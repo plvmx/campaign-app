@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import MobileLayout from '@/components/MobileLayout';
 import { getCurrentUser } from '@/lib/auth';
@@ -30,7 +30,7 @@ interface Campaign {
   created_at: string;
 }
 
-export default function AppPage() {
+function AppPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { dates: campaignDates } = useCampaignDates();
@@ -79,7 +79,7 @@ export default function AppPage() {
   const [campaignPlaces, setCampaignPlaces] = useState<Record<string, string[]>>({});
   const [campaignLeaders, setCampaignLeaders] = useState<Record<string, string[]>>({});
   
-  
+
   // Helper function to apply date filter
   const applyDateFilter = (campaignsToFilter: Campaign[]) => {
     const today = new Date();
@@ -1748,6 +1748,20 @@ export default function AppPage() {
         </div>
       </div>
     </MobileLayout>
+  );
+}
+
+export default function AppPage() {
+  return (
+    <Suspense fallback={
+      <MobileLayout>
+        <div className="flex min-h-screen items-center justify-center">
+          <div className="text-gray-600 dark:text-gray-400">Loading...</div>
+        </div>
+      </MobileLayout>
+    }>
+      <AppPageContent />
+    </Suspense>
   );
 }
 
