@@ -39,3 +39,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# image files (except those in public/slides which are needed)
+*.jpeg
+*.jpg
+!public/slides/*.jpg
