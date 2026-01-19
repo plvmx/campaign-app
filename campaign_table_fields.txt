@@ -1,0 +1,10 @@
+        CREATE TABLE IF NOT EXISTS campaigns (
+            Week INTEGER NOT NULL,
+            Day TEXT NOT NULL,
+            State TEXT NOT NULL,
+            Place TEXT NOT NULL,
+            Time TEXT NOT NULL,
+            Leader TEXT NOT NULL,
+            Mobile TEXT NOT NULL,
+            BOTJ INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (Week, State, Day, Place, Time)

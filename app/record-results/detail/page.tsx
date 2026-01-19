@@ -1,0 +1,850 @@
+'use client';
+
+import { useEffect, useState, useRef, useCallback } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import MobileLayout from '@/components/MobileLayout';
+import { getCurrentUser } from '@/lib/auth';
+import { supabase } from '@/lib/supabaseClient';
+import { logCampaignChange, fetchCampaignData } from '@/lib/campaignLog';
+
+interface InputRow {
+  id: string;
+  field1: string;
+  field2: string;
+  field3: string;
+}
+
+type SectionType = 'partial' | 'full' | 'fullSinners' | 'information';
+
+export default function RecordResultsDetailPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [isLoading, setIsLoading] = useState(true);
+  const [campaignData, setCampaignData] = useState({
+    date: '',
+    state: '',
+    place: '',
+    time: '',
+    leader: '',
+  });
+  const [returnFilter, setReturnFilter] = useState<string>('today');
+  const [partialRows, setPartialRows] = useState<InputRow[]>([]);
+  const [fullRows, setFullRows] = useState<InputRow[]>([]);
+  const [fullSinnersRows, setFullSinnersRows] = useState<InputRow[]>([]);
+  const [informationRows, setInformationRows] = useState<InputRow[]>([]);
+  const [campaignId, setCampaignId] = useState<string | null>(null);
+  const [teamSize, setTeamSize] = useState<string>('');
+  const [ppCnt, setPpCnt] = useState<string>('');
+  const [fpCnt, setFpCnt] = useState<string>('');
+  const [fpspCnt, setFpspCnt] = useState<string>('');
+  const [irCnt, setIrCnt] = useState<string>('');
+  const [pendingSaves, setPendingSaves] = useState<Map<string, { section: SectionType; name: string; categoryCode: 'P' | 'F' | 'SP' | 'IR' }>>(new Map());
+  const [originalNames, setOriginalNames] = useState<Set<string>>(new Set());
+  
+  // Use refs to access latest values in cleanup functions
+  const pendingSavesRef = useRef(pendingSaves);
+  const campaignIdRef = useRef(campaignId);
+  const originalNamesRef = useRef(originalNames);
+  const partialRowsRef = useRef(partialRows);
+  const fullRowsRef = useRef(fullRows);
+  const fullSinnersRowsRef = useRef(fullSinnersRows);
+  const informationRowsRef = useRef(informationRows);
+  
+  // Keep refs in sync with state
+  useEffect(() => {
+    pendingSavesRef.current = pendingSaves;
+  }, [pendingSaves]);
+  
+  useEffect(() => {
+    campaignIdRef.current = campaignId;
+  }, [campaignId]);
+  
+  useEffect(() => {
+    originalNamesRef.current = originalNames;
+  }, [originalNames]);
+  
+  useEffect(() => {
+    partialRowsRef.current = partialRows;
+  }, [partialRows]);
+  
+  useEffect(() => {
+    fullRowsRef.current = fullRows;
+  }, [fullRows]);
+  
+  useEffect(() => {
+    fullSinnersRowsRef.current = fullSinnersRows;
+  }, [fullSinnersRows]);
+  
+  useEffect(() => {
+    informationRowsRef.current = informationRows;
+  }, [informationRows]);
+
+  useEffect(() => {
+    async function checkAuth() {
+      try {
+        const user = await getCurrentUser();
+        if (!user) {
+          router.push('/login');
+          return;
+        }
+
+        // Get campaign data from query params
+        const date = searchParams.get('date') || '';
+        const state = searchParams.get('state') || '';
+        const place = searchParams.get('place') || '';
+        const time = searchParams.get('time') || '';
+        const leader = searchParams.get('leader') || '';
+        const filter = searchParams.get('returnFilter') || 'today';
+
+        setCampaignData({ date, state, place, time, leader });
+        setReturnFilter(filter);
+
+        // Find or create the campaign
+        const campaignId = await findOrCreateCampaign(user.id, { date, state, place, time, leader });
+        setCampaignId(campaignId);
+        
+        // Load team_size and count fields from the campaign if they exist
+        const { data: campaignData, error: campaignError } = await supabase
+          .from('campaigns')
+          .select('team_size, pp_cnt, fp_cnt, fpsp_cnt, ir_cnt')
+          .eq('id', campaignId)
+          .single();
+        
+        if (!campaignError && campaignData) {
+          setTeamSize(campaignData.team_size?.toString() || '');
+          setPpCnt(campaignData.pp_cnt?.toString() || '');
+          setFpCnt(campaignData.fp_cnt?.toString() || '');
+          setFpspCnt(campaignData.fpsp_cnt?.toString() || '');
+          setIrCnt(campaignData.ir_cnt?.toString() || '');
+        }
+
+        // Load existing results from the database
+        const { data: existingResults, error: resultsError } = await supabase
+          .from('results')
+          .select('first_name, category_code, created_at')
+          .eq('campaign_id', campaignId)
+          .order('created_at', { ascending: true });
+
+        if (!resultsError && existingResults) {
+          // Group results by category code
+          const partialNames = existingResults.filter(r => r.category_code === 'P').map(r => r.first_name);
+          const fullNames = existingResults.filter(r => r.category_code === 'F').map(r => r.first_name);
+          const fullSinnersNames = existingResults.filter(r => r.category_code === 'SP').map(r => r.first_name);
+          const informationNames = existingResults.filter(r => r.category_code === 'IR').map(r => r.first_name);
+
+          // Store original names for deletion tracking
+          const allOriginalNames = new Set(existingResults.map(r => `${r.first_name}:${r.category_code}`));
+          setOriginalNames(allOriginalNames);
+
+          // Helper function to create rows from names
+          const createRowsFromNames = (names: string[], prefix: string) => {
+            const rows: InputRow[] = [];
+            
+            // Generate unique IDs using crypto.randomUUID if available
+            const generateId = () => {
+              if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+                return crypto.randomUUID();
+              }
+              return `${prefix}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+            };
+            
+            for (let i = 0; i < names.length; i += 3) {
+              rows.push({
+                id: generateId(),
+                field1: names[i] || '',
+                field2: names[i + 1] || '',
+                field3: names[i + 2] || '',
+              });
+            }
+            
+            // Ensure at least 1 row for all categories
+            const minRows = 1;
+            while (rows.length < minRows) {
+              rows.push({
+                id: generateId(),
+                field1: '',
+                field2: '',
+                field3: '',
+              });
+            }
+            
+            return rows;
+          };
+
+          // Initialize rows with existing data
+          setPartialRows(createRowsFromNames(partialNames, 'p'));
+          setFullRows(createRowsFromNames(fullNames, 'f'));
+          setFullSinnersRows(createRowsFromNames(fullSinnersNames, 'fs'));
+          setInformationRows(createRowsFromNames(informationNames, 'i'));
+        } else {
+          // Initialize empty rows if no existing results
+          // Generate unique IDs for each row
+          const generateId = () => {
+            if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+              return crypto.randomUUID();
+            }
+            return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+          };
+          
+          setPartialRows([
+            { id: generateId(), field1: '', field2: '', field3: '' },
+          ]);
+          setFullRows([
+            { id: generateId(), field1: '', field2: '', field3: '' },
+          ]);
+          setFullSinnersRows([
+            { id: generateId(), field1: '', field2: '', field3: '' },
+          ]);
+          setInformationRows([
+            { id: generateId(), field1: '', field2: '', field3: '' },
+          ]);
+        }
+      } catch (error) {
+        router.push('/login');
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    checkAuth();
+  }, [router, searchParams]);
+
+  // Function to find or create a campaign
+  const findOrCreateCampaign = async (
+    userId: string,
+    campaignData: { date: string; state: string; place: string; time: string; leader: string }
+  ): Promise<string> => {
+    // Check if user is admin - admins can access any campaign
+    const { hasPermission, Permission } = await import('@/lib/permissions');
+    const isAdmin = await hasPermission(Permission.ADMIN_ACCESS);
+    
+    // First, try to find an existing campaign
+    let query = supabase
+      .from('campaigns')
+      .select('id, mobile')
+      .eq('date', campaignData.date)
+      .eq('state', campaignData.state)
+      .eq('place', campaignData.place)
+      .eq('time', campaignData.time)
+      .eq('leader', campaignData.leader);
+    
+    const { data: campaigns, error: findError } = await query;
+    
+    // For admins, use first matching campaign; for non-admins, filter by mobile
+    let existingCampaign = null;
+    if (isAdmin) {
+      // Admins can access any campaign matching the criteria
+      existingCampaign = campaigns && campaigns.length > 0 ? campaigns[0] : null;
+    } else {
+      // Non-admin users: filter by mobile and leader
+      const { getUserMobileAndLeader } = await import('@/lib/campaignFilter');
+      const { normalizeMobile } = await import('@/lib/auth');
+      const userMobileAndLeader = await getUserMobileAndLeader();
+      
+      if (userMobileAndLeader?.mobile && campaigns) {
+        const normalizedMobile = normalizeMobile(userMobileAndLeader.mobile);
+        existingCampaign = campaigns.find(c => 
+          c.mobile && normalizeMobile(c.mobile) === normalizedMobile
+        );
+      } else if (campaigns && campaigns.length > 0) {
+        // Fallback: use first match if no mobile filter
+        existingCampaign = campaigns[0];
+      }
+    }
+
+    if (existingCampaign) {
+      return existingCampaign.id;
+    }
+
+    // If not found, create a new campaign with user's mobile (if available)
+    const { getUserMobileAndLeader } = await import('@/lib/campaignFilter');
+    const userMobileAndLeader = await getUserMobileAndLeader();
+    
+    const { data: newCampaign, error: createError } = await supabase
+      .from('campaigns')
+      .insert([
+        {
+          date: campaignData.date,
+          state: campaignData.state,
+          place: campaignData.place,
+          time: campaignData.time,
+          leader: campaignData.leader,
+          mobile: userMobileAndLeader?.mobile || null,
+          botj: 0,
+          user_id: userId,
+        },
+      ])
+      .select('id')
+      .single();
+
+    if (createError || !newCampaign) {
+      throw new Error(createError?.message || 'Failed to create campaign');
+    }
+
+    return newCampaign.id;
+  };
+
+  // Function to get category code from section type
+  const getCategoryCode = (section: SectionType): 'P' | 'F' | 'SP' | 'IR' => {
+    switch (section) {
+      case 'partial':
+        return 'P';
+      case 'full':
+        return 'F';
+      case 'fullSinners':
+        return 'SP';
+      case 'information':
+        return 'IR';
+    }
+  };
+
+  // Function to cache a name for later saving
+  const cacheNameForSave = (
+    section: SectionType,
+    rowId: string,
+    fieldName: 'field1' | 'field2' | 'field3',
+    name: string
+  ) => {
+    if (!campaignId) {
+      return; // Don't cache if campaign doesn't exist
+    }
+
+    const cacheKey = `${section}-${rowId}-${fieldName}`;
+    const categoryCode = getCategoryCode(section);
+
+    setPendingSaves((prev) => {
+      const newMap = new Map(prev);
+      if (name.trim()) {
+        // Add or update the cached name
+        newMap.set(cacheKey, {
+          section,
+          name: name.trim(),
+          categoryCode,
+        });
+      } else {
+        // Remove from cache if name is empty
+        newMap.delete(cacheKey);
+      }
+      return newMap;
+    });
+  };
+
+  // Function to save team size to the campaign
+  const saveTeamSize = async () => {
+    if (!campaignId) return;
+    
+    try {
+      // Fetch old data for logging
+      const oldData = await fetchCampaignData(campaignId);
+      
+      const teamSizeValue = teamSize.trim() ? parseInt(teamSize, 10) : null;
+      
+      const newData = { team_size: teamSizeValue };
+      
+      const { error } = await supabase
+        .from('campaigns')
+        .update(newData)
+        .eq('id', campaignId);
+      
+      if (error) {
+        console.error('Error saving team size:', error);
+        return;
+      }
+      
+      // Log the change (async, won't block)
+      if (oldData) {
+        logCampaignChange(campaignId, 'UPDATE', oldData, { ...oldData, ...newData });
+      }
+    } catch (error) {
+      console.error('Error saving team size:', error);
+    }
+  };
+
+  // Function to save count fields to the campaign
+  const saveCountFields = async () => {
+    if (!campaignId) return;
+    
+    try {
+      // Fetch old data for logging
+      const oldData = await fetchCampaignData(campaignId);
+      
+      const ppCntValue = ppCnt.trim() ? parseInt(ppCnt, 10) : 0;
+      const fpCntValue = fpCnt.trim() ? parseInt(fpCnt, 10) : 0;
+      const fpspCntValue = fpspCnt.trim() ? parseInt(fpspCnt, 10) : 0;
+      const irCntValue = irCnt.trim() ? parseInt(irCnt, 10) : 0;
+      
+      const newData = {
+        pp_cnt: ppCntValue,
+        fp_cnt: fpCntValue,
+        fpsp_cnt: fpspCntValue,
+        ir_cnt: irCntValue
+      };
+      
+      const { error } = await supabase
+        .from('campaigns')
+        .update(newData)
+        .eq('id', campaignId);
+      
+      if (error) {
+        console.error('Error saving count fields:', error);
+        return;
+      }
+      
+      // Log the change (async, won't block)
+      if (oldData) {
+        logCampaignChange(campaignId, 'UPDATE', oldData, { ...oldData, ...newData });
+      }
+    } catch (error) {
+      console.error('Error saving count fields:', error);
+    }
+  };
+
+  // Function to save all pending names to the database
+  const savePendingNames = useCallback(async () => {
+    const currentPendingSaves = pendingSavesRef.current;
+    const currentCampaignId = campaignIdRef.current;
+    const currentOriginalNames = originalNamesRef.current;
+    
+    if (!currentCampaignId) {
+      return;
+    }
+
+    try {
+      const user = await getCurrentUser();
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
+
+      // Get all current names from all rows (using refs for latest values)
+      const getCurrentNames = () => {
+        const currentNames = new Set<string>();
+        
+        // Helper to add names from rows
+        // Each field is treated as a single complete name - no splitting
+        const addNamesFromRows = (rows: InputRow[], categoryCode: string) => {
+          rows.forEach(row => {
+            // Each field is a complete name - trim whitespace but preserve the full value
+            const name1 = row.field1.trim();
+            const name2 = row.field2.trim();
+            const name3 = row.field3.trim();
+            
+            if (name1) {
+              currentNames.add(`${name1}:${categoryCode}`);
+            }
+            if (name2) {
+              currentNames.add(`${name2}:${categoryCode}`);
+            }
+            if (name3) {
+              currentNames.add(`${name3}:${categoryCode}`);
+            }
+          });
+        };
+        
+        addNamesFromRows(partialRowsRef.current, 'P');
+        addNamesFromRows(fullRowsRef.current, 'F');
+        addNamesFromRows(fullSinnersRowsRef.current, 'SP');
+        addNamesFromRows(informationRowsRef.current, 'IR');
+        
+        return currentNames;
+      };
+      
+      const currentNames = getCurrentNames();
+      
+      console.log('Original names:', Array.from(currentOriginalNames));
+      console.log('Current names:', Array.from(currentNames));
+      
+      // Find names to delete (in original but not in current)
+      const namesToDelete: { name: string; categoryCode: string }[] = [];
+      currentOriginalNames.forEach(nameKey => {
+        if (!currentNames.has(nameKey)) {
+          const [name, categoryCode] = nameKey.split(':');
+          namesToDelete.push({ name, categoryCode });
+        }
+      });
+      
+      // Delete removed names
+      if (namesToDelete.length > 0) {
+        console.log('Deleting names:', namesToDelete);
+        for (const { name, categoryCode } of namesToDelete) {
+          const { error: deleteError } = await supabase
+            .from('results')
+            .delete()
+            .eq('campaign_id', currentCampaignId)
+            .eq('first_name', name)
+            .eq('category_code', categoryCode);
+          
+          if (deleteError) {
+            console.error('Error deleting name:', name, categoryCode, deleteError);
+          } else {
+            console.log('Successfully deleted:', name, categoryCode);
+          }
+        }
+      }
+
+      // Convert current names to array of results to insert/update
+      // Save ALL current names from the rows, not just pending saves
+      const resultsToSave = Array.from(currentNames).map((nameKey) => {
+        const [name, categoryCode] = nameKey.split(':');
+        return {
+          campaign_id: currentCampaignId,
+          first_name: name,
+          category_code: categoryCode,
+          user_id: user.id,
+        };
+      });
+
+      if (resultsToSave.length > 0) {
+        // Insert or update all results
+        // Using upsert to handle the UNIQUE constraint gracefully
+        const { error } = await supabase.from('results').upsert(resultsToSave, {
+          onConflict: 'campaign_id,first_name,category_code',
+        });
+
+        if (error) {
+          // Log error but don't throw (user is navigating away)
+          console.error('Error saving names:', error);
+        } else {
+          console.log('Successfully saved names:', resultsToSave.length);
+        }
+      }
+      
+      // Update original names with current names
+      setOriginalNames(currentNames);
+      originalNamesRef.current = currentNames;
+      
+      // Clear pending saves on success
+      setPendingSaves(new Map());
+      pendingSavesRef.current = new Map();
+    } catch (error: any) {
+      console.error('Error saving names:', error);
+    }
+  }, []);
+
+  // Auto-save periodically and on navigation
+  useEffect(() => {
+    // Auto-save every 3 seconds if there are changes
+    const autoSaveInterval = setInterval(() => {
+      const currentCampaignId = campaignIdRef.current;
+      if (currentCampaignId) {
+        savePendingNames();
+        saveTeamSize();
+        saveCountFields();
+      }
+    }, 3000);
+
+    const handleBeforeUnload = () => {
+      // Final save attempt (may not complete)
+      const currentCampaignId = campaignIdRef.current;
+      if (currentCampaignId) {
+        savePendingNames();
+        saveTeamSize();
+        saveCountFields();
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    
+    // Cleanup: Save all pending names and team size when component unmounts
+    return () => {
+      clearInterval(autoSaveInterval);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      // Final save on cleanup (when navigating away)
+      const currentCampaignId = campaignIdRef.current;
+      
+      if (currentCampaignId) {
+        // Save team size
+        saveTeamSize();
+        
+        // Save count fields
+        saveCountFields();
+        
+        // Always save pending names (including deletions)
+        savePendingNames();
+      }
+    };
+  }, [savePendingNames]);
+
+  const addNewRow = (section: SectionType) => {
+    // Generate a unique ID using crypto.randomUUID if available, otherwise use timestamp
+    const generateId = () => {
+      if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+        return crypto.randomUUID();
+      }
+      return `${section}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    };
+    
+    const newRow: InputRow = {
+      id: generateId(),
+      field1: '',
+      field2: '',
+      field3: '',
+    };
+    
+    // Use functional state updates to avoid stale closure issues
+    switch (section) {
+      case 'partial':
+        setPartialRows((prevRows) => [...prevRows, newRow]);
+        break;
+      case 'full':
+        setFullRows((prevRows) => [...prevRows, newRow]);
+        break;
+      case 'fullSinners':
+        setFullSinnersRows((prevRows) => [...prevRows, newRow]);
+        break;
+      case 'information':
+        setInformationRows((prevRows) => [...prevRows, newRow]);
+        break;
+    }
+  };
+
+  const updateRowField = (
+    section: SectionType,
+    rowId: string,
+    fieldName: 'field1' | 'field2' | 'field3',
+    value: string
+  ) => {
+    // Use functional state updates to avoid stale closure issues
+    switch (section) {
+      case 'partial':
+        setPartialRows((prevRows) =>
+          prevRows.map((row) =>
+            row.id === rowId ? { ...row, [fieldName]: value } : row
+          )
+        );
+        break;
+      case 'full':
+        setFullRows((prevRows) =>
+          prevRows.map((row) =>
+            row.id === rowId ? { ...row, [fieldName]: value } : row
+          )
+        );
+        break;
+      case 'fullSinners':
+        setFullSinnersRows((prevRows) =>
+          prevRows.map((row) =>
+            row.id === rowId ? { ...row, [fieldName]: value } : row
+          )
+        );
+        break;
+      case 'information':
+        setInformationRows((prevRows) =>
+          prevRows.map((row) =>
+            row.id === rowId ? { ...row, [fieldName]: value } : row
+          )
+        );
+        break;
+    }
+  };
+
+  const handleNameChange = (
+    section: SectionType,
+    rowId: string,
+    fieldName: 'field1' | 'field2' | 'field3',
+    value: string
+  ) => {
+    // Update the local state
+    updateRowField(section, rowId, fieldName, value);
+    // Cache the name for later saving
+    cacheNameForSave(section, rowId, fieldName, value);
+  };
+
+  const renderInputGrid = (rows: InputRow[], section: SectionType) => {
+    return (
+      <div className="space-y-2">
+        {rows.map((row, index) => (
+          <div key={row.id} className="flex gap-2 w-full">
+            <input
+              type="text"
+              value={row.field1}
+              onChange={(e) => handleNameChange(section, row.id, 'field1', e.target.value)}
+              maxLength={255}
+              className="flex-1 min-w-0 rounded-md border-2 border-gray-400 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
+              placeholder="Name 1"
+            />
+            <input
+              type="text"
+              value={row.field2}
+              onChange={(e) => handleNameChange(section, row.id, 'field2', e.target.value)}
+              maxLength={255}
+              className="flex-1 min-w-0 rounded-md border-2 border-gray-400 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
+              placeholder="Name 2"
+            />
+            <input
+              type="text"
+              value={row.field3}
+              onChange={(e) => handleNameChange(section, row.id, 'field3', e.target.value)}
+              maxLength={255}
+              className="flex-1 min-w-0 rounded-md border-2 border-gray-400 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
+              placeholder="Name 3"
+            />
+            {index === rows.length - 1 && (
+              <button
+                onClick={() => addNewRow(section)}
+                className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-md border-2 border-gray-400 bg-white text-lg font-semibold text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+                aria-label="Add new row"
+              >
+                +
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  if (isLoading) {
+    return (
+      <MobileLayout>
+        <div className="flex min-h-screen items-center justify-center">
+          <div className="text-gray-600 dark:text-gray-400">Loading...</div>
+        </div>
+      </MobileLayout>
+    );
+  }
+
+  return (
+    <MobileLayout>
+      <div className="p-4 bg-blue-50 dark:bg-blue-900/20 min-h-screen">
+        <div className="mb-6">
+          <button
+            onClick={() => router.push(`/app?filter=${returnFilter}`)}
+            className="mb-4 text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 hover:underline"
+          >
+            ← Back to Campaigns
+          </button>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+            Record Results
+          </h1>
+          <div className="mt-2 space-y-1">
+            <p className="text-base font-semibold text-gray-900 dark:text-gray-100">
+              {campaignData.place}, {campaignData.state}
+            </p>
+            {campaignData.date && campaignData.time && (
+              <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                {(() => {
+                  // Format date
+                  const dateObj = new Date(campaignData.date + 'T00:00:00');
+                  const formattedDate = dateObj.toLocaleDateString('en-US', {
+                    weekday: 'short',
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                  });
+                  
+                  // Format time
+                  const timeStr = campaignData.time.includes('T')
+                    ? campaignData.time.split('T')[1]?.split('.')[0]
+                    : campaignData.time;
+                  const [hours, minutes] = timeStr.split(':');
+                  const hour = parseInt(hours, 10);
+                  const ampm = hour >= 12 ? 'PM' : 'AM';
+                  const displayHour = hour % 12 || 12;
+                  const formattedTime = `${displayHour}:${minutes} ${ampm}`;
+                  
+                  return `${formattedDate} at ${formattedTime}`;
+                })()}
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* Team Size Input */}
+        <div className="mb-6">
+          <label htmlFor="teamSize" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Number of people in my team
+          </label>
+          <input
+            id="teamSize"
+            type="number"
+            min="0"
+            value={teamSize}
+            onChange={(e) => setTeamSize(e.target.value)}
+            onBlur={saveTeamSize}
+            className="block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
+            placeholder="Enter number of team members"
+          />
+        </div>
+
+        {/* Partial Presentations Banner */}
+        <div className="mb-4 rounded-md bg-green-100 px-4 py-2 flex items-center justify-between gap-2 dark:bg-green-900/30">
+          <span className="text-sm font-medium text-green-800 dark:text-green-200">
+            Partial Presentations
+          </span>
+          <input
+            type="number"
+            min="0"
+            step="1"
+            value={ppCnt}
+            onChange={(e) => setPpCnt(e.target.value)}
+            onBlur={saveCountFields}
+            className="w-20 rounded-md border-2 border-green-600 bg-white px-2 py-1 text-sm text-center focus:border-green-700 focus:outline-none focus:ring-green-500 dark:border-green-500 dark:bg-gray-900 dark:text-white"
+            placeholder="0"
+          />
+        </div>
+
+        {/* Partial Presentations Input Fields */}
+        {renderInputGrid(partialRows, 'partial')}
+
+        {/* Full Presentations Banner */}
+        <div className="mb-4 mt-6 rounded-md bg-orange-100 px-4 py-2 flex items-center justify-between gap-2 dark:bg-orange-900/30">
+          <span className="text-sm font-medium text-orange-800 dark:text-orange-200">
+            Full Presentations
+          </span>
+          <input
+            type="number"
+            min="0"
+            step="1"
+            value={fpCnt}
+            onChange={(e) => setFpCnt(e.target.value)}
+            onBlur={saveCountFields}
+            className="w-20 rounded-md border-2 border-orange-600 bg-white px-2 py-1 text-sm text-center focus:border-orange-700 focus:outline-none focus:ring-orange-500 dark:border-orange-500 dark:bg-gray-900 dark:text-white"
+            placeholder="0"
+          />
+        </div>
+
+        {/* Full Presentations Input Fields */}
+        {renderInputGrid(fullRows, 'full')}
+
+        {/* Full Presentations and Sinners Prayers Banner */}
+        <div className="mb-4 mt-6 rounded-md bg-red-100 px-4 py-2 flex items-center justify-between gap-2 dark:bg-red-900/30">
+          <span className="text-sm font-medium text-red-800 dark:text-red-200">
+            Full Presentations and Sinners Prayers
+          </span>
+          <input
+            type="number"
+            min="0"
+            step="1"
+            value={fpspCnt}
+            onChange={(e) => setFpspCnt(e.target.value)}
+            onBlur={saveCountFields}
+            className="w-20 rounded-md border-2 border-red-600 bg-white px-2 py-1 text-sm text-center focus:border-red-700 focus:outline-none focus:ring-red-500 dark:border-red-500 dark:bg-gray-900 dark:text-white"
+            placeholder="0"
+          />
+        </div>
+
+        {/* Full Presentations and Sinners Prayers Input Fields */}
+        {renderInputGrid(fullSinnersRows, 'fullSinners')}
+
+        {/* Information Requests Banner */}
+        <div className="mb-4 mt-6 rounded-md bg-yellow-100 px-4 py-2 flex items-center justify-between gap-2 dark:bg-yellow-900/30">
+          <span className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+            Information Requests
+          </span>
+          <input
+            type="number"
+            min="0"
+            step="1"
+            value={irCnt}
+            onChange={(e) => setIrCnt(e.target.value)}
+            onBlur={saveCountFields}
+            className="w-20 rounded-md border-2 border-yellow-600 bg-white px-2 py-1 text-sm text-center focus:border-yellow-700 focus:outline-none focus:ring-yellow-500 dark:border-yellow-500 dark:bg-gray-900 dark:text-white"
+            placeholder="0"
+          />
+        </div>
+
+        {/* Information Requests Input Fields */}
+        {renderInputGrid(informationRows, 'information')}
+      </div>
+    </MobileLayout>
+  );
+}
+

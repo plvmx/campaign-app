@@ -1,0 +1,120 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import MobileLayout from '@/components/MobileLayout';
+import CampaignForm, { CampaignData } from '@/components/CampaignForm';
+import { getCurrentUser } from '@/lib/auth';
+import { supabase } from '@/lib/supabaseClient';
+import { getUserStateCode, getCachedStateCode } from '@/lib/location';
+import { logCampaignChange } from '@/lib/campaignLog';
+
+export default function CapturePage() {
+  const router = useRouter();
+  const [isLoading, setIsLoading] = useState(true);
+  const [defaultState, setDefaultState] = useState<string>('');
+
+  useEffect(() => {
+    async function checkAuthAndGetState() {
+      try {
+        const user = await getCurrentUser();
+        if (!user) {
+          router.push('/login');
+          return;
+        }
+
+        // Try to get cached state first (faster)
+        const cachedState = getCachedStateCode();
+        if (cachedState) {
+          setDefaultState(cachedState);
+        } else {
+          // If no cache, get state from location
+          const stateCode = await getUserStateCode();
+          if (stateCode) {
+            setDefaultState(stateCode);
+          }
+        }
+      } catch (error) {
+        router.push('/login');
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    checkAuthAndGetState();
+  }, [router]);
+
+  const handleSubmit = async (data: CampaignData) => {
+    try {
+      // Get the current user (can be anonymous)
+      const user = await getCurrentUser();
+      if (!user) {
+        throw new Error('You must be logged in to create a campaign');
+      }
+
+      // Get user's mobile from state_leaders if not provided in form
+      let mobile = data.mobile || null;
+      if (!mobile) {
+        const { getUserMobileAndLeader } = await import('@/lib/campaignFilter');
+        const userMobileAndLeader = await getUserMobileAndLeader();
+        mobile = userMobileAndLeader?.mobile || null;
+      }
+
+      const newCampaignData = {
+        date: data.date,
+        state: data.state,
+        place: data.place,
+        time: data.time,
+        leader: data.leader,
+        mobile: mobile,
+        botj: data.botj || 'No',
+        user_id: user.id,
+        created_at: new Date().toISOString(),
+      };
+
+      const { data: insertedData, error } = await supabase
+        .from('campaigns')
+        .insert([newCampaignData])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Log the insertion (async, won't block)
+      if (insertedData) {
+        logCampaignChange(insertedData.id, 'INSERT', null, insertedData);
+      }
+
+      // Redirect to app page with success parameter
+      router.push('/app?created=true');
+    } catch (error: any) {
+      throw new Error(error.message || 'Failed to create campaign');
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <MobileLayout>
+        <div className="flex min-h-screen items-center justify-center">
+          <div className="text-gray-600 dark:text-gray-400">Loading...</div>
+        </div>
+      </MobileLayout>
+    );
+  }
+
+  return (
+    <MobileLayout>
+      <div className="p-4">
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+            Create Campaign
+          </h1>
+          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+            Fill in the details to create a new campaign
+          </p>
+        </div>
+        <CampaignForm onSubmit={handleSubmit} initialData={{ state: defaultState }} />
+      </div>
+    </MobileLayout>
+  );
+}
+

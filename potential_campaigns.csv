@@ -1,0 +1,138 @@
+state,place,time,leader,Mobile
+NSW,Ashfield,10:30 am,Maria,0428 212 029
+NSW,Blacktown,10:30 am,Maria,0428 212 029
+NSW,Brighton Le S,11:00 am,Daniel Z,0412 026 797
+NSW,Burwood,10:30 am,Marie H,0414 901 790
+NSW,Calderwood,9:00 am,Mary J,0415 536 714
+NSW,Camden Haven,8:30 am,Steve P,0447 680 477
+NSW,Castle Hill,10:30 am,Jack,0405 727 291
+NSW,Chatswood,10:00 am,Peter K,0422 218 121
+NSW,Chatswood,10:00 am,Colin,0412 633 125
+NSW,Coffs Harbour,9:30 am,Andrew,0414 649 428
+NSW,Cronulla,10:30 am,Marie H,0414 901 790
+NSW,Dee Why,9:00 am,Shaun T,0430 133 560
+NSW,Grafton,6:45 pm,Roger,0404 213 801
+NSW,Gunnedah,10:00 am,Greg R,0401 253 086
+NSW,Heatherbrae,9:00 am,Peter O',0423 294 273
+NSW,Homebush,10:30 am,Maria,0428 212 029
+NSW,Hornsby,10:00 am,Peter O',0423 294 273
+NSW,Kempsey,10:00 am,Steve Pr,0447 680 477
+NSW,Lake Cathie,10:00 am,Steve Pr,0447 680 477
+NSW,Lidcombe,10:30 am,Marie H,0414 901 790
+NSW,LifeSource Food,10:00 am,Michelle,0415 198 836
+NSW,Miranda,12:00 pm,Marie H,0414 901 790
+NSW,Miranda,11:00 am,Marie H,0414 901 790
+NSW,Mona Vale,8:30 am,Luke Sh,0435 193 069
+NSW,Orange,10:00 am,Ps Alan,0427 631 157
+NSW,Parramatta,11:00 am,Margaret,0429 174 973
+NSW,Penrith,10:15 am,Matt P,0404 016 632
+NSW,Port Macquarie,10:00 am,Steve Pr,0447 680 477
+NSW,Queanbeyan,9:30 am,Jo-Ann,0460 919 112
+NSW,Rhodes,10:30 am,Maria,0428 212 029
+NSW,Rouse Hill,10:00 am,Peter S,0430 220 180
+NSW,Shellharbour,9:00 am,Mary J,0415 536 714
+NSW,Strathfield,12:00 pm,Maria,0428 212 029
+NSW,Sydney CBD,10:00 am,Bee Bee,0421 324 570
+NSW,Sydney CBD,10:00 am,Margaret,0429 174 973
+NSW,Sylvania,10:30 am,Marie H,0414 901 790
+NSW,Tamworth,10:00 am,Greg R,0401 253 086
+NSW,Tweed Heads,2:00 pm,David W,0404 084 706
+NSW,Wollongong,9:00 am,Mary J,0415 536 714
+ACT,Belconnen,9:30 am,Roger,0404 213 801
+ACT,Civic 1,7:00 pm,Jo-Ann,0460 919 112
+ACT,Civic 2,9:30 am,Andrew,0414 649 428
+ACT,Erindale,9:30 am,Mary Mc,0402 814 631
+ACT,Fyshwick,9:30 am,Charles,0422 223 292
+ACT,Gungahlin,9:30 am,Roger,0404 213 801
+ACT,Jervis Bay,10:00 am,Bruce,0404 369 645
+ACT,Kingston,9:30 am,Charles,0422 223 292
+ACT,MacArthur,9:30 am,Jo-Ann,0460 919 112
+ACT,Mawson,9:30 am,Mary Mc,0402 814 631
+ACT,Queanbeyan,9:30 am,Charles,0422 223 292
+ACT,Sanctuary Point,12:15 pm,,
+ACT,Tuggeranong Sth,9:30 am,Charles,0422 223 292
+ACT,Woden,9:30 am,Mary Mc,0402 814 631
+QLD,Charters Towers,3:30 pm,Sarah,0459 598 537
+QLD,Logan,11:00 am,Paul,0490 522 768
+QLD,Moorooka,11:00 am,Paul,0490 522 768
+QLD,Noosaville,1:00 pm,Diane,0412 360 131
+VIC,Ashwood,11:00 am,Muriel,0429 512 221
+VIC,Braybrook,1:00 pm,Arun,0475 301 444
+VIC,Castlemaine,11:00 am,Heather,0419 874 260
+VIC,Chadstone,11:00 am,Muriel,0429 512 221
+VIC,Clayton,10:00 am,Rob,0419 400 211
+VIC,Cranbourne,11:00 am,Jarmo,0425 193 285
+VIC,Cranbourne,11:00 am,Seye,0405 059 584
+VIC,Dandenong,10:00 am,Deb,0424 089 580
+VIC,Dandenong,10:00 am,Brent,0419 529 176
+VIC,Daylesford,9:00 am,Sarni,0403 850 043
+VIC,Docklands,10:00 am,Judith,0430 163 642
+VIC,Footscray Vic Uni,10:00 am,Chrish,0413 500 709
+VIC,Frankston 1,1:30 pm,Linda,0415 914 789
+VIC,Frankston 2,12:30 pm,Linda,0415 914 789
+VIC,Geelong,10:00 am,Arun,0475 301 444
+VIC,Greensborough,11:00 am,Judith,0430 163 642
+VIC,Macleod,10:00 am,Judith,0430 163 642
+VIC,Maryborough,8:30 am,Mark,0416 199 320
+VIC,Melbourne CBD,5:00 pm,Peter,0429 028 464
+VIC,Melbourne CBD,4:45 pm,Arun,0475 301 444
+VIC,Mernda,10:45 am,Evelin,0478 225 084
+VIC,Mernda,10:45 am,Tibi,0411 299 283
+VIC,Narre Warren,12:00 pm,Steve L,0417 008 077
+VIC,Pakenham,10:00 am,Don,0405 452 508
+VIC,Pakenham,10:00 am,Kevin,0433 301 835
+VIC,Rowville,11:00 am,Michael,0419 521 260
+VIC,St Kilda,10:30 am,Nagesh,0451 408 066
+VIC,Sunshine,4:45 pm,Arun,0475 301 444
+VIC,Werribee,10:30 am,Chrish,0413 500 709
+VIC,Werribee,10:00 am,John,0447 172 179
+SA,Adelaide,10:30 am,Vonnie,0408 105 574
+SA,Adelaide CBD,10:30 am,Michael,0403 974 683
+SA,Elizabeth,11:00 am,Geoff,0490 749 160
+SA,Elizabeth,10:00 am,Ps Kyle,0451 456 261
+SA,Gawler,10:00 am,Bev,0437 169 735
+SA,Gawler,2:00 pm,Bev,0437 169 735
+SA,Glenelg,10:30 am,Cathy,0434 885 320
+SA,Glenelg,10:30 am,Gabrielle,08 8277 8419
+SA,Glenelg,10:30 am,Janne,0451 452 092
+SA,Hahndorf,2:00 pm,Luke,0405 243 340
+SA,Loxton CoC,10:00 am,Geoff,0490 749 160
+SA,Mt Barker,2:00 pm,Luke,0405 243 340
+SA,Mt Barker,11:30 am,Luke,0405 243 340
+SA,Mt Gambier,12:30 pm,Denis,0437 067 027
+SA,Murray Bridge,1:30 pm,Steven,0416 019 144
+SA,Oaklands Station,10:30 am,Janne,0451 452 092
+SA,Port Adelaide,10:30 am,Ps Chris,0405 526 980
+SA,Riverland Field D,10:00 am,Geoff,0490 749 160
+SA,Salisbury,10:30 am,Julia,0469 957 347
+SA,Salisbury,10:30 am,Linda,0430 577 786
+WA,Albany,10:00 am,Glenda,0437 735 888
+WA,Armadale,9:30 am,Martin,0421 012 243
+WA,Balingup,10:00 am,Annelise,0422 620 878
+WA,Belmont,3:00 pm,Nicole,0403 162 091
+WA,Bunbury,10:00 am,Annelise,0422 620 878
+WA,Busselton,10:00 am,Annelise,0422 620 878
+WA,Cannington,9:30 am,Ps Paul,0402 840 808
+WA,Donnybrook,10:00 am,Annelise,0422 620 878
+WA,Ellenbrook,11:30 am,Alan,0414 324 255
+WA,Fremantle,9:30 am,Alice,0402 084 336
+WA,Fremantle,9:30 am,Matt,0438 021 286
+WA,Geraldton,10:00 am,Celia,0429 110 861
+WA,Gosnells,10:00 am,Martin,0421 012 243
+WA,Joondalup,10:30 am,Barry,0409 378 203
+WA,Kelmscott,9:30 am,Martin,0421 012 243
+WA,Margaret River,9:30 am,Diana,0428 711 766
+WA,Mandurah,9:00 am,Miriam,0448 723 280
+WA,Midland 1,11:00 am,Alan,0414 324 255
+WA,Midland 2,11:00 am,Alan,0414 324 255
+WA,Morley,2:00 pm,Lorraine,0400 022 900
+WA,Mt Barker,10:00 am,Charmaine,0407 161 086
+WA,Mundaring,11:30 am,Alan,0414 324 255
+WA,Northam,9:00 am,Deborah,0409 112 232
+WA,Perth CBD 1,10:00 am,Rosheen,0413 778 998
+WA,Perth CBD 2,4:00 pm,Sabrina,0423 157 401
+WA,Perth CBD 3,9:30 am,Barry,0409 378 203
+WA,Pinjarra,10:00 am,Norm,0497 734 006
+WA,Rockingham,9:30 am,Ps Nicole,0435 663 045
+WA,Thornlie,9:30 am,Sarah K,0475 505 716
+WA,Yagan Square,7:00 pm,Emmanuel,0466 909 675
