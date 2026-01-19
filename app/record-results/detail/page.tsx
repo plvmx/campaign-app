@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import MobileLayout from '@/components/MobileLayout';
 import { getCurrentUser } from '@/lib/auth';
@@ -16,7 +16,7 @@ interface InputRow {
 
 type SectionType = 'partial' | 'full' | 'fullSinners' | 'information';
 
-export default function RecordResultsDetailPage() {
+function RecordResultsDetailPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isLoading, setIsLoading] = useState(true);
@@ -845,6 +845,20 @@ export default function RecordResultsDetailPage() {
         {renderInputGrid(informationRows, 'information')}
       </div>
     </MobileLayout>
+  );
+}
+
+export default function RecordResultsDetailPage() {
+  return (
+    <Suspense fallback={
+      <MobileLayout>
+        <div className="flex min-h-screen items-center justify-center">
+          <div className="text-gray-600 dark:text-gray-400">Loading...</div>
+        </div>
+      </MobileLayout>
+    }>
+      <RecordResultsDetailPageContent />
+    </Suspense>
   );
 }
 
