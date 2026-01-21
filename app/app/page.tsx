@@ -1531,8 +1531,25 @@ function AppPageContent() {
                                         Place
                                       </label>
                                       <select
-                                        value={editData.place}
-                                        onChange={(e) => updateInlineEditField(campaign.id, 'place', e.target.value)}
+                                        value={inlineEditOtherPlace[campaign.id] ? 'OTHER_PLACE' : editData.place}
+                                        onChange={(e) => {
+                                          if (e.target.value === 'OTHER_PLACE') {
+                                            setInlineEditOtherPlace(prev => ({ ...prev, [campaign.id]: true }));
+                                            updateInlineEditField(campaign.id, 'place', '');
+                                          } else {
+                                            setInlineEditOtherPlace(prev => {
+                                              const newState = { ...prev };
+                                              delete newState[campaign.id];
+                                              return newState;
+                                            });
+                                            setInlineEditCustomPlace(prev => {
+                                              const newState = { ...prev };
+                                              delete newState[campaign.id];
+                                              return newState;
+                                            });
+                                            updateInlineEditField(campaign.id, 'place', e.target.value);
+                                          }
+                                        }}
                                         className="w-full rounded-md border-2 border-gray-400 bg-white px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
                                         disabled={!editData.state}
                                       >
@@ -1540,7 +1557,18 @@ function AppPageContent() {
                                         {(campaignPlaces[campaign.id] || []).map((place) => (
                                           <option key={place} value={place}>{place}</option>
                                         ))}
+                                        <option value="OTHER_PLACE">Other Place</option>
                                       </select>
+                                      {inlineEditOtherPlace[campaign.id] && (
+                                        <input
+                                          type="text"
+                                          required
+                                          value={inlineEditCustomPlace[campaign.id] || ''}
+                                          onChange={(e) => setInlineEditCustomPlace(prev => ({ ...prev, [campaign.id]: e.target.value }))}
+                                          placeholder="Enter new place name"
+                                          className="mt-2 w-full rounded-md border-2 border-gray-400 bg-white px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
+                                        />
+                                      )}
                                     </div>
                                     <div>
                                       <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
