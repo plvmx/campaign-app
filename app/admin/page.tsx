@@ -424,6 +424,54 @@ export default function AdminPage() {
             </button>
           </div>
 
+          {/* Campaign Slides */}
+          <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+              Campaign Slides
+            </h2>
+            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+              Generate campaign slides in JPEG format for upcoming campaigns
+            </p>
+            <button
+              onClick={() => router.push('/admin/generate-slides')}
+              className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            >
+              Generate Slides
+            </button>
+          </div>
+
+          {/* Campaign Results Report */}
+          <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+              Campaign Results Report
+            </h2>
+            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+              Generate a comprehensive campaign results report in landscape JPEG format
+            </p>
+            <button
+              onClick={() => router.push('/admin/generate-report')}
+              className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            >
+              Generate Report
+            </button>
+          </div>
+
+          {/* Campaign Logs Viewer */}
+          <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+              Campaign Change Logs
+            </h2>
+            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+              View and search all campaign change records with advanced filtering options
+            </p>
+            <button
+              onClick={() => router.push('/admin/campaign-logs')}
+              className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            >
+              View Logs
+            </button>
+          </div>
+
           {/* Export Campaigns */}
           <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
@@ -570,52 +618,6 @@ export default function AdminPage() {
                 )}
               </div>
             </div>
-          </div>
-
-          {/* Campaign Logs Viewer */}
-          <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-              Campaign Change Logs
-            </h2>
-            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-              View and search all campaign change records with advanced filtering options
-            </p>
-            <button
-              onClick={() => router.push('/admin/campaign-logs')}
-              className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-            >
-              View Logs
-            </button>
-          </div>
-
-          <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-              Campaign Results Report
-            </h2>
-            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-              Generate a comprehensive campaign results report in landscape JPEG format
-            </p>
-            <button
-              onClick={() => router.push('/admin/generate-report')}
-              className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-            >
-              Generate Report
-            </button>
-          </div>
-
-          <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-              Campaign Slides
-            </h2>
-            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-              Generate campaign slides in JPEG format for upcoming campaigns
-            </p>
-            <button
-              onClick={() => router.push('/admin/generate-slides')}
-              className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-            >
-              Generate Slides
-            </button>
           </div>
 
           <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
