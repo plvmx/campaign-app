@@ -74,6 +74,12 @@ function AppPageContent() {
   const [filterState, setFilterState] = useState<string>('');
   const [isFormExpanded, setIsFormExpanded] = useState<boolean>(false);
   const [dateFilter, setDateFilter] = useState<'today' | 'past' | 'upcoming'>('today');
+  
+  // State for "Other Place" functionality
+  const [isOtherPlace, setIsOtherPlace] = useState<boolean>(false);
+  const [customPlace, setCustomPlace] = useState<string>('');
+  const [inlineEditOtherPlace, setInlineEditOtherPlace] = useState<Record<string, boolean>>({});
+  const [inlineEditCustomPlace, setInlineEditCustomPlace] = useState<Record<string, string>>({});
    
   // Dropdown data for inline editing (per campaign)
   const [campaignPlaces, setCampaignPlaces] = useState<Record<string, string[]>>({});
@@ -588,6 +594,8 @@ function AppPageContent() {
       
       // Reset form and reload
       setFormState({ date: '', state: '', place: '', time: '', leader: '', mobile: '', botj: 'No', tl_ok: false, sr_ok: false });
+      setIsOtherPlace(false);
+      setCustomPlace('');
       setIsFormExpanded(false); // Collapse form after successful save
       
       // Reload campaigns
@@ -770,6 +778,16 @@ function AppPageContent() {
       
       setSuccess('Campaign updated successfully');
       setInlineEditingId(null);
+      setInlineEditOtherPlace(prev => {
+        const newState = { ...prev };
+        delete newState[campaignId];
+        return newState;
+      });
+      setInlineEditCustomPlace(prev => {
+        const newState = { ...prev };
+        delete newState[campaignId];
+        return newState;
+      });
       
       // Reload campaigns
       const { getUserAdminStatus, getUserMobileAndLeader } = await import('@/lib/campaignFilter');
@@ -836,6 +854,20 @@ function AppPageContent() {
   };
   
   const updateInlineEditField = async (campaignId: string, field: string, value: string | boolean) => {
+    // If state is being changed, clear "Other Place" state
+    if (field === 'state') {
+      setInlineEditOtherPlace(prev => {
+        const newState = { ...prev };
+        delete newState[campaignId];
+        return newState;
+      });
+      setInlineEditCustomPlace(prev => {
+        const newState = { ...prev };
+        delete newState[campaignId];
+        return newState;
+      });
+    }
+    
     // If leader is being changed, fetch and update mobile from state_leaders table
     if (field === 'leader') {
       if (value && typeof value === 'string') {
@@ -1162,7 +1194,11 @@ function AppPageContent() {
                   id="state"
                   required
                   value={formState.state}
-                  onChange={(e) => setFormState({ ...formState, state: e.target.value, place: '', leader: '' })}
+                  onChange={(e) => {
+                    setFormState({ ...formState, state: e.target.value, place: '', leader: '' });
+                    setIsOtherPlace(false);
+                    setCustomPlace('');
+                  }}
                   disabled={!isAdmin}
                   className="mt-1 block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
                 >
@@ -1181,8 +1217,17 @@ function AppPageContent() {
                 <select
                   id="place"
                   required
-                  value={formState.place}
-                  onChange={(e) => setFormState({ ...formState, place: e.target.value, leader: '', mobile: '' })}
+                  value={isOtherPlace ? 'OTHER_PLACE' : formState.place}
+                  onChange={(e) => {
+                    if (e.target.value === 'OTHER_PLACE') {
+                      setIsOtherPlace(true);
+                      setFormState({ ...formState, place: '', leader: '', mobile: '' });
+                    } else {
+                      setIsOtherPlace(false);
+                      setCustomPlace('');
+                      setFormState({ ...formState, place: e.target.value, leader: '', mobile: '' });
+                    }
+                  }}
                   disabled={!formState.state || loadingPlaces}
                   className="mt-1 block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white disabled:opacity-50"
                 >
@@ -1192,7 +1237,18 @@ function AppPageContent() {
                       {place}
                     </option>
                   ))}
+                  <option value="OTHER_PLACE">Other Place</option>
                 </select>
+                {isOtherPlace && (
+                  <input
+                    type="text"
+                    required
+                    value={customPlace}
+                    onChange={(e) => setCustomPlace(e.target.value)}
+                    placeholder="Enter new place name"
+                    className="mt-2 block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
+                  />
+                )}
               </div>
               <div>
                 <label htmlFor="time" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
