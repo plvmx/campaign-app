@@ -560,12 +560,61 @@ function AppPageContent() {
         throw new Error('You must be logged in');
       }
       
+      // Handle "Other Place" - insert into state_places table if needed
+      let placeValue = formState.place;
+      if (isOtherPlace && customPlace.trim()) {
+        if (!formState.state || !formState.state.trim()) {
+          throw new Error('Please select a state before entering a new place');
+        }
+        
+        const newPlace = customPlace.trim();
+        const stateValue = formState.state.toUpperCase().trim();
+        
+        // Insert new place into state_places table
+        const { error: placeError } = await supabase
+          .from('state_places')
+          .insert([{ 
+            state: stateValue, 
+            place: newPlace 
+          }]);
+        
+        // If it's a duplicate (unique constraint violation), that's okay - just use the place name
+        if (placeError) {
+          if (placeError.code === '23505') {
+            // Duplicate entry - that's fine, the place already exists
+            console.log(`Place "${newPlace}" already exists for state "${stateValue}"`);
+          } else {
+            console.error('Error inserting place:', placeError);
+            throw new Error(`Failed to add new place: ${placeError.message}`);
+          }
+        }
+        
+        placeValue = newPlace;
+        
+        // Reload places for the state
+        const { data: placesData } = await supabase
+          .from('state_places')
+          .select('place')
+          .eq('state', stateValue)
+          .order('place', { ascending: true });
+        
+        if (placesData) {
+          const uniquePlaces = Array.from(new Set(placesData.map(p => p.place).filter(Boolean)));
+          setPlaces(uniquePlaces);
+        }
+      }
+      
+      // Validate that we have a place value
+      if (!placeValue || placeValue.trim() === '') {
+        throw new Error('Please select or enter a place');
+      }
+      
       const mobileValue = formState.mobile.trim() || null;
       
       const newCampaignData = {
         date: formState.date,
         state: formState.state,
-        place: formState.place,
+        place: placeValue,
         time: formState.time,
         leader: formState.leader,
         mobile: mobileValue,
@@ -747,6 +796,61 @@ function AppPageContent() {
         throw new Error('You must be logged in');
       }
       
+      // Handle "Other Place" - insert into state_places table if needed
+      let placeValue = editData.place;
+      const isOther = inlineEditOtherPlace[campaignId];
+      const customPlaceValue = inlineEditCustomPlace[campaignId];
+      
+      if (isOther && customPlaceValue && customPlaceValue.trim()) {
+        if (!editData.state || !editData.state.trim()) {
+          throw new Error('Please select a state before entering a new place');
+        }
+        
+        const newPlace = customPlaceValue.trim();
+        const stateValue = editData.state.toUpperCase().trim();
+        
+        // Insert new place into state_places table
+        const { error: placeError } = await supabase
+          .from('state_places')
+          .insert([{ 
+            state: stateValue, 
+            place: newPlace 
+          }]);
+        
+        // If it's a duplicate (unique constraint violation), that's okay - just use the place name
+        if (placeError) {
+          if (placeError.code === '23505') {
+            // Duplicate entry - that's fine, the place already exists
+            console.log(`Place "${newPlace}" already exists for state "${stateValue}"`);
+          } else {
+            console.error('Error inserting place:', placeError);
+            throw new Error(`Failed to add new place: ${placeError.message}`);
+          }
+        }
+        
+        placeValue = newPlace;
+        
+        // Reload places for the state
+        const { data: placesData } = await supabase
+          .from('state_places')
+          .select('place')
+          .eq('state', stateValue)
+          .order('place', { ascending: true });
+        
+        if (placesData) {
+          const uniquePlaces = Array.from(new Set(placesData.map(p => p.place).filter(Boolean)));
+          setCampaignPlaces(prev => ({
+            ...prev,
+            [campaignId]: uniquePlaces,
+          }));
+        }
+      }
+      
+      // Validate that we have a place value
+      if (!placeValue || placeValue.trim() === '') {
+        throw new Error('Please select or enter a place');
+      }
+      
       // Fetch old data for logging
       const oldData = await fetchCampaignData(campaignId);
       
@@ -755,7 +859,7 @@ function AppPageContent() {
       const newData = {
         date: editData.date,
         state: editData.state,
-        place: editData.place,
+        place: placeValue,
         time: editData.time,
         leader: editData.leader,
         mobile: mobileValue,
@@ -1216,7 +1320,7 @@ function AppPageContent() {
                 </label>
                 <select
                   id="place"
-                  required
+                  required={!isOtherPlace}
                   value={isOtherPlace ? 'OTHER_PLACE' : formState.place}
                   onChange={(e) => {
                     if (e.target.value === 'OTHER_PLACE') {
@@ -1242,6 +1346,7 @@ function AppPageContent() {
                 {isOtherPlace && (
                   <input
                     type="text"
+                    id="customPlace"
                     required
                     value={customPlace}
                     onChange={(e) => setCustomPlace(e.target.value)}
@@ -1531,6 +1636,7 @@ function AppPageContent() {
                                         Place
                                       </label>
                                       <select
+                                        required={!inlineEditOtherPlace[campaign.id]}
                                         value={inlineEditOtherPlace[campaign.id] ? 'OTHER_PLACE' : editData.place}
                                         onChange={(e) => {
                                           if (e.target.value === 'OTHER_PLACE') {
@@ -1562,6 +1668,7 @@ function AppPageContent() {
                                       {inlineEditOtherPlace[campaign.id] && (
                                         <input
                                           type="text"
+                                          id={`customPlace_${campaign.id}`}
                                           required
                                           value={inlineEditCustomPlace[campaign.id] || ''}
                                           onChange={(e) => setInlineEditCustomPlace(prev => ({ ...prev, [campaign.id]: e.target.value }))}
