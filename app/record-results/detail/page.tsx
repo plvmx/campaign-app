@@ -747,6 +747,25 @@ function RecordResultsDetailPageContent() {
           </div>
         </div>
 
+        {/* Auto-save notification */}
+        <div className="mb-6 rounded-lg border-2 border-blue-400 bg-blue-100 px-4 py-3 shadow-sm dark:border-blue-500 dark:bg-blue-900/40">
+          <div className="flex items-start gap-3">
+            <div className="flex-shrink-0 mt-0.5">
+              <svg className="h-5 w-5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-1">
+                Changes are automatically saved
+              </p>
+              <p className="text-xs text-blue-800 dark:text-blue-200">
+                All your entries are saved automatically every few seconds. There is no need to click a Save button.
+              </p>
+            </div>
+          </div>
+        </div>
+
         {/* Team Size Input */}
         <div className="mb-6">
           <label htmlFor="teamSize" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
