@@ -51,12 +51,12 @@ export default function CapturePage() {
         throw new Error('You must be logged in to create a campaign');
       }
 
-      // Get user's mobile from state_leaders if not provided in form
+      // Get user's mobile from state_leaders if not provided in form (optimized)
       let mobile = data.mobile || null;
       if (!mobile) {
-        const { getUserMobileAndLeader } = await import('@/lib/campaignFilter');
-        const userMobileAndLeader = await getUserMobileAndLeader();
-        mobile = userMobileAndLeader?.mobile || null;
+        const { getUserAdminStatusAndMobile } = await import('@/lib/campaignFilter');
+        const { mobile: userMobile } = await getUserAdminStatusAndMobile();
+        mobile = userMobile || null;
       }
 
       const newCampaignData = {

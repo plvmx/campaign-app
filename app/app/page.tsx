@@ -379,6 +379,9 @@ function AppPageContent() {
         
         console.log('Campaign filtering:', { adminStatus, userState, userMobileAndLeader: userMobileAndLeaderData });
         
+        // Performance logging
+        const queryStartTime = performance.now();
+        
         let query = supabase
           .from('campaigns')
           .select('*');
@@ -421,6 +424,11 @@ function AppPageContent() {
 
         if (error) throw error;
         
+        // Performance logging
+        const queryEndTime = performance.now();
+        const queryDuration = queryEndTime - queryStartTime;
+        console.log(`[Performance] Campaign query took ${queryDuration.toFixed(2)}ms, returned ${data?.length || 0} campaigns`);
+        
         // Additional filtering for regular users (mobile match)
         // SR users should see ALL campaigns for their state, so no additional filtering
         let filteredData = data || [];
@@ -435,18 +443,8 @@ function AppPageContent() {
         }
         
         // Store all campaigns (unfiltered by state and date filter)
+        // The memoized filteredCampaigns will automatically update via useEffect
         setAllCampaigns(filteredData);
-        
-        // Apply state filter if set
-        let finalData = filteredData;
-        if (filterState) {
-          finalData = finalData.filter(c => c.state.toUpperCase() === filterState.toUpperCase());
-        }
-        
-        // Apply date filter
-        finalData = applyDateFilter(finalData);
-        
-        setCampaigns(finalData);
         
         // Load dropdown data
         await loadDropdownData();

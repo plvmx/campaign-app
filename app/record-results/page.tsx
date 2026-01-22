@@ -88,13 +88,13 @@ export default function RecordResultsPage() {
       // Admins can access any campaign matching the criteria
       existingCampaign = campaigns && campaigns.length > 0 ? campaigns[0] : null;
     } else {
-      // Non-admin users: filter by mobile and leader
-      const { getUserMobileAndLeader } = await import('@/lib/campaignFilter');
+      // Non-admin users: filter by mobile and leader (optimized)
+      const { getUserAdminStatusAndMobile } = await import('@/lib/campaignFilter');
       const { normalizeMobile } = await import('@/lib/auth');
-      const userMobileAndLeader = await getUserMobileAndLeader();
+      const { mobile: userMobile } = await getUserAdminStatusAndMobile();
       
-      if (userMobileAndLeader?.mobile && campaigns) {
-        const normalizedMobile = normalizeMobile(userMobileAndLeader.mobile);
+      if (userMobile && campaigns) {
+        const normalizedMobile = normalizeMobile(userMobile);
         existingCampaign = campaigns.find(c => 
           c.mobile && normalizeMobile(c.mobile) === normalizedMobile
         );
