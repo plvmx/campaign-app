@@ -7,7 +7,7 @@ import { getCurrentUser } from '@/lib/auth';
 import { supabase } from '@/lib/supabaseClient';
 import { getUserProfile, upsertUserProfile, UserProfile } from '@/lib/userProfile';
 import { getUserStateCode } from '@/lib/location';
-import { normalizeName } from '@/lib/auth';
+import { normalizeName, normalizeMobile } from '@/lib/auth';
 import { hasPermission, Permission } from '@/lib/permissions';
 import { useCampaignDates } from '@/contexts/CampaignDatesContext';
 import { formatDateForDb } from '@/lib/campaignDates';
@@ -39,6 +39,7 @@ function AppPageContent() {
   const [isLoading, setIsLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
   const [adminStatus, setAdminStatus] = useState<string | null>(null); // Store admin status from state_leaders table
+  const [userMobileAndLeader, setUserMobileAndLeader] = useState<{ mobile: string | null; leader: string | null } | null>(null); // Store user's mobile and leader for Record Results button visibility
   const [showMoreInfo, setShowMoreInfo] = useState(false); // Toggle for More Info section
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [allCampaigns, setAllCampaigns] = useState<Campaign[]>([]); // Store unfiltered campaigns
@@ -275,12 +276,13 @@ function AppPageContent() {
         }
 
         // Get user's mobile and leader (admin status already fetched above)
-        const userMobileAndLeader = await getUserMobileAndLeader();
+        const userMobileAndLeaderData = await getUserMobileAndLeader();
+        setUserMobileAndLeader(userMobileAndLeaderData);
         
         // Store admin status in state for display
         setAdminStatus(adminStatus);
         
-        console.log('Campaign filtering:', { adminStatus, userState, userMobileAndLeader });
+        console.log('Campaign filtering:', { adminStatus, userState, userMobileAndLeader: userMobileAndLeaderData });
         
         let query = supabase
           .from('campaigns')
@@ -305,10 +307,10 @@ function AppPageContent() {
           }
         } else {
           // Regular user: filter by name and mobile match
-          if (userMobileAndLeader?.mobile && userMobileAndLeader?.leader) {
+          if (userMobileAndLeaderData?.mobile && userMobileAndLeaderData?.leader) {
             // Filter by leader name
-            query = query.eq('leader', userMobileAndLeader.leader);
-            console.log('Filter: Regular user - filtering by leader:', userMobileAndLeader.leader);
+            query = query.eq('leader', userMobileAndLeaderData.leader);
+            console.log('Filter: Regular user - filtering by leader:', userMobileAndLeaderData.leader);
           } else {
             // Fallback to user_id if mobile/leader not available
             console.log('Filter: Regular user - no mobile/leader, using user_id fallback');
@@ -329,8 +331,8 @@ function AppPageContent() {
         let filteredData = data || [];
         if (adminStatus !== 'AD' && adminStatus !== 'SR') {
           // Regular user: also filter by normalized mobile
-          if (userMobileAndLeader?.mobile) {
-            const normalizedMobile = normalizeMobile(userMobileAndLeader.mobile);
+          if (userMobileAndLeaderData?.mobile) {
+            const normalizedMobile = normalizeMobile(userMobileAndLeaderData.mobile);
             filteredData = filteredData.filter(campaign => 
               campaign.mobile && normalizeMobile(campaign.mobile) === normalizedMobile
             );
@@ -1275,20 +1277,20 @@ function AppPageContent() {
                 <label htmlFor="date" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   Date
                 </label>
-                <select
+                <input
+                  type="date"
                   id="date"
                   required
                   value={formState.date}
                   onChange={(e) => setFormState({ ...formState, date: e.target.value })}
+                  min={campaignDates ? formatDateForDb(new Date(campaignDates.pastCampaignStart)) : undefined}
+                  max={campaignDates ? (() => {
+                    const endDate = new Date(campaignDates.secondWeekStart);
+                    endDate.setDate(endDate.getDate() + 6); // Add 6 days to get to Sunday
+                    return formatDateForDb(endDate);
+                  })() : undefined}
                   className="mt-1 block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
-                >
-                  <option value="">Select a date</option>
-                  {availableDates.map((date) => (
-                    <option key={date.value} value={date.value}>
-                      {date.label}
-                    </option>
-                  ))}
-                </select>
+                />
               </div>
               <div>
                 <label htmlFor="state" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -1883,13 +1885,35 @@ function AppPageContent() {
                                     })()}
                                   </div>
                                   <div className="flex flex-row gap-2 sm:ml-4 w-full sm:w-auto">
-                                    {/* Show Record Results button if campaign date is today or earlier */}
+                                    {/* Show Record Results button if campaign date is today or earlier AND (user is admin OR campaign leader/mobile matches user) */}
                                     {(() => {
                                       const today = new Date();
                                       today.setHours(0, 0, 0, 0);
                                       const campaignDate = new Date(campaign.date);
                                       campaignDate.setHours(0, 0, 0, 0);
-                                      return campaignDate <= today;
+                                      const isPastOrToday = campaignDate <= today;
+                                      
+                                      // Admin users can see Record Results button for all past campaigns
+                                      if (adminStatus === 'AD') {
+                                        return isPastOrToday;
+                                      }
+                                      
+                                      // For non-admin users, check if leader and mobile match
+                                      if (!userMobileAndLeader || !userMobileAndLeader.leader || !userMobileAndLeader.mobile) {
+                                        return false;
+                                      }
+                                      
+                                      // Normalize and compare leader names
+                                      const campaignLeaderNormalized = normalizeName(campaign.leader || '');
+                                      const userLeaderNormalized = normalizeName(userMobileAndLeader.leader);
+                                      const leaderMatches = campaignLeaderNormalized === userLeaderNormalized;
+                                      
+                                      // Normalize and compare mobile numbers
+                                      const campaignMobileNormalized = normalizeMobile(campaign.mobile || '');
+                                      const userMobileNormalized = normalizeMobile(userMobileAndLeader.mobile || '');
+                                      const mobileMatches = campaignMobileNormalized === userMobileNormalized && campaignMobileNormalized !== '';
+                                      
+                                      return isPastOrToday && leaderMatches && mobileMatches;
                                     })() && (
                                       <button
                                         onClick={() => {

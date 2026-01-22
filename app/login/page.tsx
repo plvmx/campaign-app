@@ -2,6 +2,7 @@
 
 import { useState, FormEvent, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { getSession, signInWithMobileAndName } from '@/lib/auth';
 
 export default function LoginPage() {
@@ -69,7 +70,17 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8 dark:bg-gray-900">
       <div className="w-full max-w-md space-y-6 rounded-lg bg-blue-50 p-6 shadow-lg dark:bg-blue-900/20 sm:p-8">
-        <div>
+        <div className="flex flex-col items-center">
+          <div className="mb-4 flex justify-center">
+            <Image
+              src="/afj_graphic.png"
+              alt="AFJ Graphic"
+              width={200}
+              height={200}
+              className="h-auto w-auto max-w-full"
+              priority
+            />
+          </div>
           <h2 className="text-center text-2xl font-bold text-gray-900 dark:text-gray-100">
             AFJ Campaign Manager
           </h2>
