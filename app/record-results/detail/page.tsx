@@ -103,12 +103,22 @@ function RecordResultsDetailPageContent() {
         const campaignId = await findOrCreateCampaign(user.id, { date, state, place, time, leader });
         setCampaignId(campaignId);
         
-        // Load team_size and count fields from the campaign if they exist
-        const { data: campaignData, error: campaignError } = await supabase
-          .from('campaigns')
-          .select('team_size, pp_cnt, fp_cnt, fpsp_cnt, ir_cnt')
-          .eq('id', campaignId)
-          .single();
+        // Load campaign data and results in parallel (they're independent queries)
+        const [campaignResponse, resultsResponse] = await Promise.all([
+          supabase
+            .from('campaigns')
+            .select('team_size, pp_cnt, fp_cnt, fpsp_cnt, ir_cnt')
+            .eq('id', campaignId)
+            .single(),
+          supabase
+            .from('results')
+            .select('first_name, category_code, created_at')
+            .eq('campaign_id', campaignId)
+            .order('created_at', { ascending: true })
+        ]);
+        
+        const { data: campaignData, error: campaignError } = campaignResponse;
+        const { data: existingResults, error: resultsError } = resultsResponse;
         
         if (!campaignError && campaignData) {
           setTeamSize(campaignData.team_size?.toString() || '');
@@ -117,13 +127,6 @@ function RecordResultsDetailPageContent() {
           setFpspCnt(campaignData.fpsp_cnt?.toString() || '');
           setIrCnt(campaignData.ir_cnt?.toString() || '');
         }
-
-        // Load existing results from the database
-        const { data: existingResults, error: resultsError } = await supabase
-          .from('results')
-          .select('first_name, category_code, created_at')
-          .eq('campaign_id', campaignId)
-          .order('created_at', { ascending: true });
 
         if (!resultsError && existingResults) {
           // Group results by category code
@@ -208,14 +211,26 @@ function RecordResultsDetailPageContent() {
     checkAuth();
   }, [router, searchParams]);
 
-  // Function to find or create a campaign
+  // Function to find or create a campaign (optimized to avoid duplicate queries)
   const findOrCreateCampaign = async (
     userId: string,
     campaignData: { date: string; state: string; place: string; time: string; leader: string }
   ): Promise<string> => {
-    // Check if user is admin - admins can access any campaign
-    const { hasPermission, Permission } = await import('@/lib/permissions');
-    const isAdmin = await hasPermission(Permission.ADMIN_ACCESS);
+    // Parallelize: Check admin status and get user mobile/leader in parallel
+    const [{ hasPermission, Permission }, { getUserAdminStatusAndMobile }, { normalizeMobile }] = await Promise.all([
+      import('@/lib/permissions'),
+      import('@/lib/campaignFilter'),
+      import('@/lib/auth')
+    ]);
+    
+    const [isAdmin, adminData] = await Promise.all([
+      hasPermission(Permission.ADMIN_ACCESS),
+      getUserAdminStatusAndMobile()
+    ]);
+    
+    const userMobileAndLeader = adminData.mobile && adminData.leader 
+      ? { mobile: adminData.mobile, leader: adminData.leader } 
+      : null;
     
     // First, try to find an existing campaign
     let query = supabase
@@ -236,10 +251,6 @@ function RecordResultsDetailPageContent() {
       existingCampaign = campaigns && campaigns.length > 0 ? campaigns[0] : null;
     } else {
       // Non-admin users: filter by mobile and leader
-      const { getUserMobileAndLeader } = await import('@/lib/campaignFilter');
-      const { normalizeMobile } = await import('@/lib/auth');
-      const userMobileAndLeader = await getUserMobileAndLeader();
-      
       if (userMobileAndLeader?.mobile && campaigns) {
         const normalizedMobile = normalizeMobile(userMobileAndLeader.mobile);
         existingCampaign = campaigns.find(c => 
@@ -256,9 +267,6 @@ function RecordResultsDetailPageContent() {
     }
 
     // If not found, create a new campaign with user's mobile (if available)
-    const { getUserMobileAndLeader } = await import('@/lib/campaignFilter');
-    const userMobileAndLeader = await getUserMobileAndLeader();
-    
     const { data: newCampaign, error: createError } = await supabase
       .from('campaigns')
       .insert([
@@ -269,7 +277,7 @@ function RecordResultsDetailPageContent() {
           time: campaignData.time,
           leader: campaignData.leader,
           mobile: userMobileAndLeader?.mobile || null,
-          botj: 0,
+          botj: 'No', // Use text format instead of 0
           user_id: userId,
         },
       ])

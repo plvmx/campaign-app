@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef, Suspense } from 'react';
+import { useEffect, useState, useRef, Suspense, useMemo, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import MobileLayout from '@/components/MobileLayout';
 import { getCurrentUser } from '@/lib/auth';
@@ -87,8 +87,12 @@ function AppPageContent() {
   const [campaignLeaders, setCampaignLeaders] = useState<Record<string, string[]>>({});
   
 
+  // Cache for places and leaders by state to avoid repeated queries
+  const placesCache = useRef<Record<string, string[]>>({});
+  const leadersCache = useRef<Record<string, string[]>>({});
+
   // Helper function to apply date filter
-  const applyDateFilter = (campaignsToFilter: Campaign[]) => {
+  const applyDateFilter = useCallback((campaignsToFilter: Campaign[]) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     
@@ -105,35 +109,107 @@ function AppPageContent() {
       }
       return true;
     });
-  };
+  }, [dateFilter]);
+
+  // Reusable function to refetch campaigns (optimized to avoid duplicate queries)
+  const refetchCampaigns = useCallback(async () => {
+    if (!user) return;
+    
+    const { getUserAdminStatusAndMobile } = await import('@/lib/campaignFilter');
+    const { normalizeMobile } = await import('@/lib/auth');
+    const { admin: adminStatus, state: userState, mobile, leader } = await getUserAdminStatusAndMobile();
+    const userMobileAndLeaderData = mobile && leader ? { mobile, leader } : null;
+    
+    let query = supabase.from('campaigns').select('*');
+    
+    if (adminStatus === 'AD') {
+      // No filter
+    } else if (adminStatus === 'SR') {
+      if (userState) {
+        query = query.eq('state', userState.toUpperCase().trim());
+      } else {
+        query = query.eq('user_id', user.id);
+      }
+    } else {
+      if (userMobileAndLeaderData?.mobile && userMobileAndLeaderData?.leader) {
+        query = query.eq('leader', userMobileAndLeaderData.leader);
+      } else {
+        query = query.eq('user_id', user.id);
+      }
+    }
+    
+    const { data, error: fetchError } = await query
+      .order('date', { ascending: true })
+      .order('state', { ascending: true })
+      .order('place', { ascending: true })
+      .order('time', { ascending: true });
+    
+    if (fetchError) throw fetchError;
+    
+    let filteredData = data || [];
+    if (adminStatus !== 'AD' && adminStatus !== 'SR') {
+      if (userMobileAndLeaderData?.mobile) {
+        const normalizedMobile = normalizeMobile(userMobileAndLeaderData.mobile);
+        filteredData = filteredData.filter(campaign => 
+          campaign.mobile && normalizeMobile(campaign.mobile) === normalizedMobile
+        );
+      }
+    }
+    
+    setAllCampaigns(filteredData);
+    
+    // Apply state filter if set
+    let finalData = filteredData;
+    if (filterState) {
+      finalData = finalData.filter(c => c.state.toUpperCase() === filterState.toUpperCase());
+    }
+    
+    // Apply date filter
+    finalData = applyDateFilter(finalData);
+    
+    setCampaigns(finalData);
+  }, [user, filterState, applyDateFilter]);
   
-  // Load places from state_places table when state changes in inline edit
+  // Load places from state_places table when state changes in inline edit (with caching)
   useEffect(() => {
     if (inlineEditingId && inlineEditState[inlineEditingId]) {
       const editData = inlineEditState[inlineEditingId];
       const campaignId = inlineEditingId; // Capture for type narrowing
       if (editData.state) {
-        async function loadPlacesForEdit() {
-          const { data, error } = await supabase
-            .from('state_places')
-            .select('place')
-            .eq('state', editData.state.toUpperCase().trim())
-            .order('place', { ascending: true });
-          
-          if (error) {
-            console.error('Error loading places:', error);
-            return;
+        const normalizedState = editData.state.toUpperCase().trim();
+        
+        // Check cache first
+        if (placesCache.current[normalizedState]) {
+          setCampaignPlaces(prev => ({
+            ...prev,
+            [campaignId]: placesCache.current[normalizedState],
+          }));
+        } else {
+          // Load from database and cache
+          async function loadPlacesForEdit() {
+            const { data, error } = await supabase
+              .from('state_places')
+              .select('place')
+              .eq('state', normalizedState)
+              .order('place', { ascending: true });
+            
+            if (error) {
+              console.error('Error loading places:', error);
+              return;
+            }
+            
+            if (data) {
+              const uniquePlaces = Array.from(new Set(data.map(p => p.place).filter(Boolean)));
+              // Cache the result
+              placesCache.current[normalizedState] = uniquePlaces;
+              setCampaignPlaces(prev => ({
+                ...prev,
+                [campaignId]: uniquePlaces,
+              }));
+            }
           }
-          
-          if (data) {
-            const uniquePlaces = Array.from(new Set(data.map(p => p.place).filter(Boolean)));
-            setCampaignPlaces(prev => ({
-              ...prev,
-              [campaignId]: uniquePlaces,
-            }));
-          }
+          loadPlacesForEdit();
         }
-        loadPlacesForEdit();
       } else {
         // Clear places if no state selected
         setCampaignPlaces(prev => {
@@ -145,33 +221,46 @@ function AppPageContent() {
     }
   }, [inlineEditingId, inlineEditState]);
   
-  // Load leaders from state_leaders table when state changes in inline edit
+  // Load leaders from state_leaders table when state changes in inline edit (with caching)
   useEffect(() => {
     if (inlineEditingId && inlineEditState[inlineEditingId]) {
       const editData = inlineEditState[inlineEditingId];
       const campaignId = inlineEditingId; // Capture for type narrowing
       if (editData.state) {
-        async function loadLeadersForEdit() {
-          const { data, error } = await supabase
-            .from('state_leaders')
-            .select('leader')
-            .eq('state', editData.state.toUpperCase().trim())
-            .order('leader', { ascending: true });
-          
-          if (error) {
-            console.error('Error loading leaders:', error);
-            return;
+        const normalizedState = editData.state.toUpperCase().trim();
+        
+        // Check cache first
+        if (leadersCache.current[normalizedState]) {
+          setCampaignLeaders(prev => ({
+            ...prev,
+            [campaignId]: leadersCache.current[normalizedState],
+          }));
+        } else {
+          // Load from database and cache
+          async function loadLeadersForEdit() {
+            const { data, error } = await supabase
+              .from('state_leaders')
+              .select('leader')
+              .eq('state', normalizedState)
+              .order('leader', { ascending: true });
+            
+            if (error) {
+              console.error('Error loading leaders:', error);
+              return;
+            }
+            
+            if (data) {
+              const uniqueLeaders = Array.from(new Set(data.map(l => l.leader).filter(Boolean)));
+              // Cache the result
+              leadersCache.current[normalizedState] = uniqueLeaders;
+              setCampaignLeaders(prev => ({
+                ...prev,
+                [campaignId]: uniqueLeaders,
+              }));
+            }
           }
-          
-          if (data) {
-            const uniqueLeaders = Array.from(new Set(data.map(l => l.leader).filter(Boolean)));
-            setCampaignLeaders(prev => ({
-              ...prev,
-              [campaignId]: uniqueLeaders,
-            }));
-          }
+          loadLeadersForEdit();
         }
-        loadLeadersForEdit();
       } else {
         // Clear leaders if no state selected
         setCampaignLeaders(prev => {
@@ -201,11 +290,65 @@ function AppPageContent() {
           router.push('/login');
           return;
         }
-        
-        // Get user's admin status from state_leaders table first to determine default filter
-        const { getUserAdminStatus, getUserMobileAndLeader } = await import('@/lib/campaignFilter');
+        setUser(currentUser);
+
+        // Parallelize independent operations
+        const { getUserAdminStatusAndMobile } = await import('@/lib/campaignFilter');
         const { normalizeMobile } = await import('@/lib/auth');
-        const { admin: adminStatus, state: userState } = await getUserAdminStatus();
+        
+        // Load profile and check for pending first name in parallel
+        const [profile, pendingFirstName] = await Promise.all([
+          getUserProfile(),
+          Promise.resolve(sessionStorage.getItem('pendingFirstName'))
+        ]);
+        
+        // Handle new user profile creation if needed
+        let finalProfile = profile;
+        if (!profile && pendingFirstName) {
+          // New user - create profile with first name and state (if permission given)
+          try {
+            let stateCode: string | null = null;
+            
+            // Try to get user's state (this will request location permission)
+            try {
+              stateCode = await getUserStateCode();
+            } catch (locationError) {
+              // User denied location permission or error occurred
+              console.log('Location permission not granted or error occurred');
+            }
+            
+            // Create profile with name and state (if available)
+            finalProfile = await upsertUserProfile({
+              name: pendingFirstName,
+              state: stateCode,
+            });
+            
+            // Clear the pending first name from sessionStorage
+            sessionStorage.removeItem('pendingFirstName');
+          } catch (profileError) {
+            console.error('Error creating user profile:', profileError);
+            // Continue even if profile creation fails
+          }
+        }
+        
+        // Store profile in state for display
+        if (finalProfile) {
+          setUserProfile(finalProfile);
+        }
+        
+        // Parallelize: Get admin status/mobile/leader and check admin permission
+        // Note: getUserAdminStatusAndMobile needs profile, so we do it after profile is ready
+        const [adminData, adminAccess] = await Promise.all([
+          getUserAdminStatusAndMobile(),
+          hasPermission(Permission.ADMIN_ACCESS)
+        ]);
+        
+        const { admin: adminStatus, state: userState, mobile, leader } = adminData;
+        const userMobileAndLeaderData = mobile && leader ? { mobile, leader } : null;
+        
+        setIsAdmin(adminAccess);
+        setAdminStatus(adminStatus);
+        setUserMobileAndLeader(userMobileAndLeaderData);
         
         // Check if returning from a filtered view (URL parameter takes precedence)
         const filterParam = searchParams.get('filter');
@@ -224,47 +367,6 @@ function AppPageContent() {
           
           setDateFilter(isAdminOrSR ? 'upcoming' : 'today');
         }
-        setUser(currentUser);
-
-        // Check if user has a profile, if not create one
-        let profile = await getUserProfile();
-        const pendingFirstName = sessionStorage.getItem('pendingFirstName');
-        
-        if (!profile && pendingFirstName) {
-          // New user - create profile with first name and state (if permission given)
-          try {
-            let stateCode: string | null = null;
-            
-            // Try to get user's state (this will request location permission)
-            try {
-              stateCode = await getUserStateCode();
-            } catch (locationError) {
-              // User denied location permission or error occurred
-              console.log('Location permission not granted or error occurred');
-            }
-            
-            // Create profile with name and state (if available)
-            profile = await upsertUserProfile({
-              name: pendingFirstName,
-              state: stateCode,
-            });
-            
-            // Clear the pending first name from sessionStorage
-            sessionStorage.removeItem('pendingFirstName');
-          } catch (profileError) {
-            console.error('Error creating user profile:', profileError);
-            // Continue even if profile creation fails
-          }
-        }
-        
-        // Store profile in state for display
-        if (profile) {
-          setUserProfile(profile);
-        }
-        
-        // Check admin status
-        const adminAccess = await hasPermission(Permission.ADMIN_ACCESS);
-        setIsAdmin(adminAccess);
 
         // Check for success parameter from campaign creation
         if (searchParams.get('created') === 'true') {
@@ -274,13 +376,6 @@ function AppPageContent() {
           // Hide success message after 5 seconds
           setTimeout(() => setShowSuccess(false), 5000);
         }
-
-        // Get user's mobile and leader (admin status already fetched above)
-        const userMobileAndLeaderData = await getUserMobileAndLeader();
-        setUserMobileAndLeader(userMobileAndLeaderData);
-        
-        // Store admin status in state for display
-        setAdminStatus(adminStatus);
         
         console.log('Campaign filtering:', { adminStatus, userState, userMobileAndLeader: userMobileAndLeaderData });
         
@@ -414,24 +509,29 @@ function AppPageContent() {
     }
   }, [campaignDates]);
   
+  // Memoize filtered campaigns to avoid recalculating on every render
+  const filteredCampaigns = useMemo(() => {
+    if (allCampaigns.length === 0) return [];
+    
+    let filtered = allCampaigns;
+    
+    // Apply state filter if set
+    if (filterState) {
+      filtered = filtered.filter(c => c.state.toUpperCase() === filterState.toUpperCase());
+    }
+    
+    // Apply date filter
+    filtered = applyDateFilter(filtered);
+    
+    return filtered;
+  }, [allCampaigns, filterState, applyDateFilter]);
+
   // Apply state and date filters when they change
   useEffect(() => {
-    if (allCampaigns.length > 0) {
-      let filtered = allCampaigns;
-      
-      // Apply state filter if set
-      if (filterState) {
-        filtered = filtered.filter(c => c.state.toUpperCase() === filterState.toUpperCase());
-      }
-      
-      // Apply date filter
-      filtered = applyDateFilter(filtered);
-      
-      setCampaigns(filtered);
-    }
-  }, [filterState, dateFilter, allCampaigns]);
+    setCampaigns(filteredCampaigns);
+  }, [filteredCampaigns]);
   
-  // Load places from state_places table when state changes
+  // Load places from state_places table when state changes (with caching)
   useEffect(() => {
     // Skip if we're in the middle of editing (loading data programmatically)
     if (isEditingRef.current) {
@@ -444,17 +544,27 @@ function AppPageContent() {
         return;
       }
       
+      const normalizedState = formState.state.toUpperCase().trim();
+      
+      // Check cache first
+      if (placesCache.current[normalizedState]) {
+        setPlaces(placesCache.current[normalizedState]);
+        return;
+      }
+      
       setLoadingPlaces(true);
       try {
         const { data, error } = await supabase
           .from('state_places')
           .select('place')
-          .eq('state', formState.state.toUpperCase().trim())
+          .eq('state', normalizedState)
           .order('place', { ascending: true });
         
         if (error) throw error;
         
         const uniquePlaces = Array.from(new Set((data || []).map(p => p.place).filter(Boolean)));
+        // Cache the result
+        placesCache.current[normalizedState] = uniquePlaces;
         setPlaces(uniquePlaces);
       } catch (err) {
         console.error('Error loading places:', err);
@@ -466,7 +576,7 @@ function AppPageContent() {
     loadPlaces();
   }, [formState.state]);
   
-  // Load leaders from state_leaders table when state changes
+  // Load leaders from state_leaders table when state changes (with caching)
   useEffect(() => {
     // Skip if we're in the middle of editing (loading data programmatically)
     if (isEditingRef.current) {
@@ -479,17 +589,27 @@ function AppPageContent() {
         return;
       }
       
+      const normalizedState = formState.state.toUpperCase().trim();
+      
+      // Check cache first
+      if (leadersCache.current[normalizedState]) {
+        setLeaders(leadersCache.current[normalizedState]);
+        return;
+      }
+      
       setLoadingLeaders(true);
       try {
         const { data, error } = await supabase
           .from('state_leaders')
           .select('leader')
-          .eq('state', formState.state.toUpperCase().trim())
+          .eq('state', normalizedState)
           .order('leader', { ascending: true });
         
         if (error) throw error;
         
         const uniqueLeaders = Array.from(new Set((data || []).map(l => l.leader).filter(Boolean)));
+        // Cache the result
+        leadersCache.current[normalizedState] = uniqueLeaders;
         setLeaders(uniqueLeaders);
       } catch (err) {
         console.error('Error loading leaders:', err);
@@ -593,7 +713,7 @@ function AppPageContent() {
         
         placeValue = newPlace;
         
-        // Reload places for the state
+        // Reload places for the state and update cache
         const { data: placesData } = await supabase
           .from('state_places')
           .select('place')
@@ -602,6 +722,8 @@ function AppPageContent() {
         
         if (placesData) {
           const uniquePlaces = Array.from(new Set(placesData.map(p => p.place).filter(Boolean)));
+          // Update cache
+          placesCache.current[stateValue] = uniquePlaces;
           setPlaces(uniquePlaces);
         }
       }
@@ -649,59 +771,8 @@ function AppPageContent() {
       setCustomPlace('');
       setIsFormExpanded(false); // Collapse form after successful save
       
-      // Reload campaigns
-      const { getUserAdminStatus, getUserMobileAndLeader } = await import('@/lib/campaignFilter');
-      const { normalizeMobile } = await import('@/lib/auth');
-      const { admin: adminStatus, state: userState } = await getUserAdminStatus();
-      const userMobileAndLeader = await getUserMobileAndLeader();
-      
-      let query = supabase.from('campaigns').select('*');
-      
-      if (adminStatus === 'AD') {
-        // No filter
-      } else if (adminStatus === 'SR') {
-        if (userState) {
-          query = query.eq('state', userState.toUpperCase().trim());
-        } else {
-          query = query.eq('user_id', user.id);
-        }
-      } else {
-        if (userMobileAndLeader?.mobile && userMobileAndLeader?.leader) {
-          query = query.eq('leader', userMobileAndLeader.leader);
-        } else {
-          query = query.eq('user_id', user.id);
-        }
-      }
-      
-      const { data, error: fetchError } = await query
-        .order('date', { ascending: true })
-        .order('state', { ascending: true })
-        .order('place', { ascending: true })
-        .order('time', { ascending: true });
-      
-      if (fetchError) throw fetchError;
-      
-      let filteredData = data || [];
-      if (adminStatus !== 'AD' && adminStatus !== 'SR') {
-        if (userMobileAndLeader?.mobile) {
-          const normalizedMobile = normalizeMobile(userMobileAndLeader.mobile);
-          filteredData = filteredData.filter(campaign => 
-            campaign.mobile && normalizeMobile(campaign.mobile) === normalizedMobile
-          );
-        }
-      }
-      
-      setAllCampaigns(filteredData);
-      
-      // Apply state filter if set
-      if (filterState) {
-        filteredData = filteredData.filter(c => c.state.toUpperCase() === filterState.toUpperCase());
-      }
-      
-      // Apply date filter
-      filteredData = applyDateFilter(filteredData);
-      
-      setCampaigns(filteredData);
+      // Reload campaigns using optimized function
+      await refetchCampaigns();
     } catch (err: any) {
       setError(err.message || 'Failed to save campaign');
     } finally {
@@ -727,43 +798,63 @@ function AppPageContent() {
     // Normalize state to uppercase to match dropdown options
     const normalizedState = campaign.state ? campaign.state.toUpperCase().trim() : '';
     
-    // Load places for the state from state_places table
+    // Load places for the state from state_places table (with caching)
     if (normalizedState) {
-      try {
-        const { data, error } = await supabase
-          .from('state_places')
-          .select('place')
-          .eq('state', normalizedState)
-          .order('place', { ascending: true });
-        
-        if (!error && data) {
-          const uniquePlaces = Array.from(new Set(data.map(p => p.place).filter(Boolean)));
-          setCampaignPlaces(prev => ({
-            ...prev,
-            [campaign.id]: uniquePlaces,
-          }));
+      // Check cache first
+      if (placesCache.current[normalizedState]) {
+        setCampaignPlaces(prev => ({
+          ...prev,
+          [campaign.id]: placesCache.current[normalizedState],
+        }));
+      } else {
+        try {
+          const { data, error } = await supabase
+            .from('state_places')
+            .select('place')
+            .eq('state', normalizedState)
+            .order('place', { ascending: true });
+          
+          if (!error && data) {
+            const uniquePlaces = Array.from(new Set(data.map(p => p.place).filter(Boolean)));
+            // Cache the result
+            placesCache.current[normalizedState] = uniquePlaces;
+            setCampaignPlaces(prev => ({
+              ...prev,
+              [campaign.id]: uniquePlaces,
+            }));
+          }
+        } catch (err) {
+          console.error('Error loading places:', err);
         }
-      } catch (err) {
-        console.error('Error loading places:', err);
       }
       
-      // Load leaders for the state from state_leaders table
-      try {
-        const { data, error } = await supabase
-          .from('state_leaders')
-          .select('leader')
-          .eq('state', normalizedState)
-          .order('leader', { ascending: true });
-        
-        if (!error && data) {
-          const uniqueLeaders = Array.from(new Set(data.map(l => l.leader).filter(Boolean)));
-          setCampaignLeaders(prev => ({
-            ...prev,
-            [campaign.id]: uniqueLeaders,
-          }));
+      // Load leaders for the state from state_leaders table (with caching)
+      // Check cache first
+      if (leadersCache.current[normalizedState]) {
+        setCampaignLeaders(prev => ({
+          ...prev,
+          [campaign.id]: leadersCache.current[normalizedState],
+        }));
+      } else {
+        try {
+          const { data, error } = await supabase
+            .from('state_leaders')
+            .select('leader')
+            .eq('state', normalizedState)
+            .order('leader', { ascending: true });
+          
+          if (!error && data) {
+            const uniqueLeaders = Array.from(new Set(data.map(l => l.leader).filter(Boolean)));
+            // Cache the result
+            leadersCache.current[normalizedState] = uniqueLeaders;
+            setCampaignLeaders(prev => ({
+              ...prev,
+              [campaign.id]: uniqueLeaders,
+            }));
+          }
+        } catch (err) {
+          console.error('Error loading leaders:', err);
         }
-      } catch (err) {
-        console.error('Error loading leaders:', err);
       }
     }
     
@@ -832,7 +923,7 @@ function AppPageContent() {
         
         placeValue = newPlace;
         
-        // Reload places for the state
+        // Reload places for the state and update cache
         const { data: placesData } = await supabase
           .from('state_places')
           .select('place')
@@ -841,6 +932,8 @@ function AppPageContent() {
         
         if (placesData) {
           const uniquePlaces = Array.from(new Set(placesData.map(p => p.place).filter(Boolean)));
+          // Update cache
+          placesCache.current[stateValue] = uniquePlaces;
           setCampaignPlaces(prev => ({
             ...prev,
             [campaignId]: uniquePlaces,
@@ -895,59 +988,8 @@ function AppPageContent() {
         return newState;
       });
       
-      // Reload campaigns
-      const { getUserAdminStatus, getUserMobileAndLeader } = await import('@/lib/campaignFilter');
-      const { normalizeMobile } = await import('@/lib/auth');
-      const { admin: adminStatus, state: userState } = await getUserAdminStatus();
-      const userMobileAndLeader = await getUserMobileAndLeader();
-      
-      let query = supabase.from('campaigns').select('*');
-      
-      if (adminStatus === 'AD') {
-        // No filter
-      } else if (adminStatus === 'SR') {
-        if (userState) {
-          query = query.eq('state', userState.toUpperCase().trim());
-        } else {
-          query = query.eq('user_id', user.id);
-        }
-      } else {
-        if (userMobileAndLeader?.mobile && userMobileAndLeader?.leader) {
-          query = query.eq('leader', userMobileAndLeader.leader);
-        } else {
-          query = query.eq('user_id', user.id);
-        }
-      }
-      
-      const { data, error: fetchError } = await query
-        .order('date', { ascending: true })
-        .order('state', { ascending: true })
-        .order('place', { ascending: true })
-        .order('time', { ascending: true });
-      
-      if (fetchError) throw fetchError;
-      
-      let filteredData = data || [];
-      if (adminStatus !== 'AD' && adminStatus !== 'SR') {
-        if (userMobileAndLeader?.mobile) {
-          const normalizedMobile = normalizeMobile(userMobileAndLeader.mobile);
-          filteredData = filteredData.filter(campaign => 
-            campaign.mobile && normalizeMobile(campaign.mobile) === normalizedMobile
-          );
-        }
-      }
-      
-      setAllCampaigns(filteredData);
-      
-      // Apply state filter if set
-      if (filterState) {
-        filteredData = filteredData.filter(c => c.state.toUpperCase() === filterState.toUpperCase());
-      }
-      
-      // Apply date filter
-      filteredData = applyDateFilter(filteredData);
-      
-      setCampaigns(filteredData);
+      // Reload campaigns using optimized function
+      await refetchCampaigns();
     } catch (err: any) {
       setError(err.message || 'Failed to update campaign');
     }
@@ -1047,73 +1089,35 @@ function AppPageContent() {
       
       setSuccess('Campaign deleted successfully');
       
-      // Reload campaigns
-      const user = await getCurrentUser();
-      if (!user) return;
-      
-      const { getUserAdminStatus, getUserMobileAndLeader } = await import('@/lib/campaignFilter');
-      const { normalizeMobile } = await import('@/lib/auth');
-      const { admin: adminStatus, state: userState } = await getUserAdminStatus();
-      const userMobileAndLeader = await getUserMobileAndLeader();
-      
-      let query = supabase.from('campaigns').select('*');
-      
-      if (adminStatus === 'AD') {
-        // No filter
-      } else if (adminStatus === 'SR') {
-        if (userState) {
-          query = query.eq('state', userState.toUpperCase().trim());
-        } else {
-          query = query.eq('user_id', user.id);
-        }
-      } else {
-        if (userMobileAndLeader?.mobile && userMobileAndLeader?.leader) {
-          query = query.eq('leader', userMobileAndLeader.leader);
-        } else {
-          query = query.eq('user_id', user.id);
-        }
-      }
-      
-      const { data, error: fetchError } = await query
-        .order('date', { ascending: true })
-        .order('state', { ascending: true })
-        .order('place', { ascending: true })
-        .order('time', { ascending: true });
-      
-      if (fetchError) throw fetchError;
-      
-      let filteredData = data || [];
-      if (adminStatus !== 'AD' && adminStatus !== 'SR') {
-        if (userMobileAndLeader?.mobile) {
-          const normalizedMobile = normalizeMobile(userMobileAndLeader.mobile);
-          filteredData = filteredData.filter(campaign => 
-            campaign.mobile && normalizeMobile(campaign.mobile) === normalizedMobile
-          );
-        }
-      }
-      
-      setAllCampaigns(filteredData);
-      
-      // Apply state filter if set
-      if (filterState) {
-        filteredData = filteredData.filter(c => c.state.toUpperCase() === filterState.toUpperCase());
-      }
-      
-      // Apply date filter
-      filteredData = applyDateFilter(filteredData);
-      
-      setCampaigns(filteredData);
+      // Reload campaigns using optimized function
+      await refetchCampaigns();
     } catch (err: any) {
       setError(err.message || 'Failed to delete campaign');
     }
   };
 
   const handleToggleCheckbox = async (campaignId: string, field: 'tl_ok' | 'sr_ok', currentValue: boolean) => {
+    const newValue = !currentValue;
+    
+    // Optimistic update: update UI immediately for better UX
+    setCampaigns(prev => prev.map(campaign => 
+      campaign.id === campaignId 
+        ? { ...campaign, [field]: newValue }
+        : campaign
+    ));
+
+    setAllCampaigns(prev => prev.map(campaign => 
+      campaign.id === campaignId 
+        ? { ...campaign, [field]: newValue }
+        : campaign
+    ));
+    
     try {
-      // Fetch old data for logging
-      const oldData = await fetchCampaignData(campaignId);
+      // Fetch old data for logging (in parallel with update)
+      const [oldData] = await Promise.all([
+        fetchCampaignData(campaignId)
+      ]);
       
-      const newValue = !currentValue;
       const newData = { [field]: newValue };
       
       // Update database
@@ -1122,25 +1126,25 @@ function AppPageContent() {
         .update(newData)
         .eq('id', campaignId);
 
-      if (error) throw error;
+      if (error) {
+        // Rollback optimistic update on error
+        setCampaigns(prev => prev.map(campaign => 
+          campaign.id === campaignId 
+            ? { ...campaign, [field]: currentValue }
+            : campaign
+        ));
+        setAllCampaigns(prev => prev.map(campaign => 
+          campaign.id === campaignId 
+            ? { ...campaign, [field]: currentValue }
+            : campaign
+        ));
+        throw error;
+      }
       
       // Log the change (async, won't block)
       if (oldData) {
         logCampaignChange(campaignId, 'UPDATE', oldData, { ...oldData, ...newData });
       }
-
-      // Update local state
-      setCampaigns(prev => prev.map(campaign => 
-        campaign.id === campaignId 
-          ? { ...campaign, [field]: !currentValue }
-          : campaign
-      ));
-
-      setAllCampaigns(prev => prev.map(campaign => 
-        campaign.id === campaignId 
-          ? { ...campaign, [field]: !currentValue }
-          : campaign
-      ));
     } catch (err: any) {
       setError(err.message || 'Failed to update verification status');
     }
