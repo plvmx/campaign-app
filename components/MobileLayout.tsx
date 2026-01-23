@@ -30,14 +30,14 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
   return (
     <div className="flex min-h-screen flex-col bg-gray-50 dark:bg-gray-900 overflow-x-hidden">
       {/* Header */}
-      <header className="sticky top-0 z-10 border-b border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-950">
+      <header className="sticky top-0 z-10 border-b-2 border-gray-800 dark:border-gray-600 bg-white dark:bg-gray-950">
         <div className="flex h-14 items-center justify-between px-4">
           <h1 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100 truncate">
             Campaign Manager
           </h1>
           <button
             onClick={handleSignOut}
-            className="rounded-md px-3 py-1.5 text-xs sm:text-sm font-medium text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800 whitespace-nowrap"
+            className="rounded-md px-3 py-1.5 text-base font-bold text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800 whitespace-nowrap border-2 border-gray-800 dark:border-gray-600"
           >
             Sign Out
           </button>
@@ -50,7 +50,7 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
       </main>
 
       {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 border-t border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-950">
+      <nav className="fixed bottom-0 left-0 right-0 border-t-2 border-gray-800 dark:border-gray-600 bg-white dark:bg-gray-950">
         <div className="flex items-center justify-around">
           {navItems.map((item) => {
             const isActive = pathname === item.href || 

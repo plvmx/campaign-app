@@ -1178,7 +1178,7 @@ function AppPageContent() {
             </p>
             <button
               onClick={() => setShowMoreInfo(!showMoreInfo)}
-              className="text-sm sm:text-base text-blue-600 dark:text-blue-400 underline hover:text-blue-800 dark:hover:text-blue-300 focus:outline-none"
+              className="text-base font-bold text-blue-600 dark:text-blue-400 underline hover:text-blue-800 dark:hover:text-blue-300 focus:outline-none border-2 border-gray-800 dark:border-gray-600 rounded-md px-2 py-1"
             >
               More Info
             </button>
@@ -1198,7 +1198,7 @@ function AppPageContent() {
           <div className="mt-4 flex justify-center gap-3 flex-wrap">
             <button
               onClick={() => setDateFilter('today')}
-              className={`rounded-md px-4 py-2 text-sm font-semibold transition-colors shadow-sm ${
+              className={`rounded-md px-4 py-2 text-base font-bold transition-colors shadow-sm border-2 border-gray-800 dark:border-gray-600 ${
                 dateFilter === 'today'
                   ? 'bg-blue-600 text-white shadow-md'
                   : 'bg-gradient-to-b from-gray-100 to-gray-200 text-gray-700 hover:from-gray-200 hover:to-gray-300 dark:from-gray-700 dark:to-gray-800 dark:text-gray-300 dark:hover:from-gray-600 dark:hover:to-gray-700'
@@ -1208,7 +1208,7 @@ function AppPageContent() {
             </button>
             <button
               onClick={() => setDateFilter('past')}
-              className={`rounded-md px-4 py-2 text-sm font-semibold transition-colors shadow-sm ${
+              className={`rounded-md px-4 py-2 text-base font-bold transition-colors shadow-sm border-2 border-gray-800 dark:border-gray-600 ${
                 dateFilter === 'past'
                   ? 'bg-blue-600 text-white shadow-md'
                   : 'bg-gradient-to-b from-gray-100 to-gray-200 text-gray-700 hover:from-gray-200 hover:to-gray-300 dark:from-gray-700 dark:to-gray-800 dark:text-gray-300 dark:hover:from-gray-600 dark:hover:to-gray-700'
@@ -1218,7 +1218,7 @@ function AppPageContent() {
             </button>
             <button
               onClick={() => setDateFilter('upcoming')}
-              className={`rounded-md px-4 py-2 text-sm font-semibold transition-colors shadow-sm ${
+              className={`rounded-md px-4 py-2 text-base font-bold transition-colors shadow-sm border-2 border-gray-800 dark:border-gray-600 ${
                 dateFilter === 'upcoming'
                   ? 'bg-blue-600 text-white shadow-md'
                   : 'bg-gradient-to-b from-gray-100 to-gray-200 text-gray-700 hover:from-gray-200 hover:to-gray-300 dark:from-gray-700 dark:to-gray-800 dark:text-gray-300 dark:hover:from-gray-600 dark:hover:to-gray-700'
@@ -1228,7 +1228,7 @@ function AppPageContent() {
             </button>
             <button
               onClick={() => setIsFormExpanded(!isFormExpanded)}
-              className={`rounded-md px-4 py-2 text-sm font-semibold transition-colors shadow-sm ${
+              className={`rounded-md px-4 py-2 text-base font-bold transition-colors shadow-sm border-2 border-gray-800 dark:border-gray-600 ${
                 isFormExpanded
                   ? 'bg-green-600 text-white shadow-md'
                   : 'bg-gradient-to-b from-green-100 to-green-200 text-green-700 hover:from-green-200 hover:to-green-300 dark:from-green-700 dark:to-green-800 dark:text-green-300 dark:hover:from-green-600 dark:hover:to-green-700'
@@ -1260,7 +1260,7 @@ function AppPageContent() {
 
           {/* Add/Edit Form */}
           {isFormExpanded && (
-            <div className="rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800 w-full overflow-hidden">
+            <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white shadow-sm dark:bg-gray-800 w-full overflow-hidden">
               <div className="flex items-center justify-between p-4">
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
                   Create Campaign
@@ -1268,7 +1268,7 @@ function AppPageContent() {
                 <button
                   type="button"
                   onClick={() => setIsFormExpanded(false)}
-                  className="rounded-md bg-red-600 px-3 py-1 text-sm font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+                  className="rounded-md bg-red-600 px-3 py-1 text-base font-bold text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
                 >
                   Close
                 </button>
@@ -1489,7 +1489,7 @@ function AppPageContent() {
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="flex-1 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed border-2 border-gray-800 dark:border-gray-600"
                 >
                   {isSubmitting ? 'Creating...' : 'Create'}
                 </button>
@@ -1522,7 +1522,7 @@ function AppPageContent() {
           )}
 
           {/* List of Campaigns */}
-          <div className="rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800 w-full overflow-hidden">
+          <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white shadow-sm dark:bg-gray-800 w-full overflow-hidden">
             <div className="p-4">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
                 {dateFilter === 'today' && `Today's Campaigns (${campaigns.length})`}
@@ -1789,13 +1789,13 @@ function AppPageContent() {
                                   <div className="flex gap-2 pt-2">
                                     <button
                                       onClick={() => handleSaveInlineEdit(campaign.id)}
-                                      className="flex-1 rounded-md bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700"
+                                      className="flex-1 rounded-md bg-green-600 px-3 py-2 text-base font-bold text-white hover:bg-green-700 border-2 border-gray-800 dark:border-gray-600"
                                     >
                                       Save
                                     </button>
                                     <button
                                       onClick={handleCancelInlineEdit}
-                                      className="flex-1 rounded-md bg-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+                                      className="flex-1 rounded-md bg-gray-200 px-3 py-2 text-base font-bold text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 border-2 border-gray-800 dark:border-gray-600"
                                     >
                                       Cancel
                                     </button>

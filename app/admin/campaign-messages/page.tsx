@@ -175,7 +175,7 @@ export default function CampaignMessagesPage() {
             </p>
             <button
               onClick={() => router.push('/admin')}
-              className="mt-4 rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+              className="mt-4 rounded-md bg-red-600 px-4 py-2 text-base font-bold text-white hover:bg-red-700 border-2 border-gray-800 dark:border-gray-600"
             >
               Go Back
             </button>
@@ -200,7 +200,7 @@ export default function CampaignMessagesPage() {
             </div>
             <button
               onClick={() => router.push('/admin')}
-              className="rounded-md bg-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 whitespace-nowrap"
+              className="rounded-md bg-gray-200 px-3 py-2 text-base font-bold text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 whitespace-nowrap border-2 border-gray-800 dark:border-gray-600"
             >
               Back
             </button>
@@ -260,7 +260,7 @@ export default function CampaignMessagesPage() {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="flex-1 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed border-2 border-gray-800 dark:border-gray-600"
               >
                 {isSubmitting ? 'Saving...' : editingDate ? 'Update' : 'Add'}
               </button>
@@ -268,7 +268,7 @@ export default function CampaignMessagesPage() {
                 <button
                   type="button"
                   onClick={handleCancel}
-                  className="rounded-md bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+                  className="rounded-md bg-gray-200 px-4 py-2 text-base font-bold text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 border-2 border-gray-800 dark:border-gray-600"
                 >
                   Cancel
                 </button>
@@ -309,13 +309,13 @@ export default function CampaignMessagesPage() {
                     <div className="flex flex-col sm:flex-row gap-2 flex-shrink-0">
                       <button
                         onClick={() => handleEdit(item)}
-                        className="rounded-md bg-blue-100 px-3 py-1 text-sm font-medium text-blue-700 hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50 whitespace-nowrap"
+                        className="rounded-md bg-blue-100 px-3 py-1 text-base font-bold text-blue-700 hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50 whitespace-nowrap border-2 border-gray-800 dark:border-gray-600"
                       >
                         Edit
                       </button>
                       <button
                         onClick={() => handleDelete(item.date)}
-                        className="rounded-md bg-red-100 px-3 py-1 text-sm font-medium text-red-700 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-300 dark:hover:bg-red-900/50 whitespace-nowrap"
+                        className="rounded-md bg-red-100 px-3 py-1 text-base font-bold text-red-700 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-300 dark:hover:bg-red-900/50 whitespace-nowrap border-2 border-gray-800 dark:border-gray-600"
                       >
                         Delete
                       </button>

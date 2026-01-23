@@ -346,7 +346,7 @@ export default function AdminPage() {
             </p>
             <button
               onClick={() => router.push('/app')}
-              className="mt-4 rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+              className="mt-4 rounded-md bg-red-600 px-4 py-2 text-base font-bold text-white hover:bg-red-700 border-2 border-gray-800 dark:border-gray-600"
             >
               Go Back
             </button>
@@ -408,7 +408,7 @@ export default function AdminPage() {
           )}
 
           {/* Weekly Refresh */}
-          <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+          <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
               Weekly Refresh
             </h2>
@@ -418,14 +418,14 @@ export default function AdminPage() {
             <button
               onClick={handleWeeklyRefresh}
               disabled={isRefreshing || !dates}
-              className="mt-4 rounded-md bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
+              className="mt-4 rounded-md bg-purple-600 px-4 py-2 text-base font-bold text-white hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 disabled:bg-gray-400 disabled:cursor-not-allowed border-2 border-gray-800 dark:border-gray-600"
             >
               {isRefreshing ? 'Refreshing...' : 'Weekly Refresh'}
             </button>
           </div>
 
           {/* Campaign Slides */}
-          <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+          <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
               Campaign Slides
             </h2>
@@ -434,14 +434,14 @@ export default function AdminPage() {
             </p>
             <button
               onClick={() => router.push('/admin/generate-slides')}
-              className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
             >
               Generate Slides
             </button>
           </div>
 
           {/* Campaign Results Report */}
-          <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+          <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
               Campaign Results Report
             </h2>
@@ -450,14 +450,14 @@ export default function AdminPage() {
             </p>
             <button
               onClick={() => router.push('/admin/generate-report')}
-              className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
             >
               Generate Report
             </button>
           </div>
 
           {/* Campaign Logs Viewer */}
-          <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+          <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
               Campaign Change Logs
             </h2>
@@ -466,14 +466,14 @@ export default function AdminPage() {
             </p>
             <button
               onClick={() => router.push('/admin/campaign-logs')}
-              className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
             >
               View Logs
             </button>
           </div>
 
           {/* Export Campaigns */}
-          <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+          <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
               Export Campaigns
             </h2>
@@ -483,14 +483,14 @@ export default function AdminPage() {
             <button
               onClick={handleExportCampaigns}
               disabled={isExporting}
-              className="mt-4 rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
+              className="mt-4 rounded-md bg-green-600 px-4 py-2 text-base font-bold text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:bg-gray-400 disabled:cursor-not-allowed border-2 border-gray-800 dark:border-gray-600"
             >
               {isExporting ? 'Exporting...' : 'Export Campaigns to CSV'}
             </button>
           </div>
 
           {/* Import Campaigns */}
-          <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+          <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
               Import Campaigns
             </h2>
@@ -508,14 +508,14 @@ export default function AdminPage() {
               <button
                 onClick={handleImportCampaigns}
                 disabled={isImporting || !importFile}
-                className="w-full rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                className="w-full rounded-md bg-red-600 px-4 py-2 text-base font-bold text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:bg-gray-400 disabled:cursor-not-allowed border-2 border-gray-800 dark:border-gray-600"
               >
                 {isImporting ? 'Importing...' : 'Import Campaigns from CSV'}
               </button>
             </div>
           </div>
 
-          <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+          <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
               Campaign Messages
             </h2>
@@ -524,13 +524,13 @@ export default function AdminPage() {
             </p>
             <button
               onClick={() => router.push('/admin/campaign-messages')}
-              className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
             >
               Manage Campaign Messages
             </button>
           </div>
           
-          <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+          <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
               State Places Management
             </h2>
@@ -539,13 +539,13 @@ export default function AdminPage() {
             </p>
             <button
               onClick={() => router.push('/admin/state-places')}
-              className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
             >
               Manage State Places
             </button>
           </div>
 
-          <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+          <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
               State Leaders Management
             </h2>
@@ -554,13 +554,13 @@ export default function AdminPage() {
             </p>
             <button
               onClick={() => router.push('/admin/state-leaders')}
-              className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
             >
               Manage State Leaders
             </button>
           </div>
 
-          <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+          <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
               User Management
             </h2>
@@ -569,13 +569,13 @@ export default function AdminPage() {
             </p>
             <button
               disabled
-              className="mt-4 rounded-md bg-gray-200 px-4 py-2 text-sm font-medium text-gray-600 dark:bg-gray-700 dark:text-gray-400"
+              className="mt-4 rounded-md bg-gray-200 px-4 py-2 text-base font-bold text-gray-600 dark:bg-gray-700 dark:text-gray-400 border-2 border-gray-800 dark:border-gray-600"
             >
               Coming Soon
             </button>
           </div>
 
-          <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+          <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
               System Settings
             </h2>
@@ -620,7 +620,7 @@ export default function AdminPage() {
             </div>
           </div>
 
-          <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+          <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
               Analytics
             </h2>
@@ -629,7 +629,7 @@ export default function AdminPage() {
             </p>
             <button
               disabled
-              className="mt-4 rounded-md bg-gray-200 px-4 py-2 text-sm font-medium text-gray-600 dark:bg-gray-700 dark:text-gray-400"
+              className="mt-4 rounded-md bg-gray-200 px-4 py-2 text-base font-bold text-gray-600 dark:bg-gray-700 dark:text-gray-400 border-2 border-gray-800 dark:border-gray-600"
             >
               Coming Soon
             </button>

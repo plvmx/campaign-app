@@ -139,13 +139,13 @@ export default function SlideViewerPage() {
         <div className="flex gap-4 p-4 bg-gray-900">
           <button
             onClick={handleNext}
-            className="flex-1 rounded-md bg-blue-600 px-6 py-3 text-base font-semibold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            className="flex-1 rounded-md bg-blue-600 px-6 py-3 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
           >
             Next
           </button>
           <button
             onClick={handleDownload}
-            className="flex-1 rounded-md bg-green-600 px-6 py-3 text-base font-semibold text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+            className="flex-1 rounded-md bg-green-600 px-6 py-3 text-base font-bold text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
           >
             Download
           </button>

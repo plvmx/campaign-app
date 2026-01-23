@@ -715,7 +715,7 @@ function RecordResultsDetailPageContent() {
         <div className="mb-6">
           <button
             onClick={() => router.push(`/app?filter=${returnFilter}`)}
-            className="mb-4 text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 hover:underline"
+            className="mb-4 text-base font-bold text-blue-600 hover:text-blue-700 dark:text-blue-400 hover:underline border-2 border-gray-800 dark:border-gray-600 rounded-md px-3 py-1"
           >
             ← Back to Campaigns
           </button>

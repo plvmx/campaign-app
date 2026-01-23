@@ -671,7 +671,7 @@ export default function GenerateSlidesPage() {
             </p>
             <button
               onClick={() => router.push('/admin')}
-              className="mt-4 rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+              className="mt-4 rounded-md bg-red-600 px-4 py-2 text-base font-bold text-white hover:bg-red-700 border-2 border-gray-800 dark:border-gray-600"
             >
               Go Back
             </button>
@@ -751,7 +751,7 @@ export default function GenerateSlidesPage() {
             <button
               onClick={generateSlides}
               disabled={isGenerating}
-              className="w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
+              className="w-full rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:bg-gray-400 disabled:cursor-not-allowed border-2 border-gray-800 dark:border-gray-600"
             >
               {isGenerating ? 'Generating Slides...' : 'Generate Campaign Slides'}
             </button>
