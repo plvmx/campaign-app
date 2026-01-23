@@ -1566,7 +1566,7 @@ function AppPageContent() {
                     // Date header (only show if different from previous)
                     if (date !== lastDate) {
                       result.push(
-                        <div key={`date-${date}`} className="bg-blue-100 dark:bg-blue-900/30 px-4 py-4 border-b-2 border-blue-300 dark:border-blue-700">
+                        <div key={`date-${date}`} className="bg-blue-100 dark:bg-blue-900/30 px-4 py-4 border-2 border-gray-800 dark:border-gray-600 border-b-2 border-blue-300 dark:border-blue-700">
                           <div className="font-bold text-xl sm:text-2xl text-blue-900 dark:text-blue-100 break-words">
                             {new Date(date).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
                           </div>
@@ -1583,7 +1583,7 @@ function AppPageContent() {
                       // State header (only show if different from previous)
                       if (state !== lastState) {
                         result.push(
-                          <div key={`state-${date}-${state}`} className="bg-yellow-100 dark:bg-yellow-900/30 px-4 py-3">
+                          <div key={`state-${date}-${state}`} className="bg-yellow-100 dark:bg-yellow-900/30 px-4 py-3 border-2 border-gray-800 dark:border-gray-600">
                             <div className="font-bold text-base sm:text-lg text-yellow-900 dark:text-yellow-200">
                               {state}
                             </div>
@@ -1603,7 +1603,7 @@ function AppPageContent() {
                           if (isEditing && editData) {
                             // Inline editing mode - show editable fields
                             result.push(
-                              <div key={campaign.id} className="p-4 bg-blue-50 dark:bg-blue-900/20 border-b border-gray-100 dark:border-gray-800">
+                              <div key={campaign.id} className="p-4 bg-blue-50 dark:bg-blue-900/20 border-b-2 border-gray-800 dark:border-gray-600">
                                 <div className="space-y-3">
                                   <div className="grid grid-cols-2 gap-2">
                                     <div>
@@ -1830,7 +1830,7 @@ function AppPageContent() {
                             const stateColor = getStateColor(campaign.state);
                             
                             result.push(
-                              <div key={campaign.id} className={`p-4 sm:p-5 ${stateColor.bg} border-b border-gray-100 dark:border-gray-800`}>
+                              <div key={campaign.id} className={`p-4 sm:p-5 ${stateColor.bg} border-b-2 border-gray-800 dark:border-gray-600`}>
                                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                                   <div className="flex-1 min-w-0">
                                     <div className={`text-lg sm:text-xl font-bold ${stateColor.text} mb-2 break-words`}>
@@ -1930,20 +1930,20 @@ function AppPageContent() {
                                           });
                                           router.push(`/record-results/detail?${params.toString()}`);
                                         }}
-                                        className="flex-1 rounded-md bg-green-100 px-2 sm:px-4 py-2 text-xs sm:text-base font-semibold text-green-700 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-300 dark:hover:bg-green-900/50"
+                                        className="flex-1 rounded-md bg-green-100 px-2 sm:px-4 py-2 text-base font-bold text-green-700 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-300 dark:hover:bg-green-900/50 border-2 border-gray-800 dark:border-gray-600"
                                       >
                                         Record Results
                                       </button>
                                     )}
                                     <button
                                       onClick={() => handleEdit(campaign)}
-                                      className="flex-1 rounded-md bg-blue-100 px-2 sm:px-4 py-2 text-xs sm:text-base font-semibold text-blue-700 hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50"
+                                      className="flex-1 rounded-md bg-blue-100 px-2 sm:px-4 py-2 text-base font-bold text-blue-700 hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50 border-2 border-gray-800 dark:border-gray-600"
                                     >
                                       Edit
                                     </button>
                                     <button
                                       onClick={() => handleDelete(campaign.id)}
-                                      className="flex-1 rounded-md bg-red-100 px-2 sm:px-4 py-2 text-xs sm:text-base font-semibold text-red-700 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-300 dark:hover:bg-red-900/50"
+                                      className="flex-1 rounded-md bg-red-100 px-2 sm:px-4 py-2 text-base font-bold text-red-700 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-300 dark:hover:bg-red-900/50 border-2 border-gray-800 dark:border-gray-600"
                                     >
                                       Delete
                                     </button>
