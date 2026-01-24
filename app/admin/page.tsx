@@ -9,6 +9,7 @@ import { useCampaignDates } from '@/contexts/CampaignDatesContext';
 import { formatDateReadable, formatDateForDb } from '@/lib/campaignDates';
 import { supabase } from '@/lib/supabaseClient';
 import { isCampaignLoggingEnabled, setCampaignLoggingEnabled } from '@/lib/appSettings';
+import { CampaignRule, evaluateRules } from '@/lib/campaignRules';
 
 export default function AdminPage() {
   const router = useRouter();
