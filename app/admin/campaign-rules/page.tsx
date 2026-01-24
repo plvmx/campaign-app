@@ -67,6 +67,13 @@ export default function CampaignRulesPage() {
   const [previewRuleId, setPreviewRuleId] = useState<string | null>(null);
   const [previewDates, setPreviewDates] = useState<Date[]>([]);
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
+  
+  // Dropdown data
+  const [places, setPlaces] = useState<string[]>([]);
+  const [leaders, setLeaders] = useState<string[]>([]);
+  const [timeOptions, setTimeOptions] = useState<{ value: string; label: string }[]>([]);
+  const [loadingPlaces, setLoadingPlaces] = useState(false);
+  const [loadingLeaders, setLoadingLeaders] = useState(false);
 
   useEffect(() => {
     async function checkAuthAndPermissions() {
@@ -116,6 +123,103 @@ export default function CampaignRulesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasAccess]);
 
+  // Generate time options (8:00 AM to 8:00 PM, half-hour intervals)
+  useEffect(() => {
+    const times: { value: string; label: string }[] = [];
+    for (let hour = 8; hour <= 20; hour++) {
+      for (let minute = 0; minute < 60; minute += 30) {
+        const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+        const displayHour = hour % 12 || 12;
+        const ampm = hour >= 12 ? 'PM' : 'AM';
+        times.push({
+          value: timeStr,
+          label: `${displayHour}:${minute.toString().padStart(2, '0')} ${ampm}`,
+        });
+      }
+    }
+    setTimeOptions(times);
+  }, []);
+
+  // Fetch places from state_places table when state changes
+  useEffect(() => {
+    async function fetchPlaces() {
+      if (!formState.state) {
+        setPlaces([]);
+        setFormState(prev => ({ ...prev, place: '' }));
+        return;
+      }
+
+      setLoadingPlaces(true);
+      try {
+        const { data, error } = await supabase
+          .from('state_places')
+          .select('place')
+          .eq('state', formState.state)
+          .order('place', { ascending: true });
+
+        if (error) throw error;
+
+        const uniquePlaces = Array.from(
+          new Set((data || []).map((item) => item.place).filter(Boolean))
+        ).sort();
+
+        setPlaces(uniquePlaces);
+        
+        // If current place is not in the filtered list, clear it
+        if (formState.place && !uniquePlaces.includes(formState.place)) {
+          setFormState(prev => ({ ...prev, place: '' }));
+        }
+      } catch (err) {
+        console.error('Error fetching places:', err);
+        setPlaces([]);
+      } finally {
+        setLoadingPlaces(false);
+      }
+    }
+
+    fetchPlaces();
+  }, [formState.state]);
+
+  // Fetch leaders from state_leaders table when state changes
+  useEffect(() => {
+    async function fetchLeaders() {
+      if (!formState.state) {
+        setLeaders([]);
+        setFormState(prev => ({ ...prev, leader: '', mobile: '' }));
+        return;
+      }
+
+      setLoadingLeaders(true);
+      try {
+        const { data, error } = await supabase
+          .from('state_leaders')
+          .select('leader')
+          .eq('state', formState.state)
+          .order('leader', { ascending: true });
+
+        if (error) throw error;
+
+        const uniqueLeaders = Array.from(
+          new Set((data || []).map((item) => item.leader).filter(Boolean))
+        ).sort();
+
+        setLeaders(uniqueLeaders);
+        
+        // If current leader is not in the filtered list, clear it
+        if (formState.leader && !uniqueLeaders.includes(formState.leader)) {
+          setFormState(prev => ({ ...prev, leader: '', mobile: '' }));
+        }
+      } catch (err) {
+        console.error('Error fetching leaders:', err);
+        setLeaders([]);
+      } finally {
+        setLoadingLeaders(false);
+      }
+    }
+
+    fetchLeaders();
+  }, [formState.state]);
+
   // Fetch mobile from state_leaders when leader/state changes
   useEffect(() => {
     const fetchMobile = async () => {
@@ -130,10 +234,15 @@ export default function CampaignRulesPage() {
           
           if (!error && data?.mobile) {
             setFormState(prev => ({ ...prev, mobile: data.mobile || '' }));
+          } else {
+            setFormState(prev => ({ ...prev, mobile: '' }));
           }
         } catch (err) {
           // Ignore errors - mobile is optional
+          setFormState(prev => ({ ...prev, mobile: '' }));
         }
+      } else {
+        setFormState(prev => ({ ...prev, mobile: '' }));
       }
     };
     fetchMobile();
@@ -231,7 +340,7 @@ export default function CampaignRulesPage() {
     setPreviewDates([]);
   };
 
-  const handleEdit = (rule: CampaignRule) => {
+  const handleEdit = async (rule: CampaignRule) => {
     setEditingId(rule.id);
     setFormState({
       name: rule.name,
@@ -251,6 +360,46 @@ export default function CampaignRulesPage() {
       priority: rule.priority,
       notes: rule.notes || '',
     });
+    
+    // Load places and leaders for the rule's state
+    if (rule.state) {
+      setLoadingPlaces(true);
+      setLoadingLeaders(true);
+      try {
+        const [placesResult, leadersResult] = await Promise.all([
+          supabase
+            .from('state_places')
+            .select('place')
+            .eq('state', rule.state)
+            .order('place', { ascending: true }),
+          supabase
+            .from('state_leaders')
+            .select('leader')
+            .eq('state', rule.state)
+            .order('leader', { ascending: true }),
+        ]);
+
+        if (placesResult.data) {
+          const uniquePlaces = Array.from(
+            new Set(placesResult.data.map((item) => item.place).filter(Boolean))
+          ).sort();
+          setPlaces(uniquePlaces);
+        }
+
+        if (leadersResult.data) {
+          const uniqueLeaders = Array.from(
+            new Set(leadersResult.data.map((item) => item.leader).filter(Boolean))
+          ).sort();
+          setLeaders(uniqueLeaders);
+        }
+      } catch (err) {
+        console.error('Error loading places/leaders for edit:', err);
+      } finally {
+        setLoadingPlaces(false);
+        setLoadingLeaders(false);
+      }
+    }
+    
     setError(null);
     setSuccess(null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -428,15 +577,29 @@ export default function CampaignRulesPage() {
                 <label htmlFor="place" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   Place *
                 </label>
-                <input
+                <select
                   id="place"
-                  type="text"
                   required
                   value={formState.place}
                   onChange={(e) => setFormState({ ...formState, place: e.target.value })}
-                  className="mt-1 block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
-                  placeholder="e.g., Clayton"
-                />
+                  disabled={!formState.state || loadingPlaces}
+                  className="mt-1 block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed dark:border-gray-500 dark:bg-gray-900 dark:text-white dark:disabled:bg-gray-700"
+                >
+                  <option value="">
+                    {!formState.state
+                      ? 'Select a state first'
+                      : loadingPlaces
+                      ? 'Loading places...'
+                      : places.length === 0
+                      ? 'No places found for this state'
+                      : 'Select a place'}
+                  </option>
+                  {places.map((place) => (
+                    <option key={place} value={place}>
+                      {place}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
 
@@ -445,28 +608,48 @@ export default function CampaignRulesPage() {
                 <label htmlFor="leader" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   Leader *
                 </label>
-                <input
+                <select
                   id="leader"
-                  type="text"
                   required
                   value={formState.leader}
                   onChange={(e) => setFormState({ ...formState, leader: e.target.value })}
-                  className="mt-1 block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
-                  placeholder="e.g., Rob"
-                />
+                  disabled={!formState.state || loadingLeaders}
+                  className="mt-1 block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed dark:border-gray-500 dark:bg-gray-900 dark:text-white dark:disabled:bg-gray-700"
+                >
+                  <option value="">
+                    {!formState.state
+                      ? 'Select a state first'
+                      : loadingLeaders
+                      ? 'Loading leaders...'
+                      : leaders.length === 0
+                      ? 'No leaders found for this state'
+                      : 'Select a leader'}
+                  </option>
+                  {leaders.map((leader) => (
+                    <option key={leader} value={leader}>
+                      {leader}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label htmlFor="time" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   Time *
                 </label>
-                <input
+                <select
                   id="time"
-                  type="time"
                   required
                   value={formState.time}
                   onChange={(e) => setFormState({ ...formState, time: e.target.value })}
                   className="mt-1 block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
-                />
+                >
+                  <option value="">Select a time</option>
+                  {timeOptions.map((time) => (
+                    <option key={time.value} value={time.value}>
+                      {time.label}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
 
