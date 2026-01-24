@@ -25,6 +25,7 @@ export default function AdminPage() {
   const [loggingEnabled, setLoggingEnabled] = useState<boolean>(true);
   const [isLoadingLoggingSetting, setIsLoadingLoggingSetting] = useState(true);
   const [isTogglingLogging, setIsTogglingLogging] = useState(false);
+  const [refreshMode, setRefreshMode] = useState<'copy' | 'rules' | 'both'>('copy');
 
   useEffect(() => {
     async function checkAuthAndPermissions() {
@@ -64,62 +65,141 @@ export default function AdminPage() {
     setError(null);
 
     try {
-      // Calculate the end of the week for Past Campaign Start (Sunday)
-      const pastWeekStart = new Date(dates.pastCampaignStart);
-      const pastWeekEnd = new Date(pastWeekStart);
-      pastWeekEnd.setDate(pastWeekEnd.getDate() + 6); // Add 6 days to get to Sunday
+      const secondWeekStart = new Date(dates.secondWeekStart);
+      const secondWeekEnd = new Date(secondWeekStart);
+      secondWeekEnd.setDate(secondWeekEnd.getDate() + 13); // 2 weeks (14 days)
 
-      const pastWeekStartStr = formatDateForDb(pastWeekStart);
-      const pastWeekEndStr = formatDateForDb(pastWeekEnd);
+      const secondWeekStartStr = formatDateForDb(secondWeekStart);
+      const secondWeekEndStr = formatDateForDb(secondWeekEnd);
 
-      // Fetch all campaigns from Past Campaign Start to end of that week (Sunday)
-      const { data: pastCampaigns, error: fetchError } = await supabase
-        .from('campaigns')
-        .select('*')
-        .gte('date', pastWeekStartStr)
-        .lte('date', pastWeekEndStr)
-        .order('date', { ascending: true });
+      let allNewCampaigns: any[] = [];
+      let copyCount = 0;
+      let rulesCount = 0;
+      let copiedCampaigns: any[] = [];
 
-      if (fetchError) throw fetchError;
+      // Option 1: Copy from past week
+      if (refreshMode === 'copy' || refreshMode === 'both') {
+        const pastWeekStart = new Date(dates.pastCampaignStart);
+        const pastWeekEnd = new Date(pastWeekStart);
+        pastWeekEnd.setDate(pastWeekEnd.getDate() + 6); // Add 6 days to get to Sunday
 
-      if (!pastCampaigns || pastCampaigns.length === 0) {
-        setRefreshMessage('No campaigns found in the past week period to copy.');
-        return;
+        const pastWeekStartStr = formatDateForDb(pastWeekStart);
+        const pastWeekEndStr = formatDateForDb(pastWeekEnd);
+
+        // Fetch all campaigns from Past Campaign Start to end of that week (Sunday)
+        const { data: pastCampaigns, error: fetchError } = await supabase
+          .from('campaigns')
+          .select('*')
+          .gte('date', pastWeekStartStr)
+          .lte('date', pastWeekEndStr)
+          .order('date', { ascending: true });
+
+        if (fetchError) throw fetchError;
+
+        if (pastCampaigns && pastCampaigns.length > 0) {
+          // Calculate the date offset (days between Past Campaign Start and Second Week Start)
+          const daysDifference = Math.floor(
+            (secondWeekStart.getTime() - pastWeekStart.getTime()) / (1000 * 60 * 60 * 24)
+          );
+
+          // Create new campaign records for Second Week
+          copiedCampaigns = pastCampaigns.map((campaign) => {
+            const originalDate = new Date(campaign.date);
+            const newDate = new Date(originalDate);
+            newDate.setDate(newDate.getDate() + daysDifference);
+
+            return {
+              date: formatDateForDb(newDate),
+              state: campaign.state,
+              place: campaign.place,
+              time: campaign.time,
+              leader: campaign.leader,
+              mobile: campaign.mobile,
+              botj: campaign.botj,
+              user_id: campaign.user_id,
+              team_size: null, // Reset team_size for new campaigns
+            };
+          });
+
+          if (refreshMode === 'copy') {
+            allNewCampaigns.push(...copiedCampaigns);
+          }
+          copyCount = copiedCampaigns.length;
+        }
       }
 
-      // Calculate the date offset (days between Past Campaign Start and Second Week Start)
-      const secondWeekStart = new Date(dates.secondWeekStart);
-      const daysDifference = Math.floor(
-        (secondWeekStart.getTime() - pastWeekStart.getTime()) / (1000 * 60 * 60 * 24)
-      );
+      // Option 2: Generate from rules
+      if (refreshMode === 'rules' || refreshMode === 'both') {
+        // Fetch all active rules
+        const { data: rules, error: rulesError } = await supabase
+          .from('campaign_rules')
+          .select('*')
+          .eq('is_active', true)
+          .order('priority', { ascending: false });
 
-      // Create new campaign records for Second Week
-      const newCampaigns = pastCampaigns.map((campaign) => {
-        const originalDate = new Date(campaign.date);
-        const newDate = new Date(originalDate);
-        newDate.setDate(newDate.getDate() + daysDifference);
+        if (rulesError) throw rulesError;
 
-        return {
-          date: formatDateForDb(newDate),
-          state: campaign.state,
-          place: campaign.place,
-          time: campaign.time,
-          leader: campaign.leader,
-          mobile: campaign.mobile,
-          botj: campaign.botj,
-          user_id: campaign.user_id,
-          team_size: null, // Reset team_size for new campaigns
-        };
-      });
+        if (rules && rules.length > 0) {
+          // Evaluate rules to generate campaigns
+          const ruleCampaigns = evaluateRules(
+            rules as CampaignRule[],
+            secondWeekStart,
+            secondWeekEnd
+          );
+
+          // Convert to campaign format
+          const generatedCampaigns = ruleCampaigns.map(campaign => ({
+            date: campaign.date,
+            state: campaign.state,
+            place: campaign.place,
+            time: campaign.time,
+            leader: campaign.leader,
+            mobile: campaign.mobile,
+            botj: campaign.botj,
+            user_id: user.id,
+            team_size: null,
+          }));
+
+          // If both modes, merge and deduplicate by priority
+          if (refreshMode === 'both') {
+            // Create a map to track conflicts (date_state_place_time)
+            const conflictMap = new Map<string, any>();
+            
+            // Add copied campaigns first (lower priority)
+            copiedCampaigns.forEach(campaign => {
+              const key = `${campaign.date}_${campaign.state}_${campaign.place}_${campaign.time}`;
+              conflictMap.set(key, campaign);
+            });
+
+            // Add rule-generated campaigns (higher priority rules override)
+            generatedCampaigns.forEach(campaign => {
+              const key = `${campaign.date}_${campaign.state}_${campaign.place}_${campaign.time}`;
+              conflictMap.set(key, campaign); // Rules override copied campaigns
+            });
+
+            allNewCampaigns = Array.from(conflictMap.values());
+            rulesCount = generatedCampaigns.length;
+          } else {
+            allNewCampaigns = generatedCampaigns;
+            rulesCount = generatedCampaigns.length;
+          }
+        }
+      }
+
+      if (allNewCampaigns.length === 0) {
+        setRefreshMessage('No campaigns to create. Check your rules or past week campaigns.');
+        return;
+      }
 
       // Insert new campaigns
       const { error: insertError } = await supabase
         .from('campaigns')
-        .insert(newCampaigns);
+        .insert(allNewCampaigns);
 
       if (insertError) throw insertError;
 
       // Delete campaigns older than Past Campaign Start date
+      const pastWeekStartStr = formatDateForDb(dates.pastCampaignStart);
       const { data: deletedCampaigns, error: deleteError } = await supabase
         .from('campaigns')
         .delete()
@@ -130,9 +210,17 @@ export default function AdminPage() {
 
       const deletedCount = deletedCampaigns?.length || 0;
 
-      setRefreshMessage(
-        `Successfully copied ${newCampaigns.length} campaign(s) from ${formatDateReadable(pastWeekStart)} - ${formatDateReadable(pastWeekEnd)} to the second week starting ${formatDateReadable(secondWeekStart)}. Deleted ${deletedCount} old campaign(s) from before ${formatDateReadable(pastWeekStart)}.`
-      );
+      let message = `Successfully created ${allNewCampaigns.length} campaign(s) for the period starting ${formatDateReadable(secondWeekStart)}. `;
+      if (refreshMode === 'copy') {
+        message += `Copied ${copyCount} from past week. `;
+      } else if (refreshMode === 'rules') {
+        message += `Generated ${rulesCount} from rules. `;
+      } else {
+        message += `Copied ${copyCount} from past week and generated ${rulesCount} from rules. `;
+      }
+      message += `Deleted ${deletedCount} old campaign(s).`;
+
+      setRefreshMessage(message);
     } catch (err: any) {
       setError(err.message || 'Failed to refresh campaigns');
     } finally {
@@ -413,14 +501,47 @@ export default function AdminPage() {
               Weekly Refresh
             </h2>
             <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-              Copy campaigns from the past week to the second week period and clean up old campaigns. This will create new campaigns starting from the Second Week Start date and delete any campaigns older than the Past Campaign Start date.
+              Generate campaigns for the second week period and clean up old campaigns. This will create new campaigns starting from the Second Week Start date and delete any campaigns older than the Past Campaign Start date.
+            </p>
+            <div className="mt-4 space-y-3">
+              <div>
+                <label htmlFor="refresh-mode" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Refresh Mode
+                </label>
+                <select
+                  id="refresh-mode"
+                  value={refreshMode}
+                  onChange={(e) => setRefreshMode(e.target.value as 'copy' | 'rules' | 'both')}
+                  className="block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
+                >
+                  <option value="copy">Copy from Past Week (Original)</option>
+                  <option value="rules">Generate from Rules Only</option>
+                  <option value="both">Both (Rules override conflicts)</option>
+                </select>
+              </div>
+              <button
+                onClick={handleWeeklyRefresh}
+                disabled={isRefreshing || !dates}
+                className="w-full rounded-md bg-purple-600 px-4 py-2 text-base font-bold text-white hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 disabled:bg-gray-400 disabled:cursor-not-allowed border-2 border-gray-800 dark:border-gray-600"
+              >
+                {isRefreshing ? 'Refreshing...' : 'Weekly Refresh'}
+              </button>
+            </div>
+          </div>
+
+          {/* Campaign Rules Management */}
+          <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+              Campaign Rules
+            </h2>
+            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+              Manage rules for automatic campaign generation. Create rules for recurring campaigns (weekly, biweekly, monthly).
             </p>
             <button
-              onClick={handleWeeklyRefresh}
-              disabled={isRefreshing || !dates}
-              className="mt-4 rounded-md bg-purple-600 px-4 py-2 text-base font-bold text-white hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 disabled:bg-gray-400 disabled:cursor-not-allowed border-2 border-gray-800 dark:border-gray-600"
+              onClick={() => router.push('/admin/campaign-rules')}
+              className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
             >
-              {isRefreshing ? 'Refreshing...' : 'Weekly Refresh'}
+              Manage Campaign Rules
             </button>
           </div>
 
