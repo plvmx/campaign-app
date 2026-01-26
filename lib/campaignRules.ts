@@ -205,8 +205,9 @@ function findBiweeklyOccurrences(
     }
     
     // Next occurrence is exactly frequencyValue weeks after the reference date
-    nextOccurrence = new Date(refDate);
-    nextOccurrence.setDate(nextOccurrence.getDate() + (frequencyValue * 7));
+    // Use milliseconds to ensure precise calculation
+    const millisecondsPerWeek = 7 * 24 * 60 * 60 * 1000;
+    nextOccurrence = new Date(refDate.getTime() + (frequencyValue * millisecondsPerWeek));
   } else {
     // No reference date - find the first occurrence of the target day in the target period
     let baseDate = new Date(normalizedStartDate);
@@ -287,7 +288,11 @@ function isDateExcepted(date: Date, ruleConfig: any): boolean {
     return false;
   }
   
-  const dateStr = date.toISOString().split('T')[0];
+  // Format date in local timezone (not UTC) to avoid day shifts
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const dateStr = `${year}-${month}-${day}`;
   return ruleConfig.exceptions.includes(dateStr);
 }
 
@@ -370,7 +375,11 @@ export function evaluateRule(
   
   // Generate campaign records
   return validDates.map(date => {
-    const dateStr = date.toISOString().split('T')[0];
+    // Format date in local timezone (not UTC) to avoid day shifts
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`;
     
     // Check for field overrides in rule_config
     const overrideFields = rule.rule_config?.override_fields?.[dateStr] || {};
