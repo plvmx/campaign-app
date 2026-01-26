@@ -179,13 +179,22 @@ function findBiweeklyOccurrences(
 ): Date[] {
   const matches: Date[] = [];
   
+  // Normalize dates to midnight (local time) to avoid timezone issues
+  const normalizedStartDate = new Date(startDate);
+  normalizedStartDate.setHours(0, 0, 0, 0);
+  const normalizedEndDate = new Date(endDate);
+  normalizedEndDate.setHours(23, 59, 59, 999);
+  
   // If reference date is provided, use it; otherwise use start date
   let baseDate: Date;
   if (referenceDate) {
-    baseDate = new Date(referenceDate);
+    // Parse reference date string (YYYY-MM-DD format) in local timezone
+    const [year, month, day] = referenceDate.split('-').map(Number);
+    baseDate = new Date(year, month - 1, day);
   } else {
-    baseDate = new Date(startDate);
+    baseDate = new Date(normalizedStartDate);
   }
+  baseDate.setHours(0, 0, 0, 0);
   
   // Find the first occurrence of the target day of week from base date
   const baseDayOfWeek = baseDate.getDay();
@@ -193,20 +202,39 @@ function findBiweeklyOccurrences(
   if (daysToAdd < 0) {
     daysToAdd += 7;
   }
+  // If baseDate is already the target day, daysToAdd will be 0, which is correct
   baseDate.setDate(baseDate.getDate() + daysToAdd);
   
-  // If base date is before start date, move forward by frequency intervals
-  while (baseDate < startDate) {
-    baseDate.setDate(baseDate.getDate() + (frequencyValue * 7));
+  // Verify we're on the correct day of week (should always be true, but check for safety)
+  if (baseDate.getDay() !== dayOfWeek) {
+    // This should never happen, but if it does, log and fix it
+    console.warn(`Expected day ${dayOfWeek} but got ${baseDate.getDay()}, correcting...`);
+    const currentDay = baseDate.getDay();
+    const correction = (dayOfWeek - currentDay + 7) % 7;
+    baseDate.setDate(baseDate.getDate() + correction);
   }
   
-  // Generate all occurrences
-  const current = new Date(baseDate);
-  while (current <= endDate) {
-    if (current >= startDate) {
-      matches.push(new Date(current));
+  // Calculate the next occurrence after the reference date
+  // If reference date was set, the next occurrence should be exactly frequencyValue weeks later
+  // If no reference date, start from the first occurrence in the target period
+  let nextOccurrence: Date;
+  if (referenceDate) {
+    // Next occurrence is exactly frequencyValue weeks after the reference date
+    nextOccurrence = new Date(baseDate);
+    nextOccurrence.setDate(nextOccurrence.getDate() + (frequencyValue * 7));
+  } else {
+    // No reference date - use the first occurrence in the target period
+    nextOccurrence = new Date(baseDate);
+    // If it's before start date, move forward by frequency intervals
+    while (nextOccurrence < normalizedStartDate) {
+      nextOccurrence.setDate(nextOccurrence.getDate() + (frequencyValue * 7));
     }
-    current.setDate(current.getDate() + (frequencyValue * 7));
+  }
+  
+  // Only add if the next occurrence is within the target period
+  if (nextOccurrence >= normalizedStartDate && nextOccurrence <= normalizedEndDate) {
+    nextOccurrence.setHours(0, 0, 0, 0);
+    matches.push(nextOccurrence);
   }
   
   return matches;
@@ -256,6 +284,7 @@ function isDateExcepted(date: Date, ruleConfig: any): boolean {
 
 /**
  * Evaluate a single rule and generate campaign dates
+ * For biweekly rules, this will use the reference_date if set, or check existing campaigns
  */
 export function evaluateRule(
   rule: CampaignRule,
@@ -285,6 +314,7 @@ export function evaluateRule(
       if (rule.day_of_week === null || rule.frequency_value === null) {
         return [];
       }
+      // Use reference_date from rule_config if set
       const refDate = rule.rule_config?.reference_date || null;
       matchingDates = findBiweeklyOccurrences(
         rule.frequency_value,

@@ -55,6 +55,7 @@ export default function CampaignRulesPage() {
     month_week_number: null as number | null,
     month_day_of_week: null as number | null,
     day_of_week: 0,
+    reference_date: '', // For biweekly rules
     start_date: '',
     end_date: '',
     is_active: true,
@@ -284,7 +285,11 @@ export default function CampaignRulesPage() {
         is_active: formState.is_active,
         priority: formState.priority,
         notes: formState.notes.trim() || null,
-        rule_config: {},
+        rule_config: {
+          ...(formState.frequency_type === 'biweekly' && formState.reference_date
+            ? { reference_date: formState.reference_date }
+            : {}),
+        },
       };
 
       if (editingId) {
@@ -330,6 +335,7 @@ export default function CampaignRulesPage() {
       month_week_number: null,
       month_day_of_week: null,
       day_of_week: 0,
+      reference_date: '',
       start_date: '',
       end_date: '',
       is_active: true,
@@ -354,6 +360,7 @@ export default function CampaignRulesPage() {
       month_week_number: rule.month_week_number,
       month_day_of_week: rule.month_day_of_week,
       day_of_week: rule.day_of_week ?? 0,
+      reference_date: rule.rule_config?.reference_date || '',
       start_date: rule.start_date || '',
       end_date: rule.end_date || '',
       is_active: rule.is_active,
@@ -689,20 +696,37 @@ export default function CampaignRulesPage() {
             {(formState.frequency_type === 'weekly' || formState.frequency_type === 'biweekly') && (
               <>
                 {formState.frequency_type === 'biweekly' && (
-                  <div>
-                    <label htmlFor="frequency_value" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Every N Weeks *
-                    </label>
-                    <input
-                      id="frequency_value"
-                      type="number"
-                      min="2"
-                      required
-                      value={formState.frequency_value}
-                      onChange={(e) => setFormState({ ...formState, frequency_value: parseInt(e.target.value) || 2 })}
-                      className="mt-1 block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
-                    />
-                  </div>
+                  <>
+                    <div>
+                      <label htmlFor="frequency_value" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Every N Weeks *
+                      </label>
+                      <input
+                        id="frequency_value"
+                        type="number"
+                        min="2"
+                        required
+                        value={formState.frequency_value}
+                        onChange={(e) => setFormState({ ...formState, frequency_value: parseInt(e.target.value) || 2 })}
+                        className="mt-1 block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="reference_date" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Reference Date (Optional)
+                      </label>
+                      <input
+                        id="reference_date"
+                        type="date"
+                        value={formState.reference_date}
+                        onChange={(e) => setFormState({ ...formState, reference_date: e.target.value })}
+                        className="mt-1 block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
+                      />
+                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                        The starting date for the biweekly pattern. If not set, uses the target period start date.
+                      </p>
+                    </div>
+                  </>
                 )}
                 <div>
                   <label htmlFor="day_of_week" className="block text-sm font-medium text-gray-700 dark:text-gray-300">

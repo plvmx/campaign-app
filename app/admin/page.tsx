@@ -141,6 +141,30 @@ export default function AdminPage() {
         if (rulesError) throw rulesError;
 
         if (rules && rules.length > 0) {
+          // For biweekly rules without reference_date, check existing campaigns
+          // to determine the last campaign date
+          for (const rule of rules as CampaignRule[]) {
+            if (rule.frequency_type === 'biweekly' && !rule.rule_config?.reference_date) {
+              // Find the most recent campaign matching this rule
+              const { data: existingCampaigns, error: existingError } = await supabase
+                .from('campaigns')
+                .select('date')
+                .eq('state', rule.state)
+                .eq('place', rule.place)
+                .eq('time', rule.time)
+                .eq('leader', rule.leader)
+                .order('date', { ascending: false })
+                .limit(1);
+              
+              if (!existingError && existingCampaigns && existingCampaigns.length > 0) {
+                // Use the last campaign date as the reference
+                const lastCampaignDate = existingCampaigns[0].date;
+                rule.rule_config = rule.rule_config || {};
+                rule.rule_config.reference_date = lastCampaignDate;
+              }
+            }
+          }
+
           // Evaluate rules to generate campaigns
           const ruleCampaigns = evaluateRules(
             rules as CampaignRule[],
@@ -198,6 +222,42 @@ export default function AdminPage() {
         .insert(allNewCampaigns);
 
       if (insertError) throw insertError;
+
+      // For biweekly rules, update reference_date in rule_config to the date of created campaigns
+      // This ensures the next evaluation uses the correct reference point
+      if (refreshMode === 'rules' || refreshMode === 'both') {
+        if (rules && rules.length > 0) {
+          for (const rule of rules as CampaignRule[]) {
+            if (rule.frequency_type === 'biweekly') {
+              // Find campaigns created for this rule in this batch
+              const ruleCampaigns = allNewCampaigns.filter(c => 
+                c.state === rule.state &&
+                c.place === rule.place &&
+                c.time === rule.time &&
+                c.leader === rule.leader
+              );
+              
+              if (ruleCampaigns.length > 0) {
+                // Use the earliest date from created campaigns as the new reference
+                const newReferenceDate = ruleCampaigns
+                  .map(c => c.date)
+                  .sort()[0]; // Sort to get earliest date
+                
+                // Update the rule's reference_date
+                const updatedRuleConfig = {
+                  ...(rule.rule_config || {}),
+                  reference_date: newReferenceDate,
+                };
+                
+                await supabase
+                  .from('campaign_rules')
+                  .update({ rule_config: updatedRuleConfig })
+                  .eq('id', rule.id);
+              }
+            }
+          }
+        }
+      }
 
       // Delete campaigns older than Past Campaign Start date
       const pastWeekStartStr = formatDateForDb(dates.pastCampaignStart);
