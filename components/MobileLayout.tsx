@@ -33,7 +33,7 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
       <header className="sticky top-0 z-10 border-b-2 border-gray-800 dark:border-gray-600 bg-white dark:bg-gray-950">
         <div className="flex h-14 items-center justify-between px-4">
           <h1 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100 truncate">
-            Campaign Manager
+            AFJ Campaign Manager
           </h1>
           <button
             onClick={handleSignOut}

@@ -74,7 +74,7 @@ function AppPageContent() {
   });
   const [filterState, setFilterState] = useState<string>('');
   const [isFormExpanded, setIsFormExpanded] = useState<boolean>(false);
-  const [dateFilter, setDateFilter] = useState<'today' | 'past' | 'upcoming'>('today');
+  const [dateFilter, setDateFilter] = useState<'past' | 'future'>('future');
   
   // State for "Other Place" functionality
   const [isOtherPlace, setIsOtherPlace] = useState<boolean>(false);
@@ -93,19 +93,28 @@ function AppPageContent() {
 
   // Helper function to apply date filter
   const applyDateFilter = useCallback((campaignsToFilter: Campaign[]) => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const now = new Date();
     
     return campaignsToFilter.filter(campaign => {
+      // Parse campaign date and time
       const campaignDate = new Date(campaign.date);
-      campaignDate.setHours(0, 0, 0, 0);
       
-      if (dateFilter === 'today') {
-        return campaignDate.getTime() === today.getTime();
-      } else if (dateFilter === 'past') {
-        return campaignDate.getTime() < today.getTime();
-      } else if (dateFilter === 'upcoming') {
-        return campaignDate.getTime() > today.getTime();
+      // Parse time string (format: HH:MM or HH:MM:SS)
+      let timeStr = campaign.time;
+      if (timeStr.includes('T')) {
+        // Handle ISO timestamp format
+        timeStr = timeStr.split('T')[1]?.split('.')[0] || timeStr;
+      }
+      const [hours, minutes] = timeStr.split(':').map(Number);
+      
+      // Set the campaign date and time
+      const campaignDateTime = new Date(campaignDate);
+      campaignDateTime.setHours(hours || 0, minutes || 0, 0, 0);
+      
+      if (dateFilter === 'past') {
+        return campaignDateTime < now;
+      } else if (dateFilter === 'future') {
+        return campaignDateTime > now;
       }
       return true;
     });
@@ -352,20 +361,13 @@ function AppPageContent() {
         
         // Check if returning from a filtered view (URL parameter takes precedence)
         const filterParam = searchParams.get('filter');
-        if (filterParam && (filterParam === 'today' || filterParam === 'past' || filterParam === 'upcoming')) {
-          setDateFilter(filterParam as 'today' | 'past' | 'upcoming');
+        if (filterParam && (filterParam === 'past' || filterParam === 'future')) {
+          setDateFilter(filterParam as 'past' | 'future');
           // Clean up the URL parameter
           router.replace('/app', { scroll: false });
         } else {
-          // Set default filter: 'upcoming' for users with 'AD' or 'SR' admin value, 'today' for others
-          const isAdminOrSR = adminStatus === 'AD' || adminStatus === 'SR';
-          console.log('Setting default filter:', { 
-            adminStatus, 
-            isAdminOrSR, 
-            defaultFilter: isAdminOrSR ? 'upcoming' : 'today' 
-          });
-          
-          setDateFilter(isAdminOrSR ? 'upcoming' : 'today');
+          // Set default filter: 'future' for all users
+          setDateFilter('future');
         }
 
         // Check for success parameter from campaign creation
@@ -1164,7 +1166,13 @@ function AppPageContent() {
       <div className="p-4 max-w-full overflow-x-hidden">
         <div className="mb-6">
           <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 break-words">
-            {userProfile?.name ? `Welcome back, ${userProfile.name}!` : 'Welcome back!'}
+            {userProfile?.name ? (() => {
+              // Remove underscore and everything after it for display only
+              const displayName = userProfile.name.includes('_') 
+                ? userProfile.name.split('_')[0] 
+                : userProfile.name;
+              return `Welcome back ${displayName}!`;
+            })() : 'Welcome back!'}
           </h1>
           <div className="mt-1">
             <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400 break-words inline">
@@ -1178,7 +1186,7 @@ function AppPageContent() {
             </p>
             <button
               onClick={() => setShowMoreInfo(!showMoreInfo)}
-              className="text-base font-bold text-blue-600 dark:text-blue-400 underline hover:text-blue-800 dark:hover:text-blue-300 focus:outline-none border-2 border-gray-800 dark:border-gray-600 rounded-md px-2 py-1"
+              className="text-base font-bold text-blue-600 dark:text-blue-400 underline hover:text-blue-800 dark:hover:text-blue-300 focus:outline-none"
             >
               More Info
             </button>
@@ -1197,16 +1205,6 @@ function AppPageContent() {
           {/* Date Filter Buttons */}
           <div className="mt-4 flex justify-center gap-3 flex-wrap">
             <button
-              onClick={() => setDateFilter('today')}
-              className={`rounded-md px-4 py-2 text-base font-bold transition-colors shadow-sm border-2 border-gray-800 dark:border-gray-600 ${
-                dateFilter === 'today'
-                  ? 'bg-blue-600 text-white shadow-md'
-                  : 'bg-gradient-to-b from-gray-100 to-gray-200 text-gray-700 hover:from-gray-200 hover:to-gray-300 dark:from-gray-700 dark:to-gray-800 dark:text-gray-300 dark:hover:from-gray-600 dark:hover:to-gray-700'
-              }`}
-            >
-              Today
-            </button>
-            <button
               onClick={() => setDateFilter('past')}
               className={`rounded-md px-4 py-2 text-base font-bold transition-colors shadow-sm border-2 border-gray-800 dark:border-gray-600 ${
                 dateFilter === 'past'
@@ -1217,9 +1215,9 @@ function AppPageContent() {
               Past
             </button>
             <button
-              onClick={() => setDateFilter('upcoming')}
+              onClick={() => setDateFilter('future')}
               className={`rounded-md px-4 py-2 text-base font-bold transition-colors shadow-sm border-2 border-gray-800 dark:border-gray-600 ${
-                dateFilter === 'upcoming'
+                dateFilter === 'future'
                   ? 'bg-blue-600 text-white shadow-md'
                   : 'bg-gradient-to-b from-gray-100 to-gray-200 text-gray-700 hover:from-gray-200 hover:to-gray-300 dark:from-gray-700 dark:to-gray-800 dark:text-gray-300 dark:hover:from-gray-600 dark:hover:to-gray-700'
               }`}
@@ -1525,9 +1523,8 @@ function AppPageContent() {
           <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white shadow-sm dark:bg-gray-800 w-full overflow-hidden">
             <div className="p-4">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                {dateFilter === 'today' && `Today's Campaigns (${campaigns.length})`}
                 {dateFilter === 'past' && `Past Campaigns (${campaigns.length})`}
-                {dateFilter === 'upcoming' && `Upcoming Campaigns (${campaigns.length})`}
+                {dateFilter === 'future' && `Future Campaigns (${campaigns.length})`}
               </h2>
             </div>
             <div className="divide-y divide-gray-200 dark:divide-gray-700">

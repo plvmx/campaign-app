@@ -27,7 +27,7 @@ function RecordResultsDetailPageContent() {
     time: '',
     leader: '',
   });
-  const [returnFilter, setReturnFilter] = useState<string>('today');
+  const [returnFilter, setReturnFilter] = useState<string>('future');
   const [partialRows, setPartialRows] = useState<InputRow[]>([]);
   const [fullRows, setFullRows] = useState<InputRow[]>([]);
   const [fullSinnersRows, setFullSinnersRows] = useState<InputRow[]>([]);
@@ -94,7 +94,7 @@ function RecordResultsDetailPageContent() {
         const place = searchParams.get('place') || '';
         const time = searchParams.get('time') || '';
         const leader = searchParams.get('leader') || '';
-        const filter = searchParams.get('returnFilter') || 'today';
+        const filter = searchParams.get('returnFilter') || 'future';
 
         setCampaignData({ date, state, place, time, leader });
         setReturnFilter(filter);
