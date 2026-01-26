@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useState, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import MobileLayout from '@/components/MobileLayout';
 import { getCurrentUser } from '@/lib/auth';
 import { hasPermission, Permission } from '@/lib/permissions';
@@ -30,12 +30,16 @@ const MONTH_WEEKS = [
   { value: -1, label: 'Last Week' },
 ];
 
-export default function CampaignRulesPage() {
+function CampaignRulesPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { dates } = useCampaignDates();
   const [isLoading, setIsLoading] = useState(true);
   const [hasAccess, setHasAccess] = useState(false);
   const [user, setUser] = useState<any>(null);
+  const [adminStatus, setAdminStatus] = useState<string | null>(null);
+  const [userState, setUserState] = useState<string | null>(null);
+  const [isStateLocked, setIsStateLocked] = useState(false);
   const [rules, setRules] = useState<CampaignRule[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -86,11 +90,33 @@ export default function CampaignRulesPage() {
         }
         setUser(currentUser);
 
-        const canAccess = await hasPermission(Permission.ADMIN_ACCESS);
+        // Check if user is admin (AD) or state reporter (SR)
+        const { getUserAdminStatusAndMobile } = await import('@/lib/campaignFilter');
+        const { admin: adminStatusValue, state: userStateValue } = await getUserAdminStatusAndMobile();
+        setAdminStatus(adminStatusValue);
+        setUserState(userStateValue);
+
+        // Allow access for AD (admin) or SR (state reporter) users
+        const canAccess = adminStatusValue === 'AD' || adminStatusValue === 'SR';
         if (!canAccess) {
           setError('You do not have permission to access this page');
           return;
         }
+
+        // Check for state query parameter (for SR users)
+        const stateParam = searchParams.get('state');
+        if (adminStatusValue === 'SR') {
+          // For SR users, use state from query param or their own state
+          const stateToUse = stateParam || userStateValue;
+          if (stateToUse) {
+            setFormState(prev => ({ ...prev, state: stateToUse.toUpperCase().trim() }));
+            setIsStateLocked(true);
+          }
+        } else if (stateParam && adminStatusValue === 'AD') {
+          // For AD users, pre-populate but don't lock
+          setFormState(prev => ({ ...prev, state: stateParam.toUpperCase().trim() }));
+        }
+
         setHasAccess(true);
         await fetchRules();
       } catch (err: any) {
@@ -100,13 +126,20 @@ export default function CampaignRulesPage() {
       }
     }
     checkAuthAndPermissions();
-  }, [router]);
+  }, [router, searchParams]);
 
   const fetchRules = async () => {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('campaign_rules')
-        .select('*')
+        .select('*');
+
+      // Filter by state for SR users
+      if (adminStatus === 'SR' && userState) {
+        query = query.eq('state', userState.toUpperCase().trim());
+      }
+
+      const { data, error } = await query
         .order('priority', { ascending: false })
         .order('created_at', { ascending: false });
       
@@ -122,7 +155,7 @@ export default function CampaignRulesPage() {
       fetchRules();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasAccess]);
+  }, [hasAccess, adminStatus, userState]);
 
   // Generate time options (8:00 AM to 8:00 PM, half-hour intervals)
   useEffect(() => {
@@ -256,6 +289,15 @@ export default function CampaignRulesPage() {
     setIsSubmitting(true);
 
     try {
+      // Validate state for SR users - they can only manage rules for their state
+      if (adminStatus === 'SR' && userState) {
+        const formStateNormalized = formState.state.trim().toUpperCase();
+        const userStateNormalized = userState.trim().toUpperCase();
+        if (formStateNormalized !== userStateNormalized) {
+          throw new Error(`You can only manage campaign rules for ${userState}.`);
+        }
+      }
+
       // Validate required fields based on frequency type
       if (formState.frequency_type === 'monthly' && formState.month_week_number === null) {
         throw new Error('Week of month is required for monthly rules');
@@ -323,10 +365,12 @@ export default function CampaignRulesPage() {
 
   const resetForm = () => {
     setEditingId(null);
+    // Preserve locked state for SR users
+    const preservedState = isStateLocked && userState ? userState.toUpperCase().trim() : '';
     setFormState({
       name: '',
       leader: '',
-      state: '',
+      state: preservedState,
       place: '',
       time: '',
       mobile: '',
@@ -348,10 +392,12 @@ export default function CampaignRulesPage() {
 
   const handleEdit = async (rule: CampaignRule) => {
     setEditingId(rule.id);
+    // For SR users with locked state, use the locked state instead of rule's state
+    const stateToUse = isStateLocked && userState ? userState.toUpperCase().trim() : rule.state;
     setFormState({
       name: rule.name,
       leader: rule.leader,
-      state: rule.state,
+      state: stateToUse,
       place: rule.place,
       time: rule.time,
       mobile: rule.mobile || '',
@@ -368,8 +414,8 @@ export default function CampaignRulesPage() {
       notes: rule.notes || '',
     });
     
-    // Load places and leaders for the rule's state
-    if (rule.state) {
+    // Load places and leaders for the state (use locked state for SR users)
+    if (stateToUse) {
       setLoadingPlaces(true);
       setLoadingLeaders(true);
       try {
@@ -377,12 +423,12 @@ export default function CampaignRulesPage() {
           supabase
             .from('state_places')
             .select('place')
-            .eq('state', rule.state)
+            .eq('state', stateToUse)
             .order('place', { ascending: true }),
           supabase
             .from('state_leaders')
             .select('leader')
-            .eq('state', rule.state)
+            .eq('state', stateToUse)
             .order('leader', { ascending: true }),
         ]);
 
@@ -570,7 +616,8 @@ export default function CampaignRulesPage() {
                   required
                   value={formState.state}
                   onChange={(e) => setFormState({ ...formState, state: e.target.value })}
-                  className="mt-1 block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
+                  disabled={isStateLocked}
+                  className="mt-1 block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed dark:border-gray-500 dark:bg-gray-900 dark:text-white dark:disabled:bg-gray-700"
                 >
                   <option value="">Select state</option>
                   {AUSTRALIAN_STATES.map((state) => (
@@ -1037,5 +1084,19 @@ export default function CampaignRulesPage() {
         </div>
       </div>
     </MobileLayout>
+  );
+}
+
+export default function CampaignRulesPage() {
+  return (
+    <Suspense fallback={
+      <MobileLayout>
+        <div className="p-4">
+          <div className="text-center">Loading...</div>
+        </div>
+      </MobileLayout>
+    }>
+      <CampaignRulesPageContent />
+    </Suspense>
   );
 }

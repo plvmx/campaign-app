@@ -39,6 +39,7 @@ function AppPageContent() {
   const [isLoading, setIsLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
   const [adminStatus, setAdminStatus] = useState<string | null>(null); // Store admin status from state_leaders table
+  const [userState, setUserState] = useState<string | null>(null); // Store user's state from state_leaders table
   const [userMobileAndLeader, setUserMobileAndLeader] = useState<{ mobile: string | null; leader: string | null } | null>(null); // Store user's mobile and leader for Record Results button visibility
   const [showMoreInfo, setShowMoreInfo] = useState(false); // Toggle for More Info section
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
@@ -352,11 +353,12 @@ function AppPageContent() {
           hasPermission(Permission.ADMIN_ACCESS)
         ]);
         
-        const { admin: adminStatus, state: userState, mobile, leader } = adminData;
+        const { admin: adminStatus, state: userStateValue, mobile, leader } = adminData;
         const userMobileAndLeaderData = mobile && leader ? { mobile, leader } : null;
         
         setIsAdmin(adminAccess);
         setAdminStatus(adminStatus);
+        setUserState(userStateValue);
         setUserMobileAndLeader(userMobileAndLeaderData);
         
         // Check if returning from a filtered view (URL parameter takes precedence)
@@ -1491,6 +1493,15 @@ function AppPageContent() {
                 >
                   {isSubmitting ? 'Creating...' : 'Create'}
                 </button>
+                {adminStatus === 'SR' && userState && (
+                  <button
+                    type="button"
+                    onClick={() => router.push(`/admin/campaign-rules?state=${encodeURIComponent(userState)}`)}
+                    className="flex-1 rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
+                  >
+                    Manage Campaign Rules
+                  </button>
+                )}
               </div>
             </form>
           </div>
