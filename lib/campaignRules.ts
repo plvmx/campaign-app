@@ -185,56 +185,65 @@ function findBiweeklyOccurrences(
   const normalizedEndDate = new Date(endDate);
   normalizedEndDate.setHours(23, 59, 59, 999);
   
-  // If reference date is provided, use it; otherwise use start date
-  let baseDate: Date;
+  // Calculate the next occurrence
+  let nextOccurrence: Date;
+  
   if (referenceDate) {
+    // Reference date exists - it should already be on the correct day of week
     // Parse reference date string (YYYY-MM-DD format) in local timezone
     const [year, month, day] = referenceDate.split('-').map(Number);
-    baseDate = new Date(year, month - 1, day);
-  } else {
-    baseDate = new Date(normalizedStartDate);
-  }
-  baseDate.setHours(0, 0, 0, 0);
-  
-  // Find the first occurrence of the target day of week from base date
-  const baseDayOfWeek = baseDate.getDay();
-  let daysToAdd = dayOfWeek - baseDayOfWeek;
-  if (daysToAdd < 0) {
-    daysToAdd += 7;
-  }
-  // If baseDate is already the target day, daysToAdd will be 0, which is correct
-  baseDate.setDate(baseDate.getDate() + daysToAdd);
-  
-  // Verify we're on the correct day of week (should always be true, but check for safety)
-  if (baseDate.getDay() !== dayOfWeek) {
-    // This should never happen, but if it does, log and fix it
-    console.warn(`Expected day ${dayOfWeek} but got ${baseDate.getDay()}, correcting...`);
-    const currentDay = baseDate.getDay();
-    const correction = (dayOfWeek - currentDay + 7) % 7;
-    baseDate.setDate(baseDate.getDate() + correction);
-  }
-  
-  // Calculate the next occurrence after the reference date
-  // If reference date was set, the next occurrence should be exactly frequencyValue weeks later
-  // If no reference date, start from the first occurrence in the target period
-  let nextOccurrence: Date;
-  if (referenceDate) {
+    const refDate = new Date(year, month - 1, day);
+    refDate.setHours(0, 0, 0, 0);
+    
+    // Verify the reference date is on the correct day of week
+    // If it's not, adjust it (this shouldn't happen, but handle it gracefully)
+    if (refDate.getDay() !== dayOfWeek) {
+      // Reference date is not on the expected day - adjust it
+      const currentDay = refDate.getDay();
+      const daysToAdd = (dayOfWeek - currentDay + 7) % 7;
+      refDate.setDate(refDate.getDate() + daysToAdd);
+    }
+    
     // Next occurrence is exactly frequencyValue weeks after the reference date
-    nextOccurrence = new Date(baseDate);
+    nextOccurrence = new Date(refDate);
     nextOccurrence.setDate(nextOccurrence.getDate() + (frequencyValue * 7));
   } else {
-    // No reference date - use the first occurrence in the target period
-    nextOccurrence = new Date(baseDate);
-    // If it's before start date, move forward by frequency intervals
-    while (nextOccurrence < normalizedStartDate) {
-      nextOccurrence.setDate(nextOccurrence.getDate() + (frequencyValue * 7));
+    // No reference date - find the first occurrence of the target day in the target period
+    let baseDate = new Date(normalizedStartDate);
+    baseDate.setHours(0, 0, 0, 0);
+    
+    // Find the first occurrence of the target day of week from start date
+    const baseDayOfWeek = baseDate.getDay();
+    let daysToAdd = dayOfWeek - baseDayOfWeek;
+    if (daysToAdd < 0) {
+      daysToAdd += 7;
     }
+    baseDate.setDate(baseDate.getDate() + daysToAdd);
+    
+    // Verify we're on the correct day of week
+    if (baseDate.getDay() !== dayOfWeek) {
+      const currentDay = baseDate.getDay();
+      const correction = (dayOfWeek - currentDay + 7) % 7;
+      baseDate.setDate(baseDate.getDate() + correction);
+    }
+    
+    nextOccurrence = new Date(baseDate);
+  }
+  
+  nextOccurrence.setHours(0, 0, 0, 0);
+  
+  // Verify the calculated date is on the correct day of week
+  if (nextOccurrence.getDay() !== dayOfWeek) {
+    // This should never happen, but if it does, log and fix it
+    console.warn(`Calculated date ${nextOccurrence.toISOString()} is not on day ${dayOfWeek}, correcting...`);
+    const currentDay = nextOccurrence.getDay();
+    const correction = (dayOfWeek - currentDay + 7) % 7;
+    nextOccurrence.setDate(nextOccurrence.getDate() + correction);
   }
   
   // Only add if the next occurrence is within the target period
   if (nextOccurrence >= normalizedStartDate && nextOccurrence <= normalizedEndDate) {
-    nextOccurrence.setHours(0, 0, 0, 0);
-    matches.push(nextOccurrence);
+    matches.push(new Date(nextOccurrence));
   }
   
   return matches;
