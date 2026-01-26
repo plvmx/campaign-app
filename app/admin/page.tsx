@@ -77,6 +77,7 @@ export default function AdminPage() {
       let copyCount = 0;
       let rulesCount = 0;
       let copiedCampaigns: any[] = [];
+      let rules: CampaignRule[] | null = null;
 
       // Option 1: Copy from past week
       if (refreshMode === 'copy' || refreshMode === 'both') {
@@ -132,18 +133,19 @@ export default function AdminPage() {
       // Option 2: Generate from rules
       if (refreshMode === 'rules' || refreshMode === 'both') {
         // Fetch all active rules
-        const { data: rules, error: rulesError } = await supabase
+        const { data: fetchedRules, error: rulesError } = await supabase
           .from('campaign_rules')
           .select('*')
           .eq('is_active', true)
           .order('priority', { ascending: false });
 
         if (rulesError) throw rulesError;
+        rules = (fetchedRules || []) as CampaignRule[];
 
         if (rules && rules.length > 0) {
           // For biweekly rules without reference_date, check existing campaigns
           // to determine the last campaign date
-          for (const rule of rules as CampaignRule[]) {
+          for (const rule of rules) {
             if (rule.frequency_type === 'biweekly' && !rule.rule_config?.reference_date) {
               // Find the most recent campaign matching this rule
               const { data: existingCampaigns, error: existingError } = await supabase
@@ -167,7 +169,7 @@ export default function AdminPage() {
 
           // Evaluate rules to generate campaigns
           const ruleCampaigns = evaluateRules(
-            rules as CampaignRule[],
+            rules,
             secondWeekStart,
             secondWeekEnd
           );
