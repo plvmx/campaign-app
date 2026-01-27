@@ -127,16 +127,20 @@ function AppPageContent() {
     
     const { getUserAdminStatusAndMobile } = await import('@/lib/campaignFilter');
     const { normalizeMobile } = await import('@/lib/auth');
-    const { admin: adminStatus, state: userState, mobile, leader } = await getUserAdminStatusAndMobile();
+    const { admin: adminStatusValue, state: userStateValue, mobile, leader } = await getUserAdminStatusAndMobile();
     const userMobileAndLeaderData = mobile && leader ? { mobile, leader } : null;
+    
+    // Update state variables
+    setAdminStatus(adminStatusValue);
+    setUserState(userStateValue);
     
     let query = supabase.from('campaigns').select('*');
     
-    if (adminStatus === 'AD') {
+    if (adminStatusValue === 'AD') {
       // No filter
-    } else if (adminStatus === 'SR') {
-      if (userState) {
-        query = query.eq('state', userState.toUpperCase().trim());
+    } else if (adminStatusValue === 'SR') {
+      if (userStateValue) {
+        query = query.eq('state', userStateValue.toUpperCase().trim());
       } else {
         query = query.eq('user_id', user.id);
       }
@@ -157,7 +161,7 @@ function AppPageContent() {
     if (fetchError) throw fetchError;
     
     let filteredData = data || [];
-    if (adminStatus !== 'AD' && adminStatus !== 'SR') {
+    if (adminStatusValue !== 'AD' && adminStatusValue !== 'SR') {
       if (userMobileAndLeaderData?.mobile) {
         const normalizedMobile = normalizeMobile(userMobileAndLeaderData.mobile);
         filteredData = filteredData.filter(campaign => 
@@ -361,6 +365,14 @@ function AppPageContent() {
         setUserState(userStateValue);
         setUserMobileAndLeader(userMobileAndLeaderData);
         
+        console.log('State Reporter Debug:', { 
+          adminStatus, 
+          userStateValue, 
+          adminAccess,
+          hasAdminPermission: adminAccess,
+          userMobileAndLeader: userMobileAndLeaderData 
+        });
+        
         // Check if returning from a filtered view (URL parameter takes precedence)
         const filterParam = searchParams.get('filter');
         if (filterParam && (filterParam === 'past' || filterParam === 'future')) {
@@ -381,7 +393,7 @@ function AppPageContent() {
           setTimeout(() => setShowSuccess(false), 5000);
         }
         
-        console.log('Campaign filtering:', { adminStatus, userState, userMobileAndLeader: userMobileAndLeaderData });
+        console.log('Campaign filtering:', { adminStatus, userState: userStateValue, userMobileAndLeader: userMobileAndLeaderData });
         
         // Performance logging
         const queryStartTime = performance.now();
@@ -397,9 +409,9 @@ function AppPageContent() {
           console.log('Filter: AD - showing all campaigns');
         } else if (adminStatus === 'SR') {
           // State Reporter: filter by state only (no name filter)
-          if (userState) {
+          if (userStateValue) {
             // Normalize state to uppercase for matching
-            const normalizedState = userState.toUpperCase().trim();
+            const normalizedState = userStateValue.toUpperCase().trim();
             query = query.eq('state', normalizedState);
             console.log('Filter: SR - filtering by state:', normalizedState);
           } else {
