@@ -367,10 +367,18 @@ function AppPageContent() {
         
         console.log('State Reporter Debug:', { 
           adminStatus, 
-          userStateValue, 
+          userStateValue,
+          userProfileState: finalProfile?.state,
           adminAccess,
           hasAdminPermission: adminAccess,
-          userMobileAndLeader: userMobileAndLeaderData 
+          userMobileAndLeader: userMobileAndLeaderData,
+          willShowButton: adminStatus === 'SR' && (userStateValue || finalProfile?.state) ? 'YES' : 'NO',
+          buttonCondition: {
+            adminStatusIsSR: adminStatus === 'SR',
+            hasUserState: !!userStateValue,
+            hasProfileState: !!finalProfile?.state,
+            willShow: adminStatus === 'SR' && (userStateValue || finalProfile?.state)
+          }
         });
         
         // Check if returning from a filtered view (URL parameter takes precedence)
@@ -1248,6 +1256,19 @@ function AppPageContent() {
             >
               Create
             </button>
+            {adminStatus === 'SR' && (userState || userProfile?.state) && (
+              <button
+                type="button"
+                onClick={() => {
+                  const stateToUse = userState || userProfile?.state || '';
+                  console.log('Navigating to campaign rules with state:', stateToUse);
+                  router.push(`/admin/campaign-rules?state=${encodeURIComponent(stateToUse)}`);
+                }}
+                className="rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
+              >
+                Manage Campaign Rules
+              </button>
+            )}
           </div>
         </div>
 
@@ -1505,15 +1526,6 @@ function AppPageContent() {
                 >
                   {isSubmitting ? 'Creating...' : 'Create'}
                 </button>
-                {adminStatus === 'SR' && userState && (
-                  <button
-                    type="button"
-                    onClick={() => router.push(`/admin/campaign-rules?state=${encodeURIComponent(userState)}`)}
-                    className="flex-1 rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
-                  >
-                    Manage Campaign Rules
-                  </button>
-                )}
               </div>
             </form>
           </div>

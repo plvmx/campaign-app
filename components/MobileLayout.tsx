@@ -1,9 +1,10 @@
 'use client';
 
-import { ReactNode } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { signOut } from '@/lib/auth';
+import { hasPermission, Permission } from '@/lib/permissions';
 
 interface MobileLayoutProps {
   children: ReactNode;
@@ -11,12 +12,33 @@ interface MobileLayoutProps {
 
 export default function MobileLayout({ children }: MobileLayoutProps) {
   const pathname = usePathname();
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
 
-  const navItems = [
+  useEffect(() => {
+    async function checkAdminStatus() {
+      try {
+        const adminAccess = await hasPermission(Permission.ADMIN_ACCESS);
+        setIsAdmin(adminAccess);
+      } catch (error) {
+        console.error('Error checking admin status:', error);
+        setIsAdmin(false);
+      }
+    }
+    checkAdminStatus();
+  }, []);
+
+  const allNavItems = [
     { href: '/app', label: 'Home', icon: '🏠' },
     { href: '/results', label: 'Campaigns', icon: '📊' },
     { href: '/admin', label: 'Admin', icon: '⚙️' },
   ];
+
+  // Filter nav items based on admin status
+  const navItems = isAdmin === null 
+    ? [] // Don't show anything while checking
+    : isAdmin 
+      ? allNavItems // Show all items for admins
+      : [allNavItems[0]]; // Show only Home for non-admins
 
   const handleSignOut = async () => {
     try {
@@ -51,7 +73,7 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
 
       {/* Bottom Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 border-t-2 border-gray-800 dark:border-gray-600 bg-white dark:bg-gray-950">
-        <div className="flex items-center justify-around">
+        <div className={`flex items-center ${navItems.length === 1 ? 'justify-center' : 'justify-around'}`}>
           {navItems.map((item) => {
             const isActive = pathname === item.href || 
               (item.href !== '/app' && pathname?.startsWith(item.href));

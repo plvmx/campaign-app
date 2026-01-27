@@ -533,7 +533,7 @@ function CampaignRulesPageContent() {
               {error || 'You do not have permission to access this page.'}
             </p>
             <button
-              onClick={() => router.push('/admin')}
+              onClick={() => router.push(adminStatus === 'SR' ? '/app' : '/admin')}
               className="mt-4 rounded-md bg-red-600 px-4 py-2 text-base font-bold text-white hover:bg-red-700 border-2 border-gray-800 dark:border-gray-600"
             >
               Go Back
@@ -565,7 +565,7 @@ function CampaignRulesPageContent() {
               </p>
             </div>
             <button
-              onClick={() => router.push('/admin')}
+              onClick={() => router.push(adminStatus === 'SR' ? '/app' : '/admin')}
               className="rounded-md bg-gray-200 px-3 py-2 text-base font-bold text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 border-2 border-gray-800 dark:border-gray-600"
             >
               Back
