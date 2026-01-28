@@ -24,8 +24,17 @@ export default function CampaignForm({
   initialData,
   submitLabel = 'Create Campaign',
 }: CampaignFormProps) {
+  // Get today's date in YYYY-MM-DD format for default value and min attribute
+  const getTodayDateString = () => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   const [formData, setFormData] = useState<CampaignData>({
-    date: initialData?.date || '',
+    date: initialData?.date || getTodayDateString(),
     state: initialData?.state || '',
     place: initialData?.place || '',
     time: initialData?.time || '',
@@ -37,87 +46,9 @@ export default function CampaignForm({
   const [error, setError] = useState<string | null>(null);
   const [places, setPlaces] = useState<string[]>([]);
   const [loadingPlaces, setLoadingPlaces] = useState(false);
-  const [availableDates, setAvailableDates] = useState<{ value: string; label: string }[]>([]);
   const [timeOptions, setTimeOptions] = useState<{ value: string; label: string }[]>([]);
   const [leaders, setLeaders] = useState<string[]>([]);
   const [loadingLeaders, setLoadingLeaders] = useState(false);
-
-  // Calculate available dates (2-week period starting on calculated Monday)
-  useEffect(() => {
-    function calculateStartMonday(): Date {
-      const today = new Date();
-      const dayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
-      
-      let daysToAdd = 0;
-      
-      if (dayOfWeek === 0) {
-        // Sunday - go to next Monday (1 day)
-        daysToAdd = 1;
-      } else if (dayOfWeek >= 1 && dayOfWeek <= 3) {
-        // Monday, Tuesday, Wednesday - go to Monday of current week
-        daysToAdd = -(dayOfWeek - 1);
-      } else {
-        // Thursday, Friday, Saturday - go to Monday of next week
-        daysToAdd = 8 - dayOfWeek; // 8 - 4 = 4 (Thu), 8 - 5 = 3 (Fri), 8 - 6 = 2 (Sat)
-      }
-      
-      const startMonday = new Date(today);
-      startMonday.setDate(today.getDate() + daysToAdd);
-      startMonday.setHours(0, 0, 0, 0); // Reset time to midnight
-      
-      return startMonday;
-    }
-
-    function generateDateOptions() {
-      const startMonday = calculateStartMonday();
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      
-      const dates: { value: string; label: string }[] = [];
-      const dateValues = new Set<string>();
-      
-      // Generate 14 dates (2 weeks)
-      for (let i = 0; i < 14; i++) {
-        const date = new Date(startMonday);
-        date.setDate(startMonday.getDate() + i);
-        
-        // Format as YYYY-MM-DD for value (HTML date input format)
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-        const value = `${year}-${month}-${day}`;
-        
-        // Format for display (e.g., "Mon, 15 Jan 2024")
-        const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        const dayName = dayNames[date.getDay()];
-        const monthName = monthNames[date.getMonth()];
-        const label = `${dayName}, ${day} ${monthName} ${year}`;
-        
-        dates.push({ value, label });
-        dateValues.add(value);
-      }
-      
-      // If today is not in the list, add it at the beginning
-      const todayYear = today.getFullYear();
-      const todayMonth = String(today.getMonth() + 1).padStart(2, '0');
-      const todayDay = String(today.getDate()).padStart(2, '0');
-      const todayValue = `${todayYear}-${todayMonth}-${todayDay}`;
-      
-      if (!dateValues.has(todayValue)) {
-        const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        const dayName = dayNames[today.getDay()];
-        const monthName = monthNames[today.getMonth()];
-        const todayLabel = `${dayName}, ${todayDay} ${monthName} ${todayYear}`;
-        dates.unshift({ value: todayValue, label: `${todayLabel} (Today)` });
-      }
-      
-      setAvailableDates(dates);
-    }
-
-    generateDateOptions();
-  }, []);
 
   // Generate time options (half-hour intervals from 8:00 AM to 9:00 PM)
   useEffect(() => {
@@ -272,21 +203,16 @@ export default function CampaignForm({
         >
           Date *
         </label>
-        <select
+        <input
+          type="date"
           id="date"
           name="date"
           required
           value={formData.date}
           onChange={handleChange}
+          min={getTodayDateString()}
           className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-        >
-          <option value="">Select a date</option>
-          {availableDates.map((date) => (
-            <option key={date.value} value={date.value}>
-              {date.label}
-            </option>
-          ))}
-        </select>
+        />
       </div>
 
       <div>
