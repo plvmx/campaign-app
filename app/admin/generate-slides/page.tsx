@@ -404,7 +404,7 @@ export default function GenerateSlidesPage() {
     const dateStartTop = inchesToPixels(1.0);
     const dateLeft = inchesToPixels(0.5);
     const dateHeight = inchesToPixels(0.35);
-    const lineSpacing = inchesToPixels(0.4);
+    const lineSpacing = inchesToPixels(0.3); // Reduced from 0.4 for tighter campaign line spacing
     const bottomMargin = inchesToPixels(0.5);
     let currentY = dateStartTop;
     

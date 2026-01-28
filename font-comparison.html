@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monospace Font Comparison for Slide Generation</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #2563eb;
+            padding-bottom: 10px;
+        }
+        .font-sample {
+            margin: 30px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background: #fafafa;
+        }
+        .font-name {
+            font-size: 18px;
+            font-weight: bold;
+            color: #2563eb;
+            margin-bottom: 10px;
+            font-family: Arial, sans-serif;
+        }
+        .font-code {
+            font-size: 24px;
+            line-height: 1.5;
+            color: #333;
+            white-space: pre;
+            background: white;
+            padding: 15px;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            overflow-x: auto;
+        }
+        .description {
+            font-size: 14px;
+            color: #666;
+            margin-top: 10px;
+            font-style: italic;
+        }
+        .current {
+            border: 3px solid #10b981;
+            background: #f0fdf4;
+        }
+        .current::before {
+            content: "CURRENTLY USED";
+            display: block;
+            background: #10b981;
+            color: white;
+            padding: 5px 10px;
+            font-size: 12px;
+            font-weight: bold;
+            margin: -20px -20px 15px -20px;
+            border-radius: 5px 5px 0 0;
+        }
+        .recommended {
+            border: 3px solid #f59e0b;
+        }
+        .recommended::before {
+            content: "RECOMMENDED";
+            display: block;
+            background: #f59e0b;
+            color: white;
+            padding: 5px 10px;
+            font-size: 12px;
+            font-weight: bold;
+            margin: -20px -20px 15px -20px;
+            border-radius: 5px 5px 0 0;
+        }
+        .note {
+            background: #fef3c7;
+            border-left: 4px solid #f59e0b;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .note strong {
+            color: #92400e;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Monospace Font Comparison for Slide Generation</h1>
+        
+        <div class="note">
+            <strong>Note:</strong> All fonts below maintain uniform character spacing (monospace), which is essential for the aligned campaign entries. The sample text shows how "PlaceName1234 10:30 AM Leader12 0434885320" would appear with each font.
+        </div>
+
+        <!-- Current Font -->
+        <div class="font-sample current">
+            <div class="font-name">Courier New (Currently Used)</div>
+            <div class="font-code" style="font-family: 'Courier New', Courier, monospace;">
+PlaceName1234 10:30 AM Leader12 0434885320
+PlaceName1234 10:30 AM Leader12 0434885320
+PlaceName1234 10:30 AM Leader12 0434885320
+            </div>
+            <div class="description">Widely available, classic typewriter style. Good compatibility but can appear dated.</div>
+        </div>
+
+        <!-- Recommended Alternatives -->
+        <div class="font-sample recommended">
+            <div class="font-name">Consolas</div>
+            <div class="font-code" style="font-family: Consolas, 'Courier New', monospace;">
+PlaceName1234 10:30 AM Leader12 0434885320
+PlaceName1234 10:30 AM Leader12 0434885320
+PlaceName1234 10:30 AM Leader12 0434885320
+            </div>
+            <div class="description">Modern, clean design. Excellent readability. Available on Windows and Mac. Professional appearance.</div>
+        </div>
+
+        <div class="font-sample recommended">
+            <div class="font-name">Monaco</div>
+            <div class="font-code" style="font-family: Monaco, 'Courier New', monospace;">
+PlaceName1234 10:30 AM Leader12 0434885320
+PlaceName1234 10:30 AM Leader12 0434885320
+PlaceName1234 10:30 AM Leader12 0434885320
+            </div>
+            <div class="description">Mac-native font. Very clean and modern. Excellent for screen display. Falls back gracefully on other systems.</div>
+        </div>
+
+        <div class="font-sample">
+            <div class="font-name">Lucida Console</div>
+            <div class="font-code" style="font-family: 'Lucida Console', 'Courier New', monospace;">
+PlaceName1234 10:30 AM Leader12 0434885320
+PlaceName1234 10:30 AM Leader12 0434885320
+PlaceName1234 10:30 AM Leader12 0434885320
+            </div>
+            <div class="description">Widely available on Windows. Slightly more modern than Courier New while maintaining excellent spacing.</div>
+        </div>
+
+        <div class="font-sample">
+            <div class="font-name">Menlo</div>
+            <div class="font-code" style="font-family: Menlo, 'Courier New', monospace;">
+PlaceName1234 10:30 AM Leader12 0434885320
+PlaceName1234 10:30 AM Leader12 0434885320
+PlaceName1234 10:30 AM Leader12 0434885320
+            </div>
+            <div class="description">Mac and iOS native. Based on DejaVu Sans Mono. Very clean and readable. Modern appearance.</div>
+        </div>
+
+        <div class="font-sample">
+            <div class="font-name">DejaVu Sans Mono</div>
+            <div class="font-code" style="font-family: 'DejaVu Sans Mono', 'Courier New', monospace;">
+PlaceName1234 10:30 AM Leader12 0434885320
+PlaceName1234 10:30 AM Leader12 0434885320
+PlaceName1234 10:30 AM Leader12 0434885320
+            </div>
+            <div class="description">Open-source font. Excellent Unicode support. Available on Linux and can be loaded as web font. Very readable.</div>
+        </div>
+
+        <div class="font-sample">
+            <div class="font-name">Source Code Pro</div>
+            <div class="font-code" style="font-family: 'Source Code Pro', 'Courier New', monospace;">
+PlaceName1234 10:30 AM Leader12 0434885320
+PlaceName1234 10:30 AM Leader12 0434885320
+PlaceName1234 10:30 AM Leader12 0434885320
+            </div>
+            <div class="description">Adobe open-source font. Modern, professional design. Would need to be loaded as web font. Excellent readability.</div>
+        </div>
+
+        <div class="font-sample">
+            <div class="font-name">Roboto Mono</div>
+            <div class="font-code" style="font-family: 'Roboto Mono', 'Courier New', monospace;">
+PlaceName1234 10:30 AM Leader12 0434885320
+PlaceName1234 10:30 AM Leader12 0434885320
+PlaceName1234 10:30 AM Leader12 0434885320
+            </div>
+            <div class="description">Google font. Modern, geometric design. Would need to be loaded as web font. Very clean appearance.</div>
+        </div>
+
+        <div class="font-sample">
+            <div class="font-name">Fira Code</div>
+            <div class="font-code" style="font-family: 'Fira Code', 'Courier New', monospace;">
+PlaceName1234 10:30 AM Leader12 0434885320
+PlaceName1234 10:30 AM Leader12 0434885320
+PlaceName1234 10:30 AM Leader12 0434885320
+            </div>
+            <div class="description">Mozilla's open-source font. Designed for code but excellent for any monospace needs. Would need to be loaded as web font.</div>
+        </div>
+
+        <div class="note" style="margin-top: 40px;">
+            <strong>Cross-Platform Compatibility:</strong>
+            <ul style="margin: 10px 0 0 20px; padding: 0;">
+                <li><strong>✅ Windows:</strong> Consolas, Lucida Console, Courier New</li>
+                <li><strong>✅ Mac:</strong> Consolas, Monaco, Menlo, Courier New</li>
+                <li><strong>✅ Android/iOS:</strong> Courier New, monospace (generic)</li>
+                <li><strong>❌ Monaco/Menlo:</strong> NOT available on Windows or Android - will fall back to next font in stack</li>
+            </ul>
+        </div>
+        
+        <div class="note" style="margin-top: 20px; background: #dbeafe; border-left-color: #2563eb;">
+            <strong>Recommended Font Stack for Maximum Compatibility:</strong>
+            <div style="margin-top: 10px; padding: 10px; background: white; border-radius: 3px; font-family: monospace;">
+                <code>"Consolas", "Lucida Console", "Monaco", "Menlo", "Courier New", monospace</code>
+            </div>
+            <p style="margin-top: 10px; margin-bottom: 0;">
+                This stack ensures:
+                <ul style="margin: 10px 0 0 20px; padding: 0;">
+                    <li>Windows users get Consolas or Lucida Console</li>
+                    <li>Mac users get Consolas, Monaco, or Menlo</li>
+                    <li>Mobile/other platforms fall back to Courier New or generic monospace</li>
+                    <li>All fonts maintain uniform spacing for proper alignment</li>
+                </ul>
+            </p>
+        </div>
+    </div>
+</body>
+</html>
