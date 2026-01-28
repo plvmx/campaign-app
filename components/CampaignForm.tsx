@@ -33,8 +33,11 @@ export default function CampaignForm({
     return `${year}-${month}-${day}`;
   };
 
+  // Calculate today's date string once for use in min attribute and default value
+  const todayDateString = getTodayDateString();
+
   const [formData, setFormData] = useState<CampaignData>({
-    date: initialData?.date || getTodayDateString(),
+    date: initialData?.date || todayDateString,
     state: initialData?.state || '',
     place: initialData?.place || '',
     time: initialData?.time || '',
@@ -210,7 +213,7 @@ export default function CampaignForm({
           required
           value={formData.date}
           onChange={handleChange}
-          min={getTodayDateString()}
+          min={todayDateString}
           className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
         />
       </div>

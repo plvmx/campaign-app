@@ -62,8 +62,13 @@ function AppPageContent() {
     tl_ok: boolean;
     sr_ok: boolean;
   }>>({});
+  // Get today's date in YYYY-MM-DD format for default value and min attribute
+  const getTodayDateString = () => {
+    return formatDateForDb(new Date());
+  };
+
   const [formState, setFormState] = useState({
-    date: '',
+    date: getTodayDateString(),
     state: '',
     place: '',
     time: '',
@@ -1318,12 +1323,7 @@ function AppPageContent() {
                   required
                   value={formState.date}
                   onChange={(e) => setFormState({ ...formState, date: e.target.value })}
-                  min={campaignDates ? formatDateForDb(new Date(campaignDates.pastCampaignStart)) : undefined}
-                  max={campaignDates ? (() => {
-                    const endDate = new Date(campaignDates.secondWeekStart);
-                    endDate.setDate(endDate.getDate() + 6); // Add 6 days to get to Sunday
-                    return formatDateForDb(endDate);
-                  })() : undefined}
+                  min={getTodayDateString()}
                   className="mt-1 block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
                 />
               </div>
