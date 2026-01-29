@@ -816,82 +816,42 @@ function RecordResultsDetailPageContent() {
           />
         </div>
 
-        {/* Partial Presentations Banner - HIDDEN */}
-        {/* <div className="mb-4 rounded-md bg-green-100 px-4 py-2 flex items-center justify-between gap-2 dark:bg-green-900/30">
+        {/* Partial Presentations Banner - count field hidden */}
+        <div className="mb-4 rounded-md bg-green-100 px-4 py-2 dark:bg-green-900/30">
           <span className="text-sm font-medium text-green-800 dark:text-green-200">
             Partial Presentations
           </span>
-          <input
-            type="number"
-            min="0"
-            step="1"
-            value={ppCnt}
-            onChange={(e) => setPpCnt(e.target.value)}
-            onBlur={saveCountFields}
-            className="w-20 rounded-md border-2 border-green-600 bg-white px-2 py-1 text-sm text-center focus:border-green-700 focus:outline-none focus:ring-green-500 dark:border-green-500 dark:bg-gray-900 dark:text-white"
-            placeholder="0"
-          />
-        </div> */}
+        </div>
 
         {/* Partial Presentations Input Fields */}
         {renderInputGrid(partialRows, 'partial')}
 
-        {/* Full Presentations Banner - HIDDEN */}
-        {/* <div className="mb-4 mt-6 rounded-md bg-orange-100 px-4 py-2 flex items-center justify-between gap-2 dark:bg-orange-900/30">
+        {/* Full Presentations Banner - count field hidden */}
+        <div className="mb-4 mt-6 rounded-md bg-orange-100 px-4 py-2 dark:bg-orange-900/30">
           <span className="text-sm font-medium text-orange-800 dark:text-orange-200">
             Full Presentations
           </span>
-          <input
-            type="number"
-            min="0"
-            step="1"
-            value={fpCnt}
-            onChange={(e) => setFpCnt(e.target.value)}
-            onBlur={saveCountFields}
-            className="w-20 rounded-md border-2 border-orange-600 bg-white px-2 py-1 text-sm text-center focus:border-orange-700 focus:outline-none focus:ring-orange-500 dark:border-orange-500 dark:bg-gray-900 dark:text-white"
-            placeholder="0"
-          />
-        </div> */}
+        </div>
 
         {/* Full Presentations Input Fields */}
         {renderInputGrid(fullRows, 'full')}
 
-        {/* Full Presentations and Sinners Prayers Banner - HIDDEN */}
-        {/* <div className="mb-4 mt-6 rounded-md bg-red-100 px-4 py-2 flex items-center justify-between gap-2 dark:bg-red-900/30">
+        {/* Full Presentations and Sinners Prayers Banner - count field hidden */}
+        <div className="mb-4 mt-6 rounded-md bg-red-100 px-4 py-2 dark:bg-red-900/30">
           <span className="text-sm font-medium text-red-800 dark:text-red-200">
             Full Presentations and Sinners Prayers
           </span>
-          <input
-            type="number"
-            min="0"
-            step="1"
-            value={fpspCnt}
-            onChange={(e) => setFpspCnt(e.target.value)}
-            onBlur={saveCountFields}
-            className="w-20 rounded-md border-2 border-red-600 bg-white px-2 py-1 text-sm text-center focus:border-red-700 focus:outline-none focus:ring-red-500 dark:border-red-500 dark:bg-gray-900 dark:text-white"
-            placeholder="0"
-          />
-        </div> */}
+        </div>
 
         {/* Full Presentations and Sinners Prayers Input Fields */}
         {renderInputGrid(fullSinnersRows, 'fullSinners')}
 
-        {/* Information Requests Banner - HIDDEN */}
-        {/* <div className="mb-4 mt-6 rounded-md bg-yellow-100 px-4 py-2 flex items-center justify-between gap-2 dark:bg-yellow-900/30">
+        {/* Information Requests Banner - count field hidden */}
+        <div className="mb-4 mt-6 rounded-md bg-yellow-100 px-4 py-2 dark:bg-yellow-900/30">
           <span className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
             Information Requests
           </span>
-          <input
-            type="number"
-            min="0"
-            step="1"
-            value={irCnt}
-            onChange={(e) => setIrCnt(e.target.value)}
-            onBlur={saveCountFields}
-            className="w-20 rounded-md border-2 border-yellow-600 bg-white px-2 py-1 text-sm text-center focus:border-yellow-700 focus:outline-none focus:ring-yellow-500 dark:border-yellow-500 dark:bg-gray-900 dark:text-white"
-            placeholder="0"
-          />
-        </div> */}
+        </div>
 
         {/* Information Requests Input Fields */}
         {renderInputGrid(informationRows, 'information')}
