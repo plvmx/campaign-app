@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Campaign Report Pre-fill Test</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.25rem; }
+    p { color: #444; }
+    .link-group { margin: 1rem 0; padding: 1rem; background: #f5f5f5; border-radius: 8px; }
+    .link-group strong { display: block; margin-bottom: 0.5rem; }
+    a { color: #0066cc; word-break: break-all; }
+    a:hover { text-decoration: underline; }
+    code { font-size: 0.85em; background: #eee; padding: 0.2em 0.4em; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <h1>Campaign Report form – pre-fill test links</h1>
+  <p>Open each link in a new tab. If the form at australiaforjesus.org.au/campaignreport supports URL pre-fill, the fields may be populated with the test values below.</p>
+  <p><strong>Test values:</strong> Location = "Sydney Test", Leader = "Jane Smith", Dates = "2025-01-29", Partial = 5, Full = 3, Sinners Prayer = 2, Info Requests = 1</p>
+
+  <div class="link-group">
+    <strong>1. Params matching your app names (place, leader, date, pp_cnt, fp_cnt, pfsp_cnt, ir_cnt)</strong>
+    <a href="https://australiaforjesus.org.au/campaignreport?place=Sydney+Test&leader=Jane+Smith&date=2025-01-29&pp_cnt=5&fp_cnt=3&pfsp_cnt=2&ir_cnt=1" target="_blank" rel="noopener">
+      https://australiaforjesus.org.au/campaignreport?place=Sydney+Test&leader=Jane+Smith&date=2025-01-29&pp_cnt=5&fp_cnt=3&pfsp_cnt=2&ir_cnt=1
+    </a>
+  </div>
+
+  <div class="link-group">
+    <strong>2. Params from form labels – snake_case (location, campaign_leader, dates, etc.)</strong>
+    <a href="https://australiaforjesus.org.au/campaignreport?location=Sydney+Test&campaign_leader=Jane+Smith&dates=2025-01-29&partial_presentations=5&full_presentations=3&sinners_prayer=2&information_requests=1" target="_blank" rel="noopener">
+      https://australiaforjesus.org.au/campaignreport?location=Sydney+Test&campaign_leader=Jane+Smith&dates=2025-01-29&partial_presentations=5&full_presentations=3&sinners_prayer=2&information_requests=1
+    </a>
+  </div>
+
+  <div class="link-group">
+    <strong>3. Params from form labels – camelCase</strong>
+    <a href="https://australiaforjesus.org.au/campaignreport?location=Sydney+Test&campaignLeader=Jane+Smith&dates=2025-01-29&partialPresentations=5&fullPresentations=3&sinnersPrayer=2&informationRequests=1" target="_blank" rel="noopener">
+      https://australiaforjesus.org.au/campaignreport?location=Sydney+Test&campaignLeader=Jane+Smith&dates=2025-01-29&partialPresentations=5&fullPresentations=3&sinnersPrayer=2&informationRequests=1
+    </a>
+  </div>
+
+  <div class="link-group">
+    <strong>4. Common HTML names (Location, CampaignLeader, etc. – capitalized)</strong>
+    <a href="https://australiaforjesus.org.au/campaignreport?Location=Sydney+Test&CampaignLeader=Jane+Smith&Dates=2025-01-29&PartialPresentations=5&FullPresentations=3&SinnersPrayer=2&InformationRequests=1" target="_blank" rel="noopener">
+      https://australiaforjesus.org.au/campaignreport?Location=Sydney+Test&CampaignLeader=Jane+Smith&Dates=2025-01-29&PartialPresentations=5&FullPresentations=3&SinnersPrayer=2&InformationRequests=1
+    </a>
+  </div>
+
+  <p style="margin-top: 2rem;"><strong>How to test:</strong> Click each link. If any version pre-fills the form fields, note which link (1–4) worked; that tells us the correct parameter names to use in the app.</p>
+</body>
+</html>

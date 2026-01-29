@@ -755,6 +755,31 @@ function RecordResultsDetailPageContent() {
           </div>
         </div>
 
+        {/* Campaign Report Notice */}
+        <div className="mb-6 rounded-lg border-4 border-yellow-500 bg-yellow-100 px-4 py-4 shadow-lg dark:border-yellow-400 dark:bg-yellow-900/50">
+          <div className="flex items-start gap-3">
+            <div className="flex-shrink-0 mt-0.5">
+              <svg className="h-6 w-6 text-yellow-700 dark:text-yellow-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+            <div className="flex-1">
+              <p className="text-base font-bold text-yellow-900 dark:text-yellow-100">
+                Please continue to use the old Campaign Report{' '}
+                <a 
+                  href="https://www.australiaforjesus.org.au/campaignreport" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="underline hover:text-yellow-700 dark:hover:text-yellow-200"
+                >
+                  https://www.australiaforjesus.org.au/campaignreport
+                </a>{' '}
+                to record your campaign numbers
+              </p>
+            </div>
+          </div>
+        </div>
+
         {/* Auto-save notification */}
         <div className="mb-6 rounded-lg border-2 border-blue-400 bg-blue-100 px-4 py-3 shadow-sm dark:border-blue-500 dark:bg-blue-900/40">
           <div className="flex items-start gap-3">
@@ -791,8 +816,8 @@ function RecordResultsDetailPageContent() {
           />
         </div>
 
-        {/* Partial Presentations Banner */}
-        <div className="mb-4 rounded-md bg-green-100 px-4 py-2 flex items-center justify-between gap-2 dark:bg-green-900/30">
+        {/* Partial Presentations Banner - HIDDEN */}
+        {/* <div className="mb-4 rounded-md bg-green-100 px-4 py-2 flex items-center justify-between gap-2 dark:bg-green-900/30">
           <span className="text-sm font-medium text-green-800 dark:text-green-200">
             Partial Presentations
           </span>
@@ -806,13 +831,13 @@ function RecordResultsDetailPageContent() {
             className="w-20 rounded-md border-2 border-green-600 bg-white px-2 py-1 text-sm text-center focus:border-green-700 focus:outline-none focus:ring-green-500 dark:border-green-500 dark:bg-gray-900 dark:text-white"
             placeholder="0"
           />
-        </div>
+        </div> */}
 
         {/* Partial Presentations Input Fields */}
         {renderInputGrid(partialRows, 'partial')}
 
-        {/* Full Presentations Banner */}
-        <div className="mb-4 mt-6 rounded-md bg-orange-100 px-4 py-2 flex items-center justify-between gap-2 dark:bg-orange-900/30">
+        {/* Full Presentations Banner - HIDDEN */}
+        {/* <div className="mb-4 mt-6 rounded-md bg-orange-100 px-4 py-2 flex items-center justify-between gap-2 dark:bg-orange-900/30">
           <span className="text-sm font-medium text-orange-800 dark:text-orange-200">
             Full Presentations
           </span>
@@ -826,13 +851,13 @@ function RecordResultsDetailPageContent() {
             className="w-20 rounded-md border-2 border-orange-600 bg-white px-2 py-1 text-sm text-center focus:border-orange-700 focus:outline-none focus:ring-orange-500 dark:border-orange-500 dark:bg-gray-900 dark:text-white"
             placeholder="0"
           />
-        </div>
+        </div> */}
 
         {/* Full Presentations Input Fields */}
         {renderInputGrid(fullRows, 'full')}
 
-        {/* Full Presentations and Sinners Prayers Banner */}
-        <div className="mb-4 mt-6 rounded-md bg-red-100 px-4 py-2 flex items-center justify-between gap-2 dark:bg-red-900/30">
+        {/* Full Presentations and Sinners Prayers Banner - HIDDEN */}
+        {/* <div className="mb-4 mt-6 rounded-md bg-red-100 px-4 py-2 flex items-center justify-between gap-2 dark:bg-red-900/30">
           <span className="text-sm font-medium text-red-800 dark:text-red-200">
             Full Presentations and Sinners Prayers
           </span>
@@ -846,13 +871,13 @@ function RecordResultsDetailPageContent() {
             className="w-20 rounded-md border-2 border-red-600 bg-white px-2 py-1 text-sm text-center focus:border-red-700 focus:outline-none focus:ring-red-500 dark:border-red-500 dark:bg-gray-900 dark:text-white"
             placeholder="0"
           />
-        </div>
+        </div> */}
 
         {/* Full Presentations and Sinners Prayers Input Fields */}
         {renderInputGrid(fullSinnersRows, 'fullSinners')}
 
-        {/* Information Requests Banner */}
-        <div className="mb-4 mt-6 rounded-md bg-yellow-100 px-4 py-2 flex items-center justify-between gap-2 dark:bg-yellow-900/30">
+        {/* Information Requests Banner - HIDDEN */}
+        {/* <div className="mb-4 mt-6 rounded-md bg-yellow-100 px-4 py-2 flex items-center justify-between gap-2 dark:bg-yellow-900/30">
           <span className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
             Information Requests
           </span>
@@ -866,7 +891,7 @@ function RecordResultsDetailPageContent() {
             className="w-20 rounded-md border-2 border-yellow-600 bg-white px-2 py-1 text-sm text-center focus:border-yellow-700 focus:outline-none focus:ring-yellow-500 dark:border-yellow-500 dark:bg-gray-900 dark:text-white"
             placeholder="0"
           />
-        </div>
+        </div> */}
 
         {/* Information Requests Input Fields */}
         {renderInputGrid(informationRows, 'information')}
