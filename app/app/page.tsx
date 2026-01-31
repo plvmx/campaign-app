@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState, useRef, Suspense, useMemo, useCallback } from 'react';
-import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import MobileLayout from '@/components/MobileLayout';
 import { getCurrentUser } from '@/lib/auth';
@@ -1193,23 +1192,15 @@ function AppPageContent() {
     <MobileLayout>
       <div className="p-4 max-w-full overflow-x-hidden">
         <div className="mb-6">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 break-words">
-              {userProfile?.name ? (() => {
-                // Remove underscore and everything after it for display only
-                const displayName = userProfile.name.includes('_') 
-                  ? userProfile.name.split('_')[0] 
-                  : userProfile.name;
-                return `Welcome back ${displayName}!`;
-              })() : 'Welcome back!'}
-            </h1>
-            <Link
-              href="/campaign-list"
-              className="text-base font-bold text-amber-600 hover:text-amber-500 dark:text-amber-500 dark:hover:text-amber-400 whitespace-nowrap"
-            >
-              Be Inspired
-            </Link>
-          </div>
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 break-words">
+            {userProfile?.name ? (() => {
+              // Remove underscore and everything after it for display only
+              const displayName = userProfile.name.includes('_') 
+                ? userProfile.name.split('_')[0] 
+                : userProfile.name;
+              return `Welcome back ${displayName}!`;
+            })() : 'Welcome back!'}
+          </h1>
           <div className="mt-1">
             <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400 break-words inline">
               {adminStatus === 'AD' 

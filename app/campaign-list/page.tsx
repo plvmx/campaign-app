@@ -186,14 +186,14 @@ export default function CampaignListPage() {
           ← Back to Campaigns
         </Link>
 
-        {/* Slide-style content: same layout as JPEG slides, scrollable */}
-        <div className="mx-auto w-full max-w-2xl overflow-hidden rounded-lg border-2 border-gray-800 bg-white shadow dark:border-gray-600 dark:bg-gray-900 lg:max-w-4xl xl:max-w-5xl">
+        {/* Slide-style content: same layout as JPEG slides, scrollable; desktop: wider box and larger text */}
+        <div className="mx-auto w-full max-w-2xl overflow-hidden rounded-lg border-2 border-gray-800 bg-white shadow dark:border-gray-600 dark:bg-gray-900 lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl">
           {/* Red banner */}
           <div
             className="flex items-center justify-center py-3 text-center font-bold text-white"
             style={{ backgroundColor: 'rgb(255, 0, 0)' }}
           >
-            <span className="text-xl sm:text-2xl">A.F.J UPCOMING CAMPAIGNS</span>
+            <span className="text-xl sm:text-2xl">CURRENT A.F.J CAMPAIGNS</span>
           </div>
 
           {/* Colour key */}
@@ -223,9 +223,9 @@ export default function CampaignListPage() {
                     </span>
                   </div>
 
-                  {/* Campaign lines: fixed columns on mobile; spread to fill width on desktop */}
+                  {/* Campaign lines: fixed columns on mobile; spread to fill width on desktop, larger text on desktop */}
                   <div
-                    className="font-mono text-sm sm:text-base lg:text-lg"
+                    className="font-mono text-sm sm:text-base lg:text-xl"
                     style={{ fontFamily: '"Courier New", monospace' }}
                   >
                     {block.campaigns.map((campaign) => {
@@ -233,13 +233,13 @@ export default function CampaignListPage() {
                       return (
                         <div
                           key={campaign.id}
-                          className="grid leading-relaxed grid-cols-[13ch_10ch_8ch_12ch] gap-x-1 sm:gap-x-2 lg:grid-cols-[2fr_1fr_1fr_2fr] lg:gap-x-6"
+                          className="grid leading-relaxed grid-cols-[13ch_10ch_8ch_12ch] gap-x-1 font-bold sm:gap-x-2 lg:grid-cols-[2fr_1fr_1fr_2fr] lg:gap-x-6"
                           style={{ color: getSlideStateColor(campaign.state) }}
                         >
                           <span className="min-w-0 truncate" title={cols.place.trim()}>
                             {cols.place}
                           </span>
-                          <span>{cols.time}</span>
+                          <span className="text-right">{cols.time}</span>
                           <span className="min-w-0 truncate" title={cols.leader.trim()}>
                             {cols.leader}
                           </span>

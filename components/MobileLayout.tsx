@@ -27,18 +27,18 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
     checkAdminStatus();
   }, []);
 
-  const allNavItems = [
+  // Home and All Campaigns shown to all signed-in users; Admin only for admins
+  const baseNavItems = [
     { href: '/app', label: 'Home', icon: '🏠' },
-    { href: '/results', label: 'Campaigns', icon: '📊' },
-    { href: '/admin', label: 'Admin', icon: '⚙️' },
+    { href: '/campaign-list', label: 'All Campaigns', iconImage: '/flame_icon.png' },
   ];
+  const adminNavItem = { href: '/admin', label: 'Admin', icon: '⚙️' };
 
-  // Filter nav items based on admin status
-  const navItems = isAdmin === null 
-    ? [] // Don't show anything while checking
-    : isAdmin 
-      ? allNavItems // Show all items for admins
-      : [allNavItems[0]]; // Show only Home for non-admins
+  const navItems = isAdmin === null
+    ? []
+    : isAdmin
+      ? [...baseNavItems, adminNavItem]
+      : baseNavItems;
 
   const handleSignOut = async () => {
     try {
@@ -88,7 +88,11 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
                     : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100'
                 }`}
               >
-                <span className="text-xl">{item.icon}</span>
+                {'iconImage' in item && item.iconImage ? (
+                  <img src={item.iconImage} alt="" className="h-6 w-6 object-contain" />
+                ) : (
+                  <span className="text-xl">{item.icon}</span>
+                )}
                 <span className="text-xs font-medium">{item.label}</span>
               </Link>
             );
