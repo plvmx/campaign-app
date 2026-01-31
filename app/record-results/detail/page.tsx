@@ -828,7 +828,7 @@ function RecordResultsDetailPageContent() {
         {/* Full Presentations Banner - count field hidden */}
         <div className="mb-4 mt-6 rounded-md bg-orange-100 px-4 py-2 dark:bg-orange-900/30">
           <span className="text-sm font-medium text-orange-800 dark:text-orange-200">
-            Full Presentations
+            Full Presentations Only
           </span>
         </div>
 
