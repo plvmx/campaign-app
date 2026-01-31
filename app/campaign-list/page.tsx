@@ -6,6 +6,7 @@ import Link from 'next/link';
 import MobileLayout from '@/components/MobileLayout';
 import { getCurrentUser } from '@/lib/auth';
 import { supabase } from '@/lib/supabaseClient';
+import { calculateCampaignDates, formatDateForDb as formatDateForDbLib } from '@/lib/campaignDates';
 import {
   STATE_CODES,
   getSlideStateColor,
@@ -32,14 +33,8 @@ interface DateBlock {
   message: string | null;
 }
 
-function formatDateForDb(date: Date): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
-
-function formatCampaignLine(campaign: Campaign): string {
+/** Format campaign for display with aligned columns (place, time, leader, mobile). */
+function formatCampaignColumns(campaign: Campaign): { place: string; time: string; leader: string; mobile: string } {
   let place = campaign.place;
   const bofj = campaign.botj;
   let appendBOTJ = false;
@@ -53,11 +48,12 @@ function formatCampaignLine(campaign: Campaign): string {
   const time = formatSlideTime(campaign.time);
   const leader = campaign.leader;
   const mobile = (campaign.mobile ?? '').replace(/\s/g, '');
-  const placePadded = place.padEnd(13, ' ');
-  const timePadded = time.padStart(9, ' ');
-  const leaderPadded = leader.padEnd(8, ' ');
-  const mobilePadded = mobile.padEnd(12, ' ');
-  return `${placePadded} ${timePadded} ${leaderPadded} ${mobilePadded}`;
+  return {
+    place: place.padEnd(13, ' '),
+    time: time.padStart(9, ' '),
+    leader: leader.padEnd(8, ' '),
+    mobile: mobile.padEnd(12, ' '),
+  };
 }
 
 export default function CampaignListPage() {
@@ -66,6 +62,7 @@ export default function CampaignListPage() {
   const [hasAccess, setHasAccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dateBlocks, setDateBlocks] = useState<DateBlock[]>([]);
+  const [isLoadingData, setIsLoadingData] = useState(false);
 
   useEffect(() => {
     async function checkAndLoad() {
@@ -88,51 +85,63 @@ export default function CampaignListPage() {
   useEffect(() => {
     if (!hasAccess) return;
 
+    let cancelled = false;
+
     async function loadData() {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const todayStr = formatDateForDb(today);
+      setIsLoadingData(true);
+      setError(null);
 
-      const { data: allCampaigns, error: fetchError } = await supabase
-        .from('campaigns')
-        .select('*')
-        .gte('date', todayStr)
-        .order('date', { ascending: true })
-        .order('state', { ascending: true })
-        .order('place', { ascending: true })
-        .order('time', { ascending: true });
+      try {
+        const dates = calculateCampaignDates();
+        const startDateStr = formatDateForDbLib(dates.pastCampaignStart);
 
-      if (fetchError) {
-        setError(fetchError.message);
-        return;
+        const { data: allCampaigns, error: fetchError } = await supabase
+          .from('campaigns')
+          .select('*')
+          .gte('date', startDateStr)
+          .order('date', { ascending: true })
+          .order('state', { ascending: true })
+          .order('place', { ascending: true })
+          .order('time', { ascending: true });
+
+        if (cancelled) return;
+        if (fetchError) {
+          setError(fetchError.message);
+          return;
+        }
+
+        const campaigns = allCampaigns ?? [];
+        const uniqueDates = [...new Set(campaigns.map((c) => c.date))].sort();
+
+        const blocks: DateBlock[] = [];
+        for (const dateStr of uniqueDates) {
+          const [y, m, d] = dateStr.split('-').map(Number);
+          const date = new Date(y, m - 1, d);
+          const dateCampaigns = campaigns.filter((c) => c.date === dateStr);
+
+          const { data: msgRow } = await supabase
+            .from('campaign_messages')
+            .select('message')
+            .eq('date', dateStr)
+            .single();
+
+          blocks.push({
+            date,
+            campaigns: dateCampaigns,
+            message: msgRow?.message ?? null,
+          });
+        }
+
+        setDateBlocks(blocks);
+      } finally {
+        if (!cancelled) setIsLoadingData(false);
       }
-
-      const campaigns = allCampaigns ?? [];
-      const uniqueDates = [...new Set(campaigns.map((c) => c.date))].sort();
-
-      const blocks: DateBlock[] = [];
-      for (const dateStr of uniqueDates) {
-        const [y, m, d] = dateStr.split('-').map(Number);
-        const date = new Date(y, m - 1, d);
-        const dateCampaigns = campaigns.filter((c) => c.date === dateStr);
-
-        const { data: msgRow } = await supabase
-          .from('campaign_messages')
-          .select('message')
-          .eq('date', dateStr)
-          .single();
-
-        blocks.push({
-          date,
-          campaigns: dateCampaigns,
-          message: msgRow?.message ?? null,
-        });
-      }
-
-      setDateBlocks(blocks);
     }
 
     loadData();
+    return () => {
+      cancelled = true;
+    };
   }, [hasAccess]);
 
   if (isLoading) {
@@ -214,17 +223,33 @@ export default function CampaignListPage() {
                     </span>
                   </div>
 
-                  {/* Campaign lines (monospace, state-colored) */}
-                  <div className="font-mono text-sm sm:text-base" style={{ fontFamily: '"Courier New", monospace' }}>
-                    {block.campaigns.map((campaign) => (
-                      <div
-                        key={campaign.id}
-                        className="leading-relaxed"
-                        style={{ color: getSlideStateColor(campaign.state) }}
-                      >
-                        {formatCampaignLine(campaign)}
-                      </div>
-                    ))}
+                  {/* Campaign lines: aligned columns (place, time, leader, mobile) */}
+                  <div
+                    className="font-mono text-sm sm:text-base"
+                    style={{ fontFamily: '"Courier New", monospace' }}
+                  >
+                    {block.campaigns.map((campaign) => {
+                      const cols = formatCampaignColumns(campaign);
+                      return (
+                        <div
+                          key={campaign.id}
+                          className="grid gap-x-1 leading-relaxed sm:gap-x-2"
+                          style={{
+                            color: getSlideStateColor(campaign.state),
+                            gridTemplateColumns: '13ch 10ch 8ch 12ch',
+                          }}
+                        >
+                          <span className="min-w-0 truncate" title={cols.place.trim()}>
+                            {cols.place}
+                          </span>
+                          <span>{cols.time}</span>
+                          <span className="min-w-0 truncate" title={cols.leader.trim()}>
+                            {cols.leader}
+                          </span>
+                          <span>{cols.mobile}</span>
+                        </div>
+                      );
+                    })}
                   </div>
 
                   {/* Festive banner (e.g. Happy New Year on Dec 31) */}
@@ -258,7 +283,12 @@ export default function CampaignListPage() {
             })}
           </div>
 
-          {dateBlocks.every((b) => b.campaigns.length === 0) && (
+          {isLoadingData && dateBlocks.length === 0 && (
+            <div className="p-6 text-center text-gray-600 dark:text-gray-400">
+              Loading campaigns… You&apos;ll see the records soon.
+            </div>
+          )}
+          {!isLoadingData && dateBlocks.every((b) => b.campaigns.length === 0) && (
             <div className="p-6 text-center text-gray-500 dark:text-gray-400">
               No campaigns in the current date range.
             </div>
