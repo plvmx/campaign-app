@@ -209,8 +209,8 @@ export default function CampaignListPage() {
             </p>
           </div>
 
-          {/* Date blocks and campaigns: extra right padding so phone number doesn't touch edge on mobile */}
-          <div className="space-y-4 px-5 py-4 pr-6 lg:px-6">
+          {/* Date blocks and campaigns: minimal left padding on mobile (one space from border); more padding on desktop */}
+          <div className="space-y-4 py-4 pl-2 pr-3 lg:px-6">
             {dateBlocks.map((block, index) => {
               if (block.campaigns.length === 0) return null;
 
@@ -223,9 +223,9 @@ export default function CampaignListPage() {
                     </span>
                   </div>
 
-                  {/* Campaign lines: aligned columns (place, time, leader, mobile) */}
+                  {/* Campaign lines: fixed columns on mobile; spread to fill width on desktop */}
                   <div
-                    className="font-mono text-sm sm:text-base"
+                    className="font-mono text-sm sm:text-base lg:text-lg"
                     style={{ fontFamily: '"Courier New", monospace' }}
                   >
                     {block.campaigns.map((campaign) => {
@@ -233,11 +233,8 @@ export default function CampaignListPage() {
                       return (
                         <div
                           key={campaign.id}
-                          className="grid gap-x-1 leading-relaxed sm:gap-x-2"
-                          style={{
-                            color: getSlideStateColor(campaign.state),
-                            gridTemplateColumns: '13ch 10ch 8ch 12ch',
-                          }}
+                          className="grid leading-relaxed grid-cols-[13ch_10ch_8ch_12ch] gap-x-1 sm:gap-x-2 lg:grid-cols-[2fr_1fr_1fr_2fr] lg:gap-x-6"
+                          style={{ color: getSlideStateColor(campaign.state) }}
                         >
                           <span className="min-w-0 truncate" title={cols.place.trim()}>
                             {cols.place}
