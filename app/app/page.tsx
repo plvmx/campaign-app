@@ -1485,36 +1485,19 @@ function AppPageContent() {
               </div>
               
               <div className="flex gap-6 justify-center">
-                {/* Show TL OK checkbox unless user is SR */}
-                {adminStatus !== 'SR' && (
-                  <div className="flex items-center">
-                    <input
-                      id="tl_ok"
-                      type="checkbox"
-                      checked={formState.tl_ok}
-                      onChange={(e) => setFormState({ ...formState, tl_ok: e.target.checked })}
-                      className="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <label htmlFor="tl_ok" className="ml-2 text-base font-semibold text-gray-700 dark:text-gray-300">
-                      This Campaign is Correct
-                    </label>
-                  </div>
-                )}
-                {/* Show SR OK checkbox only for AD and SR users */}
-                {(adminStatus === 'AD' || adminStatus === 'SR') && (
-                  <div className="flex items-center">
-                    <input
-                      id="sr_ok"
-                      type="checkbox"
-                      checked={formState.sr_ok}
-                      onChange={(e) => setFormState({ ...formState, sr_ok: e.target.checked })}
-                      className="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <label htmlFor="sr_ok" className="ml-2 text-base font-semibold text-gray-700 dark:text-gray-300">
-                      This Campaign is Correct
-                    </label>
-                  </div>
-                )}
+                {/* TL OK checkbox: shown for all users */}
+                <div className="flex items-center">
+                  <input
+                    id="tl_ok"
+                    type="checkbox"
+                    checked={formState.tl_ok}
+                    onChange={(e) => setFormState({ ...formState, tl_ok: e.target.checked })}
+                    className="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <label htmlFor="tl_ok" className="ml-2 text-base font-semibold text-gray-700 dark:text-gray-300">
+                    This Campaign is Correct
+                  </label>
+                </div>
               </div>
 
               <div className="flex gap-2">
@@ -1783,36 +1766,19 @@ function AppPageContent() {
                                     
                                     return shouldShowCheckboxes ? (
                                       <div className="flex gap-6 justify-center pt-2">
-                                        {/* Show TL OK checkbox unless user is SR */}
-                                        {adminStatus !== 'SR' && (
-                                          <div className="flex items-center">
-                                            <input
-                                              id={`tl_ok_${campaign.id}`}
-                                              type="checkbox"
-                                              checked={editData.tl_ok}
-                                              onChange={(e) => updateInlineEditField(campaign.id, 'tl_ok', e.target.checked)}
-                                              className="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                            />
-                                            <label htmlFor={`tl_ok_${campaign.id}`} className="ml-2 text-sm font-semibold text-gray-700 dark:text-gray-300">
-                                              This Campaign is Correct
-                                            </label>
-                                          </div>
-                                        )}
-                                        {/* Show SR OK checkbox only for AD and SR users */}
-                                        {(adminStatus === 'AD' || adminStatus === 'SR') && (
-                                          <div className="flex items-center">
-                                            <input
-                                              id={`sr_ok_${campaign.id}`}
-                                              type="checkbox"
-                                              checked={editData.sr_ok}
-                                              onChange={(e) => updateInlineEditField(campaign.id, 'sr_ok', e.target.checked)}
-                                              className="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                            />
-                                            <label htmlFor={`sr_ok_${campaign.id}`} className="ml-2 text-sm font-semibold text-gray-700 dark:text-gray-300">
-                                              This Campaign is Correct
-                                            </label>
-                                          </div>
-                                        )}
+                                        {/* TL OK checkbox: shown for all users */}
+                                        <div className="flex items-center">
+                                          <input
+                                            id={`tl_ok_${campaign.id}`}
+                                            type="checkbox"
+                                            checked={editData.tl_ok}
+                                            onChange={(e) => updateInlineEditField(campaign.id, 'tl_ok', e.target.checked)}
+                                            className="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                          />
+                                          <label htmlFor={`tl_ok_${campaign.id}`} className="ml-2 text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                            This Campaign is Correct
+                                          </label>
+                                        </div>
                                       </div>
                                     ) : null;
                                   })()}
@@ -1889,30 +1855,16 @@ function AppPageContent() {
                                       
                                       return shouldShowCheckboxes ? (
                                         <div className="flex gap-6 justify-center text-sm sm:text-base mt-2 mb-2">
-                                          {/* Show TL OK checkbox unless user is SR */}
-                                          {adminStatus !== 'SR' && (
-                                            <div className={`flex items-center ${stateColor.text} font-semibold cursor-pointer`} onClick={() => handleToggleCheckbox(campaign.id, 'tl_ok', campaign.tl_ok)}>
-                                              <input
-                                                type="checkbox"
-                                                checked={campaign.tl_ok}
-                                                onChange={() => {}}
-                                                className="h-5 w-5 rounded border-gray-300 mr-2 cursor-pointer"
-                                              />
-                                              <span>This Campaign is Correct</span>
-                                            </div>
-                                          )}
-                                          {/* Show SR OK checkbox only for AD and SR users */}
-                                          {(adminStatus === 'AD' || adminStatus === 'SR') && (
-                                            <div className={`flex items-center ${stateColor.text} font-semibold cursor-pointer`} onClick={() => handleToggleCheckbox(campaign.id, 'sr_ok', campaign.sr_ok)}>
-                                              <input
-                                                type="checkbox"
-                                                checked={campaign.sr_ok}
-                                                onChange={() => {}}
-                                                className="h-5 w-5 rounded border-gray-300 mr-2 cursor-pointer"
-                                              />
-                                              <span>This Campaign is Correct</span>
-                                            </div>
-                                          )}
+                                          {/* TL OK checkbox: shown for all users */}
+                                          <div className={`flex items-center ${stateColor.text} font-semibold cursor-pointer`} onClick={() => handleToggleCheckbox(campaign.id, 'tl_ok', campaign.tl_ok)}>
+                                            <input
+                                              type="checkbox"
+                                              checked={campaign.tl_ok}
+                                              onChange={() => {}}
+                                              className="h-5 w-5 rounded border-gray-300 mr-2 cursor-pointer"
+                                            />
+                                            <span>This Campaign is Correct</span>
+                                          </div>
                                         </div>
                                       ) : null;
                                     })()}
