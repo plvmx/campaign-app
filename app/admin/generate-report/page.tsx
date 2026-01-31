@@ -171,7 +171,12 @@ export default function GenerateReportPage() {
         });
         
         return { dateLocation, fpAndSp, fpOnly, pp };
-      });
+      }).filter(
+        (row) =>
+          row.fpAndSp.length > 0 ||
+          row.fpOnly.length > 0 ||
+          row.pp.length > 0
+      );
 
       setReportData(rows);
       setShowReport(true);
