@@ -187,7 +187,7 @@ export default function CampaignListPage() {
         </Link>
 
         {/* Slide-style content: same layout as JPEG slides, scrollable */}
-        <div className="mx-auto max-w-2xl overflow-hidden rounded-lg border-2 border-gray-800 bg-white shadow dark:border-gray-600 dark:bg-gray-900">
+        <div className="mx-auto w-full max-w-2xl overflow-hidden rounded-lg border-2 border-gray-800 bg-white shadow dark:border-gray-600 dark:bg-gray-900 lg:max-w-4xl xl:max-w-5xl">
           {/* Red banner */}
           <div
             className="flex items-center justify-center py-3 text-center font-bold text-white"
@@ -197,7 +197,7 @@ export default function CampaignListPage() {
           </div>
 
           {/* Colour key */}
-          <div className="border-b border-gray-300 bg-white px-4 py-2 dark:border-gray-600 dark:bg-gray-900">
+          <div className="border-b border-gray-300 bg-white px-4 py-2 dark:border-gray-600 dark:bg-gray-900 lg:px-6">
             <p className="text-center text-sm font-bold sm:text-base">
               <span className="text-[rgb(130,0,0)]">Colour Key: </span>
               {STATE_CODES.map((state, i) => (
@@ -209,8 +209,8 @@ export default function CampaignListPage() {
             </p>
           </div>
 
-          {/* Date blocks and campaigns */}
-          <div className="space-y-4 p-4">
+          {/* Date blocks and campaigns: extra right padding so phone number doesn't touch edge on mobile */}
+          <div className="space-y-4 px-5 py-4 pr-6 lg:px-6">
             {dateBlocks.map((block, index) => {
               if (block.campaigns.length === 0) return null;
 
