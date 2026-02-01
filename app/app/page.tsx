@@ -1571,7 +1571,6 @@ function AppPageContent() {
                   const sortedDates = Object.keys(grouped).sort();
                   const result: React.ReactElement[] = [];
                   let lastDate = '';
-                  let lastState = '';
                   
                   sortedDates.forEach((date) => {
                     const dateCampaigns = grouped[date];
@@ -1580,31 +1579,18 @@ function AppPageContent() {
                     // Date header (only show if different from previous)
                     if (date !== lastDate) {
                       result.push(
-                        <div key={`date-${date}`} className="bg-blue-100 dark:bg-blue-900/30 px-4 py-4 border-2 border-gray-800 dark:border-gray-600 border-b-2 border-blue-300 dark:border-blue-700">
-                          <div className="font-bold text-xl sm:text-2xl text-blue-900 dark:text-blue-100 break-words">
+                        <div key={`date-${date}`} className="bg-yellow-100 dark:bg-yellow-900/30 px-4 py-4 border-2 border-gray-800 dark:border-gray-600 border-b-2 border-yellow-300 dark:border-yellow-700">
+                          <div className="font-bold text-xl sm:text-2xl text-yellow-900 dark:text-yellow-200 break-words">
                             {new Date(date).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
                           </div>
                         </div>
                       );
                       lastDate = date;
-                      lastState = ''; // Reset state when date changes
                     }
                     
                     sortedStates.forEach((state) => {
                       const stateCampaigns = dateCampaigns[state];
                       const sortedPlaces = Object.keys(stateCampaigns).sort();
-                      
-                      // State header (only show if different from previous)
-                      if (state !== lastState) {
-                        result.push(
-                          <div key={`state-${date}-${state}`} className="bg-yellow-100 dark:bg-yellow-900/30 px-4 py-3 border-2 border-gray-800 dark:border-gray-600">
-                            <div className="font-bold text-base sm:text-lg text-yellow-900 dark:text-yellow-200">
-                              {state}
-                            </div>
-                          </div>
-                        );
-                        lastState = state;
-                      }
                       
                       sortedPlaces.forEach((place) => {
                         const placeCampaigns = stateCampaigns[place];
@@ -1811,16 +1797,13 @@ function AppPageContent() {
                             const displayHour = hour % 12 || 12;
                             const displayTime = `${displayHour}:${minutes} ${ampm}`;
                             
-                            // Handle BOTJ display - convert old numeric values and show 'No' or 'Yes'
-                            let botjValue = 'No';
+                            // BOTJ: only show "BOTJ" when value is Yes; show nothing when No
+                            let showBOTJ = false;
                             if (campaign.botj === 'Yes') {
-                              botjValue = 'Yes';
-                            } else if (campaign.botj === 'No' || campaign.botj === null || campaign.botj === '') {
-                              botjValue = 'No';
-                            } else {
-                              // Handle legacy numeric values (0, 1, etc.) or any other value
+                              showBOTJ = true;
+                            } else if (campaign.botj !== 'No' && campaign.botj !== null && campaign.botj !== '') {
                               const botjStr = String(campaign.botj).trim();
-                              botjValue = (botjStr === '1' || botjStr === 'Yes' || parseInt(botjStr, 10) > 0) ? 'Yes' : 'No';
+                              showBOTJ = botjStr === '1' || botjStr.toLowerCase() === 'yes' || parseInt(botjStr, 10) > 0;
                             }
                             
                             // Get state color for campaign line
@@ -1830,19 +1813,25 @@ function AppPageContent() {
                               <div key={campaign.id} className={`p-4 sm:p-5 ${stateColor.bg} border-b-2 border-gray-800 dark:border-gray-600`}>
                                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                                   <div className="flex-1 min-w-0">
-                                    <div className={`text-lg sm:text-xl font-bold ${stateColor.text} mb-2 break-words`}>
-                                      {place} • {displayTime}
+                                    {/* Top line: Place State • Time, with BOTJ right-justified at end */}
+                                    <div className={`flex items-center justify-between gap-2 text-lg sm:text-xl font-bold ${stateColor.text} mb-2 break-words`}>
+                                      <span>
+                                        {place} {campaign.state} • {displayTime}
+                                      </span>
+                                      {showBOTJ && (
+                                        <span className="shrink-0 ml-2">BOTJ</span>
+                                      )}
                                     </div>
-                                    <div className={`text-base sm:text-lg font-semibold ${stateColor.text} opacity-90 mb-1 break-words`}>
-                                      Leader: {campaign.leader}
-                                    </div>
-                                    {campaign.mobile && (
-                                      <div className={`text-sm sm:text-base ${stateColor.text} opacity-85 mb-1 break-words`}>
-                                        Mobile: {campaign.mobile}
-                                      </div>
-                                    )}
-                                    <div className={`text-sm sm:text-base ${stateColor.text} opacity-85 mb-1`}>
-                                      BOTJ: {botjValue}
+                                    {/* Leader (bold) and mobile (normal) on same line */}
+                                    <div className={`text-base sm:text-lg ${stateColor.text} opacity-90 mb-1 break-words`}>
+                                      <span className="font-semibold">Leader: </span>
+                                      <span className="font-bold">{campaign.leader}</span>
+                                      {campaign.mobile ? (
+                                        <>
+                                          {' '}
+                                          <span className="font-normal">{campaign.mobile}</span>
+                                        </>
+                                      ) : null}
                                     </div>
                                     {/* Only show checkboxes for future campaigns unless user is AD */}
                                     {(() => {
