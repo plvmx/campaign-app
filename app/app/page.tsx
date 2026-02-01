@@ -513,7 +513,6 @@ function AppPageContent() {
               const extra = (sharedData as Campaign[]).filter((c) => !ownIds.has(c.id));
               dataMerged = [...dataMerged, ...extra];
             }
-          }
         }
 
         // Performance logging
