@@ -13,7 +13,7 @@ import { useCampaignDates } from '@/contexts/CampaignDatesContext';
 import { formatDateForDb } from '@/lib/campaignDates';
 import { getStateColor } from '@/lib/stateColors';
 import { logCampaignChange, fetchCampaignData } from '@/lib/campaignLog';
-import { getSharedWithMeOwners, isCampaignOwner, type LeaderShareOwner } from '@/lib/leaderShares';
+import { getSharedWithMeOwners, type LeaderShareOwner } from '@/lib/leaderShares';
 
 const AUSTRALIAN_STATES = ['ACT', 'NSW', 'QLD', 'SA', 'TAS', 'VIC', 'WA', 'NT'];
 
@@ -1965,14 +1965,12 @@ function AppPageContent() {
                                     >
                                       Edit
                                     </button>
-                                    {userMobileAndLeader && isCampaignOwner(campaign.leader, campaign.mobile, userMobileAndLeader.leader, userMobileAndLeader.mobile) && (
                                     <button
                                       onClick={() => handleDelete(campaign.id)}
                                       className="flex-1 rounded-md bg-red-100 px-2 sm:px-4 py-2 text-base font-bold text-red-700 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-300 dark:hover:bg-red-900/50 border-2 border-gray-800 dark:border-gray-600"
                                     >
                                       Delete
                                     </button>
-                                    )}
                                   </div>
                                 </div>
                               </div>
