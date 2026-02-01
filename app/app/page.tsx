@@ -13,6 +13,7 @@ import { useCampaignDates } from '@/contexts/CampaignDatesContext';
 import { formatDateForDb } from '@/lib/campaignDates';
 import { getStateColor } from '@/lib/stateColors';
 import { logCampaignChange, fetchCampaignData } from '@/lib/campaignLog';
+import { getSharedWithMeOwners, isCampaignOwner, type LeaderShareOwner } from '@/lib/leaderShares';
 
 const AUSTRALIAN_STATES = ['ACT', 'NSW', 'QLD', 'SA', 'TAS', 'VIC', 'WA', 'NT'];
 
@@ -41,6 +42,7 @@ function AppPageContent() {
   const [adminStatus, setAdminStatus] = useState<string | null>(null); // Store admin status from state_leaders table
   const [userState, setUserState] = useState<string | null>(null); // Store user's state from state_leaders table
   const [userMobileAndLeader, setUserMobileAndLeader] = useState<{ mobile: string | null; leader: string | null } | null>(null); // Store user's mobile and leader for Record Results button visibility
+  const [sharedWithMeOwners, setSharedWithMeOwners] = useState<LeaderShareOwner[]>([]); // Leaders who have shared their campaigns with me
   const [showMoreInfo, setShowMoreInfo] = useState(false); // Toggle for More Info section
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [allCampaigns, setAllCampaigns] = useState<Campaign[]>([]); // Store unfiltered campaigns
@@ -132,12 +134,19 @@ function AppPageContent() {
     
     const { getUserAdminStatusAndMobile } = await import('@/lib/campaignFilter');
     const { normalizeMobile } = await import('@/lib/auth');
+    const { getSharedWithMeOwners } = await import('@/lib/leaderShares');
     const { admin: adminStatusValue, state: userStateValue, mobile, leader } = await getUserAdminStatusAndMobile();
     const userMobileAndLeaderData = mobile && leader ? { mobile, leader } : null;
     
     // Update state variables
     setAdminStatus(adminStatusValue);
     setUserState(userStateValue);
+    
+    let sharedOwnersList: LeaderShareOwner[] = [];
+    if (adminStatusValue !== 'AD' && adminStatusValue !== 'SR' && userMobileAndLeaderData?.leader && userStateValue) {
+      sharedOwnersList = await getSharedWithMeOwners(userStateValue, userMobileAndLeaderData.leader);
+      setSharedWithMeOwners(sharedOwnersList);
+    }
     
     let query = supabase.from('campaigns').select('*');
     
@@ -165,12 +174,40 @@ function AppPageContent() {
     
     if (fetchError) throw fetchError;
     
-    let filteredData = data || [];
+    let dataMerged: Campaign[] = (data || []) as Campaign[];
+    if (adminStatusValue !== 'AD' && adminStatusValue !== 'SR' && sharedOwnersList.length > 0) {
+      const orParts = sharedOwnersList.map(
+        (o) => `and(state.eq.${(o.owner_state || '').replace(/'/g, "''")},leader.eq.${(o.owner_leader || '').replace(/'/g, "''")})`
+      ).join(',');
+      const { data: sharedData, error: sharedError } = await supabase
+        .from('campaigns')
+        .select('*')
+        .or(orParts)
+        .order('date', { ascending: true })
+        .order('state', { ascending: true })
+        .order('place', { ascending: true })
+        .order('time', { ascending: true });
+      if (!sharedError && sharedData?.length) {
+        const ownIds = new Set(dataMerged.map((c) => c.id));
+        const extra = (sharedData as Campaign[]).filter((c) => !ownIds.has(c.id));
+        dataMerged = [...dataMerged, ...extra];
+      }
+    }
+    
+    let filteredData = dataMerged;
     if (adminStatusValue !== 'AD' && adminStatusValue !== 'SR') {
-      if (userMobileAndLeaderData?.mobile) {
+      if (userMobileAndLeaderData?.mobile && userStateValue) {
         const normalizedMobile = normalizeMobile(userMobileAndLeaderData.mobile);
-        filteredData = filteredData.filter(campaign => 
-          campaign.mobile && normalizeMobile(campaign.mobile) === normalizedMobile
+        const isSharedCampaign = (c: Campaign) =>
+          sharedOwnersList.some(
+            (o) =>
+              (o.owner_state || '').toUpperCase().trim() === (c.state || '').toUpperCase().trim() &&
+              normalizeName(o.owner_leader) === normalizeName(c.leader || '')
+          );
+        filteredData = dataMerged.filter(
+          (c) =>
+            isSharedCampaign(c) ||
+            (!!c.mobile && normalizeMobile(c.mobile) === normalizedMobile)
         );
       }
     }
@@ -411,6 +448,7 @@ function AppPageContent() {
         // Performance logging
         const queryStartTime = performance.now();
         
+        let sharedOwnersList: LeaderShareOwner[] = [];
         let query = supabase
           .from('campaigns')
           .select('*');
@@ -433,11 +471,14 @@ function AppPageContent() {
             query = query.eq('user_id', currentUser.id);
           }
         } else {
-          // Regular user: filter by name and mobile match
+          // Regular user: filter by name and mobile match, plus campaigns shared with me
           if (userMobileAndLeaderData?.mobile && userMobileAndLeaderData?.leader) {
-            // Filter by leader name
+            // Fetch leaders who have shared their campaigns with me (used below for merge and filter)
+            sharedOwnersList = await getSharedWithMeOwners(userStateValue || '', userMobileAndLeaderData.leader);
+            setSharedWithMeOwners(sharedOwnersList);
+            // Own campaigns: filter by leader name (mobile filter applied below)
             query = query.eq('leader', userMobileAndLeaderData.leader);
-            console.log('Filter: Regular user - filtering by leader:', userMobileAndLeaderData.leader);
+            console.log('Filter: Regular user - filtering by leader:', userMobileAndLeaderData.leader, 'shared owners:', sharedOwnersList.length);
           } else {
             // Fallback to user_id if mobile/leader not available
             console.log('Filter: Regular user - no mobile/leader, using user_id fallback');
@@ -453,20 +494,49 @@ function AppPageContent() {
 
         if (error) throw error;
         
+        // For regular users, also fetch campaigns shared with me
+        let dataMerged: Campaign[] = (data || []) as Campaign[];
+        if (adminStatus !== 'AD' && adminStatus !== 'SR' && sharedOwnersList.length > 0) {
+            const orParts = sharedOwnersList.map(
+              (o) => `and(state.eq.${(o.owner_state || '').replace(/'/g, "''")},leader.eq.${(o.owner_leader || '').replace(/'/g, "''")})`
+            ).join(',');
+            const { data: sharedData, error: sharedError } = await supabase
+              .from('campaigns')
+              .select('*')
+              .or(orParts)
+              .order('date', { ascending: true })
+              .order('state', { ascending: true })
+              .order('place', { ascending: true })
+              .order('time', { ascending: true });
+            if (!sharedError && sharedData?.length) {
+              const ownIds = new Set(dataMerged.map((c) => c.id));
+              const extra = (sharedData as Campaign[]).filter((c) => !ownIds.has(c.id));
+              dataMerged = [...dataMerged, ...extra];
+            }
+          }
+        }
+
         // Performance logging
         const queryEndTime = performance.now();
         const queryDuration = queryEndTime - queryStartTime;
-        console.log(`[Performance] Campaign query took ${queryDuration.toFixed(2)}ms, returned ${data?.length || 0} campaigns`);
+        console.log(`[Performance] Campaign query took ${queryDuration.toFixed(2)}ms, returned ${dataMerged?.length || 0} campaigns`);
         
-        // Additional filtering for regular users (mobile match)
-        // SR users should see ALL campaigns for their state, so no additional filtering
-        let filteredData = data || [];
+        // Additional filtering for regular users: own (mobile match) OR shared (campaign's state/leader in sharedWithMe)
+        // SR users see ALL campaigns for their state, so no additional filtering
+        let filteredData = dataMerged;
         if (adminStatus !== 'AD' && adminStatus !== 'SR') {
-          // Regular user: also filter by normalized mobile
-          if (userMobileAndLeaderData?.mobile) {
+          if (userMobileAndLeaderData?.mobile && userStateValue) {
             const normalizedMobile = normalizeMobile(userMobileAndLeaderData.mobile);
-            filteredData = filteredData.filter(campaign => 
-              campaign.mobile && normalizeMobile(campaign.mobile) === normalizedMobile
+            const isSharedCampaign = (c: Campaign) =>
+              sharedOwnersList.some(
+                (o) =>
+                  (o.owner_state || '').toUpperCase().trim() === (c.state || '').toUpperCase().trim() &&
+                  normalizeName(o.owner_leader) === normalizeName(c.leader || '')
+              );
+            filteredData = dataMerged.filter(
+              (campaign) =>
+                isSharedCampaign(campaign) ||
+                (!!campaign.mobile && normalizeMobile(campaign.mobile) === normalizedMobile)
             );
           }
         }
@@ -1859,35 +1929,18 @@ function AppPageContent() {
                                     })()}
                                   </div>
                                   <div className="flex flex-row gap-2 sm:ml-4 w-full sm:w-auto">
-                                    {/* Show Record Results button if campaign date is today or earlier AND (user is admin OR campaign leader/mobile matches user) */}
+                                    {/* Show Record Results if campaign date is today or earlier AND (admin OR own OR shared with me) */}
                                     {(() => {
                                       const today = new Date();
                                       today.setHours(0, 0, 0, 0);
                                       const campaignDate = new Date(campaign.date);
                                       campaignDate.setHours(0, 0, 0, 0);
                                       const isPastOrToday = campaignDate <= today;
-                                      
-                                      // Admin users can see Record Results button for all past campaigns
-                                      if (adminStatus === 'AD') {
-                                        return isPastOrToday;
-                                      }
-                                      
-                                      // For non-admin users, check if leader and mobile match
-                                      if (!userMobileAndLeader || !userMobileAndLeader.leader || !userMobileAndLeader.mobile) {
-                                        return false;
-                                      }
-                                      
-                                      // Normalize and compare leader names
-                                      const campaignLeaderNormalized = normalizeName(campaign.leader || '');
-                                      const userLeaderNormalized = normalizeName(userMobileAndLeader.leader);
-                                      const leaderMatches = campaignLeaderNormalized === userLeaderNormalized;
-                                      
-                                      // Normalize and compare mobile numbers
-                                      const campaignMobileNormalized = normalizeMobile(campaign.mobile || '');
-                                      const userMobileNormalized = normalizeMobile(userMobileAndLeader.mobile || '');
-                                      const mobileMatches = campaignMobileNormalized === userMobileNormalized && campaignMobileNormalized !== '';
-                                      
-                                      return isPastOrToday && leaderMatches && mobileMatches;
+                                      if (!isPastOrToday) return false;
+                                      if (adminStatus === 'AD') return true;
+                                      const isOwn = userMobileAndLeader?.leader && userState && normalizeName(campaign.leader || '') === normalizeName(userMobileAndLeader.leader) && (campaign.state || '').toUpperCase().trim() === (userState || '').toUpperCase().trim() && userMobileAndLeader.mobile && normalizeMobile(campaign.mobile || '') === normalizeMobile(userMobileAndLeader.mobile);
+                                      const isShared = sharedWithMeOwners.some((o) => (o.owner_state || '').toUpperCase().trim() === (campaign.state || '').toUpperCase().trim() && normalizeName(o.owner_leader) === normalizeName(campaign.leader || ''));
+                                      return isOwn || isShared;
                                     })() && (
                                       <button
                                         onClick={() => {
@@ -1913,12 +1966,14 @@ function AppPageContent() {
                                     >
                                       Edit
                                     </button>
+                                    {userMobileAndLeader && isCampaignOwner(campaign.leader, campaign.mobile, userMobileAndLeader.leader, userMobileAndLeader.mobile) && (
                                     <button
                                       onClick={() => handleDelete(campaign.id)}
                                       className="flex-1 rounded-md bg-red-100 px-2 sm:px-4 py-2 text-base font-bold text-red-700 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-300 dark:hover:bg-red-900/50 border-2 border-gray-800 dark:border-gray-600"
                                     >
                                       Delete
                                     </button>
+                                    )}
                                   </div>
                                 </div>
                               </div>

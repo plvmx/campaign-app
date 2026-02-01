@@ -216,11 +216,12 @@ function RecordResultsDetailPageContent() {
     userId: string,
     campaignData: { date: string; state: string; place: string; time: string; leader: string }
   ): Promise<string> => {
-    // Parallelize: Check admin status and get user mobile/leader in parallel
-    const [{ hasPermission, Permission }, { getUserAdminStatusAndMobile }, { normalizeMobile }] = await Promise.all([
+    // Parallelize: Check admin status, user mobile/leader, and shared owners
+    const [{ hasPermission, Permission }, { getUserAdminStatusAndMobile }, { normalizeMobile, normalizeName }, { getSharedWithMeOwners }] = await Promise.all([
       import('@/lib/permissions'),
       import('@/lib/campaignFilter'),
-      import('@/lib/auth')
+      import('@/lib/auth'),
+      import('@/lib/leaderShares')
     ]);
     
     const [isAdmin, adminData] = await Promise.all([
@@ -231,11 +232,12 @@ function RecordResultsDetailPageContent() {
     const userMobileAndLeader = adminData.mobile && adminData.leader 
       ? { mobile: adminData.mobile, leader: adminData.leader } 
       : null;
+    const userState = adminData.state || null;
     
     // First, try to find an existing campaign
     let query = supabase
       .from('campaigns')
-      .select('id, mobile')
+      .select('id, mobile, state, leader')
       .eq('date', campaignData.date)
       .eq('state', campaignData.state)
       .eq('place', campaignData.place)
@@ -244,20 +246,29 @@ function RecordResultsDetailPageContent() {
     
     const { data: campaigns, error: findError } = await query;
     
-    // For admins, use first matching campaign; for non-admins, filter by mobile
-    let existingCampaign = null;
+    // For admins, use first matching campaign; for non-admins, allow own (mobile match) or shared
+    let existingCampaign: { id: string } | null = null;
     if (isAdmin) {
-      // Admins can access any campaign matching the criteria
       existingCampaign = campaigns && campaigns.length > 0 ? campaigns[0] : null;
-    } else {
-      // Non-admin users: filter by mobile and leader
-      if (userMobileAndLeader?.mobile && campaigns) {
+    } else if (campaigns && campaigns.length > 0) {
+      // Own: mobile match
+      if (userMobileAndLeader?.mobile) {
         const normalizedMobile = normalizeMobile(userMobileAndLeader.mobile);
-        existingCampaign = campaigns.find(c => 
+        existingCampaign = campaigns.find((c: { mobile: string | null }) => 
           c.mobile && normalizeMobile(c.mobile) === normalizedMobile
+        ) || null;
+      }
+      // Shared: campaign's (state, leader) is shared with me
+      if (!existingCampaign && userState && userMobileAndLeader?.leader) {
+        const sharedOwners = await getSharedWithMeOwners(userState, userMobileAndLeader.leader);
+        const isShared = sharedOwners.some(
+          (o) =>
+            (o.owner_state || '').toUpperCase().trim() === (campaignData.state || '').toUpperCase().trim() &&
+            normalizeName(o.owner_leader) === normalizeName(campaignData.leader || '')
         );
-      } else if (campaigns && campaigns.length > 0) {
-        // Fallback: use first match if no mobile filter
+        if (isShared) existingCampaign = campaigns[0];
+      }
+      if (!existingCampaign && campaigns.length > 0 && !userMobileAndLeader?.mobile) {
         existingCampaign = campaigns[0];
       }
     }
@@ -266,7 +277,12 @@ function RecordResultsDetailPageContent() {
       return existingCampaign.id;
     }
 
-    // If not found, create a new campaign with user's mobile (if available)
+    // Create only if user is the owner (campaign leader matches user's leader)
+    const isOwner = userMobileAndLeader?.leader && normalizeName(campaignData.leader || '') === normalizeName(userMobileAndLeader.leader);
+    if (!isAdmin && !isOwner) {
+      throw new Error('You can only create campaigns for your own leader. This campaign is not shared with you or does not exist.');
+    }
+
     const { data: newCampaign, error: createError } = await supabase
       .from('campaigns')
       .insert([
@@ -277,7 +293,7 @@ function RecordResultsDetailPageContent() {
           time: campaignData.time,
           leader: campaignData.leader,
           mobile: userMobileAndLeader?.mobile || null,
-          botj: 'No', // Use text format instead of 0
+          botj: 'No',
           user_id: userId,
         },
       ])

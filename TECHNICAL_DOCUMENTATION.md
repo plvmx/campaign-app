@@ -908,6 +908,24 @@ Lookup table for state leaders with mobile numbers and admin status.
 - `idx_state_leaders_state`
 - `idx_state_leaders_leader`
 
+#### `leader_shares`
+Leader-to-leader sharing: defines which leader can see another leader’s campaigns (all current and future). One row = one direction (owner → shared_with). For mutual sharing, create two rows.
+
+**Fields**:
+- `id` (UUID, PK)
+- `owner_state` (TEXT, NOT NULL) – state of the leader whose campaigns are shared
+- `owner_leader` (TEXT, NOT NULL) – leader whose campaigns are shared
+- `shared_with_state` (TEXT, NOT NULL) – state of the leader who can see them
+- `shared_with_leader` (TEXT, NOT NULL) – leader who can see the owner’s campaigns
+- `created_at` (TIMESTAMP)
+
+**Constraints**:
+- UNIQUE(owner_state, owner_leader, shared_with_state, shared_with_leader)
+
+**Indexes**:
+- `idx_leader_shares_shared_with` on (shared_with_state, shared_with_leader)
+- `idx_leader_shares_owner` on (owner_state, owner_leader)
+
 #### `user_profiles`
 Stores additional user information.
 
