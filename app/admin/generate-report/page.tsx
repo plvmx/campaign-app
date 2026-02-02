@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import MobileLayout from '@/components/MobileLayout';
 import { getCurrentUser } from '@/lib/auth';
 import { hasPermission, Permission } from '@/lib/permissions';
+import { getUserAdminStatusAndMobile } from '@/lib/campaignFilter';
 import { supabase } from '@/lib/supabaseClient';
 import html2canvas from 'html2canvas';
 import { useCampaignDates } from '@/contexts/CampaignDatesContext';
@@ -53,6 +54,8 @@ export default function GenerateReportPage() {
   const [reportData, setReportData] = useState<ReportRow[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [showReport, setShowReport] = useState(false);
+  const [userState, setUserState] = useState<string | null>(null);
+  const [adminStatus, setAdminStatus] = useState<string | null>(null);
 
   useEffect(() => {
     async function checkAuthAndPermissions() {
@@ -63,7 +66,12 @@ export default function GenerateReportPage() {
           return;
         }
 
-        const canAccess = await hasPermission(Permission.ADMIN_ACCESS);
+        const hasAdminAccess = await hasPermission(Permission.ADMIN_ACCESS);
+        const { admin: adminStatusValue, state: stateValue } = await getUserAdminStatusAndMobile();
+        setAdminStatus(adminStatusValue);
+        setUserState(stateValue ?? null);
+
+        const canAccess = hasAdminAccess || adminStatusValue === 'SR';
         if (!canAccess) {
           setError('You do not have permission to access this page');
           return;
@@ -104,8 +112,8 @@ export default function GenerateReportPage() {
     setError(null);
 
     try {
-      // Fetch campaigns in the date range
-      const { data: campaigns, error: campaignsError } = await supabase
+      // Fetch campaigns in the date range (SR: filter by their state)
+      let campaignsQuery = supabase
         .from('campaigns')
         .select('*')
         .gte('date', startDate)
@@ -113,6 +121,10 @@ export default function GenerateReportPage() {
         .order('date', { ascending: true })
         .order('state', { ascending: true })
         .order('place', { ascending: true });
+      if (adminStatus === 'SR' && userState) {
+        campaignsQuery = campaignsQuery.eq('state', userState.toUpperCase().trim());
+      }
+      const { data: campaigns, error: campaignsError } = await campaignsQuery;
 
       if (campaignsError) throw campaignsError;
       if (!campaigns || campaigns.length === 0) {
@@ -249,7 +261,7 @@ export default function GenerateReportPage() {
               {error || 'You do not have permission to access this page.'}
             </p>
             <button
-              onClick={() => router.push('/admin')}
+              onClick={() => router.push(adminStatus === 'SR' ? '/app' : '/admin')}
               className="mt-4 rounded-md bg-red-600 px-4 py-2 text-base font-bold text-white hover:bg-red-700 border-2 border-gray-800 dark:border-gray-600"
             >
               Go Back
@@ -265,10 +277,10 @@ export default function GenerateReportPage() {
       <div className="p-4">
         <div className="mb-6">
           <button
-            onClick={() => router.push('/admin')}
+            onClick={() => router.push(adminStatus === 'SR' ? '/app' : '/admin')}
             className="mb-4 text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400"
           >
-            ← Back to Admin Panel
+            ← {adminStatus === 'SR' ? 'Back to Home' : 'Back to Admin Panel'}
           </button>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
             Generate Campaign Results Report

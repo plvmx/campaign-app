@@ -154,6 +154,16 @@ export async function signInWithMobileAndName(mobile: string, firstName: string)
     }
   }
 
+  // Record last sign-in for this leader (used to find leaders not signed in since weekly refresh)
+  const { error: signInUpdateError } = await supabase
+    .from('state_leaders')
+    .update({ last_sign_in_at: new Date().toISOString() })
+    .eq('id', stateLeader.id);
+
+  if (signInUpdateError) {
+    console.warn('Failed to update last_sign_in_at:', signInUpdateError);
+  }
+
   return {
     user: authData.user,
     stateLeader,

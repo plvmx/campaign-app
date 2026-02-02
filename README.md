@@ -176,6 +176,8 @@ To load the state_leaders data from the CSV file:
 
    **Note**: The script will normalize state codes (e.g., "Qld" → "QLD", "Vic" → "VIC") and clean mobile numbers (removes "?" and "-" values, setting them to NULL).
 
+3. (Optional) Add last sign-in tracking and weekly refresh log: run `scripts/add_last_sign_in_and_weekly_refresh_log.sql` in the Supabase SQL Editor. This adds `last_sign_in_at` to `state_leaders` and creates the `weekly_refresh_log` table so admins can see which leaders have not signed in since the last Weekly Refresh.
+
 **Database Relationships**:
 - `campaigns.user_id` → Links campaigns to users
 - `results.campaign_id` → Links results to specific campaigns (CASCADE delete)

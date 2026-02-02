@@ -10,6 +10,7 @@ import { formatDateReadable, formatDateForDb } from '@/lib/campaignDates';
 import { supabase } from '@/lib/supabaseClient';
 import { isCampaignLoggingEnabled, setCampaignLoggingEnabled } from '@/lib/appSettings';
 import { CampaignRule, evaluateRules } from '@/lib/campaignRules';
+import { getLeadersNotSignedInSinceRefresh, type LeaderNotSignedIn } from '@/lib/weeklyRefresh';
 
 export default function AdminPage() {
   const router = useRouter();
@@ -27,6 +28,9 @@ export default function AdminPage() {
   const [isLoadingLoggingSetting, setIsLoadingLoggingSetting] = useState(true);
   const [isTogglingLogging, setIsTogglingLogging] = useState(false);
   const [refreshMode, setRefreshMode] = useState<'copy' | 'rules' | 'both'>('copy');
+  const [leadersNotSignedIn, setLeadersNotSignedIn] = useState<LeaderNotSignedIn[]>([]);
+  const [lastRefreshAt, setLastRefreshAt] = useState<Date | null>(null);
+  const [loadingNotSignedIn, setLoadingNotSignedIn] = useState(false);
 
   useEffect(() => {
     async function checkAuthAndPermissions() {
@@ -57,6 +61,30 @@ export default function AdminPage() {
     }
     checkAuthAndPermissions();
   }, [router]);
+
+  // Load leaders not signed in since last weekly refresh (for admin visibility)
+  useEffect(() => {
+    if (!hasAccess) return;
+    let cancelled = false;
+    setLoadingNotSignedIn(true);
+    getLeadersNotSignedInSinceRefresh()
+      .then(({ leaders, lastRefreshAt: at }) => {
+        if (!cancelled) {
+          setLeadersNotSignedIn(leaders);
+          setLastRefreshAt(at);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLeadersNotSignedIn([]);
+          setLastRefreshAt(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingNotSignedIn(false);
+      });
+    return () => { cancelled = true; };
+  }, [hasAccess, refreshMessage]);
 
   const handleWeeklyRefresh = async () => {
     if (!dates || !user) return;
@@ -272,6 +300,15 @@ export default function AdminPage() {
       if (deleteError) throw deleteError;
 
       const deletedCount = deletedCampaigns?.length || 0;
+
+      // Log this Weekly Refresh so we can find leaders who haven't signed in since
+      const { error: logError } = await supabase
+        .from('weekly_refresh_log')
+        .insert({ completed_at: new Date().toISOString(), created_by: user?.id ?? null });
+
+      if (logError) {
+        console.warn('Failed to log weekly refresh:', logError);
+      }
 
       let message = `Successfully created ${allNewCampaigns.length} campaign(s) for the period starting ${formatDateReadable(secondWeekStart)}. `;
       if (refreshMode === 'copy') {
@@ -590,6 +627,53 @@ export default function AdminPage() {
                 {isRefreshing ? 'Refreshing...' : 'Weekly Refresh'}
               </button>
             </div>
+          </div>
+
+          {/* Leaders not signed in since refresh */}
+          <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+              Leaders not signed in since refresh
+            </h2>
+            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+              Leaders who have not signed in since the last Weekly Refresh. No refresh has been run yet if no date is shown.
+            </p>
+            {loadingNotSignedIn ? (
+              <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">Loading…</p>
+            ) : (
+              <div className="mt-4 space-y-2">
+                {lastRefreshAt && (
+                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Last refresh: {lastRefreshAt.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
+                  </p>
+                )}
+                {leadersNotSignedIn.length === 0 ? (
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    {lastRefreshAt ? 'All leaders have signed in since the last refresh.' : 'No leaders, or run a Weekly Refresh first.'}
+                  </p>
+                ) : (
+                  <>
+                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      {leadersNotSignedIn.length} leader{leadersNotSignedIn.length !== 1 ? 's' : ''} not signed in since refresh
+                    </p>
+                    <ul className="max-h-48 overflow-y-auto rounded border border-gray-300 dark:border-gray-600 divide-y divide-gray-200 dark:divide-gray-600 text-sm">
+                      {leadersNotSignedIn.map((row) => (
+                        <li key={row.id} className="px-3 py-2 flex justify-between items-center text-gray-800 dark:text-gray-200">
+                          <span className="font-medium">{row.leader}</span>
+                          <span className="text-gray-500 dark:text-gray-400">{row.state}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    <button
+                      type="button"
+                      onClick={() => router.push('/admin/state-leaders')}
+                      className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+                    >
+                      Manage State Leaders →
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Campaign Rules Management */}
