@@ -14,7 +14,6 @@ import { formatDateForDb } from '@/lib/campaignDates';
 import { getStateColor } from '@/lib/stateColors';
 import { logCampaignChange, fetchCampaignData } from '@/lib/campaignLog';
 import { getSharedWithMeOwners, type LeaderShareOwner } from '@/lib/leaderShares';
-import { getLeadersNotSignedInSinceRefreshByState, type LeaderNotSignedIn } from '@/lib/weeklyRefresh';
 
 const AUSTRALIAN_STATES = ['ACT', 'NSW', 'QLD', 'SA', 'TAS', 'VIC', 'WA', 'NT'];
 
@@ -100,13 +99,6 @@ function AppPageContent() {
   const placesCache = useRef<Record<string, string[]>>({});
   const leadersCache = useRef<Record<string, string[]>>({});
 
-  // SR Admin panel (State Reporters only)
-  const [srAdminOpen, setSrAdminOpen] = useState(false);
-  const [srLeadersNotSignedIn, setSrLeadersNotSignedIn] = useState<LeaderNotSignedIn[]>([]);
-  const [srLastRefreshAt, setSrLastRefreshAt] = useState<Date | null>(null);
-  const [loadingSrLeadersNotSignedIn, setLoadingSrLeadersNotSignedIn] = useState(false);
-  // TL Admin panel (Team Leaders only)
-  const [tlAdminOpen, setTlAdminOpen] = useState(false);
 
   // Helper function to apply date filter
   const applyDateFilter = useCallback((campaignsToFilter: Campaign[]) => {
@@ -775,48 +767,6 @@ function AppPageContent() {
     }
   }, [places, leaders]);
 
-  // Open SR Admin panel when URL has sr-admin=1 (bottom bar link)
-  useEffect(() => {
-    if (searchParams.get('sr-admin') === '1') {
-      setSrAdminOpen(true);
-      setTlAdminOpen(false);
-    }
-  }, [searchParams]);
-
-  // Open TL Admin panel when URL has tl-admin=1 (bottom bar link)
-  useEffect(() => {
-    if (searchParams.get('tl-admin') === '1') {
-      setTlAdminOpen(true);
-      setSrAdminOpen(false);
-    }
-  }, [searchParams]);
-
-  // Load leaders not signed in since refresh when SR Admin panel is opened (SR only)
-  useEffect(() => {
-    if (adminStatus !== 'SR' || !srAdminOpen) return;
-    const stateToUse = userState || userProfile?.state;
-    if (!stateToUse) return;
-    let cancelled = false;
-    setLoadingSrLeadersNotSignedIn(true);
-    getLeadersNotSignedInSinceRefreshByState(stateToUse)
-      .then(({ leaders, lastRefreshAt }) => {
-        if (!cancelled) {
-          setSrLeadersNotSignedIn(leaders);
-          setSrLastRefreshAt(lastRefreshAt);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setSrLeadersNotSignedIn([]);
-          setSrLastRefreshAt(null);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingSrLeadersNotSignedIn(false);
-      });
-    return () => { cancelled = true; };
-  }, [adminStatus, srAdminOpen, userState, userProfile?.state]);
-  
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -2026,164 +1976,6 @@ function AppPageContent() {
           </div>
         </div>
       </div>
-
-      {/* TL Admin panel (slide-out from right; opened via bottom bar /app?tl-admin=1; Team Leaders only) */}
-      {adminStatus !== 'AD' && adminStatus !== 'SR' && tlAdminOpen && (
-        <>
-          <div
-            className="fixed inset-0 z-40 bg-black/50"
-            aria-hidden
-            onClick={() => {
-              setTlAdminOpen(false);
-              router.replace('/app');
-            }}
-          />
-          <div className="fixed top-0 right-0 bottom-0 z-50 w-full max-w-sm overflow-y-auto border-l-2 border-gray-800 dark:border-gray-600 bg-white dark:bg-gray-900 shadow-xl">
-            <div className="sticky top-0 flex items-center justify-between border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-3">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">TL Admin</h2>
-              <button
-                type="button"
-                onClick={() => {
-                  setTlAdminOpen(false);
-                  router.replace('/app');
-                }}
-                className="rounded-md p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
-                aria-label="Close"
-              >
-                ✕
-              </button>
-            </div>
-            <div className="p-4 space-y-4">
-              <div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const stateToUse = userState || userProfile?.state || '';
-                    router.push(`/admin/campaign-rules?state=${encodeURIComponent(stateToUse)}`);
-                    setTlAdminOpen(false);
-                    router.replace('/app');
-                  }}
-                  className="w-full rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 border-2 border-gray-800 dark:border-gray-600"
-                >
-                  Manage Campaign Rules
-                </button>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* SR Admin panel (slide-out from right; opened via bottom bar /app?sr-admin=1) */}
-      {adminStatus === 'SR' && srAdminOpen && (
-        <>
-          <div
-            className="fixed inset-0 z-40 bg-black/50"
-            aria-hidden
-            onClick={() => {
-              setSrAdminOpen(false);
-              router.replace('/app');
-            }}
-          />
-          <div className="fixed top-0 right-0 bottom-0 z-50 w-full max-w-sm overflow-y-auto border-l-2 border-gray-800 dark:border-gray-600 bg-white dark:bg-gray-900 shadow-xl">
-            <div className="sticky top-0 flex items-center justify-between border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-3">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">SR Admin</h2>
-              <button
-                type="button"
-                onClick={() => {
-                  setSrAdminOpen(false);
-                  router.replace('/app');
-                }}
-                className="rounded-md p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
-                aria-label="Close"
-              >
-                ✕
-              </button>
-            </div>
-            <div className="p-4 space-y-4">
-              <div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const stateToUse = userState || userProfile?.state || '';
-                    router.push(`/admin/campaign-rules?state=${encodeURIComponent(stateToUse)}`);
-                    setSrAdminOpen(false);
-                    router.replace('/app');
-                  }}
-                  className="w-full rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 border-2 border-gray-800 dark:border-gray-600"
-                >
-                  Manage Campaign Rules
-                </button>
-              </div>
-              <div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    router.push('/admin/generate-slides');
-                    setSrAdminOpen(false);
-                    router.replace('/app');
-                  }}
-                  className="w-full rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 border-2 border-gray-800 dark:border-gray-600"
-                >
-                  Generate Slides
-                </button>
-              </div>
-              <div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    router.push('/admin/generate-report');
-                    setSrAdminOpen(false);
-                    router.replace('/app');
-                  }}
-                  className="w-full rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 border-2 border-gray-800 dark:border-gray-600"
-                >
-                  Campaign Results Report
-                </button>
-              </div>
-
-              {/* Leaders not signed in since refresh (this state only; exclude AD/SR; show mobile right-justified) */}
-              <div className="rounded-lg border-2 border-gray-300 dark:border-gray-600 p-3">
-                <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">
-                  Leaders not signed in since refresh
-                </h3>
-                <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">
-                  Leaders in your state who have not signed in since the last Weekly Refresh (excluding admins and state reporters).
-                </p>
-                {loadingSrLeadersNotSignedIn ? (
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Loading…</p>
-                ) : (
-                  (() => {
-                    const filtered = srLeadersNotSignedIn.filter((row) => row.admin !== 'AD' && row.admin !== 'SR');
-                    return (
-                      <div className="space-y-2">
-                        {srLastRefreshAt && (
-                          <p className="text-xs font-medium text-gray-700 dark:text-gray-300">
-                            Last refresh: {srLastRefreshAt.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
-                          </p>
-                        )}
-                        {filtered.length === 0 ? (
-                          <p className="text-sm text-gray-600 dark:text-gray-400">
-                            {srLastRefreshAt ? 'All leaders in your state have signed in since the last refresh.' : 'No refresh run yet, or no leaders in your state.'}
-                          </p>
-                        ) : (
-                          <ul className="max-h-40 overflow-y-auto rounded border border-gray-200 dark:border-gray-600 divide-y divide-gray-200 dark:divide-gray-600 text-sm">
-                            {filtered.map((row) => (
-                              <li key={row.id} className="px-2 py-1.5 flex justify-between items-center gap-2 text-gray-800 dark:text-gray-200">
-                                <span className="font-medium truncate">{row.leader}</span>
-                                <span className="text-right text-gray-600 dark:text-gray-400 shrink-0">{row.mobile ?? '—'}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                      </div>
-                    );
-                  })()
-                )}
-              </div>
-            </div>
-          </div>
-        </>
-      )}
     </MobileLayout>
   );
 }

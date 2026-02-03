@@ -21,17 +21,15 @@ type NavItem = {
 };
 
 function MobileLayoutNav({ pathname, searchParams, navItems }: { pathname: string; searchParams: URLSearchParams | null; navItems: NavItem[] }) {
-  const srAdminParam = searchParams?.get('sr-admin') ?? null;
-  const tlAdminParam = searchParams?.get('tl-admin') ?? null;
   return (
     <div className={`flex items-center ${navItems.length === 1 ? 'justify-center' : 'justify-around'}`}>
       {navItems.map((item) => {
         const isActive = item.isSrAdmin
-          ? pathname === '/app' && srAdminParam === '1'
+          ? pathname === '/app/sr-admin'
           : item.isTlAdmin
-            ? pathname === '/app' && tlAdminParam === '1'
+            ? pathname === '/app/tl-admin'
             : item.href === '/app'
-              ? pathname === '/app' && srAdminParam !== '1' && tlAdminParam !== '1'
+              ? pathname === '/app'
               : pathname === item.href || (item.href !== '/app' && pathname?.startsWith(item.href));
         return (
           <Link
@@ -91,8 +89,8 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
     { href: '/campaign-list', label: 'All Campaigns', iconImage: '/flame_icon.png' },
   ];
   const adminNavItem: NavItem = { href: '/admin', label: 'Admin', icon: '⚙️' };
-  const srAdminNavItem: NavItem = { href: '/app?sr-admin=1', label: 'SR Admin', icon: '⚙️', isSrAdmin: true };
-  const tlAdminNavItem: NavItem = { href: '/app?tl-admin=1', label: 'TL Admin', icon: '⚙️', isTlAdmin: true };
+  const srAdminNavItem: NavItem = { href: '/app/sr-admin', label: 'SR Admin', icon: '⚙️', isSrAdmin: true };
+  const tlAdminNavItem: NavItem = { href: '/app/tl-admin', label: 'TL Admin', icon: '⚙️', isTlAdmin: true };
 
   const navItems: NavItem[] = isAdmin === null
     ? []
