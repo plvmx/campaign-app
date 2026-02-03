@@ -1,6 +1,6 @@
 'use client';
 
-import { ReactNode, useEffect, useState } from 'react';
+import { ReactNode, Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { signOut } from '@/lib/auth';
@@ -56,9 +56,14 @@ function MobileLayoutNav({ pathname, searchParams, navItems }: { pathname: strin
   );
 }
 
+/** Uses useSearchParams(); must be rendered inside Suspense for static prerender */
+function MobileLayoutNavWithSearchParams({ pathname, navItems }: { pathname: string; navItems: NavItem[] }) {
+  const searchParams = useSearchParams();
+  return <MobileLayoutNav pathname={pathname} searchParams={searchParams} navItems={navItems} />;
+}
+
 export default function MobileLayout({ children }: MobileLayoutProps) {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [adminStatus, setAdminStatus] = useState<string | null>(null);
 
@@ -128,9 +133,11 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
         {children}
       </main>
 
-      {/* Bottom Navigation */}
+      {/* Bottom Navigation (Suspense required for useSearchParams during prerender) */}
       <nav className="fixed bottom-0 left-0 right-0 border-t-2 border-gray-800 dark:border-gray-600 bg-white dark:bg-gray-950">
-        <MobileLayoutNav pathname={pathname ?? ''} searchParams={searchParams} navItems={navItems} />
+        <Suspense fallback={<MobileLayoutNav pathname={pathname ?? ''} searchParams={null} navItems={navItems} />}>
+          <MobileLayoutNavWithSearchParams pathname={pathname ?? ''} navItems={navItems} />
+        </Suspense>
       </nav>
     </div>
   );
