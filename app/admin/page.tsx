@@ -635,44 +635,49 @@ export default function AdminPage() {
               Leaders not signed in since refresh
             </h2>
             <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-              Leaders who have not signed in since the last Weekly Refresh. No refresh has been run yet if no date is shown.
+              Leaders who have not signed in since the last Weekly Refresh (admins and state reporters excluded). No refresh has been run yet if no date is shown.
             </p>
             {loadingNotSignedIn ? (
               <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">Loading…</p>
             ) : (
-              <div className="mt-4 space-y-2">
-                {lastRefreshAt && (
-                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Last refresh: {lastRefreshAt.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
-                  </p>
-                )}
-                {leadersNotSignedIn.length === 0 ? (
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
-                    {lastRefreshAt ? 'All leaders have signed in since the last refresh.' : 'No leaders, or run a Weekly Refresh first.'}
-                  </p>
-                ) : (
-                  <>
-                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                      {leadersNotSignedIn.length} leader{leadersNotSignedIn.length !== 1 ? 's' : ''} not signed in since refresh
-                    </p>
-                    <ul className="max-h-48 overflow-y-auto rounded border border-gray-300 dark:border-gray-600 divide-y divide-gray-200 dark:divide-gray-600 text-sm">
-                      {leadersNotSignedIn.map((row) => (
-                        <li key={row.id} className="px-3 py-2 flex justify-between items-center text-gray-800 dark:text-gray-200">
-                          <span className="font-medium">{row.leader}</span>
-                          <span className="text-gray-500 dark:text-gray-400">{row.state}</span>
-                        </li>
-                      ))}
-                    </ul>
-                    <button
-                      type="button"
-                      onClick={() => router.push('/admin/state-leaders')}
-                      className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
-                    >
-                      Manage State Leaders →
-                    </button>
-                  </>
-                )}
-              </div>
+              (() => {
+                const filtered = leadersNotSignedIn.filter((row) => row.admin !== 'AD' && row.admin !== 'SR');
+                return (
+                  <div className="mt-4 space-y-2">
+                    {lastRefreshAt && (
+                      <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Last refresh: {lastRefreshAt.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
+                      </p>
+                    )}
+                    {filtered.length === 0 ? (
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        {lastRefreshAt ? 'All leaders have signed in since the last refresh (excluding admins and state reporters).' : 'No leaders, or run a Weekly Refresh first.'}
+                      </p>
+                    ) : (
+                      <>
+                        <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                          {filtered.length} leader{filtered.length !== 1 ? 's' : ''} not signed in since refresh
+                        </p>
+                        <ul className="max-h-48 overflow-y-auto rounded border border-gray-300 dark:border-gray-600 divide-y divide-gray-200 dark:divide-gray-600 text-sm">
+                          {filtered.map((row) => (
+                            <li key={row.id} className="px-3 py-2 flex justify-between items-center gap-2 text-gray-800 dark:text-gray-200">
+                              <span className="font-medium truncate">{row.leader}</span>
+                              <span className="text-right text-gray-500 dark:text-gray-400 shrink-0">{row.mobile ?? '—'}</span>
+                            </li>
+                          ))}
+                        </ul>
+                        <button
+                          type="button"
+                          onClick={() => router.push('/admin/state-leaders')}
+                          className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+                        >
+                          Manage State Leaders →
+                        </button>
+                      </>
+                    )}
+                  </div>
+                );
+              })()
             )}
           </div>
 

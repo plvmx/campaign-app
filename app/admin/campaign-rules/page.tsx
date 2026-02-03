@@ -90,23 +90,30 @@ function CampaignRulesPageContent() {
         }
         setUser(currentUser);
 
-        // Check if user is admin (AD) or state reporter (SR)
+        // Check if user is admin (AD), state reporter (SR), or team leader (TL)
         const { getUserAdminStatusAndMobile } = await import('@/lib/campaignFilter');
         const { admin: adminStatusValue, state: userStateValue } = await getUserAdminStatusAndMobile();
         setAdminStatus(adminStatusValue);
         setUserState(userStateValue);
 
-        // Allow access for AD (admin) or SR (state reporter) users
-        const canAccess = adminStatusValue === 'AD' || adminStatusValue === 'SR';
+        // Allow access for AD (admin), SR (state reporter), or TL (team leader - has state)
+        const canAccess = adminStatusValue === 'AD' || adminStatusValue === 'SR' || (userStateValue != null && userStateValue.trim() !== '');
         if (!canAccess) {
           setError('You do not have permission to access this page');
           return;
         }
 
-        // Check for state query parameter (for SR users)
+        // Check for state query parameter
         const stateParam = searchParams.get('state');
         if (adminStatusValue === 'SR') {
           // For SR users, use state from query param or their own state
+          const stateToUse = stateParam || userStateValue;
+          if (stateToUse) {
+            setFormState(prev => ({ ...prev, state: stateToUse.toUpperCase().trim() }));
+            setIsStateLocked(true);
+          }
+        } else if (adminStatusValue !== 'AD' && userStateValue) {
+          // For TL (team leaders), lock state to their state
           const stateToUse = stateParam || userStateValue;
           if (stateToUse) {
             setFormState(prev => ({ ...prev, state: stateToUse.toUpperCase().trim() }));
@@ -134,8 +141,8 @@ function CampaignRulesPageContent() {
         .from('campaign_rules')
         .select('*');
 
-      // Filter by state for SR users
-      if (adminStatus === 'SR' && userState) {
+      // Filter by state for SR and TL users
+      if ((adminStatus === 'SR' || (adminStatus !== 'AD' && adminStatus !== 'SR')) && userState) {
         query = query.eq('state', userState.toUpperCase().trim());
       }
 
@@ -289,8 +296,8 @@ function CampaignRulesPageContent() {
     setIsSubmitting(true);
 
     try {
-      // Validate state for SR users - they can only manage rules for their state
-      if (adminStatus === 'SR' && userState) {
+      // Validate state for SR and TL users - they can only manage rules for their state
+      if ((adminStatus === 'SR' || (adminStatus !== 'AD' && adminStatus !== 'SR')) && userState) {
         const formStateNormalized = formState.state.trim().toUpperCase();
         const userStateNormalized = userState.trim().toUpperCase();
         if (formStateNormalized !== userStateNormalized) {
@@ -365,7 +372,7 @@ function CampaignRulesPageContent() {
 
   const resetForm = () => {
     setEditingId(null);
-    // Preserve locked state for SR users
+    // Preserve locked state for SR and TL users
     const preservedState = isStateLocked && userState ? userState.toUpperCase().trim() : '';
     setFormState({
       name: '',
@@ -392,7 +399,7 @@ function CampaignRulesPageContent() {
 
   const handleEdit = async (rule: CampaignRule) => {
     setEditingId(rule.id);
-    // For SR users with locked state, use the locked state instead of rule's state
+    // For SR/TL users with locked state, use the locked state instead of rule's state
     const stateToUse = isStateLocked && userState ? userState.toUpperCase().trim() : rule.state;
     setFormState({
       name: rule.name,
@@ -414,7 +421,7 @@ function CampaignRulesPageContent() {
       notes: rule.notes || '',
     });
     
-    // Load places and leaders for the state (use locked state for SR users)
+    // Load places and leaders for the state (use locked state for SR/TL users)
     if (stateToUse) {
       setLoadingPlaces(true);
       setLoadingLeaders(true);
@@ -533,7 +540,7 @@ function CampaignRulesPageContent() {
               {error || 'You do not have permission to access this page.'}
             </p>
             <button
-              onClick={() => router.push(adminStatus === 'SR' ? '/app' : '/admin')}
+              onClick={() => router.push(adminStatus === 'SR' || (adminStatus !== 'AD' && adminStatus !== 'SR') ? '/app' : '/admin')}
               className="mt-4 rounded-md bg-red-600 px-4 py-2 text-base font-bold text-white hover:bg-red-700 border-2 border-gray-800 dark:border-gray-600"
             >
               Go Back
@@ -565,10 +572,10 @@ function CampaignRulesPageContent() {
               </p>
             </div>
             <button
-              onClick={() => router.push(adminStatus === 'SR' ? '/app' : '/admin')}
+              onClick={() => router.push(adminStatus === 'SR' || (adminStatus !== 'AD' && adminStatus !== 'SR') ? '/app' : '/admin')}
               className="rounded-md bg-gray-200 px-3 py-2 text-base font-bold text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 border-2 border-gray-800 dark:border-gray-600"
             >
-              Back
+              {adminStatus === 'SR' || (adminStatus !== 'AD' && adminStatus !== 'SR') ? 'Back to Home' : 'Back to Admin Panel'}
             </button>
           </div>
         </div>
