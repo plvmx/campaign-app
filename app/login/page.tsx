@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { getSession, signInWithMobileAndName } from '@/lib/auth';
 
+const STORAGE_KEYS = { mobile: 'login_mobile', firstName: 'login_firstName' };
+
 export default function LoginPage() {
   const router = useRouter();
   const [mobile, setMobile] = useState('');
@@ -32,6 +34,19 @@ export default function LoginPage() {
     checkExistingSession();
   }, [router]);
 
+  // Load remembered mobile and first name from localStorage when login form is shown
+  useEffect(() => {
+    if (checkingSession) return;
+    try {
+      const savedMobile = localStorage.getItem(STORAGE_KEYS.mobile);
+      const savedFirstName = localStorage.getItem(STORAGE_KEYS.firstName);
+      if (savedMobile) setMobile(savedMobile);
+      if (savedFirstName) setFirstName(savedFirstName);
+    } catch {
+      // Ignore localStorage errors (e.g. private browsing)
+    }
+  }, [checkingSession]);
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -47,7 +62,15 @@ export default function LoginPage() {
 
       // Sign in with mobile and first name validation
       await signInWithMobileAndName(mobile.trim(), firstName.trim());
-      
+
+      // Remember mobile and first name for next time
+      try {
+        localStorage.setItem(STORAGE_KEYS.mobile, mobile.trim());
+        localStorage.setItem(STORAGE_KEYS.firstName, firstName.trim());
+      } catch {
+        // Ignore localStorage errors
+      }
+
       // Redirect to app after successful authentication
       router.push('/app');
     } catch (err: any) {
