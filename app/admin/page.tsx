@@ -11,6 +11,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { isCampaignLoggingEnabled, setCampaignLoggingEnabled } from '@/lib/appSettings';
 import { CampaignRule, evaluateRules } from '@/lib/campaignRules';
 import { getLeadersNotSignedInSinceRefresh, type LeaderNotSignedIn } from '@/lib/weeklyRefresh';
+import { getAllStateRefreshSettings, DEFAULT_REFRESH_MODE, type RefreshMode } from '@/lib/stateRefreshSettings';
 
 export default function AdminPage() {
   const router = useRouter();
@@ -27,7 +28,6 @@ export default function AdminPage() {
   const [loggingEnabled, setLoggingEnabled] = useState<boolean>(true);
   const [isLoadingLoggingSetting, setIsLoadingLoggingSetting] = useState(true);
   const [isTogglingLogging, setIsTogglingLogging] = useState(false);
-  const [refreshMode, setRefreshMode] = useState<'copy' | 'rules' | 'both'>('copy');
   const [leadersNotSignedIn, setLeadersNotSignedIn] = useState<LeaderNotSignedIn[]>([]);
   const [lastRefreshAt, setLastRefreshAt] = useState<Date | null>(null);
   const [loadingNotSignedIn, setLoadingNotSignedIn] = useState(false);
@@ -101,43 +101,77 @@ export default function AdminPage() {
       const secondWeekStartStr = formatDateForDb(secondWeekStart);
       const secondWeekEndStr = formatDateForDb(secondWeekEnd);
 
+      const pastWeekStart = new Date(dates.pastCampaignStart);
+      const pastWeekEnd = new Date(pastWeekStart);
+      pastWeekEnd.setDate(pastWeekEnd.getDate() + 6); // Add 6 days to get to Sunday
+      const pastWeekStartStr = formatDateForDb(pastWeekStart);
+      const pastWeekEndStr = formatDateForDb(pastWeekEnd);
+      const daysDifference = Math.floor(
+        (secondWeekStart.getTime() - pastWeekStart.getTime()) / (1000 * 60 * 60 * 24)
+      );
+
+      // Per-state refresh mode (state reporters set this in SR Admin)
+      const stateSettings = await getAllStateRefreshSettings();
+
+      // Distinct states from state_leaders (states that can have a refresh mode)
+      const { data: stateRows, error: statesError } = await supabase
+        .from('state_leaders')
+        .select('state');
+      if (statesError) throw statesError;
+      const states = Array.from(new Set((stateRows || []).map((r: { state: string }) => r.state)));
+
+      // Fetch all past week campaigns and all active rules once
+      const { data: pastCampaigns, error: fetchError } = await supabase
+        .from('campaigns')
+        .select('*')
+        .gte('date', pastWeekStartStr)
+        .lte('date', pastWeekEndStr)
+        .order('date', { ascending: true });
+      if (fetchError) throw fetchError;
+
+      const { data: fetchedRules, error: rulesError } = await supabase
+        .from('campaign_rules')
+        .select('*')
+        .eq('is_active', true)
+        .order('priority', { ascending: false });
+      if (rulesError) throw rulesError;
+      const allRules = (fetchedRules || []) as CampaignRule[];
+
+      // Biweekly rules: backfill reference_date from existing campaigns where missing
+      for (const rule of allRules) {
+        if (rule.frequency_type === 'biweekly' && !rule.rule_config?.reference_date) {
+          const { data: existingCampaigns, error: existingError } = await supabase
+            .from('campaigns')
+            .select('date')
+            .eq('state', rule.state)
+            .eq('place', rule.place)
+            .eq('time', rule.time)
+            .eq('leader', rule.leader)
+            .order('date', { ascending: false })
+            .limit(1);
+          if (!existingError && existingCampaigns?.length > 0) {
+            rule.rule_config = rule.rule_config || {};
+            rule.rule_config.reference_date = existingCampaigns[0].date;
+          }
+        }
+      }
+
       let allNewCampaigns: any[] = [];
       let copyCount = 0;
       let rulesCount = 0;
-      let copiedCampaigns: any[] = [];
-      let rules: CampaignRule[] | null = null;
+      const rulesUsedInRefresh: CampaignRule[] = [];
 
-      // Option 1: Copy from past week
-      if (refreshMode === 'copy' || refreshMode === 'both') {
-        const pastWeekStart = new Date(dates.pastCampaignStart);
-        const pastWeekEnd = new Date(pastWeekStart);
-        pastWeekEnd.setDate(pastWeekEnd.getDate() + 6); // Add 6 days to get to Sunday
+      for (const state of states) {
+        const mode: RefreshMode = stateSettings.get(state) ?? DEFAULT_REFRESH_MODE;
+        const statePast = (pastCampaigns || []).filter((c: { state: string }) => c.state === state);
+        const stateRules = allRules.filter((r) => r.state === state);
 
-        const pastWeekStartStr = formatDateForDb(pastWeekStart);
-        const pastWeekEndStr = formatDateForDb(pastWeekEnd);
-
-        // Fetch all campaigns from Past Campaign Start to end of that week (Sunday)
-        const { data: pastCampaigns, error: fetchError } = await supabase
-          .from('campaigns')
-          .select('*')
-          .gte('date', pastWeekStartStr)
-          .lte('date', pastWeekEndStr)
-          .order('date', { ascending: true });
-
-        if (fetchError) throw fetchError;
-
-        if (pastCampaigns && pastCampaigns.length > 0) {
-          // Calculate the date offset (days between Past Campaign Start and Second Week Start)
-          const daysDifference = Math.floor(
-            (secondWeekStart.getTime() - pastWeekStart.getTime()) / (1000 * 60 * 60 * 24)
-          );
-
-          // Create new campaign records for Second Week
-          copiedCampaigns = pastCampaigns.map((campaign) => {
+        let copiedForState: any[] = [];
+        if (mode === 'copy' || mode === 'both') {
+          copiedForState = statePast.map((campaign: any) => {
             const originalDate = new Date(campaign.date);
             const newDate = new Date(originalDate);
             newDate.setDate(newDate.getDate() + daysDifference);
-
             return {
               date: formatDateForDb(newDate),
               state: campaign.state,
@@ -147,63 +181,16 @@ export default function AdminPage() {
               mobile: campaign.mobile,
               botj: campaign.botj,
               user_id: campaign.user_id,
-              team_size: null, // Reset team_size for new campaigns
+              team_size: null,
             };
           });
-
-          if (refreshMode === 'copy') {
-            allNewCampaigns.push(...copiedCampaigns);
-          }
-          copyCount = copiedCampaigns.length;
+          copyCount += copiedForState.length;
         }
-      }
 
-      // Option 2: Generate from rules
-      if (refreshMode === 'rules' || refreshMode === 'both') {
-        // Fetch all active rules
-        const { data: fetchedRules, error: rulesError } = await supabase
-          .from('campaign_rules')
-          .select('*')
-          .eq('is_active', true)
-          .order('priority', { ascending: false });
-
-        if (rulesError) throw rulesError;
-        rules = (fetchedRules || []) as CampaignRule[];
-
-        if (rules && rules.length > 0) {
-          // For biweekly rules without reference_date, check existing campaigns
-          // to determine the last campaign date
-          for (const rule of rules) {
-            if (rule.frequency_type === 'biweekly' && !rule.rule_config?.reference_date) {
-              // Find the most recent campaign matching this rule
-              const { data: existingCampaigns, error: existingError } = await supabase
-                .from('campaigns')
-                .select('date')
-                .eq('state', rule.state)
-                .eq('place', rule.place)
-                .eq('time', rule.time)
-                .eq('leader', rule.leader)
-                .order('date', { ascending: false })
-                .limit(1);
-              
-              if (!existingError && existingCampaigns && existingCampaigns.length > 0) {
-                // Use the last campaign date as the reference
-                const lastCampaignDate = existingCampaigns[0].date;
-                rule.rule_config = rule.rule_config || {};
-                rule.rule_config.reference_date = lastCampaignDate;
-              }
-            }
-          }
-
-          // Evaluate rules to generate campaigns
-          const ruleCampaigns = evaluateRules(
-            rules,
-            secondWeekStart,
-            secondWeekEnd
-          );
-
-          // Convert to campaign format
-          const generatedCampaigns = ruleCampaigns.map(campaign => ({
+        let generatedForState: any[] = [];
+        if (mode === 'rules' || mode === 'both') {
+          const ruleCampaigns = evaluateRules(stateRules, secondWeekStart, secondWeekEnd);
+          generatedForState = ruleCampaigns.map((campaign) => ({
             date: campaign.date,
             state: campaign.state,
             place: campaign.place,
@@ -214,30 +201,23 @@ export default function AdminPage() {
             user_id: user.id,
             team_size: null,
           }));
+          rulesCount += generatedForState.length;
+          rulesUsedInRefresh.push(...stateRules);
+        }
 
-          // If both modes, merge and deduplicate by priority
-          if (refreshMode === 'both') {
-            // Create a map to track conflicts (date_state_place_time)
-            const conflictMap = new Map<string, any>();
-            
-            // Add copied campaigns first (lower priority)
-            copiedCampaigns.forEach(campaign => {
-              const key = `${campaign.date}_${campaign.state}_${campaign.place}_${campaign.time}`;
-              conflictMap.set(key, campaign);
-            });
-
-            // Add rule-generated campaigns (higher priority rules override)
-            generatedCampaigns.forEach(campaign => {
-              const key = `${campaign.date}_${campaign.state}_${campaign.place}_${campaign.time}`;
-              conflictMap.set(key, campaign); // Rules override copied campaigns
-            });
-
-            allNewCampaigns = Array.from(conflictMap.values());
-            rulesCount = generatedCampaigns.length;
-          } else {
-            allNewCampaigns = generatedCampaigns;
-            rulesCount = generatedCampaigns.length;
-          }
+        if (mode === 'copy') {
+          allNewCampaigns.push(...copiedForState);
+        } else if (mode === 'rules') {
+          allNewCampaigns.push(...generatedForState);
+        } else {
+          const conflictMap = new Map<string, any>();
+          copiedForState.forEach((c) => {
+            conflictMap.set(`${c.date}_${c.state}_${c.place}_${c.time}`, c);
+          });
+          generatedForState.forEach((c) => {
+            conflictMap.set(`${c.date}_${c.state}_${c.place}_${c.time}`, c);
+          });
+          allNewCampaigns.push(...Array.from(conflictMap.values()));
         }
       }
 
@@ -246,80 +226,50 @@ export default function AdminPage() {
         return;
       }
 
-      // Insert new campaigns
       const { error: insertError } = await supabase
         .from('campaigns')
         .insert(allNewCampaigns);
-
       if (insertError) throw insertError;
 
-      // For biweekly rules, update reference_date in rule_config to the date of created campaigns
-      // This ensures the next evaluation uses the correct reference point
-      if (refreshMode === 'rules' || refreshMode === 'both') {
-        if (rules && rules.length > 0) {
-          for (const rule of rules as CampaignRule[]) {
-            if (rule.frequency_type === 'biweekly') {
-              // Find campaigns created for this rule in this batch
-              const ruleCampaigns = allNewCampaigns.filter(c => 
-                c.state === rule.state &&
-                c.place === rule.place &&
-                c.time === rule.time &&
-                c.leader === rule.leader
-              );
-              
-              if (ruleCampaigns.length > 0) {
-                // Use the earliest date from created campaigns as the new reference
-                const newReferenceDate = ruleCampaigns
-                  .map(c => c.date)
-                  .sort()[0]; // Sort to get earliest date
-                
-                // Update the rule's reference_date
-                const updatedRuleConfig = {
-                  ...(rule.rule_config || {}),
-                  reference_date: newReferenceDate,
-                };
-                
-                await supabase
-                  .from('campaign_rules')
-                  .update({ rule_config: updatedRuleConfig })
-                  .eq('id', rule.id);
-              }
-            }
+      // Update biweekly rule reference_date for rules that generated campaigns
+      for (const rule of rulesUsedInRefresh) {
+        if (rule.frequency_type === 'biweekly') {
+          const ruleCampaigns = allNewCampaigns.filter(
+            (c) =>
+              c.state === rule.state &&
+              c.place === rule.place &&
+              c.time === rule.time &&
+              c.leader === rule.leader
+          );
+          if (ruleCampaigns.length > 0) {
+            const newReferenceDate = ruleCampaigns.map((c) => c.date).sort()[0];
+            await supabase
+              .from('campaign_rules')
+              .update({
+                rule_config: { ...(rule.rule_config || {}), reference_date: newReferenceDate },
+              })
+              .eq('id', rule.id);
           }
         }
       }
 
-      // Delete campaigns older than Past Campaign Start date
-      const pastWeekStartStr = formatDateForDb(dates.pastCampaignStart);
+      const pastWeekStartStrDel = formatDateForDb(dates.pastCampaignStart);
       const { data: deletedCampaigns, error: deleteError } = await supabase
         .from('campaigns')
         .delete()
-        .lt('date', pastWeekStartStr)
+        .lt('date', pastWeekStartStrDel)
         .select();
-
       if (deleteError) throw deleteError;
-
       const deletedCount = deletedCampaigns?.length || 0;
 
-      // Log this Weekly Refresh so we can find leaders who haven't signed in since
       const { error: logError } = await supabase
         .from('weekly_refresh_log')
         .insert({ completed_at: new Date().toISOString(), created_by: user?.id ?? null });
-
-      if (logError) {
-        console.warn('Failed to log weekly refresh:', logError);
-      }
+      if (logError) console.warn('Failed to log weekly refresh:', logError);
 
       let message = `Successfully created ${allNewCampaigns.length} campaign(s) for the period starting ${formatDateReadable(secondWeekStart)}. `;
-      if (refreshMode === 'copy') {
-        message += `Copied ${copyCount} from past week. `;
-      } else if (refreshMode === 'rules') {
-        message += `Generated ${rulesCount} from rules. `;
-      } else {
-        message += `Copied ${copyCount} from past week and generated ${rulesCount} from rules. `;
-      }
+      message += `Copied ${copyCount} from past week and generated ${rulesCount} from rules (per-state modes). `;
       message += `Deleted ${deletedCount} old campaign(s).`;
-
       setRefreshMessage(message);
     } catch (err: any) {
       setError(err.message || 'Failed to refresh campaigns');
@@ -601,32 +551,15 @@ export default function AdminPage() {
               Weekly Refresh
             </h2>
             <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-              Generate campaigns for the second week period and clean up old campaigns. This will create new campaigns starting from the Second Week Start date and delete any campaigns older than the Past Campaign Start date.
+              Generate campaigns for the second week period and clean up old campaigns. Refresh mode is controlled per state by state reporters in State Reporter Admin (copy, rules, or both).
             </p>
-            <div className="mt-4 space-y-3">
-              <div>
-                <label htmlFor="refresh-mode" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Refresh Mode
-                </label>
-                <select
-                  id="refresh-mode"
-                  value={refreshMode}
-                  onChange={(e) => setRefreshMode(e.target.value as 'copy' | 'rules' | 'both')}
-                  className="block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
-                >
-                  <option value="copy">Copy from Past Week (Original)</option>
-                  <option value="rules">Generate from Rules Only</option>
-                  <option value="both">Both (Rules override conflicts)</option>
-                </select>
-              </div>
-              <button
-                onClick={handleWeeklyRefresh}
-                disabled={isRefreshing || !dates}
-                className="w-full rounded-md bg-purple-600 px-4 py-2 text-base font-bold text-white hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 disabled:bg-gray-400 disabled:cursor-not-allowed border-2 border-gray-800 dark:border-gray-600"
-              >
-                {isRefreshing ? 'Refreshing...' : 'Weekly Refresh'}
-              </button>
-            </div>
+            <button
+              onClick={handleWeeklyRefresh}
+              disabled={isRefreshing || !dates}
+              className="mt-4 w-full rounded-md bg-purple-600 px-4 py-2 text-base font-bold text-white hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 disabled:bg-gray-400 disabled:cursor-not-allowed border-2 border-gray-800 dark:border-gray-600"
+            >
+              {isRefreshing ? 'Refreshing...' : 'Weekly Refresh'}
+            </button>
           </div>
 
           {/* Leaders not signed in since refresh */}
