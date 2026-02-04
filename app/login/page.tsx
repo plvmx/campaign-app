@@ -82,7 +82,7 @@ export default function LoginPage() {
             />
           </div>
           <h2 className="text-center text-2xl font-bold text-gray-900 dark:text-gray-100">
-            AFJ Campaign Manager
+            AFJ Campaign Activity System
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600 dark:text-gray-400">
             Enter your mobile number and first name<br />to sign in

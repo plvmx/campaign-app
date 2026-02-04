@@ -84,7 +84,7 @@ export default function TLAdminPage() {
       <div className="p-4">
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-            TL Admin
+            Team Leader Admin
           </h1>
           <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
             Team Leader admin options for your state
