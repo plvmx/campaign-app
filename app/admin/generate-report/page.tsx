@@ -215,6 +215,22 @@ export default function GenerateReportPage() {
         backgroundColor: '#ffffff',
         logging: false,
         useCORS: true,
+        onclone: (clonedDoc, clonedElement) => {
+          const docEl = clonedDoc.documentElement;
+          const body = clonedDoc.body;
+          docEl.style.backgroundColor = '#ffffff';
+          docEl.style.color = '#000000';
+          body.style.backgroundColor = '#ffffff';
+          body.style.color = '#000000';
+          const forceSafeColors = (el: HTMLElement) => {
+            el.style.setProperty('color', '#000000', 'important');
+            el.style.setProperty('background-color', '#ffffff', 'important');
+            el.style.setProperty('border-color', '#000000', 'important');
+            Array.from(el.children).forEach(child => forceSafeColors(child as HTMLElement));
+          };
+          forceSafeColors(clonedElement as HTMLElement);
+          clonedElement.querySelectorAll('.report-actions-header, .report-actions-cell').forEach(el => el.remove());
+        },
       });
 
       // Convert to JPEG
@@ -257,6 +273,11 @@ export default function GenerateReportPage() {
 
   const addEmptyRow = () => {
     setReportData(prev => [...prev, { dateLocation: '', fpAndSp: [], fpOnly: [], pp: [] }]);
+  };
+
+  const insertRowBelow = (index: number) => {
+    const newRow: ReportRow = { dateLocation: '', fpAndSp: [], fpOnly: [], pp: [] };
+    setReportData(prev => [...prev.slice(0, index + 1), newRow, ...prev.slice(index + 1)]);
   };
 
   const getCellDisplay = (row: ReportRow, field: keyof ReportRow): string => {
@@ -505,6 +526,12 @@ export default function GenerateReportPage() {
                       >
                         PP
                       </th>
+                      <th 
+                        className="report-actions-header border-2 border-black bg-gray-100 p-2 text-center"
+                        style={{ width: '80px', borderColor: 'black', color: 'black', fontWeight: 'bold' }}
+                      >
+                       
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -557,6 +584,15 @@ export default function GenerateReportPage() {
                               </td>
                             );
                           })}
+                          <td className="report-actions-cell border-2 border-black p-2 align-top bg-gray-50" style={{ borderColor: 'black', width: '80px' }}>
+                            <button
+                              type="button"
+                              onClick={e => { e.stopPropagation(); insertRowBelow(index); }}
+                              className="text-xs text-blue-600 hover:text-blue-800 underline"
+                            >
+                              Insert below
+                            </button>
+                          </td>
                         </tr>
                       );
                     })}
