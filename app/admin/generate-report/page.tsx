@@ -56,6 +56,7 @@ export default function GenerateReportPage() {
   const [showReport, setShowReport] = useState(false);
   const [userState, setUserState] = useState<string | null>(null);
   const [adminStatus, setAdminStatus] = useState<string | null>(null);
+  const [editingCell, setEditingCell] = useState<{ rowIndex: number; field: keyof ReportRow } | null>(null);
 
   useEffect(() => {
     async function checkAuthAndPermissions() {
@@ -206,8 +207,8 @@ export default function GenerateReportPage() {
 
     setIsGenerating(true);
     try {
-      // Wait a bit for any rendering to complete
-      await new Promise(resolve => setTimeout(resolve, 100));
+      setEditingCell(null);
+      await new Promise(resolve => setTimeout(resolve, 350));
       
       const canvas = await html2canvas(reportRef.current, {
         scale: 2,
@@ -237,6 +238,96 @@ export default function GenerateReportPage() {
     } finally {
       setIsGenerating(false);
     }
+  };
+
+  const updateCell = (rowIndex: number, field: keyof ReportRow, value: string) => {
+    setReportData(prev => {
+      const next = prev.map((row, i) => {
+        if (i !== rowIndex) return row;
+        if (field === 'dateLocation') {
+          return { ...row, dateLocation: value };
+        }
+        const arr = value.split(',').map(s => s.trim()).filter(Boolean);
+        return { ...row, [field]: arr };
+      });
+      return next;
+    });
+    setEditingCell(null);
+  };
+
+  const addEmptyRow = () => {
+    setReportData(prev => [...prev, { dateLocation: '', fpAndSp: [], fpOnly: [], pp: [] }]);
+  };
+
+  const getCellDisplay = (row: ReportRow, field: keyof ReportRow): string => {
+    if (field === 'dateLocation') return row.dateLocation;
+    const arr = row[field] as string[];
+    return Array.isArray(arr) ? arr.join(', ') : '';
+  };
+
+  const downloadReportAsWord = () => {
+    const escapeHtml = (s: string) =>
+      s
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    const rowsHtml = reportData
+      .map(
+        row =>
+          `<tr>
+            <td style="border:2px solid black;padding:8px;vertical-align:top;">${escapeHtml(getCellDisplay(row, 'dateLocation'))}</td>
+            <td style="border:2px solid black;padding:8px;vertical-align:top;">${escapeHtml(getCellDisplay(row, 'fpAndSp'))}</td>
+            <td style="border:2px solid black;padding:8px;vertical-align:top;">${escapeHtml(getCellDisplay(row, 'fpOnly'))}</td>
+            <td style="border:2px solid black;padding:8px;vertical-align:top;">${escapeHtml(getCellDisplay(row, 'pp'))}</td>
+          </tr>`
+      )
+      .join('');
+    const html = `<!DOCTYPE html>
+<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word">
+<head>
+  <meta charset="utf-8">
+  <title>Campaign Results Report</title>
+  <!--[if gte mso 9]>
+  <xml>
+    <w:WordDocument>
+      <w:View>Print</w:View>
+      <w:Zoom>100</w:Zoom>
+    </w:WordDocument>
+  </xml>
+  <![endif]-->
+  <style>
+    body { font-family: Arial, sans-serif; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 2px solid black; padding: 8px; vertical-align: top; }
+    th { font-weight: bold; text-align: center; }
+    .index { text-align: center; font-size: 18px; font-weight: bold; font-style: italic; margin-bottom: 16px; }
+  </style>
+</head>
+<body>
+  <div class="index">INDEX: &nbsp; SP - Salvation Prayer &nbsp; FP – Full Presentation &nbsp; PP - Partial Presentation</div>
+  <table>
+    <thead>
+      <tr>
+        <th style="width:20%">Date &amp; Location</th>
+        <th style="width:27%">FP &amp; SP</th>
+        <th style="width:27%">FP only</th>
+        <th style="width:26%">PP</th>
+      </tr>
+    </thead>
+    <tbody>${rowsHtml}</tbody>
+  </table>
+</body>
+</html>`;
+    const blob = new Blob(['\ufeff', html], { type: 'application/msword' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `Campaign_Results_Report_${startDate}_to_${endDate}.doc`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   if (isLoading) {
@@ -337,13 +428,22 @@ export default function GenerateReportPage() {
             </button>
             
             {showReport && reportData.length > 0 && (
-              <button
-                onClick={downloadReport}
-                disabled={isGenerating}
-                className="w-full rounded-md bg-green-600 px-4 py-2 text-base font-bold text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:bg-gray-400 disabled:cursor-not-allowed border-2 border-gray-800 dark:border-gray-600"
-              >
-                {isGenerating ? 'Preparing Download...' : 'Download JPEG'}
-              </button>
+              <div className="flex flex-col gap-2">
+                <button
+                  onClick={downloadReport}
+                  disabled={isGenerating}
+                  className="w-full rounded-md bg-green-600 px-4 py-2 text-base font-bold text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:bg-gray-400 disabled:cursor-not-allowed border-2 border-gray-800 dark:border-gray-600"
+                >
+                  {isGenerating ? 'Preparing Download...' : 'Download JPEG'}
+                </button>
+                <button
+                  type="button"
+                  onClick={downloadReportAsWord}
+                  className="w-full rounded-md bg-blue-700 px-4 py-2 text-base font-bold text-white hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
+                >
+                  Download Word
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -408,41 +508,70 @@ export default function GenerateReportPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {reportData.map((row, index) => (
-                      <tr key={index}>
-                        <td 
-                          className="border-2 border-black p-2"
-                          style={{ borderColor: 'black', verticalAlign: 'top', color: 'black' }}
-                        >
-                          {row.dateLocation}
-                        </td>
-                        <td 
-                          className="border-2 border-black p-2"
-                          style={{ borderColor: 'black', verticalAlign: 'top', color: 'black' }}
-                        >
-                          {row.fpAndSp.length > 0 ? row.fpAndSp.join(', ') : ''}
-                        </td>
-                        <td 
-                          className="border-2 border-black p-2"
-                          style={{ borderColor: 'black', verticalAlign: 'top', color: 'black' }}
-                        >
-                          {row.fpOnly.length > 0 ? row.fpOnly.join(', ') : ''}
-                        </td>
-                        <td 
-                          className="border-2 border-black p-2"
-                          style={{ 
-                            borderColor: 'black', 
-                            verticalAlign: 'top',
-                            color: 'black'
-                          }}
-                        >
-                          {row.pp.length > 0 ? row.pp.join(', ') : ''}
-                        </td>
-                      </tr>
-                    ))}
+                    {reportData.map((row, index) => {
+                      const fields: (keyof ReportRow)[] = ['dateLocation', 'fpAndSp', 'fpOnly', 'pp'];
+                      return (
+                        <tr key={index}>
+                          {fields.map(field => {
+                            const isEditing = editingCell?.rowIndex === index && editingCell?.field === field;
+                            const display = getCellDisplay(row, field);
+                            const isEmpty = !display;
+                            return (
+                              <td
+                                key={field}
+                                className="border-2 border-black p-2 min-h-[2.5rem] cursor-text"
+                                style={{ borderColor: 'black', verticalAlign: 'top', color: 'black' }}
+                                onClick={() => !isEditing && setEditingCell({ rowIndex: index, field })}
+                              >
+                                {isEditing ? (
+                                  <input
+                                    type="text"
+                                    className="w-full min-w-[80px] border-0 border-b border-gray-400 bg-transparent p-0 text-black outline-none focus:border-black"
+                                    style={{ color: 'black' }}
+                                    autoFocus
+                                    value={display}
+                                    onChange={e => {
+                                      const v = e.target.value;
+                                      setReportData(prev => {
+                                        const next = [...prev];
+                                        if (field === 'dateLocation') {
+                                          next[index] = { ...next[index], dateLocation: v };
+                                        } else {
+                                          (next[index] as ReportRow)[field] = v.split(',').map(s => s.trim()).filter(Boolean);
+                                        }
+                                        return next;
+                                      });
+                                    }}
+                                    onBlur={e => updateCell(index, field, e.target.value)}
+                                    onKeyDown={e => {
+                                      if (e.key === 'Enter') {
+                                        e.currentTarget.blur();
+                                      }
+                                    }}
+                                  />
+                                ) : (
+                                  <span className={isEmpty ? 'text-gray-400' : ''} title={isEmpty ? 'Click to add' : undefined}>
+                                    {display || '\u00A0'}
+                                  </span>
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
+            </div>
+            <div className="mt-4">
+              <button
+                type="button"
+                onClick={addEmptyRow}
+                className="rounded-md border-2 border-dashed border-gray-400 bg-gray-50 px-4 py-2 text-sm font-medium text-gray-700 hover:border-gray-600 hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-gray-500 dark:hover:bg-gray-700"
+              >
+                Add row
+              </button>
             </div>
           </div>
         )}
