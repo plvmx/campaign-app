@@ -49,6 +49,8 @@ function RecordResultsDetailPageContent() {
   const fullRowsRef = useRef(fullRows);
   const fullSinnersRowsRef = useRef(fullSinnersRows);
   const informationRowsRef = useRef(informationRows);
+  const debounceNamesTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const savingNamesRef = useRef(false);
   
   // Keep refs in sync with state
   useEffect(() => {
@@ -422,17 +424,16 @@ function RecordResultsDetailPageContent() {
     }
   };
 
-  // Function to save all pending names to the database
+  // Function to save all pending names to the database.
+  // Guarded to prevent concurrent runs (which could persist intermediate typing states like "M", "Muh").
   const savePendingNames = useCallback(async () => {
-    const currentPendingSaves = pendingSavesRef.current;
+    if (savingNamesRef.current) return;
     const currentCampaignId = campaignIdRef.current;
-    const currentOriginalNames = originalNamesRef.current;
-    
-    if (!currentCampaignId) {
-      return;
-    }
+    if (!currentCampaignId) return;
 
+    savingNamesRef.current = true;
     try {
+      const currentOriginalNames = originalNamesRef.current;
       const user = await getCurrentUser();
       if (!user) {
         throw new Error('User not authenticated');
@@ -480,7 +481,9 @@ function RecordResultsDetailPageContent() {
       const namesToDelete: { name: string; categoryCode: string }[] = [];
       currentOriginalNames.forEach(nameKey => {
         if (!currentNames.has(nameKey)) {
-          const [name, categoryCode] = nameKey.split(':');
+          const lastColon = nameKey.lastIndexOf(':');
+          const name = nameKey.slice(0, lastColon);
+          const categoryCode = nameKey.slice(lastColon + 1);
           namesToDelete.push({ name, categoryCode });
         }
       });
@@ -507,7 +510,9 @@ function RecordResultsDetailPageContent() {
       // Convert current names to array of results to insert/update
       // Save ALL current names from the rows, not just pending saves
       const resultsToSave = Array.from(currentNames).map((nameKey) => {
-        const [name, categoryCode] = nameKey.split(':');
+        const lastColon = nameKey.lastIndexOf(':');
+        const name = nameKey.slice(0, lastColon);
+        const categoryCode = nameKey.slice(lastColon + 1);
         return {
           campaign_id: currentCampaignId,
           first_name: name,
@@ -540,52 +545,66 @@ function RecordResultsDetailPageContent() {
       pendingSavesRef.current = new Map();
     } catch (error: any) {
       console.error('Error saving names:', error);
+    } finally {
+      savingNamesRef.current = false;
     }
   }, []);
 
+  // Debounce name saves so we only persist after the user stops typing (prevents "M", "Muh", "Muhammad" as separate records).
+  const DEBOUNCE_MS = 2000;
+  const scheduleSaveNames = useCallback(() => {
+    if (debounceNamesTimerRef.current) clearTimeout(debounceNamesTimerRef.current);
+    debounceNamesTimerRef.current = setTimeout(() => {
+      debounceNamesTimerRef.current = null;
+      savePendingNames();
+    }, DEBOUNCE_MS);
+  }, [savePendingNames]);
+
+  const flushSaveNames = useCallback(() => {
+    if (debounceNamesTimerRef.current) {
+      clearTimeout(debounceNamesTimerRef.current);
+      debounceNamesTimerRef.current = null;
+    }
+    savePendingNames();
+  }, [savePendingNames]);
+
   // Auto-save periodically and on navigation
   useEffect(() => {
-    // Auto-save every 3 seconds if there are changes
+    // Save team size and counts every 3 seconds; names are saved only via debounce or flush (see scheduleSaveNames / flushSaveNames)
     const autoSaveInterval = setInterval(() => {
       const currentCampaignId = campaignIdRef.current;
       if (currentCampaignId) {
-        savePendingNames();
         saveTeamSize();
         saveCountFields();
       }
     }, 3000);
 
     const handleBeforeUnload = () => {
-      // Final save attempt (may not complete)
       const currentCampaignId = campaignIdRef.current;
       if (currentCampaignId) {
-        savePendingNames();
+        flushSaveNames();
         saveTeamSize();
         saveCountFields();
       }
     };
 
     window.addEventListener('beforeunload', handleBeforeUnload);
-    
-    // Cleanup: Save all pending names and team size when component unmounts
+
     return () => {
       clearInterval(autoSaveInterval);
       window.removeEventListener('beforeunload', handleBeforeUnload);
-      // Final save on cleanup (when navigating away)
+      if (debounceNamesTimerRef.current) {
+        clearTimeout(debounceNamesTimerRef.current);
+        debounceNamesTimerRef.current = null;
+      }
       const currentCampaignId = campaignIdRef.current;
-      
       if (currentCampaignId) {
-        // Save team size
         saveTeamSize();
-        
-        // Save count fields
         saveCountFields();
-        
-        // Always save pending names (including deletions)
-        savePendingNames();
+        flushSaveNames();
       }
     };
-  }, [savePendingNames]);
+  }, [flushSaveNames]);
 
   const addNewRow = (section: SectionType) => {
     // Generate a unique ID using crypto.randomUUID if available, otherwise use timestamp
@@ -669,6 +688,8 @@ function RecordResultsDetailPageContent() {
     updateRowField(section, rowId, fieldName, value);
     // Cache the name for later saving
     cacheNameForSave(section, rowId, fieldName, value);
+    // Debounce save so we only persist after user stops typing (avoids saving "M", "Muh", "Muhammad" as separate records)
+    scheduleSaveNames();
   };
 
   const renderInputGrid = (rows: InputRow[], section: SectionType) => {
