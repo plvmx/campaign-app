@@ -141,7 +141,7 @@ export default function SRAdminPage() {
 
   return (
     <MobileLayout>
-      <div className="p-4">
+      <div className="p-4 pb-24">
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
             State Reporter Admin
@@ -249,12 +249,13 @@ export default function SRAdminPage() {
             <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
               Generate campaign slides in JPEG format for upcoming campaigns in your state.
             </p>
-            <a
-              href="/admin/generate-slides"
-              className="mt-4 inline-block rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
+            <button
+              type="button"
+              onClick={() => { window.location.href = '/admin/generate-slides'; }}
+              className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
             >
               Generate Slides
-            </a>
+            </button>
           </div>
 
           {/* Campaign Results Report */}
@@ -265,12 +266,13 @@ export default function SRAdminPage() {
             <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
               Generate a comprehensive campaign results report in landscape JPEG format for your state.
             </p>
-            <a
-              href="/admin/generate-report"
-              className="mt-4 inline-block rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
+            <button
+              type="button"
+              onClick={() => { window.location.href = '/admin/generate-report'; }}
+              className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
             >
               Generate Report
-            </a>
+            </button>
           </div>
 
           {/* Leaders not signed in since refresh */}

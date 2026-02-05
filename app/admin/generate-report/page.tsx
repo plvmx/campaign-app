@@ -274,7 +274,7 @@ export default function GenerateReportPage() {
 
   return (
     <MobileLayout>
-      <div className="p-4">
+      <div className="p-4 pb-28">
         <div className="mb-6">
           <a
             href={adminStatus === 'SR' ? '/app/sr-admin' : '/admin'}
@@ -328,8 +328,9 @@ export default function GenerateReportPage() {
             </div>
             
             <button
-              onClick={fetchReportData}
-              disabled={isGenerating || !startDate || !endDate}
+              type="button"
+              onClick={() => fetchReportData()}
+              disabled={isGenerating}
               className="w-full rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:bg-gray-400 disabled:cursor-not-allowed border-2 border-gray-800 dark:border-gray-600"
             >
               {isGenerating ? 'Generating...' : 'Generate Report'}
