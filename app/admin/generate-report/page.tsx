@@ -260,12 +260,12 @@ export default function GenerateReportPage() {
             <p className="mt-1 text-sm text-red-600 dark:text-red-300">
               {error || 'You do not have permission to access this page.'}
             </p>
-            <button
-              onClick={() => router.push(adminStatus === 'SR' ? '/app' : '/admin')}
-              className="mt-4 rounded-md bg-red-600 px-4 py-2 text-base font-bold text-white hover:bg-red-700 border-2 border-gray-800 dark:border-gray-600"
+            <a
+              href={adminStatus === 'SR' ? '/app/sr-admin' : '/admin'}
+              className="mt-4 inline-block rounded-md bg-red-600 px-4 py-2 text-base font-bold text-white hover:bg-red-700 border-2 border-gray-800 dark:border-gray-600"
             >
               Go Back
-            </button>
+            </a>
           </div>
         </div>
       </MobileLayout>
@@ -276,12 +276,12 @@ export default function GenerateReportPage() {
     <MobileLayout>
       <div className="p-4">
         <div className="mb-6">
-          <button
-            onClick={() => router.push(adminStatus === 'SR' ? '/app' : '/admin')}
-            className="mb-4 text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400"
+          <a
+            href={adminStatus === 'SR' ? '/app/sr-admin' : '/admin'}
+            className="mb-4 inline-block text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400"
           >
-            ← {adminStatus === 'SR' ? 'Back to Home' : 'Back to Admin Panel'}
-          </button>
+            ← {adminStatus === 'SR' ? 'Back to SR Admin' : 'Back to Admin Panel'}
+          </a>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
             Generate Campaign Results Report
           </h1>
