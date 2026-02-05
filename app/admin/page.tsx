@@ -167,7 +167,7 @@ export default function AdminPage() {
         const stateRules = allRules.filter((r) => r.state === state);
 
         let copiedForState: any[] = [];
-        if (mode === 'copy' || mode === 'both') {
+        if (mode === 'copy' || mode === 'both' || mode === 'either') {
           copiedForState = statePast.map((campaign: any) => {
             const originalDate = new Date(campaign.date);
             const newDate = new Date(originalDate);
@@ -184,11 +184,11 @@ export default function AdminPage() {
               team_size: null,
             };
           });
-          copyCount += copiedForState.length;
+          if (mode !== 'either') copyCount += copiedForState.length;
         }
 
         let generatedForState: any[] = [];
-        if (mode === 'rules' || mode === 'both') {
+        if (mode === 'rules' || mode === 'both' || mode === 'either') {
           const ruleCampaigns = evaluateRules(stateRules, secondWeekStart, secondWeekEnd);
           generatedForState = ruleCampaigns.map((campaign) => ({
             date: campaign.date,
@@ -209,6 +209,16 @@ export default function AdminPage() {
           allNewCampaigns.push(...copiedForState);
         } else if (mode === 'rules') {
           allNewCampaigns.push(...generatedForState);
+        } else if (mode === 'either') {
+          // Slots covered by rules (state, place, time, leader) — do not copy for these
+          const ruleSlots = new Set(
+            generatedForState.map((c) => `${c.state}_${c.place}_${c.time}_${c.leader}`)
+          );
+          const copyOnlyWhenNoRule = copiedForState.filter(
+            (c) => !ruleSlots.has(`${c.state}_${c.place}_${c.time}_${c.leader}`)
+          );
+          copyCount += copyOnlyWhenNoRule.length;
+          allNewCampaigns.push(...generatedForState, ...copyOnlyWhenNoRule);
         } else {
           const conflictMap = new Map<string, any>();
           copiedForState.forEach((c) => {

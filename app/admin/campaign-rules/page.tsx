@@ -30,6 +30,18 @@ const MONTH_WEEKS = [
   { value: -1, label: 'Last Week' },
 ];
 
+/** Normalize time string from DB (e.g. "10:00:00") to HH:MM for form/display. */
+function timeToHHMM(timeStr: string | null | undefined): string {
+  if (!timeStr) return '';
+  const part = timeStr.trim().split(':');
+  if (part.length >= 2) {
+    const h = part[0].padStart(2, '0');
+    const m = part[1].padStart(2, '0');
+    return `${h}:${m}`;
+  }
+  return timeStr;
+}
+
 function CampaignRulesPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -406,7 +418,7 @@ function CampaignRulesPageContent() {
       leader: rule.leader,
       state: stateToUse,
       place: rule.place,
-      time: rule.time,
+      time: timeToHHMM(rule.time),
       mobile: rule.mobile || '',
       frequency_type: rule.frequency_type,
       frequency_value: rule.frequency_value || 2,
@@ -1019,7 +1031,7 @@ function CampaignRulesPageContent() {
                           )}
                         </div>
                         <div className={`text-sm ${stateColor.text} opacity-75 mt-1`}>
-                          {rule.leader} - {rule.place}, {rule.state} at {rule.time}
+                          {rule.leader} - {rule.place}, {rule.state} at {timeToHHMM(rule.time)}
                         </div>
                         <div className={`text-xs ${stateColor.text} opacity-60 mt-1`}>
                           {frequencyLabel}{dayLabel ? ` on ${dayLabel}` : ''}

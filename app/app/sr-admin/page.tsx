@@ -21,7 +21,7 @@ export default function SRAdminPage() {
   const [leadersNotSignedIn, setLeadersNotSignedIn] = useState<LeaderNotSignedIn[]>([]);
   const [lastRefreshAt, setLastRefreshAt] = useState<Date | null>(null);
   const [loadingLeaders, setLoadingLeaders] = useState(false);
-  const [refreshMode, setRefreshMode] = useState<RefreshMode>('copy');
+  const [refreshMode, setRefreshMode] = useState<RefreshMode>('either');
   const [loadingRefreshMode, setLoadingRefreshMode] = useState(false);
   const [savingRefreshMode, setSavingRefreshMode] = useState(false);
   const [refreshModeMessage, setRefreshModeMessage] = useState<string | null>(null);
@@ -84,7 +84,7 @@ export default function SRAdminPage() {
         if (!cancelled) setRefreshMode(mode);
       })
       .catch(() => {
-        if (!cancelled) setRefreshMode('copy');
+        if (!cancelled) setRefreshMode('either');
       })
       .finally(() => {
         if (!cancelled) setLoadingRefreshMode(false);
@@ -206,7 +206,7 @@ export default function SRAdminPage() {
               Weekly Refresh Mode
             </h2>
             <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-              Choose how campaigns are created for your state when an admin runs Weekly Refresh: copy from the past week, generate from rules only, or both (rules override where they apply).
+              Choose how campaigns are created for your state when an admin runs Weekly Refresh. Either: copy from past week only when there is no rule for that leader/place/time; otherwise the rule runs and nothing is copied for that campaign.
             </p>
             {loadingRefreshMode ? (
               <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">Loading…</p>
@@ -222,6 +222,7 @@ export default function SRAdminPage() {
                     onChange={(e) => setRefreshMode(e.target.value as RefreshMode)}
                     className="block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
                   >
+                    <option value="either">Either (Copy if no Rule for Campaign)</option>
                     <option value="copy">Copy from Past Week</option>
                     <option value="rules">Generate from Rules Only</option>
                     <option value="both">Both (Rules override conflicts)</option>

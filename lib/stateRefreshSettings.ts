@@ -1,8 +1,8 @@
 import { supabase } from '@/lib/supabaseClient';
 
-export type RefreshMode = 'copy' | 'rules' | 'both';
+export type RefreshMode = 'copy' | 'rules' | 'both' | 'either';
 
-export const DEFAULT_REFRESH_MODE: RefreshMode = 'copy';
+export const DEFAULT_REFRESH_MODE: RefreshMode = 'either';
 
 export interface StateRefreshSetting {
   state: string;
