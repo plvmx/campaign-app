@@ -1798,33 +1798,21 @@ function AppPageContent() {
                                     </div>
                                   </div>
                                   
-                                  {/* Only show checkboxes for future campaigns unless user is AD */}
-                                  {(() => {
-                                    const today = new Date();
-                                    today.setHours(0, 0, 0, 0);
-                                    const campaignDate = new Date(campaign.date);
-                                    campaignDate.setHours(0, 0, 0, 0);
-                                    const isFuture = campaignDate > today;
-                                    const shouldShowCheckboxes = adminStatus === 'AD' || isFuture;
-                                    
-                                    return shouldShowCheckboxes ? (
-                                      <div className="flex gap-6 justify-center pt-2">
-                                        {/* TL OK checkbox: shown for all users */}
-                                        <div className="flex items-center">
-                                          <input
-                                            id={`tl_ok_${campaign.id}`}
-                                            type="checkbox"
-                                            checked={editData.tl_ok}
-                                            onChange={(e) => updateInlineEditField(campaign.id, 'tl_ok', e.target.checked)}
-                                            className="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                          />
-                                          <label htmlFor={`tl_ok_${campaign.id}`} className="ml-2 text-sm font-semibold text-gray-700 dark:text-gray-300">
-                                            This Campaign is Correct
-                                          </label>
-                                        </div>
-                                      </div>
-                                    ) : null;
-                                  })()}
+                                  {/* This Campaign is Correct checkbox: shown for all campaigns */}
+                                  <div className="flex gap-6 justify-center pt-2">
+                                    <div className="flex items-center">
+                                      <input
+                                        id={`tl_ok_${campaign.id}`}
+                                        type="checkbox"
+                                        checked={editData.tl_ok}
+                                        onChange={(e) => updateInlineEditField(campaign.id, 'tl_ok', e.target.checked)}
+                                        className="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                      />
+                                      <label htmlFor={`tl_ok_${campaign.id}`} className="ml-2 text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                        This Campaign is Correct
+                                      </label>
+                                    </div>
+                                  </div>
 
                                   <div className="flex gap-2 pt-2">
                                     <button
@@ -1890,30 +1878,18 @@ function AppPageContent() {
                                         </>
                                       ) : null}
                                     </div>
-                                    {/* Only show checkboxes for future campaigns unless user is AD */}
-                                    {(() => {
-                                      const today = new Date();
-                                      today.setHours(0, 0, 0, 0);
-                                      const campaignDate = new Date(campaign.date);
-                                      campaignDate.setHours(0, 0, 0, 0);
-                                      const isFuture = campaignDate > today;
-                                      const shouldShowCheckboxes = adminStatus === 'AD' || isFuture;
-                                      
-                                      return shouldShowCheckboxes ? (
-                                        <div className="flex gap-6 justify-center text-sm sm:text-base mt-2 mb-2">
-                                          {/* TL OK checkbox: shown for all users */}
-                                          <div className={`flex items-center ${stateColor.text} font-semibold cursor-pointer`} onClick={() => handleToggleCheckbox(campaign.id, 'tl_ok', campaign.tl_ok)}>
-                                            <input
-                                              type="checkbox"
-                                              checked={campaign.tl_ok}
-                                              onChange={() => {}}
-                                              className="h-5 w-5 rounded border-gray-300 mr-2 cursor-pointer"
-                                            />
-                                            <span>This Campaign is Correct</span>
-                                          </div>
-                                        </div>
-                                      ) : null;
-                                    })()}
+                                    {/* This Campaign is Correct checkbox: shown for all campaigns */}
+                                    <div className="flex gap-6 justify-center text-sm sm:text-base mt-2 mb-2">
+                                      <div className={`flex items-center ${stateColor.text} font-semibold cursor-pointer`} onClick={() => handleToggleCheckbox(campaign.id, 'tl_ok', campaign.tl_ok)}>
+                                        <input
+                                          type="checkbox"
+                                          checked={campaign.tl_ok}
+                                          onChange={() => {}}
+                                          className="h-5 w-5 rounded border-gray-300 mr-2 cursor-pointer"
+                                        />
+                                        <span>This Campaign is Correct</span>
+                                      </div>
+                                    </div>
                                   </div>
                                   <div className="flex flex-row gap-2 sm:ml-4 w-full sm:w-auto">
                                     {/* Show Record Results only if campaign date+time is in the past (same as Past tab) AND (admin OR own OR shared with me) */}
