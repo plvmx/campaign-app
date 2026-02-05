@@ -1916,14 +1916,19 @@ function AppPageContent() {
                                     })()}
                                   </div>
                                   <div className="flex flex-row gap-2 sm:ml-4 w-full sm:w-auto">
-                                    {/* Show Record Results if campaign date is today or earlier AND (admin OR own OR shared with me) */}
+                                    {/* Show Record Results only if campaign date+time is in the past (same as Past tab) AND (admin OR own OR shared with me) */}
                                     {(() => {
-                                      const today = new Date();
-                                      today.setHours(0, 0, 0, 0);
+                                      const now = new Date();
                                       const campaignDate = new Date(campaign.date);
-                                      campaignDate.setHours(0, 0, 0, 0);
-                                      const isPastOrToday = campaignDate <= today;
-                                      if (!isPastOrToday) return false;
+                                      let timeStr = campaign.time;
+                                      if (timeStr.includes('T')) {
+                                        timeStr = timeStr.split('T')[1]?.split('.')[0] || timeStr;
+                                      }
+                                      const [hours, minutes] = (timeStr || '0:0').split(':').map(Number);
+                                      const campaignDateTime = new Date(campaignDate);
+                                      campaignDateTime.setHours(hours || 0, minutes || 0, 0, 0);
+                                      const isPast = campaignDateTime < now;
+                                      if (!isPast) return false;
                                       if (adminStatus === 'AD') return true;
                                       const isOwn = userMobileAndLeader?.leader && userState && normalizeName(campaign.leader || '') === normalizeName(userMobileAndLeader.leader) && (campaign.state || '').toUpperCase().trim() === (userState || '').toUpperCase().trim() && userMobileAndLeader.mobile && normalizeMobile(campaign.mobile || '') === normalizeMobile(userMobileAndLeader.mobile);
                                       const isShared = sharedWithMeOwners.some((o) => (o.owner_state || '').toUpperCase().trim() === (campaign.state || '').toUpperCase().trim() && normalizeName(o.owner_leader) === normalizeName(campaign.leader || ''));
