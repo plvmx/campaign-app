@@ -96,7 +96,7 @@ export default function AdminPage() {
     try {
       const secondWeekStart = new Date(dates.secondWeekStart);
       const secondWeekEnd = new Date(secondWeekStart);
-      secondWeekEnd.setDate(secondWeekEnd.getDate() + 13); // 2 weeks (14 days)
+      secondWeekEnd.setDate(secondWeekEnd.getDate() + 6); // Single week (Mon–Sun), matching copy window
 
       const secondWeekStartStr = formatDateForDb(secondWeekStart);
       const secondWeekEndStr = formatDateForDb(secondWeekEnd);
@@ -277,7 +277,7 @@ export default function AdminPage() {
         .insert({ completed_at: new Date().toISOString(), created_by: user?.id ?? null });
       if (logError) console.warn('Failed to log weekly refresh:', logError);
 
-      let message = `Successfully created ${allNewCampaigns.length} campaign(s) for the period starting ${formatDateReadable(secondWeekStart)}. `;
+      let message = `Successfully created ${allNewCampaigns.length} campaign(s) for the week starting ${formatDateReadable(secondWeekStart)}. `;
       message += `Copied ${copyCount} from past week and generated ${rulesCount} from rules (per-state modes). `;
       message += `Deleted ${deletedCount} old campaign(s).`;
       setRefreshMessage(message);
