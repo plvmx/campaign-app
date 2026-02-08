@@ -202,20 +202,34 @@ export default function GenerateReportPage() {
     }
   };
 
+  const LINES_PER_JPEG = 12;
+
   const downloadReport = async () => {
-    if (!reportRef.current) return;
+    if (!reportRef.current || reportData.length === 0) return;
 
     setIsGenerating(true);
     try {
       setEditingCell(null);
       await new Promise(resolve => setTimeout(resolve, 350));
-      
-      const canvas = await html2canvas(reportRef.current, {
+
+      const escapeHtml = (s: string) =>
+        String(s)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;');
+
+      const chunks: ReportRow[][] = [];
+      for (let i = 0; i < reportData.length; i += LINES_PER_JPEG) {
+        chunks.push(reportData.slice(i, i + LINES_PER_JPEG));
+      }
+
+      const captureOptions = {
         scale: 2,
         backgroundColor: '#ffffff',
         logging: false,
         useCORS: true,
-        onclone: (clonedDoc, clonedElement) => {
+        onclone: (clonedDoc: Document, clonedElement: HTMLElement) => {
           const docEl = clonedDoc.documentElement;
           const body = clonedDoc.body;
           docEl.style.backgroundColor = '#ffffff';
@@ -228,27 +242,71 @@ export default function GenerateReportPage() {
             el.style.setProperty('border-color', '#000000', 'important');
             Array.from(el.children).forEach(child => forceSafeColors(child as HTMLElement));
           };
-          forceSafeColors(clonedElement as HTMLElement);
-          clonedElement.querySelectorAll('.report-actions-header, .report-actions-cell').forEach(el => el.remove());
+          forceSafeColors(clonedElement);
         },
-      });
+      };
 
-      // Convert to JPEG
-      canvas.toBlob((blob) => {
-        if (!blob) {
-          throw new Error('Failed to generate image');
-        }
-        
+      for (let partIndex = 0; partIndex < chunks.length; partIndex++) {
+        const chunkRows = chunks[partIndex];
+        const rowsHtml = chunkRows
+          .map(
+            (row) =>
+              `<tr>
+                <td class="border-2 border-black p-2" style="border-color:#000;vertical-align:top;color:#000;font-size:1.25rem;">${escapeHtml(getCellDisplay(row, 'dateLocation'))}</td>
+                <td class="border-2 border-black p-2" style="border-color:#000;vertical-align:top;color:#000;font-size:1.25rem;">${escapeHtml(getCellDisplay(row, 'fpAndSp'))}</td>
+                <td class="border-2 border-black p-2" style="border-color:#000;vertical-align:top;color:#000;font-size:1.25rem;">${escapeHtml(getCellDisplay(row, 'fpOnly'))}</td>
+                <td class="border-2 border-black p-2" style="border-color:#000;vertical-align:top;color:#000;font-size:1.25rem;">${escapeHtml(getCellDisplay(row, 'pp'))}</td>
+              </tr>`
+          )
+          .join('');
+
+        const chunkHtml = `
+          <div class="min-w-[1200px] bg-white p-8" style="width:1200px;font-family:Arial,sans-serif;background:#fff;color:#000;">
+            <div class="mb-4 text-center">
+              <div class="text-lg font-bold italic" style="color:#000;">
+                INDEX: <span class="ml-4">SP</span> - Salvation Prayer
+                <span class="ml-6">FP</span> – Full Presentation
+                <span class="ml-6">PP</span> - Partial Presentation
+              </div>
+            </div>
+            <table class="w-full border-collapse" style="border:2px solid #000;">
+              <thead>
+                <tr>
+                  <th class="border-2 border-black bg-white p-2 text-center" style="width:20%;border-color:#000;color:#000;font-weight:bold;">Date & Location</th>
+                  <th class="border-2 border-black bg-white p-2 text-center" style="width:27%;border-color:#000;color:#000;font-weight:bold;">FP & SP</th>
+                  <th class="border-2 border-black bg-white p-2 text-center" style="width:27%;border-color:#000;color:#000;font-weight:bold;">FP only</th>
+                  <th class="border-2 border-black bg-white p-2 text-center" style="width:26%;border-color:#000;color:#000;font-weight:bold;">PP</th>
+                </tr>
+              </thead>
+              <tbody>${rowsHtml}</tbody>
+            </table>
+          </div>`;
+
+        const tempDiv = document.createElement('div');
+        tempDiv.style.position = 'absolute';
+        tempDiv.style.left = '-9999px';
+        tempDiv.style.top = '0';
+        tempDiv.innerHTML = chunkHtml;
+        document.body.appendChild(tempDiv);
+
+        const canvas = await html2canvas(tempDiv.firstElementChild as HTMLElement, captureOptions);
+        document.body.removeChild(tempDiv);
+
+        const blob = await new Promise<Blob | null>((resolve) => {
+          canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.95);
+        });
+        if (!blob) throw new Error('Failed to generate image');
+
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
-        const filename = `Campaign_Results_Report_${startDate}_to_${endDate}.jpeg`;
+        const partSuffix = chunks.length > 1 ? `_part${partIndex + 1}` : '';
         link.href = url;
-        link.download = filename;
+        link.download = `Campaign_Results_Report_${startDate}_to_${endDate}${partSuffix}.jpeg`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
-      }, 'image/jpeg', 0.95);
+      }
     } catch (err: any) {
       setError(err.message || 'Error downloading report');
     } finally {
@@ -546,8 +604,8 @@ export default function GenerateReportPage() {
                             return (
                               <td
                                 key={field}
-                                className="border-2 border-black p-2 min-h-[2.5rem] cursor-text"
-                                style={{ borderColor: 'black', verticalAlign: 'top', color: 'black' }}
+                                className="border-2 border-black p-2 min-h-[2.5rem] cursor-text text-xl"
+                                style={{ borderColor: 'black', verticalAlign: 'top', color: 'black', fontSize: '1.25rem' }}
                                 onClick={() => !isEditing && setEditingCell({ rowIndex: index, field })}
                               >
                                 {isEditing ? (
