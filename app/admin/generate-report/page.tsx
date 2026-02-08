@@ -255,30 +255,42 @@ export default function GenerateReportPage() {
           .map(
             (row) =>
               `<tr>
-                <td style="border:2px solid #000;border-color:#000;vertical-align:top;color:#000;font-size:1.25rem;padding:0.25rem 0.5rem;">${escapeHtml(getCellDisplay(row, 'dateLocation'))}</td>
-                <td style="border:2px solid #000;border-color:#000;vertical-align:top;color:#000;font-size:1.25rem;padding:0.25rem 0.5rem;">${escapeHtml(getCellDisplay(row, 'fpAndSp'))}</td>
-                <td style="border:2px solid #000;border-color:#000;vertical-align:top;color:#000;font-size:1.25rem;padding:0.25rem 0.5rem;">${escapeHtml(getCellDisplay(row, 'fpOnly'))}</td>
-                <td style="border:2px solid #000;border-color:#000;vertical-align:top;color:#000;font-size:1.25rem;padding:0.25rem 0.5rem;">${escapeHtml(getCellDisplay(row, 'pp'))}</td>
+                <td style="border:2px solid #000;color:#000;font-size:1.25rem;vertical-align:top;padding-top:0.25rem;padding-bottom:0.25rem;padding-left:0.5rem;padding-right:0.5rem;box-sizing:border-box;line-height:1.25;">${escapeHtml(getCellDisplay(row, 'dateLocation'))}</td>
+                <td style="border:2px solid #000;color:#000;font-size:1.25rem;vertical-align:top;padding-top:0.25rem;padding-bottom:0.25rem;padding-left:0.5rem;padding-right:0.5rem;box-sizing:border-box;line-height:1.25;">${escapeHtml(getCellDisplay(row, 'fpAndSp'))}</td>
+                <td style="border:2px solid #000;color:#000;font-size:1.25rem;vertical-align:top;padding-top:0.25rem;padding-bottom:0.25rem;padding-left:0.5rem;padding-right:0.5rem;box-sizing:border-box;line-height:1.25;">${escapeHtml(getCellDisplay(row, 'fpOnly'))}</td>
+                <td style="border:2px solid #000;color:#000;font-size:1.25rem;vertical-align:top;padding-top:0.25rem;padding-bottom:0.25rem;padding-left:0.5rem;padding-right:0.5rem;box-sizing:border-box;line-height:1.25;">${escapeHtml(getCellDisplay(row, 'pp'))}</td>
               </tr>`
           )
           .join('');
 
         const chunkHtml = `
-          <div class="min-w-[1200px] bg-white px-8 pb-8 pt-2" style="width:1200px;font-family:Arial,sans-serif;background:#fff;color:#000;padding:0.5rem 2rem 2rem 2rem;">
-            <div class="text-center" style="margin-bottom:0.25rem;">
-              <div class="text-lg font-bold italic" style="color:#000;">
-                INDEX: <span class="ml-4">SP</span> - Salvation Prayer
-                <span class="ml-6">FP</span> – Full Presentation
-                <span class="ml-6">PP</span> - Partial Presentation
+          <div class="report-chunk-root" style="width:1200px;min-width:1200px;font-family:Arial,sans-serif;background:#fff;color:#000;padding:0.5rem 2rem 2rem 2rem;box-sizing:border-box;">
+            <style>
+              .report-chunk-root table { border-collapse: collapse; border: 2px solid #000; }
+              .report-chunk-root th, .report-chunk-root td {
+                vertical-align: top !important;
+                padding-top: 0.25rem !important;
+                padding-bottom: 0.25rem !important;
+                padding-left: 0.5rem !important;
+                padding-right: 0.5rem !important;
+                box-sizing: border-box !important;
+                line-height: 1.25 !important;
+              }
+            </style>
+            <div style="text-align:center;margin-bottom:0.25rem;">
+              <div style="color:#000;font-size:1.125rem;font-weight:bold;font-style:italic;">
+                INDEX: <span style="margin-left:1rem;">SP</span> - Salvation Prayer
+                <span style="margin-left:1.5rem;">FP</span> – Full Presentation
+                <span style="margin-left:1.5rem;">PP</span> - Partial Presentation
               </div>
             </div>
-            <table class="w-full border-collapse" style="border:2px solid #000;">
+            <table style="width:100%;border:2px solid #000;">
               <thead>
                 <tr>
-                  <th style="width:20%;border:2px solid #000;border-color:#000;color:#000;font-weight:bold;text-align:center;background:#fff;padding:0.25rem 0.5rem;">Date & Location</th>
-                  <th style="width:27%;border:2px solid #000;border-color:#000;color:#000;font-weight:bold;text-align:center;background:#fff;padding:0.25rem 0.5rem;">FP & SP</th>
-                  <th style="width:27%;border:2px solid #000;border-color:#000;color:#000;font-weight:bold;text-align:center;background:#fff;padding:0.25rem 0.5rem;">FP only</th>
-                  <th style="width:26%;border:2px solid #000;border-color:#000;color:#000;font-weight:bold;text-align:center;background:#fff;padding:0.25rem 0.5rem;">PP</th>
+                  <th style="width:20%;border:2px solid #000;color:#000;font-weight:bold;text-align:center;background:#fff;vertical-align:top;padding-top:0.25rem;padding-bottom:0.25rem;padding-left:0.5rem;padding-right:0.5rem;box-sizing:border-box;line-height:1.25;">Date & Location</th>
+                  <th style="width:27%;border:2px solid #000;color:#000;font-weight:bold;text-align:center;background:#fff;vertical-align:top;padding-top:0.25rem;padding-bottom:0.25rem;padding-left:0.5rem;padding-right:0.5rem;box-sizing:border-box;line-height:1.25;">FP & SP</th>
+                  <th style="width:27%;border:2px solid #000;color:#000;font-weight:bold;text-align:center;background:#fff;vertical-align:top;padding-top:0.25rem;padding-bottom:0.25rem;padding-left:0.5rem;padding-right:0.5rem;box-sizing:border-box;line-height:1.25;">FP only</th>
+                  <th style="width:26%;border:2px solid #000;color:#000;font-weight:bold;text-align:center;background:#fff;vertical-align:top;padding-top:0.25rem;padding-bottom:0.25rem;padding-left:0.5rem;padding-right:0.5rem;box-sizing:border-box;line-height:1.25;">PP</th>
                 </tr>
               </thead>
               <tbody>${rowsHtml}</tbody>
