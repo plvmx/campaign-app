@@ -255,17 +255,17 @@ export default function GenerateReportPage() {
           .map(
             (row) =>
               `<tr>
-                <td class="border-2 border-black p-2" style="border-color:#000;vertical-align:top;color:#000;font-size:1.25rem;">${escapeHtml(getCellDisplay(row, 'dateLocation'))}</td>
-                <td class="border-2 border-black p-2" style="border-color:#000;vertical-align:top;color:#000;font-size:1.25rem;">${escapeHtml(getCellDisplay(row, 'fpAndSp'))}</td>
-                <td class="border-2 border-black p-2" style="border-color:#000;vertical-align:top;color:#000;font-size:1.25rem;">${escapeHtml(getCellDisplay(row, 'fpOnly'))}</td>
-                <td class="border-2 border-black p-2" style="border-color:#000;vertical-align:top;color:#000;font-size:1.25rem;">${escapeHtml(getCellDisplay(row, 'pp'))}</td>
+                <td style="border:2px solid #000;border-color:#000;vertical-align:top;color:#000;font-size:1.25rem;padding:0.25rem 0.5rem;">${escapeHtml(getCellDisplay(row, 'dateLocation'))}</td>
+                <td style="border:2px solid #000;border-color:#000;vertical-align:top;color:#000;font-size:1.25rem;padding:0.25rem 0.5rem;">${escapeHtml(getCellDisplay(row, 'fpAndSp'))}</td>
+                <td style="border:2px solid #000;border-color:#000;vertical-align:top;color:#000;font-size:1.25rem;padding:0.25rem 0.5rem;">${escapeHtml(getCellDisplay(row, 'fpOnly'))}</td>
+                <td style="border:2px solid #000;border-color:#000;vertical-align:top;color:#000;font-size:1.25rem;padding:0.25rem 0.5rem;">${escapeHtml(getCellDisplay(row, 'pp'))}</td>
               </tr>`
           )
           .join('');
 
         const chunkHtml = `
           <div class="min-w-[1200px] bg-white px-8 pb-8 pt-2" style="width:1200px;font-family:Arial,sans-serif;background:#fff;color:#000;padding:0.5rem 2rem 2rem 2rem;">
-            <div class="mb-2 text-center" style="margin-bottom:0.5rem;">
+            <div class="text-center" style="margin-bottom:0.25rem;">
               <div class="text-lg font-bold italic" style="color:#000;">
                 INDEX: <span class="ml-4">SP</span> - Salvation Prayer
                 <span class="ml-6">FP</span> – Full Presentation
@@ -275,10 +275,10 @@ export default function GenerateReportPage() {
             <table class="w-full border-collapse" style="border:2px solid #000;">
               <thead>
                 <tr>
-                  <th class="border-2 border-black bg-white p-2 text-center" style="width:20%;border-color:#000;color:#000;font-weight:bold;">Date & Location</th>
-                  <th class="border-2 border-black bg-white p-2 text-center" style="width:27%;border-color:#000;color:#000;font-weight:bold;">FP & SP</th>
-                  <th class="border-2 border-black bg-white p-2 text-center" style="width:27%;border-color:#000;color:#000;font-weight:bold;">FP only</th>
-                  <th class="border-2 border-black bg-white p-2 text-center" style="width:26%;border-color:#000;color:#000;font-weight:bold;">PP</th>
+                  <th style="width:20%;border:2px solid #000;border-color:#000;color:#000;font-weight:bold;text-align:center;background:#fff;padding:0.25rem 0.5rem;">Date & Location</th>
+                  <th style="width:27%;border:2px solid #000;border-color:#000;color:#000;font-weight:bold;text-align:center;background:#fff;padding:0.25rem 0.5rem;">FP & SP</th>
+                  <th style="width:27%;border:2px solid #000;border-color:#000;color:#000;font-weight:bold;text-align:center;background:#fff;padding:0.25rem 0.5rem;">FP only</th>
+                  <th style="width:26%;border:2px solid #000;border-color:#000;color:#000;font-weight:bold;text-align:center;background:#fff;padding:0.25rem 0.5rem;">PP</th>
                 </tr>
               </thead>
               <tbody>${rowsHtml}</tbody>
@@ -550,7 +550,7 @@ export default function GenerateReportPage() {
                 }}
               >
                 {/* Report Header */}
-                <div className="mb-2 text-center">
+                <div className="mb-1 text-center" style={{ marginBottom: '0.25rem' }}>
                   <div className="text-lg font-bold italic" style={{ color: 'black' }}>
                     INDEX: <span className="ml-4">SP</span> - Salvation Prayer
                     <span className="ml-6">FP</span> – Full Presentation
@@ -563,37 +563,39 @@ export default function GenerateReportPage() {
                   <thead>
                     <tr>
                       <th 
-                        className="border-2 border-black bg-white p-2 text-center"
-                        style={{ width: '20%', borderColor: 'black', color: 'black', fontWeight: 'bold' }}
+                        className="border-2 border-black bg-white px-2 py-1 text-center"
+                        style={{ width: '20%', borderColor: 'black', color: 'black', fontWeight: 'bold', paddingTop: '0.25rem', paddingBottom: '0.25rem' }}
                       >
                         Date & Location
                       </th>
                       <th 
-                        className="border-2 border-black bg-white p-2 text-center"
-                        style={{ width: '27%', borderColor: 'black', color: 'black', fontWeight: 'bold' }}
+                        className="border-2 border-black bg-white px-2 py-1 text-center"
+                        style={{ width: '27%', borderColor: 'black', color: 'black', fontWeight: 'bold', paddingTop: '0.25rem', paddingBottom: '0.25rem' }}
                       >
                         FP & SP
                       </th>
                       <th 
-                        className="border-2 border-black bg-white p-2 text-center"
-                        style={{ width: '27%', borderColor: 'black', color: 'black', fontWeight: 'bold' }}
+                        className="border-2 border-black bg-white px-2 py-1 text-center"
+                        style={{ width: '27%', borderColor: 'black', color: 'black', fontWeight: 'bold', paddingTop: '0.25rem', paddingBottom: '0.25rem' }}
                       >
                         FP only
                       </th>
                       <th 
-                        className="border-2 border-black bg-white p-2 text-center"
+                        className="border-2 border-black bg-white px-2 py-1 text-center"
                         style={{ 
                           width: '26%', 
                           borderColor: 'black',
                           color: 'black',
-                          fontWeight: 'bold'
+                          fontWeight: 'bold',
+                          paddingTop: '0.25rem',
+                          paddingBottom: '0.25rem'
                         }}
                       >
                         PP
                       </th>
                       <th 
-                        className="report-actions-header border-2 border-black bg-gray-100 p-2 text-center"
-                        style={{ width: '80px', borderColor: 'black', color: 'black', fontWeight: 'bold' }}
+                        className="report-actions-header border-2 border-black bg-gray-100 px-2 py-1 text-center"
+                        style={{ width: '80px', borderColor: 'black', color: 'black', fontWeight: 'bold', paddingTop: '0.25rem', paddingBottom: '0.25rem' }}
                       >
                        
                       </th>
@@ -611,8 +613,8 @@ export default function GenerateReportPage() {
                             return (
                               <td
                                 key={field}
-                                className="border-2 border-black p-2 min-h-[2.5rem] cursor-text text-xl"
-                                style={{ borderColor: 'black', verticalAlign: 'top', color: 'black', fontSize: '1.25rem' }}
+                                className="border-2 border-black px-2 py-1 cursor-text text-xl"
+                                style={{ borderColor: 'black', verticalAlign: 'top', color: 'black', fontSize: '1.25rem', paddingTop: '0.25rem', paddingBottom: '0.25rem' }}
                                 onClick={() => !isEditing && setEditingCell({ rowIndex: index, field })}
                               >
                                 {isEditing ? (
@@ -649,7 +651,7 @@ export default function GenerateReportPage() {
                               </td>
                             );
                           })}
-                          <td className="report-actions-cell border-2 border-black p-2 align-top bg-gray-50" style={{ borderColor: 'black', width: '80px' }}>
+                          <td className="report-actions-cell border-2 border-black px-2 py-1 align-top bg-gray-50" style={{ borderColor: 'black', width: '80px', paddingTop: '0.25rem', paddingBottom: '0.25rem' }}>
                             <button
                               type="button"
                               onClick={e => { e.stopPropagation(); insertRowBelow(index); }}
