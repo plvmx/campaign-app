@@ -137,6 +137,20 @@ export default function AdminPage() {
       if (rulesError) throw rulesError;
       const allRules = (fetchedRules || []) as CampaignRule[];
 
+      // Fetch existing campaigns in target week to avoid duplicate inserts
+      const { data: existingInTargetWeek, error: existingError } = await supabase
+        .from('campaigns')
+        .select('date, state, place, time, leader')
+        .gte('date', secondWeekStartStr)
+        .lte('date', secondWeekEndStr);
+      if (existingError) throw existingError;
+      const existingSlotKeys = new Set(
+        (existingInTargetWeek || []).map(
+          (c: { date: string; state: string; place: string; time: string; leader: string }) =>
+            `${c.date}_${c.state}_${c.place}_${c.time}_${c.leader}`
+        )
+      );
+
       // Biweekly rules: backfill reference_date from existing campaigns where missing
       for (const rule of allRules) {
         if (rule.frequency_type === 'biweekly' && !rule.rule_config?.reference_date) {
@@ -236,15 +250,30 @@ export default function AdminPage() {
         return;
       }
 
+      // Skip campaigns that already exist (same date, state, place, time, leader)
+      const slotKey = (c: { date: string; state: string; place: string; time: string; leader: string }) =>
+        `${c.date}_${c.state}_${c.place}_${c.time}_${c.leader}`;
+      const toInsert = allNewCampaigns.filter((c) => !existingSlotKeys.has(slotKey(c)));
+      const skippedCount = allNewCampaigns.length - toInsert.length;
+
+      if (toInsert.length === 0) {
+        setRefreshMessage(
+          skippedCount > 0
+            ? `No new campaigns created; ${skippedCount} already existed for the week starting ${formatDateReadable(secondWeekStart)}.`
+            : 'No campaigns to create. Check your rules or past week campaigns.'
+        );
+        return;
+      }
+
       const { error: insertError } = await supabase
         .from('campaigns')
-        .insert(allNewCampaigns);
+        .insert(toInsert);
       if (insertError) throw insertError;
 
       // Update biweekly rule reference_date for rules that generated campaigns
       for (const rule of rulesUsedInRefresh) {
         if (rule.frequency_type === 'biweekly') {
-          const ruleCampaigns = allNewCampaigns.filter(
+          const ruleCampaigns = toInsert.filter(
             (c) =>
               c.state === rule.state &&
               c.place === rule.place &&
@@ -277,8 +306,9 @@ export default function AdminPage() {
         .insert({ completed_at: new Date().toISOString(), created_by: user?.id ?? null });
       if (logError) console.warn('Failed to log weekly refresh:', logError);
 
-      let message = `Successfully created ${allNewCampaigns.length} campaign(s) for the week starting ${formatDateReadable(secondWeekStart)}. `;
+      let message = `Successfully created ${toInsert.length} campaign(s) for the week starting ${formatDateReadable(secondWeekStart)}. `;
       message += `Copied ${copyCount} from past week and generated ${rulesCount} from rules (per-state modes). `;
+      if (skippedCount > 0) message += `${skippedCount} already existed and were skipped. `;
       message += `Deleted ${deletedCount} old campaign(s).`;
       setRefreshMessage(message);
     } catch (err: any) {
