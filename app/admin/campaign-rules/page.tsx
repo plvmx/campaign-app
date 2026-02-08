@@ -51,6 +51,7 @@ function CampaignRulesPageContent() {
   const [user, setUser] = useState<any>(null);
   const [adminStatus, setAdminStatus] = useState<string | null>(null);
   const [userState, setUserState] = useState<string | null>(null);
+  const [userLeader, setUserLeader] = useState<string | null>(null);
   const [isStateLocked, setIsStateLocked] = useState(false);
   const [rules, setRules] = useState<CampaignRule[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -104,9 +105,10 @@ function CampaignRulesPageContent() {
 
         // Check if user is admin (AD), state reporter (SR), or team leader (TL)
         const { getUserAdminStatusAndMobile } = await import('@/lib/campaignFilter');
-        const { admin: adminStatusValue, state: userStateValue } = await getUserAdminStatusAndMobile();
+        const { admin: adminStatusValue, state: userStateValue, leader: userLeaderValue } = await getUserAdminStatusAndMobile();
         setAdminStatus(adminStatusValue);
         setUserState(userStateValue);
+        setUserLeader(userLeaderValue);
 
         // Allow access for AD (admin), SR (state reporter), or TL (team leader - has state)
         const canAccess = adminStatusValue === 'AD' || adminStatusValue === 'SR' || (userStateValue != null && userStateValue.trim() !== '');
@@ -125,10 +127,14 @@ function CampaignRulesPageContent() {
             setIsStateLocked(true);
           }
         } else if (adminStatusValue !== 'AD' && userStateValue) {
-          // For TL (team leaders), lock state to their state
+          // For TL (team leaders), lock state to their state and leader to themselves
           const stateToUse = stateParam || userStateValue;
           if (stateToUse) {
-            setFormState(prev => ({ ...prev, state: stateToUse.toUpperCase().trim() }));
+            setFormState(prev => ({
+              ...prev,
+              state: stateToUse.toUpperCase().trim(),
+              ...(userLeaderValue ? { leader: userLeaderValue } : {}),
+            }));
             setIsStateLocked(true);
           }
         } else if (stateParam && adminStatusValue === 'AD') {
@@ -149,13 +155,28 @@ function CampaignRulesPageContent() {
 
   const fetchRules = async () => {
     try {
+      const isTeamLeader = adminStatus !== 'AD' && adminStatus !== 'SR' && !!userState;
+      const isStateReporter = adminStatus === 'SR';
+
+      // Team Leaders without a matched leader name see no rules
+      if (isTeamLeader && !userLeader) {
+        setRules([]);
+        return;
+      }
+
       let query = supabase
         .from('campaign_rules')
         .select('*');
 
-      // Filter by state for SR and TL users
-      if ((adminStatus === 'SR' || (adminStatus !== 'AD' && adminStatus !== 'SR')) && userState) {
+      // State Reporters: only see rules for their state (leaders in their state)
+      if (isStateReporter && userState) {
         query = query.eq('state', userState.toUpperCase().trim());
+      }
+      // Team Leaders: only see their own rules (state + leader = themselves)
+      if (isTeamLeader && userState && userLeader) {
+        query = query
+          .eq('state', userState.toUpperCase().trim())
+          .eq('leader', userLeader);
       }
 
       const { data, error } = await query
@@ -174,7 +195,7 @@ function CampaignRulesPageContent() {
       fetchRules();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasAccess, adminStatus, userState]);
+  }, [hasAccess, adminStatus, userState, userLeader]);
 
   // Generate time options (8:00 AM to 8:00 PM, half-hour intervals)
   useEffect(() => {
@@ -233,12 +254,23 @@ function CampaignRulesPageContent() {
     fetchPlaces();
   }, [formState.state]);
 
-  // Fetch leaders from state_leaders table when state changes
+  // Fetch leaders from state_leaders table when state changes (or for TL, only show themselves)
+  const isTeamLeader = adminStatus !== 'AD' && adminStatus !== 'SR' && !!userState;
+  const isLeaderLocked = isTeamLeader && !!userLeader;
+
   useEffect(() => {
     async function fetchLeaders() {
       if (!formState.state) {
         setLeaders([]);
         setFormState(prev => ({ ...prev, leader: '', mobile: '' }));
+        return;
+      }
+
+      // Team Leaders: can only create rules for themselves — show only their name and lock leader
+      if (isTeamLeader && userLeader && formState.state.toUpperCase().trim() === (userState || '').toUpperCase().trim()) {
+        setLeaders([userLeader]);
+        setFormState(prev => ({ ...prev, leader: prev.leader || userLeader }));
+        setLoadingLeaders(false);
         return;
       }
 
@@ -271,7 +303,7 @@ function CampaignRulesPageContent() {
     }
 
     fetchLeaders();
-  }, [formState.state]);
+  }, [formState.state, isTeamLeader, userLeader, userState]);
 
   // Fetch mobile from state_leaders when leader/state changes
   useEffect(() => {
@@ -315,6 +347,10 @@ function CampaignRulesPageContent() {
         if (formStateNormalized !== userStateNormalized) {
           throw new Error(`You can only manage campaign rules for ${userState}.`);
         }
+      }
+      // Team Leaders: can only create/edit rules for themselves
+      if (isTeamLeader && userLeader && formState.leader?.trim() !== userLeader.trim()) {
+        throw new Error('As a Team Leader you can only create rules for yourself.');
       }
 
       // Validate required fields based on frequency type
@@ -384,11 +420,12 @@ function CampaignRulesPageContent() {
 
   const resetForm = () => {
     setEditingId(null);
-    // Preserve locked state for SR and TL users
+    // Preserve locked state for SR and TL users; preserve locked leader for TL
     const preservedState = isStateLocked && userState ? userState.toUpperCase().trim() : '';
+    const preservedLeader = isLeaderLocked && userLeader ? userLeader : '';
     setFormState({
       name: '',
-      leader: '',
+      leader: preservedLeader,
       state: preservedState,
       place: '',
       time: '',
@@ -410,6 +447,11 @@ function CampaignRulesPageContent() {
   };
 
   const handleEdit = async (rule: CampaignRule) => {
+    // Team Leaders can only edit their own rules
+    if (isTeamLeader && userLeader && rule.leader?.trim() !== userLeader.trim()) {
+      setError('You can only edit your own campaign rules.');
+      return;
+    }
     setEditingId(rule.id);
     // For SR/TL users with locked state, use the locked state instead of rule's state
     const stateToUse = isStateLocked && userState ? userState.toUpperCase().trim() : rule.state;
@@ -438,18 +480,16 @@ function CampaignRulesPageContent() {
       setLoadingPlaces(true);
       setLoadingLeaders(true);
       try {
-        const [placesResult, leadersResult] = await Promise.all([
-          supabase
-            .from('state_places')
-            .select('place')
-            .eq('state', stateToUse)
-            .order('place', { ascending: true }),
-          supabase
-            .from('state_leaders')
-            .select('leader')
-            .eq('state', stateToUse)
-            .order('leader', { ascending: true }),
-        ]);
+        // Team Leaders: only show themselves as leader option
+        if (isTeamLeader && userLeader) {
+          setLeaders([userLeader]);
+          setLoadingLeaders(false);
+        }
+        const placesResult = await supabase
+          .from('state_places')
+          .select('place')
+          .eq('state', stateToUse)
+          .order('place', { ascending: true });
 
         if (placesResult.data) {
           const uniquePlaces = Array.from(
@@ -458,17 +498,24 @@ function CampaignRulesPageContent() {
           setPlaces(uniquePlaces);
         }
 
-        if (leadersResult.data) {
-          const uniqueLeaders = Array.from(
-            new Set(leadersResult.data.map((item) => item.leader).filter(Boolean))
-          ).sort();
-          setLeaders(uniqueLeaders);
+        if (!isTeamLeader) {
+          const leadersResult = await supabase
+            .from('state_leaders')
+            .select('leader')
+            .eq('state', stateToUse)
+            .order('leader', { ascending: true });
+          if (leadersResult.data) {
+            const uniqueLeaders = Array.from(
+              new Set(leadersResult.data.map((item) => item.leader).filter(Boolean))
+            ).sort();
+            setLeaders(uniqueLeaders);
+          }
         }
       } catch (err) {
         console.error('Error loading places/leaders for edit:', err);
       } finally {
         setLoadingPlaces(false);
-        setLoadingLeaders(false);
+        if (!isTeamLeader) setLoadingLeaders(false);
       }
     }
     
@@ -477,11 +524,17 @@ function CampaignRulesPageContent() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (id: string, rule?: CampaignRule) => {
     if (!confirm('Are you sure you want to delete this campaign rule?')) {
       return;
     }
-
+    // Team Leaders can only delete their own rules
+    if (isTeamLeader && userLeader) {
+      if (!rule || rule.leader?.trim() !== userLeader.trim()) {
+        setError('You can only delete your own campaign rules.');
+        return;
+      }
+    }
     try {
       const { error } = await supabase.from('campaign_rules').delete().eq('id', id);
       if (error) throw error;
@@ -517,6 +570,11 @@ function CampaignRulesPageContent() {
   };
 
   const handleToggleActive = async (rule: CampaignRule) => {
+    // Team Leaders can only toggle their own rules
+    if (isTeamLeader && userLeader && rule.leader?.trim() !== userLeader.trim()) {
+      setError('You can only update your own campaign rules.');
+      return;
+    }
     try {
       const { error } = await supabase
         .from('campaign_rules')
@@ -679,19 +737,21 @@ function CampaignRulesPageContent() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label htmlFor="leader" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Leader *
+                  Leader * {isLeaderLocked && <span className="text-gray-500 font-normal">(you)</span>}
                 </label>
                 <select
                   id="leader"
                   required
                   value={formState.leader}
                   onChange={(e) => setFormState({ ...formState, leader: e.target.value })}
-                  disabled={!formState.state || loadingLeaders}
+                  disabled={isLeaderLocked || !formState.state || loadingLeaders}
                   className="mt-1 block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed dark:border-gray-500 dark:bg-gray-900 dark:text-white dark:disabled:bg-gray-700"
                 >
                   <option value="">
                     {!formState.state
                       ? 'Select a state first'
+                      : isLeaderLocked
+                      ? userLeader ?? 'You'
                       : loadingLeaders
                       ? 'Loading leaders...'
                       : leaders.length === 0
@@ -1088,7 +1148,7 @@ function CampaignRulesPageContent() {
                           {rule.is_active ? 'Deactivate' : 'Activate'}
                         </button>
                         <button
-                          onClick={() => handleDelete(rule.id)}
+                          onClick={() => handleDelete(rule.id, rule)}
                           className="rounded-md bg-red-100 px-3 py-1 text-base font-bold text-red-700 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-300 dark:hover:bg-red-900/50 border-2 border-gray-800 dark:border-gray-600"
                         >
                           Delete
