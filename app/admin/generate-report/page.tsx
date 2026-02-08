@@ -213,18 +213,7 @@ export default function GenerateReportPage() {
       setEditingCell(null);
       await new Promise(resolve => setTimeout(resolve, 350));
 
-      const escapeHtml = (s: string) =>
-        String(s)
-          .replace(/&/g, '&amp;')
-          .replace(/</g, '&lt;')
-          .replace(/>/g, '&gt;')
-          .replace(/"/g, '&quot;');
-
-      const chunks: ReportRow[][] = [];
-      for (let i = 0; i < reportData.length; i += LINES_PER_JPEG) {
-        chunks.push(reportData.slice(i, i + LINES_PER_JPEG));
-      }
-
+      const chunkCount = Math.ceil(reportData.length / LINES_PER_JPEG);
       const captureOptions = {
         scale: 2,
         backgroundColor: '#ffffff',
@@ -244,68 +233,32 @@ export default function GenerateReportPage() {
             Array.from(el.children).forEach(child => forceSafeColors(child as HTMLElement));
           };
           forceSafeColors(clonedElement);
+          clonedElement.querySelectorAll('.report-actions-header, .report-actions-cell').forEach((el) => el.remove());
         },
       };
 
       const zip = new JSZip();
 
-      for (let partIndex = 0; partIndex < chunks.length; partIndex++) {
-        const chunkRows = chunks[partIndex];
-        const rowsHtml = chunkRows
-          .map(
-            (row) =>
-              `<tr>
-                <td style="border:2px solid #000;color:#000;font-size:1.25rem;vertical-align:top;padding-top:0.25rem;padding-bottom:0.25rem;padding-left:0.5rem;padding-right:0.5rem;box-sizing:border-box;line-height:1.25;">${escapeHtml(getCellDisplay(row, 'dateLocation'))}</td>
-                <td style="border:2px solid #000;color:#000;font-size:1.25rem;vertical-align:top;padding-top:0.25rem;padding-bottom:0.25rem;padding-left:0.5rem;padding-right:0.5rem;box-sizing:border-box;line-height:1.25;">${escapeHtml(getCellDisplay(row, 'fpAndSp'))}</td>
-                <td style="border:2px solid #000;color:#000;font-size:1.25rem;vertical-align:top;padding-top:0.25rem;padding-bottom:0.25rem;padding-left:0.5rem;padding-right:0.5rem;box-sizing:border-box;line-height:1.25;">${escapeHtml(getCellDisplay(row, 'fpOnly'))}</td>
-                <td style="border:2px solid #000;color:#000;font-size:1.25rem;vertical-align:top;padding-top:0.25rem;padding-bottom:0.25rem;padding-left:0.5rem;padding-right:0.5rem;box-sizing:border-box;line-height:1.25;">${escapeHtml(getCellDisplay(row, 'pp'))}</td>
-              </tr>`
-          )
-          .join('');
+      for (let partIndex = 0; partIndex < chunkCount; partIndex++) {
+        const clone = reportRef.current.cloneNode(true) as HTMLElement;
+        const tbody = clone.querySelector('tbody');
+        if (tbody) {
+          const rows = Array.from(tbody.querySelectorAll('tr'));
+          rows.forEach((tr, i) => {
+            if (i < partIndex * LINES_PER_JPEG || i >= (partIndex + 1) * LINES_PER_JPEG) {
+              tr.remove();
+            }
+          });
+        }
+        clone.querySelectorAll('.report-actions-header, .report-actions-cell').forEach((el) => el.remove());
 
-        const chunkHtml = `
-          <div class="report-chunk-root" style="width:1200px;min-width:1200px;font-family:Arial,sans-serif;background:#fff;color:#000;padding:0.5rem 2rem 2rem 2rem;box-sizing:border-box;">
-            <style>
-              .report-chunk-root table { border-collapse: collapse; border: 2px solid #000; }
-              .report-chunk-root th, .report-chunk-root td {
-                vertical-align: top !important;
-                padding-top: 0.25rem !important;
-                padding-bottom: 0.25rem !important;
-                padding-left: 0.5rem !important;
-                padding-right: 0.5rem !important;
-                box-sizing: border-box !important;
-                line-height: 1.25 !important;
-              }
-            </style>
-            <div style="text-align:center;margin-bottom:0.25rem;">
-              <div style="color:#000;font-size:1.125rem;font-weight:bold;font-style:italic;">
-                INDEX: <span style="margin-left:1rem;">SP</span> - Salvation Prayer
-                <span style="margin-left:1.5rem;">FP</span> – Full Presentation
-                <span style="margin-left:1.5rem;">PP</span> - Partial Presentation
-              </div>
-            </div>
-            <table style="width:100%;border:2px solid #000;">
-              <thead>
-                <tr>
-                  <th style="width:20%;border:2px solid #000;color:#000;font-weight:bold;text-align:center;background:#fff;vertical-align:top;padding-top:0.25rem;padding-bottom:0.25rem;padding-left:0.5rem;padding-right:0.5rem;box-sizing:border-box;line-height:1.25;">Date & Location</th>
-                  <th style="width:27%;border:2px solid #000;color:#000;font-weight:bold;text-align:center;background:#fff;vertical-align:top;padding-top:0.25rem;padding-bottom:0.25rem;padding-left:0.5rem;padding-right:0.5rem;box-sizing:border-box;line-height:1.25;">FP & SP</th>
-                  <th style="width:27%;border:2px solid #000;color:#000;font-weight:bold;text-align:center;background:#fff;vertical-align:top;padding-top:0.25rem;padding-bottom:0.25rem;padding-left:0.5rem;padding-right:0.5rem;box-sizing:border-box;line-height:1.25;">FP only</th>
-                  <th style="width:26%;border:2px solid #000;color:#000;font-weight:bold;text-align:center;background:#fff;vertical-align:top;padding-top:0.25rem;padding-bottom:0.25rem;padding-left:0.5rem;padding-right:0.5rem;box-sizing:border-box;line-height:1.25;">PP</th>
-                </tr>
-              </thead>
-              <tbody>${rowsHtml}</tbody>
-            </table>
-          </div>`;
+        clone.style.position = 'absolute';
+        clone.style.left = '-9999px';
+        clone.style.top = '0';
+        document.body.appendChild(clone);
 
-        const tempDiv = document.createElement('div');
-        tempDiv.style.position = 'absolute';
-        tempDiv.style.left = '-9999px';
-        tempDiv.style.top = '0';
-        tempDiv.innerHTML = chunkHtml;
-        document.body.appendChild(tempDiv);
-
-        const canvas = await html2canvas(tempDiv.firstElementChild as HTMLElement, captureOptions);
-        document.body.removeChild(tempDiv);
+        const canvas = await html2canvas(clone, captureOptions);
+        document.body.removeChild(clone);
 
         const blob = await new Promise<Blob | null>((resolve) => {
           canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.95);
@@ -313,7 +266,7 @@ export default function GenerateReportPage() {
         if (!blob) throw new Error('Failed to generate image');
 
         const arrayBuffer = await blob.arrayBuffer();
-        const partSuffix = chunks.length > 1 ? `_part${partIndex + 1}` : '';
+        const partSuffix = chunkCount > 1 ? `_part${partIndex + 1}` : '';
         zip.file(`Campaign_Results_Report_${startDate}_to_${endDate}${partSuffix}.jpeg`, arrayBuffer);
       }
 
