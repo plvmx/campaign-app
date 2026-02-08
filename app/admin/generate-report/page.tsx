@@ -8,6 +8,7 @@ import { hasPermission, Permission } from '@/lib/permissions';
 import { getUserAdminStatusAndMobile } from '@/lib/campaignFilter';
 import { supabase } from '@/lib/supabaseClient';
 import html2canvas from 'html2canvas';
+import JSZip from 'jszip';
 import { useCampaignDates } from '@/contexts/CampaignDatesContext';
 import { formatDateForDb } from '@/lib/campaignDates';
 
@@ -246,6 +247,8 @@ export default function GenerateReportPage() {
         },
       };
 
+      const zip = new JSZip();
+
       for (let partIndex = 0; partIndex < chunks.length; partIndex++) {
         const chunkRows = chunks[partIndex];
         const rowsHtml = chunkRows
@@ -261,8 +264,8 @@ export default function GenerateReportPage() {
           .join('');
 
         const chunkHtml = `
-          <div class="min-w-[1200px] bg-white p-8" style="width:1200px;font-family:Arial,sans-serif;background:#fff;color:#000;">
-            <div class="mb-4 text-center">
+          <div class="min-w-[1200px] bg-white px-8 pb-8 pt-2" style="width:1200px;font-family:Arial,sans-serif;background:#fff;color:#000;padding:0.5rem 2rem 2rem 2rem;">
+            <div class="mb-2 text-center" style="margin-bottom:0.5rem;">
               <div class="text-lg font-bold italic" style="color:#000;">
                 INDEX: <span class="ml-4">SP</span> - Salvation Prayer
                 <span class="ml-6">FP</span> – Full Presentation
@@ -297,16 +300,20 @@ export default function GenerateReportPage() {
         });
         if (!blob) throw new Error('Failed to generate image');
 
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
+        const arrayBuffer = await blob.arrayBuffer();
         const partSuffix = chunks.length > 1 ? `_part${partIndex + 1}` : '';
-        link.href = url;
-        link.download = `Campaign_Results_Report_${startDate}_to_${endDate}${partSuffix}.jpeg`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
+        zip.file(`Campaign_Results_Report_${startDate}_to_${endDate}${partSuffix}.jpeg`, arrayBuffer);
       }
+
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      const url = URL.createObjectURL(zipBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `Campaign_Results_Report_${startDate}_to_${endDate}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
     } catch (err: any) {
       setError(err.message || 'Error downloading report');
     } finally {
@@ -536,14 +543,14 @@ export default function GenerateReportPage() {
             <div className="overflow-x-auto">
               <div 
                 ref={reportRef}
-                className="min-w-[1200px] bg-white p-8"
+                className="min-w-[1200px] bg-white px-8 pb-8 pt-2"
                 style={{ 
                   width: '1200px',
                   fontFamily: 'Arial, sans-serif'
                 }}
               >
                 {/* Report Header */}
-                <div className="mb-4 text-center">
+                <div className="mb-2 text-center">
                   <div className="text-lg font-bold italic" style={{ color: 'black' }}>
                     INDEX: <span className="ml-4">SP</span> - Salvation Prayer
                     <span className="ml-6">FP</span> – Full Presentation
