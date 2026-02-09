@@ -11,6 +11,7 @@ import html2canvas from 'html2canvas';
 import JSZip from 'jszip';
 import { useCampaignDates } from '@/contexts/CampaignDatesContext';
 import { formatDateForDb } from '@/lib/campaignDates';
+import { applyReportCloneStyles } from '@/lib/reportCloneStyles';
 
 interface Campaign {
   id: string;
@@ -234,6 +235,7 @@ export default function GenerateReportPage() {
           };
           forceSafeColors(clonedElement);
           clonedElement.querySelectorAll('.report-actions-header, .report-actions-cell').forEach((el) => el.remove());
+          applyReportCloneStyles(clonedElement);
         },
       };
 
