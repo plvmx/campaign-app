@@ -254,6 +254,11 @@ export default function GenerateReportPage() {
         }
         clone.querySelectorAll('.report-actions-header, .report-actions-cell').forEach((el) => el.remove());
 
+        // Apply inline styles to our clone before capture so they are present on the
+        // node html2canvas reads/clones (critical for production where iframe clone
+        // may not inherit stylesheets).
+        applyReportCloneStyles(clone);
+
         clone.style.position = 'absolute';
         clone.style.left = '-9999px';
         clone.style.top = '0';
@@ -531,19 +536,19 @@ export default function GenerateReportPage() {
                     <tr>
                       <th 
                         className="border-2 border-black bg-white px-2 py-1 text-center"
-                        style={{ width: '20%', borderColor: 'black', color: 'black', fontWeight: 'bold', paddingTop: '0.25rem', paddingBottom: '0.25rem' }}
+                        style={{ width: '20%', borderColor: 'black', color: 'black', fontWeight: 'bold', paddingTop: '0.25rem', paddingBottom: '0.25rem', verticalAlign: 'top', lineHeight: 1.25, boxSizing: 'border-box' }}
                       >
                         Date & Location
                       </th>
                       <th 
                         className="border-2 border-black bg-white px-2 py-1 text-center"
-                        style={{ width: '27%', borderColor: 'black', color: 'black', fontWeight: 'bold', paddingTop: '0.25rem', paddingBottom: '0.25rem' }}
+                        style={{ width: '27%', borderColor: 'black', color: 'black', fontWeight: 'bold', paddingTop: '0.25rem', paddingBottom: '0.25rem', verticalAlign: 'top', lineHeight: 1.25, boxSizing: 'border-box' }}
                       >
                         FP & SP
                       </th>
                       <th 
                         className="border-2 border-black bg-white px-2 py-1 text-center"
-                        style={{ width: '27%', borderColor: 'black', color: 'black', fontWeight: 'bold', paddingTop: '0.25rem', paddingBottom: '0.25rem' }}
+                        style={{ width: '27%', borderColor: 'black', color: 'black', fontWeight: 'bold', paddingTop: '0.25rem', paddingBottom: '0.25rem', verticalAlign: 'top', lineHeight: 1.25, boxSizing: 'border-box' }}
                       >
                         FP only
                       </th>
@@ -555,14 +560,17 @@ export default function GenerateReportPage() {
                           color: 'black',
                           fontWeight: 'bold',
                           paddingTop: '0.25rem',
-                          paddingBottom: '0.25rem'
+                          paddingBottom: '0.25rem',
+                          verticalAlign: 'top',
+                          lineHeight: 1.25,
+                          boxSizing: 'border-box'
                         }}
                       >
                         PP
                       </th>
                       <th 
                         className="report-actions-header border-2 border-black bg-gray-100 px-2 py-1 text-center"
-                        style={{ width: '80px', borderColor: 'black', color: 'black', fontWeight: 'bold', paddingTop: '0.25rem', paddingBottom: '0.25rem' }}
+                        style={{ width: '80px', borderColor: 'black', color: 'black', fontWeight: 'bold', paddingTop: '0.25rem', paddingBottom: '0.25rem', verticalAlign: 'top', lineHeight: 1.25, boxSizing: 'border-box' }}
                       >
                        
                       </th>
@@ -581,7 +589,7 @@ export default function GenerateReportPage() {
                               <td
                                 key={field}
                                 className="border-2 border-black px-2 py-1 cursor-text text-xl"
-                                style={{ borderColor: 'black', verticalAlign: 'top', color: 'black', fontSize: '1.25rem', paddingTop: '0.25rem', paddingBottom: '0.25rem' }}
+                                style={{ borderColor: 'black', verticalAlign: 'top', color: 'black', fontSize: '1.25rem', paddingTop: '0.25rem', paddingBottom: '0.25rem', lineHeight: 1.25, boxSizing: 'border-box' }}
                                 onClick={() => !isEditing && setEditingCell({ rowIndex: index, field })}
                               >
                                 {isEditing ? (
@@ -618,7 +626,7 @@ export default function GenerateReportPage() {
                               </td>
                             );
                           })}
-                          <td className="report-actions-cell border-2 border-black px-2 py-1 align-top bg-gray-50" style={{ borderColor: 'black', width: '80px', paddingTop: '0.25rem', paddingBottom: '0.25rem' }}>
+                          <td className="report-actions-cell border-2 border-black px-2 py-1 align-top bg-gray-50" style={{ borderColor: 'black', width: '80px', paddingTop: '0.25rem', paddingBottom: '0.25rem', lineHeight: 1.25, boxSizing: 'border-box' }}>
                             <button
                               type="button"
                               onClick={e => { e.stopPropagation(); insertRowBelow(index); }}

@@ -1,7 +1,8 @@
 /**
- * Applies inline styles to a cloned report element so that when html2canvas
- * captures it (in an iframe where stylesheets may not apply), the JPEG
- * matches the preview. Call this from html2canvas's onclone callback.
+ * Applies inline styles to a report element (or its clone) so that when
+ * html2canvas captures it, the JPEG matches the preview. Call this:
+ * 1) on the clone before passing it to html2canvas (so the node has inline styles),
+ * 2) inside html2canvas's onclone (so the iframe clone has them if copy differs).
  */
 export function applyReportCloneStyles(clonedElement: HTMLElement): void {
   clonedElement.querySelectorAll('th, td').forEach((node) => {
