@@ -1290,9 +1290,9 @@ function AppPageContent() {
             {showMoreInfo && (
               <div className="mt-2 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md text-sm text-gray-700 dark:text-gray-300">
                 {adminStatus === 'SR' 
-                  ? 'Please check all campaign details carefully. If any details are not correct use the Edit, Delete and Create buttons to make any changes necessary. When you have finished please confirm by clicking on the "This Campaign is Correct" checkbox'
+                  ? 'Please check all campaign details carefully. If any details are not correct use the Edit, Delete and Create buttons to make any changes necessary. When viewing Future campaigns, when you have finished please confirm by clicking on the "This Campaign is Correct" checkbox.'
                   : adminStatus !== 'AD'
-                  ? 'As a team leader you can perform two main functions here. Firstly you can record results (names of persons that you and your team have presented the gospel to) by clicking on the "Record Results" button. Secondly you can check and confirm that all details relating to your upcoming campaigns are correct. If any details are not correct use the Edit, Delete and Create buttons to make any changes necessary. When you have finished please confirm by clicking on the "This Campaign is Correct" checkbox.'
+                  ? 'As a team leader you can perform two main functions here. Firstly you can record results (names of persons that you and your team have presented the gospel to) by clicking on the "Record Results" button. Secondly you can check and confirm that all details relating to your upcoming campaigns are correct. If any details are not correct use the Edit, Delete and Create buttons to make any changes necessary. When viewing Future campaigns, when you have finished please confirm by clicking on the "This Campaign is Correct" checkbox.'
                   : 'More info to come soon'
                 }
               </div>
@@ -1541,22 +1541,6 @@ function AppPageContent() {
                 </select>
               </div>
               
-              <div className="flex gap-6 justify-center">
-                {/* TL OK checkbox: shown for all users */}
-                <div className="flex items-center">
-                  <input
-                    id="tl_ok"
-                    type="checkbox"
-                    checked={formState.tl_ok}
-                    onChange={(e) => setFormState({ ...formState, tl_ok: e.target.checked })}
-                    className="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  <label htmlFor="tl_ok" className="ml-2 text-base font-semibold text-gray-700 dark:text-gray-300">
-                    This Campaign is Correct
-                  </label>
-                </div>
-              </div>
-
               <div className="flex gap-2">
                 <button
                   type="submit"
@@ -1797,22 +1781,6 @@ function AppPageContent() {
                                       </select>
                                     </div>
                                   </div>
-                                  
-                                  {/* This Campaign is Correct checkbox: shown for all campaigns */}
-                                  <div className="flex gap-6 justify-center pt-2">
-                                    <div className="flex items-center">
-                                      <input
-                                        id={`tl_ok_${campaign.id}`}
-                                        type="checkbox"
-                                        checked={editData.tl_ok}
-                                        onChange={(e) => updateInlineEditField(campaign.id, 'tl_ok', e.target.checked)}
-                                        className="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                      />
-                                      <label htmlFor={`tl_ok_${campaign.id}`} className="ml-2 text-sm font-semibold text-gray-700 dark:text-gray-300">
-                                        This Campaign is Correct
-                                      </label>
-                                    </div>
-                                  </div>
 
                                   <div className="flex gap-2 pt-2">
                                     <button
@@ -1878,18 +1846,20 @@ function AppPageContent() {
                                         </>
                                       ) : null}
                                     </div>
-                                    {/* This Campaign is Correct checkbox: shown for all campaigns */}
-                                    <div className="flex gap-6 justify-center text-sm sm:text-base mt-2 mb-2">
-                                      <div className={`flex items-center ${stateColor.text} font-semibold cursor-pointer`} onClick={() => handleToggleCheckbox(campaign.id, 'tl_ok', campaign.tl_ok)}>
-                                        <input
-                                          type="checkbox"
-                                          checked={campaign.tl_ok}
-                                          onChange={() => {}}
-                                          className="h-5 w-5 rounded border-gray-300 mr-2 cursor-pointer"
-                                        />
-                                        <span>This Campaign is Correct</span>
+                                    {/* This Campaign is Correct checkbox: shown only for Future campaigns */}
+                                    {dateFilter === 'future' && (
+                                      <div className="flex gap-6 justify-center text-sm sm:text-base mt-2 mb-2">
+                                        <div className={`flex items-center ${stateColor.text} font-semibold cursor-pointer`} onClick={() => handleToggleCheckbox(campaign.id, 'tl_ok', campaign.tl_ok)}>
+                                          <input
+                                            type="checkbox"
+                                            checked={campaign.tl_ok}
+                                            onChange={() => {}}
+                                            className="h-5 w-5 rounded border-gray-300 mr-2 cursor-pointer"
+                                          />
+                                          <span>This Campaign is Correct</span>
+                                        </div>
                                       </div>
-                                    </div>
+                                    )}
                                   </div>
                                   <div className="flex flex-row gap-2 sm:ml-4 w-full sm:w-auto">
                                     {/* Show Record Results only if campaign date+time is in the past (same as Past tab) AND (admin OR own OR shared with me) */}

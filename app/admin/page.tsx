@@ -196,6 +196,7 @@ export default function AdminPage() {
               botj: campaign.botj,
               user_id: campaign.user_id,
               team_size: null,
+              tl_ok: false,
             };
           });
           if (mode !== 'either') copyCount += copiedForState.length;
