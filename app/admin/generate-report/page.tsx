@@ -7,11 +7,10 @@ import { getCurrentUser } from '@/lib/auth';
 import { hasPermission, Permission } from '@/lib/permissions';
 import { getUserAdminStatusAndMobile } from '@/lib/campaignFilter';
 import { supabase } from '@/lib/supabaseClient';
-import html2canvas from 'html2canvas';
 import JSZip from 'jszip';
 import { useCampaignDates } from '@/contexts/CampaignDatesContext';
 import { formatDateForDb } from '@/lib/campaignDates';
-import { applyReportCloneStyles } from '@/lib/reportCloneStyles';
+import { drawReportPage, canvasToJpegBlob } from '@/lib/reportCanvas';
 
 interface Campaign {
   id: string;
@@ -55,6 +54,7 @@ export default function GenerateReportPage() {
   const [endDate, setEndDate] = useState('');
   const [reportData, setReportData] = useState<ReportRow[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
   const [showReport, setShowReport] = useState(false);
   const [userState, setUserState] = useState<string | null>(null);
   const [adminStatus, setAdminStatus] = useState<string | null>(null);
@@ -207,71 +207,20 @@ export default function GenerateReportPage() {
   const LINES_PER_JPEG = 12;
 
   const downloadReport = async () => {
-    if (!reportRef.current || reportData.length === 0) return;
+    if (reportData.length === 0) return;
 
-    setIsGenerating(true);
+    setIsDownloading(true);
     try {
-      setEditingCell(null);
-      await new Promise(resolve => setTimeout(resolve, 350));
-
       const chunkCount = Math.ceil(reportData.length / LINES_PER_JPEG);
-      const captureOptions = {
-        scale: 2,
-        backgroundColor: '#ffffff',
-        logging: false,
-        useCORS: true,
-        onclone: (clonedDoc: Document, clonedElement: HTMLElement) => {
-          const docEl = clonedDoc.documentElement;
-          const body = clonedDoc.body;
-          docEl.style.backgroundColor = '#ffffff';
-          docEl.style.color = '#000000';
-          body.style.backgroundColor = '#ffffff';
-          body.style.color = '#000000';
-          const forceSafeColors = (el: HTMLElement) => {
-            el.style.setProperty('color', '#000000', 'important');
-            el.style.setProperty('background-color', '#ffffff', 'important');
-            el.style.setProperty('border-color', '#000000', 'important');
-            Array.from(el.children).forEach(child => forceSafeColors(child as HTMLElement));
-          };
-          forceSafeColors(clonedElement);
-          clonedElement.querySelectorAll('.report-actions-header, .report-actions-cell').forEach((el) => el.remove());
-          applyReportCloneStyles(clonedElement);
-        },
-      };
-
       const zip = new JSZip();
 
       for (let partIndex = 0; partIndex < chunkCount; partIndex++) {
-        const clone = reportRef.current.cloneNode(true) as HTMLElement;
-        const tbody = clone.querySelector('tbody');
-        if (tbody) {
-          const rows = Array.from(tbody.querySelectorAll('tr'));
-          rows.forEach((tr, i) => {
-            if (i < partIndex * LINES_PER_JPEG || i >= (partIndex + 1) * LINES_PER_JPEG) {
-              tr.remove();
-            }
-          });
-        }
-        clone.querySelectorAll('.report-actions-header, .report-actions-cell').forEach((el) => el.remove());
-
-        // Apply inline styles to our clone before capture so they are present on the
-        // node html2canvas reads/clones (critical for production where iframe clone
-        // may not inherit stylesheets).
-        applyReportCloneStyles(clone);
-
-        clone.style.position = 'absolute';
-        clone.style.left = '-9999px';
-        clone.style.top = '0';
-        document.body.appendChild(clone);
-
-        const canvas = await html2canvas(clone, captureOptions);
-        document.body.removeChild(clone);
-
-        const blob = await new Promise<Blob | null>((resolve) => {
-          canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.95);
-        });
-        if (!blob) throw new Error('Failed to generate image');
-
+        const chunk = reportData.slice(
+          partIndex * LINES_PER_JPEG,
+          (partIndex + 1) * LINES_PER_JPEG
+        );
+        const canvas = drawReportPage(chunk);
+        const blob = await canvasToJpegBlob(canvas);
         const arrayBuffer = await blob.arrayBuffer();
         const partSuffix = chunkCount > 1 ? `_part${partIndex + 1}` : '';
         zip.file(`Campaign_Results_Report_${startDate}_to_${endDate}${partSuffix}.jpeg`, arrayBuffer);
@@ -289,7 +238,7 @@ export default function GenerateReportPage() {
     } catch (err: any) {
       setError(err.message || 'Error downloading report');
     } finally {
-      setIsGenerating(false);
+      setIsDownloading(false);
     }
   };
 
@@ -479,7 +428,7 @@ export default function GenerateReportPage() {
             <button
               type="button"
               onClick={() => fetchReportData()}
-              disabled={isGenerating}
+              disabled={isGenerating || isDownloading}
               className="w-full rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:bg-gray-400 disabled:cursor-not-allowed border-2 border-gray-800 dark:border-gray-600"
             >
               {isGenerating ? 'Generating...' : 'Generate Report'}
@@ -489,10 +438,10 @@ export default function GenerateReportPage() {
               <div className="flex flex-col gap-2">
                 <button
                   onClick={downloadReport}
-                  disabled={isGenerating}
+                  disabled={isGenerating || isDownloading}
                   className="w-full rounded-md bg-green-600 px-4 py-2 text-base font-bold text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:bg-gray-400 disabled:cursor-not-allowed border-2 border-gray-800 dark:border-gray-600"
                 >
-                  {isGenerating ? 'Preparing Download...' : 'Download JPEG'}
+                  {isDownloading ? 'Preparing Download...' : 'Download JPEG'}
                 </button>
                 <button
                   type="button"
