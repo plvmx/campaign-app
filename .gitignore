@@ -30,6 +30,11 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
+# database backups (never commit)
+backup-*.sql.gz
+*.sql.gz
+!scripts/**/*.sql
+
 # env files (can opt-in for committing if needed)
 .env*
 
