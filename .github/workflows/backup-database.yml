@@ -1,5 +1,6 @@
 # Weekly Supabase database backup (Sunday morning).
-# Add repository secret: SUPABASE_DB_URL (Direct connection URI from Supabase Dashboard).
+# Add repository secret: SUPABASE_DB_URL = Session (pooler) connection URI from Supabase Connect panel.
+# Use Session, not Direct: GitHub runners have no IPv6; Direct is IPv6-only and fails with "Network unreachable".
 # Backups are kept as workflow artifacts (default 90 days on GitHub free tier).
 
 name: Weekly database backup

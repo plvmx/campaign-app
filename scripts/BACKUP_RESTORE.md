@@ -6,10 +6,11 @@ Weekly backups run automatically **every Sunday at 06:00 UTC** via GitHub Action
 
 ### 1. Add the database URL as a GitHub secret
 
-1. In **Supabase**: open your project, then click the **Connect** button at the top of the dashboard (next to the project name).  
-   You can also go to **Settings** (gear icon in the left sidebar) → **Database** to see connection options and reset the database password if needed.
-2. In the Connect panel, select **Direct connection** (not Session or Transaction pooler). Copy the **URI** and replace `[YOUR-PASSWORD]` with your database password. It looks like:
-   `postgresql://postgres:[YOUR-PASSWORD]@db.xxxxxxxxxxxx.supabase.co:5432/postgres`
+**Use the Session (pooler) connection, not Direct.** GitHub’s runners don’t support IPv6, and Supabase’s Direct connection is IPv6-only, so the backup would fail with “Network unreachable”. The Session pooler works over IPv4.
+
+1. In **Supabase**: open your project, then click the **Connect** button at the top of the dashboard.
+2. In the Connect panel, select **Session** (or “Session mode” / pooler), **not** Direct or Transaction. Copy the **URI** and replace `[YOUR-PASSWORD]` with your database password. It looks like:
+   `postgresql://postgres.xxxxxxxxxxxx:[YOUR-PASSWORD]@aws-0-us-east-1.pooler.supabase.com:5432/postgres`
 3. In **GitHub**: repo → **Settings** → **Secrets and variables** → **Actions**.
 4. **New repository secret**: name `SUPABASE_DB_URL`, value = the full URI (including your password).
 
@@ -27,8 +28,10 @@ Edit `.github/workflows/backup-database.yml` and change the cron expression:
 
 **From your machine** (requires PostgreSQL client tools, e.g. `brew install libpq` on macOS):
 
+Use the same Session pooler URI as in the GitHub secret, or the Direct URI if your network has IPv6:
+
 ```bash
-export SUPABASE_DB_URL='postgresql://postgres:YOUR_PASSWORD@db.xxxx.supabase.co:5432/postgres'
+export SUPABASE_DB_URL='postgresql://postgres.xxxx:PASSWORD@aws-0-REGION.pooler.supabase.com:5432/postgres'
 ./scripts/backup-database.sh
 # Writes backup-YYYY-MM-DD.sql.gz to current directory
 ```
