@@ -10,7 +10,6 @@ import { formatDateReadable, formatDateForDb } from '@/lib/campaignDates';
 import { supabase } from '@/lib/supabaseClient';
 import { isCampaignLoggingEnabled, setCampaignLoggingEnabled } from '@/lib/appSettings';
 import { CampaignRule, evaluateRules } from '@/lib/campaignRules';
-import { getLeadersNotSignedInSinceRefresh, type LeaderNotSignedIn } from '@/lib/weeklyRefresh';
 import { getAllStateRefreshSettings, DEFAULT_REFRESH_MODE, type RefreshMode } from '@/lib/stateRefreshSettings';
 
 export default function AdminPage() {
@@ -22,15 +21,9 @@ export default function AdminPage() {
   const [error, setError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshMessage, setRefreshMessage] = useState<string | null>(null);
-  const [isExporting, setIsExporting] = useState(false);
-  const [isImporting, setIsImporting] = useState(false);
-  const [importFile, setImportFile] = useState<File | null>(null);
   const [loggingEnabled, setLoggingEnabled] = useState<boolean>(true);
   const [isLoadingLoggingSetting, setIsLoadingLoggingSetting] = useState(true);
   const [isTogglingLogging, setIsTogglingLogging] = useState(false);
-  const [leadersNotSignedIn, setLeadersNotSignedIn] = useState<LeaderNotSignedIn[]>([]);
-  const [lastRefreshAt, setLastRefreshAt] = useState<Date | null>(null);
-  const [loadingNotSignedIn, setLoadingNotSignedIn] = useState(false);
 
   useEffect(() => {
     async function checkAuthAndPermissions() {
@@ -61,30 +54,6 @@ export default function AdminPage() {
     }
     checkAuthAndPermissions();
   }, [router]);
-
-  // Load leaders not signed in since last weekly refresh (for admin visibility)
-  useEffect(() => {
-    if (!hasAccess) return;
-    let cancelled = false;
-    setLoadingNotSignedIn(true);
-    getLeadersNotSignedInSinceRefresh()
-      .then(({ leaders, lastRefreshAt: at }) => {
-        if (!cancelled) {
-          setLeadersNotSignedIn(leaders);
-          setLastRefreshAt(at);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setLeadersNotSignedIn([]);
-          setLastRefreshAt(null);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingNotSignedIn(false);
-      });
-    return () => { cancelled = true; };
-  }, [hasAccess, refreshMessage]);
 
   const handleWeeklyRefresh = async () => {
     if (!dates || !user) return;
@@ -319,174 +288,6 @@ export default function AdminPage() {
     }
   };
 
-  const handleExportCampaigns = async () => {
-    setIsExporting(true);
-    setError(null);
-    setRefreshMessage(null);
-
-    try {
-      // Fetch all campaigns
-      const { data: campaigns, error: fetchError } = await supabase
-        .from('campaigns')
-        .select('*')
-        .order('date', { ascending: true });
-
-      if (fetchError) throw fetchError;
-
-      if (!campaigns || campaigns.length === 0) {
-        setRefreshMessage('No campaigns to export.');
-        return;
-      }
-
-      // Convert to CSV
-      const headers = ['id', 'date', 'state', 'place', 'time', 'leader', 'mobile', 'botj', 'team_size', 'user_id', 'created_at'];
-      const csvRows = [headers.join(',')];
-
-      campaigns.forEach(campaign => {
-        const row = headers.map(header => {
-          const value = campaign[header];
-          // Escape quotes and wrap in quotes if contains comma
-          if (value === null || value === undefined) return '';
-          const stringValue = String(value);
-          if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
-            return `"${stringValue.replace(/"/g, '""')}"`;
-          }
-          return stringValue;
-        });
-        csvRows.push(row.join(','));
-      });
-
-      const csvContent = csvRows.join('\n');
-      
-      // Create download
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      const timestamp = new Date().toISOString().split('T')[0];
-      link.href = url;
-      link.download = `campaigns_export_${timestamp}.csv`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-
-      setRefreshMessage(`Successfully exported ${campaigns.length} campaign(s) to CSV.`);
-    } catch (err: any) {
-      setError(err.message || 'Failed to export campaigns');
-    } finally {
-      setIsExporting(false);
-    }
-  };
-
-  const handleImportCampaigns = async () => {
-    if (!importFile) {
-      setError('Please select a CSV file to import');
-      return;
-    }
-
-    if (!confirm('WARNING: This will DELETE ALL existing campaigns and replace them with the campaigns from the CSV file. This action cannot be undone. Are you sure you want to continue?')) {
-      return;
-    }
-
-    setIsImporting(true);
-    setError(null);
-    setRefreshMessage(null);
-
-    try {
-      // Read the CSV file
-      const text = await importFile.text();
-      const lines = text.split('\n').filter(line => line.trim());
-
-      if (lines.length < 2) {
-        throw new Error('CSV file is empty or invalid');
-      }
-
-      // Parse CSV
-      const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
-      const campaigns: any[] = [];
-
-      for (let i = 1; i < lines.length; i++) {
-        const values = parseCSVLine(lines[i]);
-        const campaign: any = {};
-        
-        headers.forEach((header, index) => {
-          const value = values[index]?.trim();
-          if (value === '' || value === 'null' || value === 'undefined') {
-            campaign[header] = null;
-          } else if (header === 'team_size') {
-            campaign[header] = value ? parseInt(value, 10) : null;
-          } else {
-            campaign[header] = value;
-          }
-        });
-
-        // Validate required fields
-        if (campaign.date && campaign.state && campaign.place && campaign.time && campaign.leader) {
-          campaigns.push(campaign);
-        }
-      }
-
-      if (campaigns.length === 0) {
-        throw new Error('No valid campaigns found in CSV file');
-      }
-
-      // Delete all existing campaigns
-      const { error: deleteError } = await supabase
-        .from('campaigns')
-        .delete()
-        .gte('created_at', '1970-01-01'); // Delete all records (matches all timestamps)
-
-      if (deleteError) throw deleteError;
-
-      // Insert new campaigns
-      const { error: insertError } = await supabase
-        .from('campaigns')
-        .insert(campaigns);
-
-      if (insertError) throw insertError;
-
-      setRefreshMessage(`Successfully imported ${campaigns.length} campaign(s) from CSV. All previous campaigns have been removed.`);
-      setImportFile(null);
-      
-      // Reset file input
-      const fileInput = document.getElementById('csv-import-input') as HTMLInputElement;
-      if (fileInput) fileInput.value = '';
-    } catch (err: any) {
-      setError(err.message || 'Failed to import campaigns');
-    } finally {
-      setIsImporting(false);
-    }
-  };
-
-  // Helper function to parse CSV line handling quoted values
-  const parseCSVLine = (line: string): string[] => {
-    const result: string[] = [];
-    let current = '';
-    let inQuotes = false;
-
-    for (let i = 0; i < line.length; i++) {
-      const char = line[i];
-      const nextChar = line[i + 1];
-
-      if (char === '"') {
-        if (inQuotes && nextChar === '"') {
-          current += '"';
-          i++; // Skip next quote
-        } else {
-          inQuotes = !inQuotes;
-        }
-      } else if (char === ',' && !inQuotes) {
-        result.push(current);
-        current = '';
-      } else {
-        current += char;
-      }
-    }
-
-    result.push(current); // Add last field
-    return result;
-  };
-
   const handleToggleLogging = async () => {
     setIsTogglingLogging(true);
     setError(null);
@@ -603,58 +404,6 @@ export default function AdminPage() {
             </button>
           </div>
 
-          {/* Leaders not signed in since refresh */}
-          <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-              Leaders not signed in since refresh
-            </h2>
-            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-              Leaders who have not signed in since the last Weekly Refresh (admins and state reporters excluded). No refresh has been run yet if no date is shown.
-            </p>
-            {loadingNotSignedIn ? (
-              <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">Loading…</p>
-            ) : (
-              (() => {
-                const filtered = leadersNotSignedIn.filter((row) => row.admin !== 'AD' && row.admin !== 'SR');
-                return (
-                  <div className="mt-4 space-y-2">
-                    {lastRefreshAt && (
-                      <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                        Last refresh: {lastRefreshAt.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
-                      </p>
-                    )}
-                    {filtered.length === 0 ? (
-                      <p className="text-sm text-gray-600 dark:text-gray-400">
-                        {lastRefreshAt ? 'All leaders have signed in since the last refresh (excluding admins and state reporters).' : 'No leaders, or run a Weekly Refresh first.'}
-                      </p>
-                    ) : (
-                      <>
-                        <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                          {filtered.length} leader{filtered.length !== 1 ? 's' : ''} not signed in since refresh
-                        </p>
-                        <ul className="max-h-48 overflow-y-auto rounded border border-gray-300 dark:border-gray-600 divide-y divide-gray-200 dark:divide-gray-600 text-sm">
-                          {filtered.map((row) => (
-                            <li key={row.id} className="px-3 py-2 flex justify-between items-center gap-2 text-gray-800 dark:text-gray-200">
-                              <span className="font-medium truncate">{row.leader}</span>
-                              <span className="text-right text-gray-500 dark:text-gray-400 shrink-0">{row.mobile ?? '—'}</span>
-                            </li>
-                          ))}
-                        </ul>
-                        <button
-                          type="button"
-                          onClick={() => router.push('/admin/state-leaders')}
-                          className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
-                        >
-                          Manage State Leaders →
-                        </button>
-                      </>
-                    )}
-                  </div>
-                );
-              })()
-            )}
-          </div>
-
           {/* Campaign Rules Management */}
           <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
@@ -717,49 +466,6 @@ export default function AdminPage() {
             >
               View Logs
             </button>
-          </div>
-
-          {/* Export Campaigns */}
-          <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-              Export Campaigns
-            </h2>
-            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-              Download all campaign records as a CSV file for backup or analysis.
-            </p>
-            <button
-              onClick={handleExportCampaigns}
-              disabled={isExporting}
-              className="mt-4 rounded-md bg-green-600 px-4 py-2 text-base font-bold text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:bg-gray-400 disabled:cursor-not-allowed border-2 border-gray-800 dark:border-gray-600"
-            >
-              {isExporting ? 'Exporting...' : 'Export Campaigns to CSV'}
-            </button>
-          </div>
-
-          {/* Import Campaigns */}
-          <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-              Import Campaigns
-            </h2>
-            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-              Replace all existing campaigns with campaigns from a CSV file. <strong className="text-red-600 dark:text-red-400">Warning: This will delete all current campaigns!</strong>
-            </p>
-            <div className="mt-4 space-y-3">
-              <input
-                id="csv-import-input"
-                type="file"
-                accept=".csv"
-                onChange={(e) => setImportFile(e.target.files?.[0] || null)}
-                className="block w-full text-sm text-gray-900 border border-gray-300 rounded-md cursor-pointer bg-gray-50 focus:outline-none dark:text-gray-400 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400"
-              />
-              <button
-                onClick={handleImportCampaigns}
-                disabled={isImporting || !importFile}
-                className="w-full rounded-md bg-red-600 px-4 py-2 text-base font-bold text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:bg-gray-400 disabled:cursor-not-allowed border-2 border-gray-800 dark:border-gray-600"
-              >
-                {isImporting ? 'Importing...' : 'Import Campaigns from CSV'}
-              </button>
-            </div>
           </div>
 
           <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
