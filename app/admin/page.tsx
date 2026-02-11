@@ -166,6 +166,7 @@ export default function AdminPage() {
               user_id: campaign.user_id,
               team_size: null,
               tl_ok: false,
+              source: 'CFP',
             };
           });
           if (mode !== 'either') copyCount += copiedForState.length;
@@ -184,6 +185,7 @@ export default function AdminPage() {
             botj: campaign.botj,
             user_id: user.id,
             team_size: null,
+            source: 'RUL',
           }));
           rulesCount += generatedForState.length;
           rulesUsedInRefresh.push(...stateRules);

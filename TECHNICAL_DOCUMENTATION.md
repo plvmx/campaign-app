@@ -852,6 +852,7 @@ Primary table storing campaign records.
 - `sr_ok` (BOOLEAN, default false)
 - `user_id` (UUID, FK to auth.users)
 - `created_at` (TIMESTAMP)
+- `source` (TEXT, nullable) – Origin: `MAN` = manual, `CFP` = copied from past week, `RUL` = created by campaign rule
 
 **Indexes**:
 - `idx_campaigns_mobile_leader` on (mobile, leader)

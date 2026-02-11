@@ -69,6 +69,7 @@ export default function CapturePage() {
         botj: data.botj || 'No',
         user_id: user.id,
         created_at: new Date().toISOString(),
+        source: 'MAN',
       };
 
       const { data: insertedData, error } = await supabase

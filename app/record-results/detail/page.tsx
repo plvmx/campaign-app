@@ -297,6 +297,7 @@ function RecordResultsDetailPageContent() {
           mobile: userMobileAndLeader?.mobile || null,
           botj: 'No',
           user_id: userId,
+          source: 'MAN',
         },
       ])
       .select('id')

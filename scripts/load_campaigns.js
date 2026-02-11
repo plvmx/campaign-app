@@ -246,6 +246,7 @@ async function loadCampaigns() {
         leader: leader.trim(),
         mobile: cleanMobile,
         botj: botjValue,
+        source: 'MAN',
         // Note: user_id will be null for imported campaigns
         // You may want to set a default system user_id if needed
       });

@@ -29,6 +29,7 @@ interface Campaign {
   tl_ok: boolean;
   sr_ok: boolean;
   created_at: string;
+  source?: string | null;
 }
 
 function AppPageContent() {
@@ -844,6 +845,7 @@ function AppPageContent() {
         sr_ok: formState.sr_ok,
         user_id: user.id,
         created_at: new Date().toISOString(),
+        source: 'MAN',
       };
       
       // Create new campaign
@@ -1845,6 +1847,11 @@ function AppPageContent() {
                                           <span className="font-normal">{campaign.mobile}</span>
                                         </>
                                       ) : null}
+                                      {isAdmin && campaign.source && (
+                                        <span className="ml-2 text-xs font-normal opacity-75" title={campaign.source === 'MAN' ? 'Manual' : campaign.source === 'CFP' ? 'Copied from past week' : campaign.source === 'RUL' ? 'Created by rule' : campaign.source}>
+                                          ({campaign.source})
+                                        </span>
+                                      )}
                                     </div>
                                     {/* This Campaign is Correct checkbox: shown only for Future campaigns */}
                                     {dateFilter === 'future' && (

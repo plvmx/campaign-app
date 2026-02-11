@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import MobileLayout from '@/components/MobileLayout';
 import { getCurrentUser } from '@/lib/auth';
+import { hasPermission, Permission } from '@/lib/permissions';
 import { supabase } from '@/lib/supabaseClient';
 import { calculateCampaignDates, formatDateForDb as formatDateForDbLib } from '@/lib/campaignDates';
 import {
@@ -25,6 +26,7 @@ interface Campaign {
   botj: boolean | string | number | null;
   tl_ok: boolean;
   sr_ok: boolean;
+  source?: string | null;
 }
 
 interface DateBlock {
@@ -60,6 +62,7 @@ export default function CampaignListPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
   const [hasAccess, setHasAccess] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dateBlocks, setDateBlocks] = useState<DateBlock[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(false);
@@ -73,6 +76,8 @@ export default function CampaignListPage() {
           return;
         }
         setHasAccess(true);
+        const admin = await hasPermission(Permission.ADMIN_ACCESS);
+        setIsAdmin(admin);
       } catch (err: any) {
         setError(err?.message ?? 'Access denied');
       } finally {
@@ -230,10 +235,15 @@ export default function CampaignListPage() {
                   >
                     {block.campaigns.map((campaign) => {
                       const cols = formatCampaignColumns(campaign);
+                      const showSource = isAdmin && campaign.source;
                       return (
                         <div
                           key={campaign.id}
-                          className="grid leading-relaxed grid-cols-[13ch_10ch_8ch_12ch] gap-x-1 font-bold sm:gap-x-2 lg:grid-cols-[2fr_1fr_1fr_2fr] lg:gap-x-6"
+                          className={`grid leading-relaxed gap-x-1 font-bold sm:gap-x-2 ${
+                            showSource
+                              ? 'grid-cols-[13ch_10ch_8ch_12ch_5ch] lg:grid-cols-[2fr_1fr_1fr_2fr_5ch]'
+                              : 'grid-cols-[13ch_10ch_8ch_12ch] lg:grid-cols-[2fr_1fr_1fr_2fr]'
+                          } lg:gap-x-6`}
                           style={{ color: getSlideStateColor(campaign.state) }}
                         >
                           <span className="min-w-0 truncate" title={cols.place.trim()}>
@@ -244,6 +254,22 @@ export default function CampaignListPage() {
                             {cols.leader}
                           </span>
                           <span>{cols.mobile}</span>
+                          {showSource && (
+                            <span
+                              className="text-xs opacity-75"
+                              title={
+                                campaign.source === 'MAN'
+                                  ? 'Manual'
+                                  : campaign.source === 'CFP'
+                                    ? 'Copied from past week'
+                                    : campaign.source === 'RUL'
+                                      ? 'Created by rule'
+                                      : campaign.source ?? ''
+                              }
+                            >
+                              {campaign.source}
+                            </span>
+                          )}
                         </div>
                       );
                     })}
