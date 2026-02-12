@@ -7,6 +7,8 @@ import { getCurrentUser } from '@/lib/auth';
 import { hasPermission, Permission } from '@/lib/permissions';
 import { supabase } from '@/lib/supabaseClient';
 import { getStateColor } from '@/lib/stateColors';
+import { AUSTRALIAN_STATES } from '@/lib/constants';
+import { getErrorMessage } from '@/lib/errorUtils';
 
 interface StateLeader {
   id: string;
@@ -16,8 +18,6 @@ interface StateLeader {
   admin: string | null;
   created_at: string;
 }
-
-const AUSTRALIAN_STATES = ['ACT', 'NSW', 'QLD', 'SA', 'TAS', 'VIC', 'WA', 'NT'];
 
 export default function StateLeadersPage() {
   const router = useRouter();
@@ -49,8 +49,8 @@ export default function StateLeadersPage() {
         }
         setHasAccess(true);
         await fetchStateLeaders();
-      } catch (err: any) {
-        setError(err.message || 'Access denied');
+      } catch (err: unknown) {
+        setError(getErrorMessage(err, 'Access denied'));
       } finally {
         setIsLoading(false);
       }
@@ -70,8 +70,8 @@ export default function StateLeadersPage() {
       
       if (error) throw error;
       setStateLeaders(data || []);
-    } catch (err: any) {
-      setError(err.message || 'Failed to fetch state leaders');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to fetch state leaders'));
     }
   };
 
@@ -130,8 +130,8 @@ export default function StateLeadersPage() {
       setFormState({ state: '', leader: '', mobile: '', admin: '' });
       setEditingId(null);
       await fetchStateLeaders();
-    } catch (err: any) {
-      setError(err.message || 'Failed to save state leader');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to save state leader'));
     } finally {
       setIsSubmitting(false);
     }
@@ -161,8 +161,8 @@ export default function StateLeadersPage() {
       if (error) throw error;
       setSuccess('State leader deleted successfully');
       await fetchStateLeaders();
-    } catch (err: any) {
-      setError(err.message || 'Failed to delete state leader');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to delete state leader'));
     }
   };
 

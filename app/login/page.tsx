@@ -4,6 +4,7 @@ import { useState, FormEvent, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { getSession, signInWithMobileAndName } from '@/lib/auth';
+import { getErrorMessage } from '@/lib/errorUtils';
 
 const STORAGE_KEYS = { mobile: 'login_mobile', firstName: 'login_firstName' };
 
@@ -73,8 +74,8 @@ export default function LoginPage() {
 
       // Redirect to app after successful authentication
       router.push('/app');
-    } catch (err: any) {
-      setError(err.message || 'Failed to authenticate. Please check your mobile number and first name.');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to authenticate. Please check your mobile number and first name.'));
     } finally {
       setIsLoading(false);
     }

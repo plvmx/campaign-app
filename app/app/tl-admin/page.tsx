@@ -8,6 +8,7 @@ import { getUserAdminStatusAndMobile } from '@/lib/campaignFilter';
 import { getUserProfile } from '@/lib/userProfile';
 import { useCampaignDates } from '@/contexts/CampaignDatesContext';
 import { formatDateReadable } from '@/lib/campaignDates';
+import { getErrorMessage } from '@/lib/errorUtils';
 
 export default function TLAdminPage() {
   const router = useRouter();
@@ -39,8 +40,8 @@ export default function TLAdminPage() {
         }
         setUserState(stateToUse);
         setHasAccess(true);
-      } catch (err: any) {
-        setError(err.message || 'Access denied');
+} catch (err: unknown) {
+      setError(getErrorMessage(err, 'Access denied'));
       } finally {
         setIsLoading(false);
       }

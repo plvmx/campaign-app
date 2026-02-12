@@ -102,7 +102,7 @@ export async function validateStateLeader(mobile: string, firstName: string): Pr
  * Sign in with mobile and first name validation
  * Creates an anonymous session after validation
  */
-export async function signInWithMobileAndName(mobile: string, firstName: string): Promise<{ user: any; stateLeader: StateLeaderMatch }> {
+export async function signInWithMobileAndName(mobile: string, firstName: string): Promise<{ user: User; stateLeader: StateLeaderMatch }> {
   // First validate against state_leaders table
   const stateLeader = await validateStateLeader(mobile, firstName);
   
@@ -165,7 +165,7 @@ export async function signInWithMobileAndName(mobile: string, firstName: string)
   }
 
   return {
-    user: authData.user,
+    user: { id: authData.user.id, email: authData.user.email },
     stateLeader,
   };
 }

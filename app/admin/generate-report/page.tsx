@@ -11,6 +11,7 @@ import JSZip from 'jszip';
 import { useCampaignDates } from '@/contexts/CampaignDatesContext';
 import { formatDateForDb } from '@/lib/campaignDates';
 import { drawReportPage, canvasToJpegBlob } from '@/lib/reportCanvas';
+import { getErrorMessage } from '@/lib/errorUtils';
 
 interface Campaign {
   id: string;
@@ -80,8 +81,8 @@ export default function GenerateReportPage() {
           return;
         }
         setHasAccess(true);
-      } catch (err: any) {
-        setError(err.message || 'Access denied');
+      } catch (err: unknown) {
+        setError(getErrorMessage(err, 'Access denied'));
       } finally {
         setIsLoading(false);
       }
@@ -195,8 +196,8 @@ export default function GenerateReportPage() {
 
       setReportData(rows);
       setShowReport(true);
-    } catch (err: any) {
-      setError(err.message || 'Error generating report');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Error generating report'));
       setReportData([]);
       setShowReport(false);
     } finally {
@@ -235,8 +236,8 @@ export default function GenerateReportPage() {
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-    } catch (err: any) {
-      setError(err.message || 'Error downloading report');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Error downloading report'));
     } finally {
       setIsDownloading(false);
     }

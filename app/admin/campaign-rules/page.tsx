@@ -4,14 +4,13 @@ import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import MobileLayout from '@/components/MobileLayout';
 import { getCurrentUser } from '@/lib/auth';
-import { hasPermission, Permission } from '@/lib/permissions';
 import { supabase } from '@/lib/supabaseClient';
 import { getStateColor } from '@/lib/stateColors';
 import { CampaignRule, previewRuleEvaluation } from '@/lib/campaignRules';
-import { formatDateReadable, formatDateForDb } from '@/lib/campaignDates';
+import { formatDateReadable } from '@/lib/campaignDates';
 import { useCampaignDates } from '@/contexts/CampaignDatesContext';
-
-const AUSTRALIAN_STATES = ['ACT', 'NSW', 'QLD', 'SA', 'TAS', 'VIC', 'WA', 'NT'];
+import { AUSTRALIAN_STATES } from '@/lib/constants';
+import { getErrorMessage } from '@/lib/errorUtils';
 const DAYS_OF_WEEK = [
   { value: 0, label: 'Sunday' },
   { value: 1, label: 'Monday' },
@@ -144,8 +143,8 @@ function CampaignRulesPageContent() {
 
         setHasAccess(true);
         await fetchRules();
-      } catch (err: any) {
-        setError(err.message || 'Access denied');
+      } catch (err: unknown) {
+        setError(getErrorMessage(err, 'Access denied'));
       } finally {
         setIsLoading(false);
       }
@@ -185,8 +184,8 @@ function CampaignRulesPageContent() {
       
       if (error) throw error;
       setRules(data || []);
-    } catch (err: any) {
-      setError(err.message || 'Failed to fetch campaign rules');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to fetch campaign rules'));
     }
   };
 
@@ -411,8 +410,8 @@ function CampaignRulesPageContent() {
       // Reset form
       resetForm();
       await fetchRules();
-    } catch (err: any) {
-      setError(err.message || 'Failed to save campaign rule');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to save campaign rule'));
     } finally {
       setIsSubmitting(false);
     }
@@ -540,8 +539,8 @@ function CampaignRulesPageContent() {
       if (error) throw error;
       setSuccess('Campaign rule deleted successfully');
       await fetchRules();
-    } catch (err: any) {
-      setError(err.message || 'Failed to delete campaign rule');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to delete campaign rule'));
     }
   };
 
@@ -562,8 +561,8 @@ function CampaignRulesPageContent() {
 
       const { dates: previewDatesResult } = previewRuleEvaluation(rule, previewStart, previewEnd);
       setPreviewDates(previewDatesResult);
-    } catch (err: any) {
-      setError(err.message || 'Failed to preview rule');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to preview rule'));
     } finally {
       setIsLoadingPreview(false);
     }
@@ -583,8 +582,8 @@ function CampaignRulesPageContent() {
       
       if (error) throw error;
       await fetchRules();
-    } catch (err: any) {
-      setError(err.message || 'Failed to update rule status');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to update rule status'));
     }
   };
 

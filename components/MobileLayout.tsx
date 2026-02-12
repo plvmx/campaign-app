@@ -20,7 +20,7 @@ type NavItem = {
   isTlAdmin?: boolean;
 };
 
-function MobileLayoutNav({ pathname, searchParams, navItems }: { pathname: string; searchParams: URLSearchParams | null; navItems: NavItem[] }) {
+function MobileLayoutNav({ pathname, navItems }: { pathname: string; navItems: NavItem[] }) {
   return (
     <div className={`flex items-center ${navItems.length === 1 ? 'justify-center' : 'justify-around'}`}>
       {navItems.map((item) => {
@@ -56,8 +56,8 @@ function MobileLayoutNav({ pathname, searchParams, navItems }: { pathname: strin
 
 /** Uses useSearchParams(); must be rendered inside Suspense for static prerender */
 function MobileLayoutNavWithSearchParams({ pathname, navItems }: { pathname: string; navItems: NavItem[] }) {
-  const searchParams = useSearchParams();
-  return <MobileLayoutNav pathname={pathname} searchParams={searchParams} navItems={navItems} />;
+  void useSearchParams(); // Required for static prerender - triggers client hydration
+  return <MobileLayoutNav pathname={pathname} navItems={navItems} />;
 }
 
 export default function MobileLayout({ children }: MobileLayoutProps) {
@@ -133,7 +133,7 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
 
       {/* Bottom Navigation (Suspense required for useSearchParams during prerender) */}
       <nav className="fixed bottom-0 left-0 right-0 border-t-2 border-gray-800 dark:border-gray-600 bg-white dark:bg-gray-950">
-        <Suspense fallback={<MobileLayoutNav pathname={pathname ?? ''} searchParams={null} navItems={navItems} />}>
+        <Suspense fallback={<MobileLayoutNav pathname={pathname ?? ''} navItems={navItems} />}>
           <MobileLayoutNavWithSearchParams pathname={pathname ?? ''} navItems={navItems} />
         </Suspense>
       </nav>

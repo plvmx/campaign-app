@@ -11,13 +11,14 @@ import { supabase } from '@/lib/supabaseClient';
 import { isCampaignLoggingEnabled, setCampaignLoggingEnabled } from '@/lib/appSettings';
 import { CampaignRule, evaluateRules } from '@/lib/campaignRules';
 import { getAllStateRefreshSettings, DEFAULT_REFRESH_MODE, type RefreshMode } from '@/lib/stateRefreshSettings';
+import { getErrorMessage } from '@/lib/errorUtils';
 
 export default function AdminPage() {
   const router = useRouter();
   const { dates } = useCampaignDates();
   const [isLoading, setIsLoading] = useState(true);
   const [hasAccess, setHasAccess] = useState(false);
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<{ id: string; email?: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshMessage, setRefreshMessage] = useState<string | null>(null);
@@ -45,8 +46,8 @@ export default function AdminPage() {
         // Load logging setting
         const enabled = await isCampaignLoggingEnabled();
         setLoggingEnabled(enabled);
-      } catch (err: any) {
-        setError(err.message || 'Access denied');
+      } catch (err: unknown) {
+        setError(getErrorMessage(err, 'Access denied'));
       } finally {
         setIsLoading(false);
         setIsLoadingLoggingSetting(false);
@@ -283,8 +284,8 @@ export default function AdminPage() {
       if (skippedCount > 0) message += `${skippedCount} already existed and were skipped. `;
       message += `Deleted ${deletedCount} old campaign(s).`;
       setRefreshMessage(message);
-    } catch (err: any) {
-      setError(err.message || 'Failed to refresh campaigns');
+} catch (err: unknown) {
+    setError(getErrorMessage(err, 'Failed to refresh campaigns'));
     } finally {
       setIsRefreshing(false);
     }
@@ -298,8 +299,8 @@ export default function AdminPage() {
       const newValue = !loggingEnabled;
       await setCampaignLoggingEnabled(newValue);
       setLoggingEnabled(newValue);
-    } catch (err: any) {
-      setError(err.message || 'Failed to update logging setting');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to update logging setting'));
     } finally {
       setIsTogglingLogging(false);
     }

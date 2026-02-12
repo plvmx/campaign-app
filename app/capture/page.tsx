@@ -8,6 +8,7 @@ import { getCurrentUser } from '@/lib/auth';
 import { supabase } from '@/lib/supabaseClient';
 import { getUserStateCode, getCachedStateCode } from '@/lib/location';
 import { logCampaignChange } from '@/lib/campaignLog';
+import { getErrorMessage } from '@/lib/errorUtils';
 
 export default function CapturePage() {
   const router = useRouter();
@@ -87,8 +88,8 @@ export default function CapturePage() {
 
       // Redirect to app page with success parameter
       router.push('/app?created=true');
-    } catch (error: any) {
-      throw new Error(error.message || 'Failed to create campaign');
+    } catch (error: unknown) {
+      throw new Error(getErrorMessage(error, 'Failed to create campaign'));
     }
   };
 

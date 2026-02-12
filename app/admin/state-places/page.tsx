@@ -7,6 +7,8 @@ import { getCurrentUser } from '@/lib/auth';
 import { hasPermission, Permission } from '@/lib/permissions';
 import { supabase } from '@/lib/supabaseClient';
 import { getStateColor } from '@/lib/stateColors';
+import { AUSTRALIAN_STATES } from '@/lib/constants';
+import { getErrorMessage } from '@/lib/errorUtils';
 
 interface StatePlace {
   id: string;
@@ -14,8 +16,6 @@ interface StatePlace {
   place: string;
   created_at: string;
 }
-
-const AUSTRALIAN_STATES = ['ACT', 'NSW', 'QLD', 'SA', 'TAS', 'VIC', 'WA', 'NT'];
 
 export default function StatePlacesPage() {
   const router = useRouter();
@@ -47,8 +47,8 @@ export default function StatePlacesPage() {
         }
         setHasAccess(true);
         await fetchStatePlaces();
-      } catch (err: any) {
-        setError(err.message || 'Access denied');
+      } catch (err: unknown) {
+        setError(getErrorMessage(err, 'Access denied'));
       } finally {
         setIsLoading(false);
       }
@@ -68,8 +68,8 @@ export default function StatePlacesPage() {
       
       if (error) throw error;
       setStatePlaces(data || []);
-    } catch (err: any) {
-      setError(err.message || 'Failed to fetch state places');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to fetch state places'));
     }
   };
 
@@ -115,8 +115,8 @@ export default function StatePlacesPage() {
       setFormState({ state: '', place: '' });
       setEditingId(null);
       await fetchStatePlaces();
-    } catch (err: any) {
-      setError(err.message || 'Failed to save state place');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to save state place'));
     } finally {
       setIsSubmitting(false);
     }
@@ -141,8 +141,8 @@ export default function StatePlacesPage() {
       if (error) throw error;
       setSuccess('State place deleted successfully');
       await fetchStatePlaces();
-    } catch (err: any) {
-      setError(err.message || 'Failed to delete state place');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to delete state place'));
     }
   };
 

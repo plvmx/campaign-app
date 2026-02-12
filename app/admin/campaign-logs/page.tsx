@@ -6,6 +6,7 @@ import MobileLayout from '@/components/MobileLayout';
 import { getCurrentUser } from '@/lib/auth';
 import { hasPermission, Permission } from '@/lib/permissions';
 import { supabase } from '@/lib/supabaseClient';
+import { getErrorMessage } from '@/lib/errorUtils';
 
 interface CampaignLog {
   id: string;
@@ -52,8 +53,8 @@ export default function CampaignLogsPage() {
         }
         setHasAccess(true);
         await fetchLogs();
-      } catch (err: any) {
-        setError(err.message || 'Access denied');
+      } catch (err: unknown) {
+        setError(getErrorMessage(err, 'Access denied'));
       } finally {
         setIsLoading(false);
       }
@@ -112,8 +113,8 @@ export default function CampaignLogsPage() {
       }
 
       setLogs(filteredData);
-    } catch (err: any) {
-      setError(err.message || 'Failed to fetch logs');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to fetch logs'));
     } finally {
       setIsSearching(false);
     }
@@ -143,8 +144,8 @@ export default function CampaignLogsPage() {
 
       if (fetchError) throw fetchError;
       setLogs(data || []);
-    } catch (err: any) {
-      setError(err.message || 'Failed to fetch logs');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to fetch logs'));
     } finally {
       setIsSearching(false);
     }

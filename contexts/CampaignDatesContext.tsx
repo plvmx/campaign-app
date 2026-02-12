@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useCallback, useContext, useState, useEffect, ReactNode } from 'react';
 import { calculateCampaignDates, CampaignDates } from '@/lib/campaignDates';
 
 interface CampaignDatesContextType {
@@ -22,22 +22,17 @@ interface CampaignDatesProviderProps {
 }
 
 export function CampaignDatesProvider({ children }: CampaignDatesProviderProps) {
-  const [dates, setDates] = useState<CampaignDates | null>(null);
+  const [dates, setDates] = useState<CampaignDates | null>(() => calculateCampaignDates());
 
-  const refreshDates = () => {
-    const newDates = calculateCampaignDates();
-    setDates(newDates);
-  };
+  const refreshDates = useCallback(() => {
+    setDates(calculateCampaignDates());
+  }, []);
 
   useEffect(() => {
-    // Calculate dates on mount
-    refreshDates();
-
     // Refresh dates every hour in case the day changes while user is active
     const interval = setInterval(refreshDates, 60 * 60 * 1000); // 1 hour
-
     return () => clearInterval(interval);
-  }, []);
+  }, [refreshDates]);
 
   return (
     <CampaignDatesContext.Provider value={{ dates, refreshDates }}>

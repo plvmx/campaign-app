@@ -10,33 +10,20 @@ import { getUserStateCode } from '@/lib/location';
 import { normalizeName, normalizeMobile } from '@/lib/auth';
 import { hasPermission, Permission } from '@/lib/permissions';
 import { useCampaignDates } from '@/contexts/CampaignDatesContext';
-import { formatDateForDb } from '@/lib/campaignDates';
+import { formatDateForDb, getTodayDateString } from '@/lib/campaignDates';
 import { getStateColor } from '@/lib/stateColors';
 import { logCampaignChange, fetchCampaignData } from '@/lib/campaignLog';
 import { getSharedWithMeOwners, type LeaderShareOwner } from '@/lib/leaderShares';
-
-const AUSTRALIAN_STATES = ['ACT', 'NSW', 'QLD', 'SA', 'TAS', 'VIC', 'WA', 'NT'];
-
-interface Campaign {
-  id: string;
-  date: string;
-  state: string;
-  place: string;
-  time: string;
-  leader: string;
-  mobile: string | null;
-  botj: string | null;
-  tl_ok: boolean;
-  sr_ok: boolean;
-  created_at: string;
-  source?: string | null;
-}
+import { AUSTRALIAN_STATES } from '@/lib/constants';
+import { getErrorMessage } from '@/lib/errorUtils';
+import type { Campaign } from '@/lib/types';
+import { formatCampaignTimeDisplay, isCampaignPast } from '@/lib/campaignUtils';
 
 function AppPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { dates: campaignDates } = useCampaignDates();
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<{ id: string; email?: string } | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
@@ -65,11 +52,6 @@ function AppPageContent() {
     tl_ok: boolean;
     sr_ok: boolean;
   }>>({});
-  // Get today's date in YYYY-MM-DD format for default value and min attribute
-  const getTodayDateString = () => {
-    return formatDateForDb(new Date());
-  };
-
   const [formState, setFormState] = useState({
     date: getTodayDateString(),
     state: '',
@@ -872,8 +854,8 @@ function AppPageContent() {
       
       // Reload campaigns using optimized function
       await refetchCampaigns();
-    } catch (err: any) {
-      setError(err.message || 'Failed to save campaign');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to save campaign'));
     } finally {
       setIsSubmitting(false);
     }
@@ -1089,8 +1071,8 @@ function AppPageContent() {
       
       // Reload campaigns using optimized function
       await refetchCampaigns();
-    } catch (err: any) {
-      setError(err.message || 'Failed to update campaign');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to update campaign'));
     }
   };
   
@@ -1190,8 +1172,8 @@ function AppPageContent() {
       
       // Reload campaigns using optimized function
       await refetchCampaigns();
-    } catch (err: any) {
-      setError(err.message || 'Failed to delete campaign');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to delete campaign'));
     }
   };
 
@@ -1244,8 +1226,8 @@ function AppPageContent() {
       if (oldData) {
         logCampaignChange(campaignId, 'UPDATE', oldData, { ...oldData, ...newData });
       }
-    } catch (err: any) {
-      setError(err.message || 'Failed to update verification status');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to update verification status'));
     }
   };
   
@@ -1803,14 +1785,7 @@ function AppPageContent() {
                             );
                           } else {
                             // Display mode - show read-only fields
-                            const timeStr = campaign.time.includes('T')
-                              ? campaign.time.split('T')[1]?.split('.')[0]
-                              : campaign.time;
-                            const [hours, minutes] = timeStr.split(':');
-                            const hour = parseInt(hours, 10);
-                            const ampm = hour >= 12 ? 'PM' : 'AM';
-                            const displayHour = hour % 12 || 12;
-                            const displayTime = `${displayHour}:${minutes} ${ampm}`;
+                            const displayTime = formatCampaignTimeDisplay(campaign.time);
                             
                             // BOTJ: only show "BOTJ" when value is Yes; show nothing when No
                             let showBOTJ = false;
@@ -1871,16 +1846,7 @@ function AppPageContent() {
                                   <div className="flex flex-row gap-2 sm:ml-4 w-full sm:w-auto">
                                     {/* Show Record Results only if campaign date+time is in the past (same as Past tab) AND (admin OR own OR shared with me) */}
                                     {(() => {
-                                      const now = new Date();
-                                      const campaignDate = new Date(campaign.date);
-                                      let timeStr = campaign.time;
-                                      if (timeStr.includes('T')) {
-                                        timeStr = timeStr.split('T')[1]?.split('.')[0] || timeStr;
-                                      }
-                                      const [hours, minutes] = (timeStr || '0:0').split(':').map(Number);
-                                      const campaignDateTime = new Date(campaignDate);
-                                      campaignDateTime.setHours(hours || 0, minutes || 0, 0, 0);
-                                      const isPast = campaignDateTime < now;
+                                      const isPast = isCampaignPast(campaign.date, campaign.time);
                                       if (!isPast) return false;
                                       if (adminStatus === 'AD') return true;
                                       const isOwn = userMobileAndLeader?.leader && userState && normalizeName(campaign.leader || '') === normalizeName(userMobileAndLeader.leader) && (campaign.state || '').toUpperCase().trim() === (userState || '').toUpperCase().trim() && userMobileAndLeader.mobile && normalizeMobile(campaign.mobile || '') === normalizeMobile(userMobileAndLeader.mobile);

@@ -7,6 +7,7 @@ import MobileLayout from '@/components/MobileLayout';
 import { getCurrentUser } from '@/lib/auth';
 import { hasPermission, Permission } from '@/lib/permissions';
 import { supabase } from '@/lib/supabaseClient';
+import { getErrorMessage } from '@/lib/errorUtils';
 import { calculateCampaignDates, formatDateForDb as formatDateForDbLib } from '@/lib/campaignDates';
 import {
   STATE_CODES,
@@ -78,8 +79,8 @@ export default function CampaignListPage() {
         setHasAccess(true);
         const admin = await hasPermission(Permission.ADMIN_ACCESS);
         setIsAdmin(admin);
-      } catch (err: any) {
-        setError(err?.message ?? 'Access denied');
+      } catch (err: unknown) {
+        setError(getErrorMessage(err, 'Access denied'));
       } finally {
         setIsLoading(false);
       }

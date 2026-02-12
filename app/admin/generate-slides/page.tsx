@@ -8,6 +8,7 @@ import { hasPermission, Permission } from '@/lib/permissions';
 import { getUserAdminStatusAndMobile } from '@/lib/campaignFilter';
 import { supabase } from '@/lib/supabaseClient';
 import JSZip from 'jszip';
+import { getErrorMessage } from '@/lib/errorUtils';
 
 // Constants matching Python code
 const DPI = 300;
@@ -60,13 +61,6 @@ interface Campaign {
   sr_ok: boolean;
 }
 
-interface DayCampaigns {
-  date: Date;
-  dayName: string;
-  week: number;
-  campaigns: Campaign[];
-}
-
 export default function GenerateSlidesPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
@@ -98,8 +92,8 @@ export default function GenerateSlidesPage() {
           return;
         }
         setHasAccess(true);
-      } catch (err: any) {
-        setError(err.message || 'Access denied');
+      } catch (err: unknown) {
+        setError(getErrorMessage(err, 'Access denied'));
       } finally {
         setIsLoading(false);
       }
@@ -652,9 +646,9 @@ export default function GenerateSlidesPage() {
       URL.revokeObjectURL(url);
       
       setProgress(`Successfully generated ${slides.length} slide(s)!`);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error generating slides:', err);
-      setError(err.message || 'Failed to generate slides');
+      setError(getErrorMessage(err, 'Failed to generate slides'));
     } finally {
       setIsGenerating(false);
     }

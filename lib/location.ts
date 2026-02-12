@@ -112,6 +112,8 @@ export async function getStateFromLocation(
  * Caches the result in localStorage to avoid repeated API calls
  */
 export async function getUserStateCode(): Promise<StateCode | null> {
+  if (typeof window === 'undefined') return null;
+
   // Check if we have a cached state code (valid for 24 hours)
   const cached = localStorage.getItem('user_state_code');
   const cachedTime = localStorage.getItem('user_state_code_time');
@@ -148,6 +150,8 @@ export async function getUserStateCode(): Promise<StateCode | null> {
  * Get cached state code without making API calls
  */
 export function getCachedStateCode(): StateCode | null {
+  if (typeof window === 'undefined') return null;
+
   const cached = localStorage.getItem('user_state_code');
   return cached ? (cached as StateCode) : null;
 }

@@ -10,6 +10,7 @@ import { getLeadersNotSignedInSinceRefreshByState, type LeaderNotSignedIn } from
 import { getStateRefreshMode, setStateRefreshMode, type RefreshMode } from '@/lib/stateRefreshSettings';
 import { useCampaignDates } from '@/contexts/CampaignDatesContext';
 import { formatDateReadable } from '@/lib/campaignDates';
+import { getErrorMessage } from '@/lib/errorUtils';
 
 export default function SRAdminPage() {
   const router = useRouter();
@@ -42,8 +43,8 @@ export default function SRAdminPage() {
         const stateToUse = state ?? (await getUserProfile())?.state ?? null;
         setUserState(stateToUse);
         setHasAccess(true);
-      } catch (err: any) {
-        setError(err.message || 'Access denied');
+} catch (err: unknown) {
+      setError(getErrorMessage(err, 'Access denied'));
       } finally {
         setIsLoading(false);
       }
@@ -101,8 +102,8 @@ export default function SRAdminPage() {
       const currentUser = await getCurrentUser();
       await setStateRefreshMode(userState, refreshMode, currentUser?.id ?? null);
       setRefreshModeMessage('Saved. This mode will be used when an admin runs Weekly Refresh for your state.');
-    } catch (err: any) {
-      setError(err.message || 'Failed to save refresh mode');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to save refresh mode'));
     } finally {
       setSavingRefreshMode(false);
     }

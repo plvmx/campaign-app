@@ -2,6 +2,8 @@
 
 import { useState, FormEvent, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
+import { getTodayDateString } from '@/lib/campaignDates';
+import { getErrorMessage } from '@/lib/errorUtils';
 
 export interface CampaignData {
   date: string;
@@ -24,16 +26,6 @@ export default function CampaignForm({
   initialData,
   submitLabel = 'Create Campaign',
 }: CampaignFormProps) {
-  // Get today's date in YYYY-MM-DD format for default value and min attribute
-  const getTodayDateString = () => {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    const day = String(today.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  };
-
-  // Calculate today's date string once for use in min attribute and default value
   const todayDateString = getTodayDateString();
 
   const [formData, setFormData] = useState<CampaignData>({
@@ -111,7 +103,7 @@ export default function CampaignForm({
         if (formData.place && !uniquePlaces.includes(formData.place)) {
           setFormData((prev) => ({ ...prev, place: '' }));
         }
-      } catch (err) {
+      } catch (err: unknown) {
         console.error('Error fetching places:', err);
         setPlaces([]);
       } finally {
@@ -152,7 +144,7 @@ export default function CampaignForm({
         if (formData.leader && !uniqueLeaders.includes(formData.leader)) {
           setFormData((prev) => ({ ...prev, leader: '' }));
         }
-      } catch (err) {
+      } catch (err: unknown) {
         console.error('Error fetching leaders:', err);
         setLeaders([]);
       } finally {
@@ -184,8 +176,8 @@ export default function CampaignForm({
 
     try {
       await onSubmit(formData);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'An error occurred'));
     } finally {
       setIsSubmitting(false);
     }

@@ -49,7 +49,7 @@ A mobile-friendly campaign management application built with Next.js, TypeScript
 npm install
 ```
 
-**Note**: This project uses `jszip` for generating ZIP files of campaign slides and `html2canvas` for report generation. These dependencies are included in the package.json.
+**Note**: This project uses `jszip` for generating ZIP files of campaign slides. Report generation uses canvas-based rendering. These dependencies are included in the package.json.
 
 2. Set up environment variables:
 

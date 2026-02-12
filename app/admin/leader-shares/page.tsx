@@ -7,6 +7,8 @@ import { getCurrentUser } from '@/lib/auth';
 import { hasPermission, Permission } from '@/lib/permissions';
 import { supabase } from '@/lib/supabaseClient';
 import { getStateColor } from '@/lib/stateColors';
+import { AUSTRALIAN_STATES } from '@/lib/constants';
+import { getErrorMessage } from '@/lib/errorUtils';
 
 interface LeaderShare {
   id: string;
@@ -21,8 +23,6 @@ interface StateLeaderOption {
   state: string;
   leader: string;
 }
-
-const AUSTRALIAN_STATES = ['ACT', 'NSW', 'QLD', 'SA', 'TAS', 'VIC', 'WA', 'NT'];
 
 export default function LeaderSharesPage() {
   const router = useRouter();
@@ -55,7 +55,7 @@ export default function LeaderSharesPage() {
         }
         setHasAccess(true);
       } catch (err: unknown) {
-        setError(err instanceof Error ? err.message : 'Access denied');
+        setError(getErrorMessage(err, 'Access denied'));
       } finally {
         setIsLoading(false);
       }
@@ -73,7 +73,7 @@ export default function LeaderSharesPage() {
       if (fetchError) throw fetchError;
       setShares(data || []);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch leader shares');
+      setError(getErrorMessage(err, 'Failed to fetch leader shares'));
     }
   };
 
@@ -87,7 +87,7 @@ export default function LeaderSharesPage() {
       if (fetchError) throw fetchError;
       setStateLeaders((data || []) as StateLeaderOption[]);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch state leaders');
+      setError(getErrorMessage(err, 'Failed to fetch state leaders'));
     }
   };
 
@@ -130,7 +130,7 @@ export default function LeaderSharesPage() {
       setFormState({ owner_state: '', owner_leader: '', shared_with_state: '', shared_with_leader: '' });
       await fetchShares();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to add leader share');
+      setError(getErrorMessage(err, 'Failed to add leader share'));
     } finally {
       setIsSubmitting(false);
     }
@@ -144,7 +144,7 @@ export default function LeaderSharesPage() {
       setSuccess('Sharing removed');
       await fetchShares();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to remove sharing');
+      setError(getErrorMessage(err, 'Failed to remove sharing'));
     }
   };
 

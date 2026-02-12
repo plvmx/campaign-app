@@ -1,6 +1,6 @@
 import { supabase } from './supabaseClient';
 import { getUserProfile } from './userProfile';
-import { normalizeMobile, normalizeName } from './auth';
+import { normalizeName } from './auth';
 
 /**
  * Get the user's admin status, state, mobile, and leader from state_leaders table in a single query
@@ -70,55 +70,5 @@ export async function getUserAdminStatusAndMobile(): Promise<{
     console.error('Error getting user admin status and mobile:', error);
     return { admin: null, state: null, mobile: null, leader: null };
   }
-}
-
-/**
- * Get the user's admin status and state from state_leaders table
- * Returns { admin: string | null, state: string | null }
- * admin: 'AD' (admin), 'SR' (state reporter), or null/empty (regular user)
- * state: The state code from the matched state_leaders record
- * 
- * @deprecated Use getUserAdminStatusAndMobile() instead for better performance
- */
-export async function getUserAdminStatus(): Promise<{ admin: string | null; state: string | null }> {
-  const { admin, state } = await getUserAdminStatusAndMobile();
-  return { admin, state };
-}
-
-/**
- * Get the user's mobile and leader from their profile and state_leaders table
- * Returns { mobile: string | null, leader: string | null } or null if not found
- * 
- * @deprecated Use getUserAdminStatusAndMobile() instead for better performance
- */
-export async function getUserMobileAndLeader(): Promise<{ mobile: string | null; leader: string | null } | null> {
-  const { mobile, leader } = await getUserAdminStatusAndMobile();
-  if (!mobile && !leader) {
-    return null;
-  }
-  return { mobile, leader };
-}
-
-/**
- * Get a Supabase query builder filtered by the current user's mobile and leader
- * Returns null if user's mobile/leader cannot be determined
- */
-export async function getFilteredCampaignsQuery() {
-  const userMobileAndLeader = await getUserMobileAndLeader();
-  
-  if (!userMobileAndLeader || !userMobileAndLeader.mobile || !userMobileAndLeader.leader) {
-    return null;
-  }
-
-  // Normalize mobile for comparison (remove spaces, etc.)
-  const normalizedMobile = normalizeMobile(userMobileAndLeader.mobile);
-  
-  // Get all campaigns and filter in memory to handle mobile normalization
-  // This is necessary because mobile numbers in DB might have different formatting
-  let query = supabase
-    .from('campaigns')
-    .select('*');
-
-  return { query, mobile: normalizedMobile, leader: userMobileAndLeader.leader };
 }
 

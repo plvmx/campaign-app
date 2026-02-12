@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import MobileLayout from '@/components/MobileLayout';
 import { getCurrentUser } from '@/lib/auth';
+import { getErrorMessage } from '@/lib/errorUtils';
 
 export default function SlideViewerPage() {
   const router = useRouter();
@@ -49,8 +50,8 @@ export default function SlideViewerPage() {
         } else {
           setSlides(slidesList);
         }
-      } catch (err: any) {
-        setError(err.message || 'Failed to load slides');
+} catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to load slides'));
       } finally {
         setIsLoading(false);
       }

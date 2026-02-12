@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { getErrorMessage } from '@/lib/errorUtils';
 
 export default function PublicSlideViewerPage() {
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
@@ -39,8 +40,8 @@ export default function PublicSlideViewerPage() {
         } else {
           setSlides(slidesList);
         }
-      } catch (err: any) {
-        setError(err.message || 'Failed to load slides');
+      } catch (err: unknown) {
+        setError(getErrorMessage(err, 'Failed to load slides'));
       } finally {
         setIsLoading(false);
       }

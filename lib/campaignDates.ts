@@ -90,6 +90,13 @@ export function formatDateForDb(date: Date): string {
 }
 
 /**
+ * Get today's date as YYYY-MM-DD string
+ */
+export function getTodayDateString(): string {
+  return formatDateForDb(new Date());
+}
+
+/**
  * Format a date as a readable string (e.g., "Mon, Jan 15, 2026")
  */
 export function formatDateReadable(date: Date): string {

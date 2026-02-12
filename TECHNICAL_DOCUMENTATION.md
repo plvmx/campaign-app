@@ -65,7 +65,7 @@ The Campaign Management App is a mobile-first Next.js application built with Typ
 - **Styling**: Tailwind CSS 4.x
 - **Database**: Supabase (PostgreSQL)
 - **Authentication**: Supabase Auth (Anonymous sessions)
-- **UI Libraries**: React 19.2.3, html2canvas, jszip
+- **UI Libraries**: React 19.2.3, jszip
 
 ---
 

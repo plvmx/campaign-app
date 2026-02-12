@@ -6,6 +6,7 @@ import MobileLayout from '@/components/MobileLayout';
 import { getCurrentUser } from '@/lib/auth';
 import { hasPermission, Permission } from '@/lib/permissions';
 import { supabase } from '@/lib/supabaseClient';
+import { getErrorMessage } from '@/lib/errorUtils';
 
 interface CampaignMessage {
   date: string;
@@ -43,8 +44,8 @@ export default function CampaignMessagesPage() {
         }
         setHasAccess(true);
         await fetchMessages();
-      } catch (err: any) {
-        setError(err.message || 'Access denied');
+} catch (err: unknown) {
+      setError(getErrorMessage(err, 'Access denied'));
       } finally {
         setIsLoading(false);
       }
@@ -61,8 +62,8 @@ export default function CampaignMessagesPage() {
       
       if (error) throw error;
       setMessages(data || []);
-    } catch (err: any) {
-      setError(err.message || 'Failed to fetch campaign messages');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to fetch campaign messages'));
     }
   };
 
@@ -107,8 +108,8 @@ export default function CampaignMessagesPage() {
       setFormState({ date: '', message: '' });
       setEditingDate(null);
       await fetchMessages();
-    } catch (err: any) {
-      setError(err.message || 'Failed to save campaign message');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to save campaign message'));
     } finally {
       setIsSubmitting(false);
     }
@@ -140,8 +141,8 @@ export default function CampaignMessagesPage() {
       if (error) throw error;
       setSuccess('Campaign message deleted successfully');
       await fetchMessages();
-    } catch (err: any) {
-      setError(err.message || 'Failed to delete campaign message');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to delete campaign message'));
     }
   };
 
