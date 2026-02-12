@@ -53,49 +53,32 @@ export function normalizeName(name: string): string {
 }
 
 /**
- * Validate mobile number and first name against state_leaders table
- * Handles mobile number formatting variations (spaces, dashes, etc.)
- * Handles name case variations (case-insensitive matching)
- * Returns the matching record if found, null otherwise
+ * Validate mobile number and first name against state_leaders table.
+ * Uses PostgreSQL RPC (validate_leader_for_login) with SECURITY DEFINER so
+ * validation works before login without exposing state_leaders to anon.
+ * Returns the matching record if found, null otherwise.
  */
 export async function validateStateLeader(mobile: string, firstName: string): Promise<StateLeaderMatch | null> {
-  const mobileNormalized = normalizeMobile(mobile);
-  const firstNameNormalized = normalizeName(firstName);
-  
-  if (!mobileNormalized || !firstNameNormalized) {
-    return null;
-  }
-
-  // Fetch all state_leaders records to do case-insensitive and mobile normalization matching
-  // We need to do this because:
-  // 1. Mobile numbers in DB might have spaces/formatting we need to normalize
-  // 2. Name matching needs to be case-insensitive
-  const { data, error } = await supabase
-    .from('state_leaders')
-    .select('id, state, leader, mobile, admin');
+  const { data, error } = await supabase.rpc('validate_leader_for_login', {
+    p_mobile: mobile,
+    p_first_name: firstName,
+  });
 
   if (error) {
     console.error('Error validating state leader:', error);
     throw error;
   }
 
-  if (!data || data.length === 0) {
-    return null;
-  }
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row || !row.id) return null;
 
-  // Find matching record with normalized comparison
-  const match = data.find(record => {
-    if (!record.mobile) return false;
-    
-    // Normalize mobile numbers for comparison
-    const recordMobileNormalized = normalizeMobile(record.mobile);
-    const recordNameNormalized = normalizeName(record.leader);
-    
-    return recordMobileNormalized === mobileNormalized && 
-           recordNameNormalized === firstNameNormalized;
-  });
-
-  return match || null;
+  return {
+    id: row.id,
+    state: row.state,
+    leader: row.leader,
+    mobile: null, // Not returned for security
+    admin: row.admin,
+  };
 }
 
 /**
