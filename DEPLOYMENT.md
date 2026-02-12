@@ -18,6 +18,9 @@ Before deploying, ensure you have the following environment variables ready:
 ### Required:
 - `NEXT_PUBLIC_SUPABASE_URL` - Your Supabase project URL
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY` - Your Supabase anonymous key
+- `SUPABASE_SERVICE_ROLE_KEY` - Your Supabase **service role** key (required for login validation; bypasses RLS server-side)
+
+  ➜ Find it in Supabase Dashboard → Settings → API → `service_role` key (keep secret, server-only)
 
 ### Optional:
 - `NEXT_PUBLIC_ADMIN_EMAILS` - Comma-separated list of admin emails (for development/testing)
@@ -46,6 +49,7 @@ git push origin main
 2. Add the following variables:
    - `NEXT_PUBLIC_SUPABASE_URL` = `your_supabase_project_url`
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY` = `your_supabase_anon_key`
+   - `SUPABASE_SERVICE_ROLE_KEY` = `your_supabase_service_role_key` ← **Required for login**
    - `NEXT_PUBLIC_ADMIN_EMAILS` = `admin@example.com` (optional)
 
 3. **Important:** After adding variables, you need to redeploy:

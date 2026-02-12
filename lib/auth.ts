@@ -54,31 +54,37 @@ export function normalizeName(name: string): string {
 
 /**
  * Validate mobile number and first name against state_leaders table.
- * Uses PostgreSQL RPC (validate_leader_for_login) with SECURITY DEFINER so
- * validation works before login without exposing state_leaders to anon.
- * Returns the matching record if found, null otherwise.
+ * Uses server-side API route with service role to bypass RLS - works regardless of RLS policies.
  */
 export async function validateStateLeader(mobile: string, firstName: string): Promise<StateLeaderMatch | null> {
-  const { data, error } = await supabase.rpc('validate_leader_for_login', {
-    p_mobile: mobile,
-    p_first_name: firstName,
-  });
+  try {
+    const res = await fetch('/api/auth/validate-leader', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mobile, firstName }),
+    });
 
-  if (error) {
-    console.error('Error validating state leader:', error);
-    throw error;
+    const json = await res.json();
+
+    if (!res.ok) {
+      console.error('Error validating state leader:', json.error);
+      throw new Error(json.error || 'Validation failed');
+    }
+
+    const match = json.match;
+    if (!match || !match.id) return null;
+
+    return {
+      id: match.id,
+      state: match.state,
+      leader: match.leader,
+      mobile: null,
+      admin: match.admin,
+    };
+  } catch (err) {
+    console.error('Error validating state leader:', err);
+    throw err;
   }
-
-  const row = Array.isArray(data) ? data[0] : data;
-  if (!row || !row.id) return null;
-
-  return {
-    id: row.id,
-    state: row.state,
-    leader: row.leader,
-    mobile: null, // Not returned for security
-    admin: row.admin,
-  };
 }
 
 /**
