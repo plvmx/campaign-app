@@ -713,6 +713,30 @@ function AppPageContent() {
       }
     }
   }, [userProfile]);
+
+  // When Create Campaign form expands for non-admin/SR users: set state if empty, then default leader and mobile
+  useEffect(() => {
+    if (!isFormExpanded || isEditingRef.current) return;
+    const isAdminOrSR = adminStatus === 'AD' || adminStatus === 'SR';
+    if (isAdminOrSR) return;
+
+    // Ensure state is set for non-admin users (they can't change it - dropdown is disabled)
+    if (!formState.state && userState) {
+      setFormState(prev => ({ ...prev, state: userState.toUpperCase().trim() }));
+      return;
+    }
+
+    if (!userMobileAndLeader?.leader || !formState.state || loadingLeaders) return;
+    // Only default when leader is not yet set and state matches user's state
+    if (formState.leader) return;
+    const stateMatches = (formState.state || '').toUpperCase().trim() === (userState || '').toUpperCase().trim();
+    if (!stateMatches || !leaders.includes(userMobileAndLeader.leader)) return;
+    setFormState(prev => ({
+      ...prev,
+      leader: userMobileAndLeader.leader!,
+      mobile: userMobileAndLeader.mobile || prev.mobile,
+    }));
+  }, [isFormExpanded, adminStatus, userMobileAndLeader, userState, formState.state, formState.leader, leaders, loadingLeaders]);
   
   // Effect to set form values after dropdowns are populated during edit
   useEffect(() => {
