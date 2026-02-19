@@ -1,5 +1,37 @@
 # Troubleshooting Deployment Issues
 
+## Issue: "Failed to authenticate" or "Authentication failed" on Login
+
+If login works locally but fails on Vercel:
+
+### 1. Enable Anonymous Sign-In in Supabase
+
+The app uses anonymous authentication. It must be enabled:
+
+1. Go to **Supabase Dashboard** → **Authentication** → **Providers**
+2. Find **Anonymous** (or "Anonymous sign-ins")
+3. **Enable** it if it is off
+
+### 2. Add SUPABASE_SERVICE_ROLE_KEY to Vercel
+
+Login validation runs server-side and needs the service role key:
+
+1. Vercel → **Settings** → **Environment Variables**
+2. Add `SUPABASE_SERVICE_ROLE_KEY` = your service role key from Supabase (Settings → API)
+3. Redeploy after adding (Deployments → ⋮ → Redeploy)
+
+### 3. Configure Supabase Redirect URLs
+
+1. Supabase → **Authentication** → **URL Configuration**
+2. Add your Vercel URL to **Redirect URLs**: `https://your-app.vercel.app/*`
+3. Set **Site URL** to your Vercel URL
+
+### 4. Check the Full Error Message
+
+Open the browser console (F12 → Console) when login fails. The full Supabase error message may help pinpoint the cause.
+
+---
+
 ## Issue: Seeing Wrong Content After Deployment
 
 If you're seeing content that doesn't match your app (e.g., "Campaign Test", "Campaign List", "Address" boxes), follow these steps:

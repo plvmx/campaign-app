@@ -103,7 +103,12 @@ export async function signInWithMobileAndName(mobile: string, firstName: string)
   const { data: authData, error: authError } = await supabase.auth.signInAnonymously();
   
   if (authError) {
-    throw new Error(`Authentication failed: ${authError.message}`);
+    const msg = authError.message || authError.toString();
+    throw new Error(
+      msg.includes('Anonymous sign-ins are disabled')
+        ? 'Anonymous sign-in is disabled in Supabase. Enable it in Dashboard → Authentication → Providers → Anonymous.'
+        : `Authentication failed: ${msg}`
+    );
   }
 
   if (!authData.user) {

@@ -7,12 +7,17 @@ import CampaignForm, { CampaignData } from '@/components/CampaignForm';
 import { getCurrentUser } from '@/lib/auth';
 import { getUserStateCode, getCachedStateCode } from '@/lib/location';
 import { supabase } from '@/lib/supabaseClient';
+import { getUserAdminStatusAndMobile } from '@/lib/campaignFilter';
 
 export default function RecordResultsPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
   const [defaultState, setDefaultState] = useState<string>('');
   const [defaultDate, setDefaultDate] = useState<string>('');
+  const [signedInLeader, setSignedInLeader] = useState<string | null>(null);
+  const [signedInMobile, setSignedInMobile] = useState<string | null>(null);
+  const [signedInState, setSignedInState] = useState<string | null>(null);
+  const [isAdminOrStateReporter, setIsAdminOrStateReporter] = useState(false);
 
   useEffect(() => {
     async function checkAuthAndGetDefaults() {
@@ -21,6 +26,16 @@ export default function RecordResultsPage() {
         if (!user) {
           router.push('/login');
           return;
+        }
+
+        // Get user's state, leader, mobile, and admin status for form defaults
+        const { admin, state, leader, mobile } = await getUserAdminStatusAndMobile();
+        const isAdminOrSR = admin === 'AD' || admin === 'SR';
+        setIsAdminOrStateReporter(isAdminOrSR);
+        if (!isAdminOrSR) {
+          setSignedInLeader(leader ?? null);
+          setSignedInMobile(mobile ?? null);
+          setSignedInState(state ?? null);
         }
 
         // Set default date to today
@@ -146,7 +161,20 @@ export default function RecordResultsPage() {
         </div>
         <CampaignForm
           onSubmit={handleSubmit}
-          initialData={{ state: defaultState, date: defaultDate }}
+          initialData={{
+            state: defaultState,
+            date: defaultDate,
+            ...(!isAdminOrStateReporter &&
+              signedInState &&
+              defaultState &&
+              defaultState.toUpperCase().trim() === signedInState.toUpperCase().trim() &&
+              signedInLeader && { leader: signedInLeader }),
+            ...(!isAdminOrStateReporter && signedInMobile && { mobile: signedInMobile }),
+          }}
+          signedInLeader={signedInLeader ?? undefined}
+          signedInMobile={signedInMobile ?? undefined}
+          signedInState={signedInState ?? undefined}
+          isAdminOrStateReporter={isAdminOrStateReporter}
           submitLabel="Record Results"
         />
       </div>

@@ -9,11 +9,16 @@ import { supabase } from '@/lib/supabaseClient';
 import { getUserStateCode, getCachedStateCode } from '@/lib/location';
 import { logCampaignChange } from '@/lib/campaignLog';
 import { getErrorMessage } from '@/lib/errorUtils';
+import { getUserAdminStatusAndMobile } from '@/lib/campaignFilter';
 
 export default function CapturePage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
   const [defaultState, setDefaultState] = useState<string>('');
+  const [signedInLeader, setSignedInLeader] = useState<string | null>(null);
+  const [signedInMobile, setSignedInMobile] = useState<string | null>(null);
+  const [signedInState, setSignedInState] = useState<string | null>(null);
+  const [isAdminOrStateReporter, setIsAdminOrStateReporter] = useState(false);
 
   useEffect(() => {
     async function checkAuthAndGetState() {
@@ -22,6 +27,16 @@ export default function CapturePage() {
         if (!user) {
           router.push('/login');
           return;
+        }
+
+        // Get user's state, leader, mobile, and admin status for form defaults
+        const { admin, state, leader, mobile } = await getUserAdminStatusAndMobile();
+        const isAdminOrSR = admin === 'AD' || admin === 'SR';
+        setIsAdminOrStateReporter(isAdminOrSR);
+        if (!isAdminOrSR) {
+          setSignedInLeader(leader ?? null);
+          setSignedInMobile(mobile ?? null);
+          setSignedInState(state ?? null);
         }
 
         // Try to get cached state first (faster)
@@ -114,7 +129,22 @@ export default function CapturePage() {
             Fill in the details to create a new campaign
           </p>
         </div>
-        <CampaignForm onSubmit={handleSubmit} initialData={{ state: defaultState }} />
+        <CampaignForm
+          onSubmit={handleSubmit}
+          initialData={{
+            state: defaultState,
+            ...(!isAdminOrStateReporter &&
+              signedInState &&
+              defaultState &&
+              defaultState.toUpperCase().trim() === signedInState.toUpperCase().trim() &&
+              signedInLeader && { leader: signedInLeader }),
+            ...(!isAdminOrStateReporter && signedInMobile && { mobile: signedInMobile }),
+          }}
+          signedInLeader={signedInLeader ?? undefined}
+          signedInMobile={signedInMobile ?? undefined}
+          signedInState={signedInState ?? undefined}
+          isAdminOrStateReporter={isAdminOrStateReporter}
+        />
       </div>
     </MobileLayout>
   );

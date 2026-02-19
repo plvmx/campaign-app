@@ -19,12 +19,22 @@ interface CampaignFormProps {
   onSubmit: (data: CampaignData) => Promise<void> | void;
   initialData?: Partial<CampaignData>;
   submitLabel?: string;
+  /** When not admin/state reporter: default leader to signed-in user's leader when state matches */
+  signedInLeader?: string;
+  signedInMobile?: string;
+  signedInState?: string;
+  /** When true, do not apply leader/mobile defaults (admins and state reporters can select any leader) */
+  isAdminOrStateReporter?: boolean;
 }
 
 export default function CampaignForm({
   onSubmit,
   initialData,
   submitLabel = 'Create Campaign',
+  signedInLeader,
+  signedInMobile,
+  signedInState,
+  isAdminOrStateReporter = false,
 }: CampaignFormProps) {
   const todayDateString = getTodayDateString();
 
@@ -143,6 +153,16 @@ export default function CampaignForm({
         // If current leader is not in the filtered list, clear it
         if (formData.leader && !uniqueLeaders.includes(formData.leader)) {
           setFormData((prev) => ({ ...prev, leader: '' }));
+        } else if (
+          !formData.leader &&
+          !isAdminOrStateReporter &&
+          signedInLeader &&
+          signedInState &&
+          formData.state.toUpperCase().trim() === signedInState.toUpperCase().trim() &&
+          uniqueLeaders.includes(signedInLeader)
+        ) {
+          // Default to signed-in user's leader when state matches (non-admin/SR only)
+          setFormData((prev) => ({ ...prev, leader: signedInLeader }));
         }
       } catch (err: unknown) {
         console.error('Error fetching leaders:', err);
@@ -154,7 +174,7 @@ export default function CampaignForm({
 
     fetchLeaders();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formData.state]);
+  }, [formData.state, formData.leader, isAdminOrStateReporter, signedInLeader, signedInState]);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
