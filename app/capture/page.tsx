@@ -132,12 +132,11 @@ export default function CapturePage() {
         <CampaignForm
           onSubmit={handleSubmit}
           initialData={{
-            state: defaultState,
-            ...(!isAdminOrStateReporter &&
-              signedInState &&
-              defaultState &&
-              defaultState.toUpperCase().trim() === signedInState.toUpperCase().trim() &&
-              signedInLeader && { leader: signedInLeader }),
+            // For non-admin users, use their state so leader can default; otherwise use location
+            state: !isAdminOrStateReporter && signedInState
+              ? signedInState
+              : defaultState,
+            ...(!isAdminOrStateReporter && signedInLeader && { leader: signedInLeader }),
             ...(!isAdminOrStateReporter && signedInMobile && { mobile: signedInMobile }),
           }}
           signedInLeader={signedInLeader ?? undefined}

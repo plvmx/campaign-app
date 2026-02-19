@@ -162,13 +162,11 @@ export default function RecordResultsPage() {
         <CampaignForm
           onSubmit={handleSubmit}
           initialData={{
-            state: defaultState,
+            state: !isAdminOrStateReporter && signedInState
+              ? signedInState
+              : defaultState,
             date: defaultDate,
-            ...(!isAdminOrStateReporter &&
-              signedInState &&
-              defaultState &&
-              defaultState.toUpperCase().trim() === signedInState.toUpperCase().trim() &&
-              signedInLeader && { leader: signedInLeader }),
+            ...(!isAdminOrStateReporter && signedInLeader && { leader: signedInLeader }),
             ...(!isAdminOrStateReporter && signedInMobile && { mobile: signedInMobile }),
           }}
           signedInLeader={signedInLeader ?? undefined}
