@@ -543,7 +543,7 @@ function RecordResultsDetailPageContent() {
       // Clear pending saves on success
       setPendingSaves(new Map());
       pendingSavesRef.current = new Map();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error saving names:', error);
     } finally {
       savingNamesRef.current = false;

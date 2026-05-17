@@ -52,7 +52,7 @@ export default function RecordResultsPage() {
           setDefaultState(cachedState);
         } else {
           // If no cache, get state from location
-          const stateCode = await getUserStateCode();
+          const { stateCode } = await getUserStateCode();
           if (stateCode) {
             setDefaultState(stateCode);
           }

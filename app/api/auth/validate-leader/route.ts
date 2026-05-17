@@ -28,9 +28,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ match: null });
     }
 
+    // Filter by leader name at the DB level (case-insensitive exact match) so we never
+    // load the entire table into memory. Mobile normalization still verified in JS below
+    // because stored values may be formatted differently (spaces, country codes, etc.).
     const { data, error } = await supabaseAdmin
       .from('state_leaders')
-      .select('id, state, leader, mobile, admin');
+      .select('id, state, leader, mobile, admin')
+      .ilike('leader', firstNameNormalized);
 
     if (error) {
       console.error('validate-leader API error:', error);
@@ -45,8 +49,7 @@ export async function POST(request: NextRequest) {
       const mobileValue = rec.mobile;
       if (!mobileValue) return false;
       const recordMobileNormalized = normalizeMobile(mobileValue);
-      const recordNameNormalized = normalizeName(rec.leader ?? '');
-      return recordMobileNormalized === mobileNormalized && recordNameNormalized === firstNameNormalized;
+      return recordMobileNormalized === mobileNormalized;
     });
 
     if (!match) {

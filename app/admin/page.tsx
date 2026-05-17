@@ -13,6 +13,22 @@ import { CampaignRule, evaluateRules } from '@/lib/campaignRules';
 import { getAllStateRefreshSettings, DEFAULT_REFRESH_MODE, type RefreshMode } from '@/lib/stateRefreshSettings';
 import { getErrorMessage } from '@/lib/errorUtils';
 
+/** Shape of a campaign row being prepared for DB insert (no id/created_at yet). */
+interface NewCampaignRow {
+  date: string;
+  state: string;
+  place: string;
+  time: string;
+  leader: string;
+  mobile: string | null;
+  botj: string | null;
+  user_id: string | null | undefined;
+  team_size: null;
+  tl_ok: boolean;
+  sr_ok?: boolean;
+  source: string;
+}
+
 export default function AdminPage() {
   const router = useRouter();
   const { dates } = useCampaignDates();
@@ -140,7 +156,7 @@ export default function AdminPage() {
         }
       }
 
-      let allNewCampaigns: any[] = [];
+      let allNewCampaigns: NewCampaignRow[] = [];
       let copyCount = 0;
       let rulesCount = 0;
       const rulesUsedInRefresh: CampaignRule[] = [];
@@ -150,9 +166,9 @@ export default function AdminPage() {
         const statePast = (pastCampaigns || []).filter((c: { state: string }) => c.state === state);
         const stateRules = allRules.filter((r) => r.state === state);
 
-        let copiedForState: any[] = [];
+        let copiedForState: NewCampaignRow[] = [];
         if (mode === 'copy' || mode === 'both' || mode === 'either') {
-          copiedForState = statePast.map((campaign: any) => {
+          copiedForState = statePast.map((campaign) => {
             const originalDate = new Date(campaign.date);
             const newDate = new Date(originalDate);
             newDate.setDate(newDate.getDate() + daysDifference);
@@ -173,7 +189,7 @@ export default function AdminPage() {
           if (mode !== 'either') copyCount += copiedForState.length;
         }
 
-        let generatedForState: any[] = [];
+        let generatedForState: NewCampaignRow[] = [];
         if (mode === 'rules' || mode === 'both' || mode === 'either') {
           const ruleCampaigns = evaluateRules(stateRules, secondWeekStart, secondWeekEnd);
           generatedForState = ruleCampaigns.map((campaign) => ({

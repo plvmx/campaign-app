@@ -19,6 +19,7 @@ export default function CapturePage() {
   const [signedInMobile, setSignedInMobile] = useState<string | null>(null);
   const [signedInState, setSignedInState] = useState<string | null>(null);
   const [isAdminOrStateReporter, setIsAdminOrStateReporter] = useState(false);
+  const [locationNote, setLocationNote] = useState<string | null>(null);
 
   useEffect(() => {
     async function checkAuthAndGetState() {
@@ -44,14 +45,28 @@ export default function CapturePage() {
         if (cachedState) {
           setDefaultState(cachedState);
         } else {
-          // If no cache, get state from location
-          const stateCode = await getUserStateCode();
+          const { stateCode, deniedByUser } = await getUserStateCode();
           if (stateCode) {
             setDefaultState(stateCode);
+          } else if (deniedByUser) {
+            setLocationNote('Location access was denied. Please select your state manually.');
           }
         }
       } catch (error) {
-        router.push('/login');
+        // Only redirect to login for auth errors; surface other failures so
+        // they don't silently swallow bugs (network issues, DB errors, etc.)
+        const msg = error instanceof Error ? error.message : String(error);
+        const isAuthError =
+          msg.toLowerCase().includes('auth') ||
+          msg.toLowerCase().includes('session') ||
+          msg.toLowerCase().includes('not authenticated') ||
+          msg.toLowerCase().includes('jwt');
+        if (isAuthError) {
+          router.push('/login');
+        } else {
+          console.error('Capture page initialisation error:', error);
+          setIsLoading(false);
+        }
       } finally {
         setIsLoading(false);
       }
@@ -129,6 +144,11 @@ export default function CapturePage() {
             Fill in the details to create a new campaign
           </p>
         </div>
+        {locationNote && (
+          <p className="mb-4 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+            {locationNote}
+          </p>
+        )}
         <CampaignForm
           onSubmit={handleSubmit}
           initialData={{

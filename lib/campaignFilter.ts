@@ -26,36 +26,22 @@ export async function getUserAdminStatusAndMobile(): Promise<{
     // Normalize state to uppercase for consistent matching (VIC, NSW, etc.)
     const normalizedState = profile.state.toUpperCase().trim();
     
-    // Fetch all needed fields in a single query
-    const { data: allLeaders, error } = await supabase
+    // Filter by both state and leader name at the DB level so we never load
+    // the entire state's leaders into memory.
+    const { data: matchedLeaders, error } = await supabase
       .from('state_leaders')
       .select('admin, leader, state, mobile')
-      .eq('state', normalizedState);
+      .eq('state', normalizedState)
+      .ilike('leader', normalizedName);
 
     if (error) {
       console.error('getUserAdminStatusAndMobile: Error fetching leaders:', error);
       return { admin: null, state: normalizedState, mobile: null, leader: null };
     }
 
-    if (!allLeaders || allLeaders.length === 0) {
-      console.log('getUserAdminStatusAndMobile: No leaders found for state:', normalizedState);
-      return { admin: null, state: normalizedState, mobile: null, leader: null };
-    }
+    const match = matchedLeaders && matchedLeaders.length > 0 ? matchedLeaders[0] : null;
 
-    // Find matching record with case-insensitive name comparison (exact match only)
-    const match = allLeaders.find(record => {
-      const recordNameNormalized = normalizeName(record.leader || '');
-      // Exact match only - no suffix stripping
-      return recordNameNormalized === normalizedName;
-    });
-    
     if (match) {
-      console.log('getUserAdminStatusAndMobile: Found match:', { 
-        profileName: profile.name, 
-        leaderName: match.leader, 
-        admin: match.admin, 
-        state: match.state 
-      });
       return {
         admin: match.admin || null,
         state: (match.state || normalizedState).toUpperCase().trim(),
@@ -63,8 +49,7 @@ export async function getUserAdminStatusAndMobile(): Promise<{
         leader: match.leader || null,
       };
     }
-    
-    console.log('getUserAdminStatusAndMobile: No match found for name:', profile.name, 'in state:', normalizedState);
+
     return { admin: null, state: normalizedState, mobile: null, leader: null };
   } catch (error) {
     console.error('Error getting user admin status and mobile:', error);

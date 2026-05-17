@@ -7,14 +7,15 @@ import { getCurrentUser } from '@/lib/auth';
 import { hasPermission, Permission } from '@/lib/permissions';
 import { supabase } from '@/lib/supabaseClient';
 import { getErrorMessage } from '@/lib/errorUtils';
+import type { Campaign } from '@/lib/types';
 
 interface CampaignLog {
   id: string;
   campaign_id: string | null;
   user_id: string | null;
   change_type: 'INSERT' | 'UPDATE' | 'DELETE';
-  old_data: Record<string, any> | null;
-  new_data: Record<string, any> | null;
+  old_data: Partial<Campaign> | null;
+  new_data: Partial<Campaign> | null;
   changed_fields: string[] | null;
   user_email: string | null;
   user_name: string | null;
