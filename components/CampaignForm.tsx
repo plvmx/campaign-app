@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, FormEvent, useEffect } from 'react';
-import { supabase } from '@/lib/supabaseClient';
 import { getTodayDateString } from '@/lib/campaignDates';
 import { getErrorMessage } from '@/lib/errorUtils';
+import { getPlacesForState, getLeadersForState } from '@/lib/services/dropdownService';
 
 export interface CampaignData {
   date: string;
@@ -84,73 +84,34 @@ export default function CampaignForm({
     generateTimeOptions();
   }, []);
 
-  // Fetch places from state_places table when state changes
+  // Fetch places when state changes
   useEffect(() => {
-    async function fetchPlaces() {
-      if (!formData.state) {
-        setPlaces([]);
-        return;
-      }
-
-      setLoadingPlaces(true);
-      try {
-        const { data, error } = await supabase
-          .from('state_places')
-          .select('place')
-          .eq('state', formData.state)
-          .order('place', { ascending: true });
-
-        if (error) throw error;
-
-        // Get unique places (should already be unique due to UNIQUE constraint, but just in case)
-        const uniquePlaces = Array.from(
-          new Set((data || []).map((item) => item.place).filter(Boolean))
-        ).sort();
-
+    if (!formData.state) {
+      setPlaces([]);
+      return;
+    }
+    setLoadingPlaces(true);
+    getPlacesForState(formData.state)
+      .then((uniquePlaces) => {
         setPlaces(uniquePlaces);
-        
-        // If current place is not in the filtered list, clear it
         if (formData.place && !uniquePlaces.includes(formData.place)) {
           setFormData((prev) => ({ ...prev, place: '' }));
         }
-      } catch (err: unknown) {
-        console.error('Error fetching places:', err);
-        setPlaces([]);
-      } finally {
-        setLoadingPlaces(false);
-      }
-    }
-
-    fetchPlaces();
+      })
+      .finally(() => setLoadingPlaces(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData.state]);
 
-  // Fetch leaders from state_leaders table when state changes
+  // Fetch leaders when state changes
   useEffect(() => {
-    async function fetchLeaders() {
-      if (!formData.state) {
-        setLeaders([]);
-        return;
-      }
-
-      setLoadingLeaders(true);
-      try {
-        const { data, error } = await supabase
-          .from('state_leaders')
-          .select('leader')
-          .eq('state', formData.state)
-          .order('leader', { ascending: true });
-
-        if (error) throw error;
-
-        // Get unique leaders (should already be unique due to UNIQUE constraint, but just in case)
-        const uniqueLeaders = Array.from(
-          new Set((data || []).map((item) => item.leader).filter(Boolean))
-        ).sort();
-
+    if (!formData.state) {
+      setLeaders([]);
+      return;
+    }
+    setLoadingLeaders(true);
+    getLeadersForState(formData.state)
+      .then((uniqueLeaders) => {
         setLeaders(uniqueLeaders);
-
-        // If current leader is not in the filtered list, clear it
         if (formData.leader && !uniqueLeaders.includes(formData.leader)) {
           setFormData((prev) => ({ ...prev, leader: '' }));
         } else if (
@@ -161,18 +122,10 @@ export default function CampaignForm({
           formData.state.toUpperCase().trim() === signedInState.toUpperCase().trim() &&
           uniqueLeaders.includes(signedInLeader)
         ) {
-          // Default to signed-in user's leader when state matches (non-admin/SR only)
           setFormData((prev) => ({ ...prev, leader: signedInLeader }));
         }
-      } catch (err: unknown) {
-        console.error('Error fetching leaders:', err);
-        setLeaders([]);
-      } finally {
-        setLoadingLeaders(false);
-      }
-    }
-
-    fetchLeaders();
+      })
+      .finally(() => setLoadingLeaders(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData.state, formData.leader, isAdminOrStateReporter, signedInLeader, signedInState]);
 

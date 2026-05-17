@@ -5,11 +5,10 @@ import { useRouter } from 'next/navigation';
 import MobileLayout from '@/components/MobileLayout';
 import CampaignForm, { CampaignData } from '@/components/CampaignForm';
 import { getCurrentUser } from '@/lib/auth';
-import { supabase } from '@/lib/supabaseClient';
 import { getUserStateCode, getCachedStateCode } from '@/lib/location';
-import { logCampaignChange } from '@/lib/campaignLog';
 import { getErrorMessage } from '@/lib/errorUtils';
 import { getUserAdminStatusAndMobile } from '@/lib/campaignFilter';
+import { createCampaign } from '@/lib/services/campaignService';
 
 export default function CapturePage() {
   const router = useRouter();
@@ -90,33 +89,18 @@ export default function CapturePage() {
         mobile = userMobile || null;
       }
 
-      const newCampaignData = {
+      await createCampaign({
         date: data.date,
         state: data.state,
         place: data.place,
         time: data.time,
         leader: data.leader,
-        mobile: mobile,
+        mobile,
         botj: data.botj || 'No',
         user_id: user.id,
-        created_at: new Date().toISOString(),
         source: 'MAN',
-      };
+      });
 
-      const { data: insertedData, error } = await supabase
-        .from('campaigns')
-        .insert([newCampaignData])
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      // Log the insertion (async, won't block)
-      if (insertedData) {
-        logCampaignChange(insertedData.id, 'INSERT', null, insertedData);
-      }
-
-      // Redirect to app page with success parameter
       router.push('/app?created=true');
     } catch (error: unknown) {
       throw new Error(getErrorMessage(error, 'Failed to create campaign'));
