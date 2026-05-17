@@ -26,6 +26,24 @@ export async function getPlacesForState(state: string): Promise<string[]> {
 }
 
 /**
+ * Fetch the mobile number for a specific leader in a state.
+ * Returns null if not found.
+ */
+export async function getLeaderMobile(state: string, leader: string): Promise<string | null> {
+  if (!state || !leader) return null;
+
+  const { data, error } = await supabase
+    .from('state_leaders')
+    .select('mobile')
+    .eq('state', state.trim().toUpperCase())
+    .eq('leader', leader)
+    .single();
+
+  if (error || !data) return null;
+  return data.mobile ?? null;
+}
+
+/**
  * Fetch the sorted list of leader names for a given state.
  * Single source of truth — replaces ~5 identical inline queries across the codebase.
  */

@@ -18,6 +18,7 @@ import { AUSTRALIAN_STATES } from '@/lib/constants';
 import { getErrorMessage } from '@/lib/errorUtils';
 import type { Campaign } from '@/lib/types';
 import { formatCampaignTimeDisplay, isCampaignPast } from '@/lib/campaignUtils';
+import { getPlacesForState, getLeadersForState, getLeaderMobile } from '@/lib/services/dropdownService';
 
 function AppPageContent() {
   const router = useRouter();
@@ -232,30 +233,10 @@ function AppPageContent() {
             [campaignId]: placesCache.current[normalizedState],
           }));
         } else {
-          // Load from database and cache
-          async function loadPlacesForEdit() {
-            const { data, error } = await supabase
-              .from('state_places')
-              .select('place')
-              .eq('state', normalizedState)
-              .order('place', { ascending: true });
-            
-            if (error) {
-              console.error('Error loading places:', error);
-              return;
-            }
-            
-            if (data) {
-              const uniquePlaces = Array.from(new Set(data.map(p => p.place).filter(Boolean)));
-              // Cache the result
-              placesCache.current[normalizedState] = uniquePlaces;
-              setCampaignPlaces(prev => ({
-                ...prev,
-                [campaignId]: uniquePlaces,
-              }));
-            }
-          }
-          loadPlacesForEdit();
+          getPlacesForState(normalizedState).then((uniquePlaces) => {
+            placesCache.current[normalizedState] = uniquePlaces;
+            setCampaignPlaces(prev => ({ ...prev, [campaignId]: uniquePlaces }));
+          });
         }
       } else {
         // Clear places if no state selected
@@ -283,30 +264,10 @@ function AppPageContent() {
             [campaignId]: leadersCache.current[normalizedState],
           }));
         } else {
-          // Load from database and cache
-          async function loadLeadersForEdit() {
-            const { data, error } = await supabase
-              .from('state_leaders')
-              .select('leader')
-              .eq('state', normalizedState)
-              .order('leader', { ascending: true });
-            
-            if (error) {
-              console.error('Error loading leaders:', error);
-              return;
-            }
-            
-            if (data) {
-              const uniqueLeaders = Array.from(new Set(data.map(l => l.leader).filter(Boolean)));
-              // Cache the result
-              leadersCache.current[normalizedState] = uniqueLeaders;
-              setCampaignLeaders(prev => ({
-                ...prev,
-                [campaignId]: uniqueLeaders,
-              }));
-            }
-          }
-          loadLeadersForEdit();
+          getLeadersForState(normalizedState).then((uniqueLeaders) => {
+            leadersCache.current[normalizedState] = uniqueLeaders;
+            setCampaignLeaders(prev => ({ ...prev, [campaignId]: uniqueLeaders }));
+          });
         }
       } else {
         // Clear leaders if no state selected
@@ -488,22 +449,27 @@ function AppPageContent() {
         // For regular users, also fetch campaigns shared with me
         let dataMerged: Campaign[] = (data || []) as Campaign[];
         if (adminStatus !== 'AD' && adminStatus !== 'SR' && sharedOwnersList.length > 0) {
-            const orParts = sharedOwnersList.map(
-              (o) => `and(state.eq.${(o.owner_state || '').replace(/'/g, "''")},leader.eq.${(o.owner_leader || '').replace(/'/g, "''")})`
-            ).join(',');
-            const { data: sharedData, error: sharedError } = await supabase
-              .from('campaigns')
-              .select('*')
-              .or(orParts)
-              .order('date', { ascending: true })
-              .order('state', { ascending: true })
-              .order('place', { ascending: true })
-              .order('time', { ascending: true });
+          const sharedResults = await Promise.all(
+            sharedOwnersList.map((o) =>
+              supabase
+                .from('campaigns')
+                .select('*')
+                .eq('state', o.owner_state || '')
+                .eq('leader', o.owner_leader || '')
+                .order('date', { ascending: true })
+                .order('state', { ascending: true })
+                .order('place', { ascending: true })
+                .order('time', { ascending: true })
+            )
+          );
+          const ownIds = new Set(dataMerged.map((c) => c.id));
+          for (const { data: sharedData, error: sharedError } of sharedResults) {
             if (!sharedError && sharedData?.length) {
-              const ownIds = new Set(dataMerged.map((c) => c.id));
               const extra = (sharedData as Campaign[]).filter((c) => !ownIds.has(c.id));
+              extra.forEach((c) => ownIds.add(c.id));
               dataMerged = [...dataMerged, ...extra];
             }
+          }
         }
 
         // Performance logging
@@ -640,71 +606,43 @@ function AppPageContent() {
       }
       
       setLoadingPlaces(true);
-      try {
-        const { data, error } = await supabase
-          .from('state_places')
-          .select('place')
-          .eq('state', normalizedState)
-          .order('place', { ascending: true });
-        
-        if (error) throw error;
-        
-        const uniquePlaces = Array.from(new Set((data || []).map(p => p.place).filter(Boolean)));
-        // Cache the result
-        placesCache.current[normalizedState] = uniquePlaces;
-        setPlaces(uniquePlaces);
-      } catch (err) {
-        console.error('Error loading places:', err);
-      } finally {
-        setLoadingPlaces(false);
-      }
+      getPlacesForState(normalizedState)
+        .then((uniquePlaces) => {
+          placesCache.current[normalizedState] = uniquePlaces;
+          setPlaces(uniquePlaces);
+        })
+        .finally(() => setLoadingPlaces(false));
     }
-    
+
     loadPlaces();
   }, [formState.state]);
-  
+
   // Load leaders from state_leaders table when state changes (with caching)
   useEffect(() => {
-    // Skip if we're in the middle of editing (loading data programmatically)
-    if (isEditingRef.current) {
-      return;
-    }
-    
+    if (isEditingRef.current) return;
+
     async function loadLeaders() {
       if (!formState.state) {
         setLeaders([]);
         return;
       }
-      
+
       const normalizedState = formState.state.toUpperCase().trim();
-      
-      // Check cache first
+
       if (leadersCache.current[normalizedState]) {
         setLeaders(leadersCache.current[normalizedState]);
         return;
       }
-      
+
       setLoadingLeaders(true);
-      try {
-        const { data, error } = await supabase
-          .from('state_leaders')
-          .select('leader')
-          .eq('state', normalizedState)
-          .order('leader', { ascending: true });
-        
-        if (error) throw error;
-        
-        const uniqueLeaders = Array.from(new Set((data || []).map(l => l.leader).filter(Boolean)));
-        // Cache the result
-        leadersCache.current[normalizedState] = uniqueLeaders;
-        setLeaders(uniqueLeaders);
-      } catch (err) {
-        console.error('Error loading leaders:', err);
-      } finally {
-        setLoadingLeaders(false);
-      }
+      getLeadersForState(normalizedState)
+        .then((uniqueLeaders) => {
+          leadersCache.current[normalizedState] = uniqueLeaders;
+          setLeaders(uniqueLeaders);
+        })
+        .finally(() => setLoadingLeaders(false));
     }
-    
+
     loadLeaders();
   }, [formState.state]);
   
@@ -825,18 +763,9 @@ function AppPageContent() {
         placeValue = newPlace;
         
         // Reload places for the state and update cache
-        const { data: placesData } = await supabase
-          .from('state_places')
-          .select('place')
-          .eq('state', stateValue)
-          .order('place', { ascending: true });
-        
-        if (placesData) {
-          const uniquePlaces = Array.from(new Set(placesData.map(p => p.place).filter(Boolean)));
-          // Update cache
-          placesCache.current[stateValue] = uniquePlaces;
-          setPlaces(uniquePlaces);
-        }
+        const uniquePlaces = await getPlacesForState(stateValue);
+        placesCache.current[stateValue] = uniquePlaces;
+        setPlaces(uniquePlaces);
       }
       
       // Validate that we have a place value
@@ -919,54 +848,19 @@ function AppPageContent() {
           [campaign.id]: placesCache.current[normalizedState],
         }));
       } else {
-        try {
-          const { data, error } = await supabase
-            .from('state_places')
-            .select('place')
-            .eq('state', normalizedState)
-            .order('place', { ascending: true });
-          
-          if (!error && data) {
-            const uniquePlaces = Array.from(new Set(data.map(p => p.place).filter(Boolean)));
-            // Cache the result
-            placesCache.current[normalizedState] = uniquePlaces;
-            setCampaignPlaces(prev => ({
-              ...prev,
-              [campaign.id]: uniquePlaces,
-            }));
-          }
-        } catch (err) {
-          console.error('Error loading places:', err);
-        }
+        getPlacesForState(normalizedState).then((uniquePlaces) => {
+          placesCache.current[normalizedState] = uniquePlaces;
+          setCampaignPlaces(prev => ({ ...prev, [campaign.id]: uniquePlaces }));
+        });
       }
-      
-      // Load leaders for the state from state_leaders table (with caching)
-      // Check cache first
+
       if (leadersCache.current[normalizedState]) {
-        setCampaignLeaders(prev => ({
-          ...prev,
-          [campaign.id]: leadersCache.current[normalizedState],
-        }));
+        setCampaignLeaders(prev => ({ ...prev, [campaign.id]: leadersCache.current[normalizedState] }));
       } else {
-        try {
-          const { data, error } = await supabase
-            .from('state_leaders')
-            .select('leader')
-            .eq('state', normalizedState)
-            .order('leader', { ascending: true });
-          
-          if (!error && data) {
-            const uniqueLeaders = Array.from(new Set(data.map(l => l.leader).filter(Boolean)));
-            // Cache the result
-            leadersCache.current[normalizedState] = uniqueLeaders;
-            setCampaignLeaders(prev => ({
-              ...prev,
-              [campaign.id]: uniqueLeaders,
-            }));
-          }
-        } catch (err) {
-          console.error('Error loading leaders:', err);
-        }
+        getLeadersForState(normalizedState).then((uniqueLeaders) => {
+          leadersCache.current[normalizedState] = uniqueLeaders;
+          setCampaignLeaders(prev => ({ ...prev, [campaign.id]: uniqueLeaders }));
+        });
       }
     }
     
@@ -1036,29 +930,15 @@ function AppPageContent() {
         placeValue = newPlace;
         
         // Reload places for the state and update cache
-        const { data: placesData } = await supabase
-          .from('state_places')
-          .select('place')
-          .eq('state', stateValue)
-          .order('place', { ascending: true });
-        
-        if (placesData) {
-          const uniquePlaces = Array.from(new Set(placesData.map(p => p.place).filter(Boolean)));
-          // Update cache
-          placesCache.current[stateValue] = uniquePlaces;
-          setCampaignPlaces(prev => ({
-            ...prev,
-            [campaignId]: uniquePlaces,
-          }));
-        }
+        const uniquePlaces = await getPlacesForState(stateValue);
+        placesCache.current[stateValue] = uniquePlaces;
+        setCampaignPlaces(prev => ({ ...prev, [campaignId]: uniquePlaces }));
       }
-      
-      // Validate that we have a place value
+
       if (!placeValue || placeValue.trim() === '') {
         throw new Error('Please select or enter a place');
       }
-      
-      // Fetch old data for logging
+
       const oldData = await fetchCampaignData(campaignId);
       
       const mobileValue = editData.mobile.trim() || null;
@@ -1134,28 +1014,13 @@ function AppPageContent() {
         // Leader is being set - fetch mobile from state_leaders table
         const editData = inlineEditState[campaignId];
         if (editData?.state) {
-          try {
-            const { data, error } = await supabase
-              .from('state_leaders')
-              .select('mobile')
-              .eq('state', editData.state.toUpperCase().trim())
-              .eq('leader', value)
-              .single();
-            
-            if (!error && data && data.mobile) {
-              // Update both leader and mobile
-              setInlineEditState(prev => ({
-                ...prev,
-                [campaignId]: {
-                  ...prev[campaignId],
-                  leader: value,
-                  mobile: data.mobile || '',
-                }
-              }));
-              return;
-            }
-          } catch (err) {
-            console.error('Error loading mobile for leader:', err);
+          const mobile = await getLeaderMobile(editData.state, value);
+          if (mobile) {
+            setInlineEditState(prev => ({
+              ...prev,
+              [campaignId]: { ...prev[campaignId], leader: value, mobile },
+            }));
+            return;
           }
         }
       } else {
@@ -1494,23 +1359,8 @@ function AppPageContent() {
                     const newLeader = e.target.value;
                     // If leader is selected, fetch and update mobile from state_leaders table
                     if (newLeader && formState.state) {
-                      try {
-                        const { data, error } = await supabase
-                          .from('state_leaders')
-                          .select('mobile')
-                          .eq('state', formState.state.toUpperCase().trim())
-                          .eq('leader', newLeader)
-                          .single();
-                        
-                        if (!error && data && data.mobile) {
-                          setFormState({ ...formState, leader: newLeader, mobile: data.mobile || '' });
-                        } else {
-                          setFormState({ ...formState, leader: newLeader });
-                        }
-                      } catch (err) {
-                        console.error('Error loading mobile for leader:', err);
-                        setFormState({ ...formState, leader: newLeader });
-                      }
+                      const mobile = await getLeaderMobile(formState.state, newLeader);
+                      setFormState({ ...formState, leader: newLeader, mobile: mobile || '' });
                     } else {
                       // Clear leader and mobile if leader is cleared
                       setFormState({ ...formState, leader: '', mobile: '' });
