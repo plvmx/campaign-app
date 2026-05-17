@@ -4,110 +4,75 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import MobileLayout from '@/components/MobileLayout';
 import CampaignForm, { CampaignData } from '@/components/CampaignForm';
-import { getCurrentUser } from '@/lib/auth';
+import { useUser } from '@/contexts/UserContext';
 import { getUserStateCode, getCachedStateCode } from '@/lib/location';
 import { getErrorMessage } from '@/lib/errorUtils';
-import { getUserAdminStatusAndMobile } from '@/lib/campaignFilter';
 import { createCampaign } from '@/lib/services/campaignService';
 
 export default function CapturePage() {
   const router = useRouter();
-  const [isLoading, setIsLoading] = useState(true);
+  const {
+    user,
+    adminStatus,
+    userState,
+    userLeader,
+    userMobile,
+    isLoading: isUserLoading,
+  } = useUser();
+
+  const isAdminOrStateReporter = adminStatus === 'AD' || adminStatus === 'SR';
+
   const [defaultState, setDefaultState] = useState<string>('');
-  const [signedInLeader, setSignedInLeader] = useState<string | null>(null);
-  const [signedInMobile, setSignedInMobile] = useState<string | null>(null);
-  const [signedInState, setSignedInState] = useState<string | null>(null);
-  const [isAdminOrStateReporter, setIsAdminOrStateReporter] = useState(false);
   const [locationNote, setLocationNote] = useState<string | null>(null);
 
   useEffect(() => {
-    async function checkAuthAndGetState() {
-      try {
-        const user = await getCurrentUser();
-        if (!user) {
-          router.push('/login');
-          return;
-        }
-
-        // Get user's state, leader, mobile, and admin status for form defaults
-        const { admin, state, leader, mobile } = await getUserAdminStatusAndMobile();
-        const isAdminOrSR = admin === 'AD' || admin === 'SR';
-        setIsAdminOrStateReporter(isAdminOrSR);
-        if (!isAdminOrSR) {
-          setSignedInLeader(leader ?? null);
-          setSignedInMobile(mobile ?? null);
-          setSignedInState(state ?? null);
-        }
-
-        // Try to get cached state first (faster)
-        const cachedState = getCachedStateCode();
-        if (cachedState) {
-          setDefaultState(cachedState);
-        } else {
-          const { stateCode, deniedByUser } = await getUserStateCode();
-          if (stateCode) {
-            setDefaultState(stateCode);
-          } else if (deniedByUser) {
-            setLocationNote('Location access was denied. Please select your state manually.');
-          }
-        }
-      } catch (error) {
-        // Only redirect to login for auth errors; surface other failures so
-        // they don't silently swallow bugs (network issues, DB errors, etc.)
-        const msg = error instanceof Error ? error.message : String(error);
-        const isAuthError =
-          msg.toLowerCase().includes('auth') ||
-          msg.toLowerCase().includes('session') ||
-          msg.toLowerCase().includes('not authenticated') ||
-          msg.toLowerCase().includes('jwt');
-        if (isAuthError) {
-          router.push('/login');
-        } else {
-          console.error('Capture page initialisation error:', error);
-          setIsLoading(false);
-        }
-      } finally {
-        setIsLoading(false);
-      }
+    if (isUserLoading) return;
+    if (!user) {
+      router.push('/login');
+      return;
     }
-    checkAuthAndGetState();
-  }, [router]);
+
+    // Non-admin users: use their own state directly (no location fetch needed)
+    if (!isAdminOrStateReporter && userState) {
+      setDefaultState(userState);
+      return;
+    }
+
+    // Try cached location first
+    const cachedState = getCachedStateCode();
+    if (cachedState) {
+      setDefaultState(cachedState);
+      return;
+    }
+
+    // Fall back to geolocation
+    getUserStateCode().then(({ stateCode, deniedByUser }) => {
+      if (stateCode) setDefaultState(stateCode);
+      else if (deniedByUser) setLocationNote('Location access was denied. Please select your state manually.');
+    });
+  }, [isUserLoading, user, router, isAdminOrStateReporter, userState]);
 
   const handleSubmit = async (data: CampaignData) => {
     try {
-      // Get the current user (can be anonymous)
-      const user = await getCurrentUser();
-      if (!user) {
-        throw new Error('You must be logged in to create a campaign');
-      }
-
-      // Get user's mobile from state_leaders if not provided in form (optimized)
-      let mobile = data.mobile || null;
-      if (!mobile) {
-        const { getUserAdminStatusAndMobile } = await import('@/lib/campaignFilter');
-        const { mobile: userMobile } = await getUserAdminStatusAndMobile();
-        mobile = userMobile || null;
-      }
-
+      if (!user) throw new Error('You must be logged in to create a campaign');
       await createCampaign({
         date: data.date,
         state: data.state,
         place: data.place,
         time: data.time,
         leader: data.leader,
-        mobile,
+        mobile: data.mobile || userMobile || null,
         botj: data.botj || 'No',
         user_id: user.id,
         source: 'MAN',
       });
-
       router.push('/app?created=true');
     } catch (error: unknown) {
       throw new Error(getErrorMessage(error, 'Failed to create campaign'));
     }
   };
 
-  if (isLoading) {
+  if (isUserLoading) {
     return (
       <MobileLayout>
         <div className="flex min-h-screen items-center justify-center">
@@ -136,20 +101,16 @@ export default function CapturePage() {
         <CampaignForm
           onSubmit={handleSubmit}
           initialData={{
-            // For non-admin users, use their state so leader can default; otherwise use location
-            state: !isAdminOrStateReporter && signedInState
-              ? signedInState
-              : defaultState,
-            ...(!isAdminOrStateReporter && signedInLeader && { leader: signedInLeader }),
-            ...(!isAdminOrStateReporter && signedInMobile && { mobile: signedInMobile }),
+            state: !isAdminOrStateReporter && userState ? userState : defaultState,
+            ...(!isAdminOrStateReporter && userLeader && { leader: userLeader }),
+            ...(!isAdminOrStateReporter && userMobile && { mobile: userMobile }),
           }}
-          signedInLeader={signedInLeader ?? undefined}
-          signedInMobile={signedInMobile ?? undefined}
-          signedInState={signedInState ?? undefined}
+          signedInLeader={isAdminOrStateReporter ? undefined : userLeader ?? undefined}
+          signedInMobile={isAdminOrStateReporter ? undefined : userMobile ?? undefined}
+          signedInState={isAdminOrStateReporter ? undefined : userState ?? undefined}
           isAdminOrStateReporter={isAdminOrStateReporter}
         />
       </div>
     </MobileLayout>
   );
 }
-
