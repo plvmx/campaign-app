@@ -3,7 +3,7 @@
 import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import MobileLayout from '@/components/MobileLayout';
-import { getCurrentUser } from '@/lib/auth';
+import { getCurrentUser, type User } from '@/lib/auth';
 import { supabase } from '@/lib/supabaseClient';
 import { getStateColor } from '@/lib/stateColors';
 import { CampaignRule, previewRuleEvaluation } from '@/lib/campaignRules';
@@ -47,7 +47,7 @@ function CampaignRulesPageContent() {
   const { dates } = useCampaignDates();
   const [isLoading, setIsLoading] = useState(true);
   const [hasAccess, setHasAccess] = useState(false);
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [adminStatus, setAdminStatus] = useState<string | null>(null);
   const [userState, setUserState] = useState<string | null>(null);
   const [userLeader, setUserLeader] = useState<string | null>(null);
@@ -364,7 +364,7 @@ function CampaignRulesPageContent() {
       }
 
       const mobileValue = formState.mobile.trim() || null;
-      const ruleData: any = {
+      const ruleData: Omit<CampaignRule, 'id'> = {
         name: formState.name.trim(),
         leader: formState.leader.trim(),
         state: formState.state.trim(),
@@ -807,7 +807,7 @@ function CampaignRulesPageContent() {
                 id="frequency_type"
                 required
                 value={formState.frequency_type}
-                onChange={(e) => setFormState({ ...formState, frequency_type: e.target.value as any })}
+                onChange={(e) => setFormState({ ...formState, frequency_type: e.target.value as 'weekly' | 'biweekly' | 'monthly' | 'custom' })}
                 className="mt-1 block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
               >
                 <option value="weekly">Weekly</option>
