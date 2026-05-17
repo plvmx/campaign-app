@@ -52,28 +52,23 @@ export async function getUserRole(): Promise<UserRole> {
       .single();
 
     if (profileData?.name && profileData?.state) {
-      // Normalize name for case-insensitive matching
       const normalizedName = profileData.name.trim().toLowerCase();
-      
-      // Fetch all state_leaders for the state to do case-insensitive name matching
+      const normalizedState = profileData.state.trim().toUpperCase();
+
+      // Filter by both state and leader name at the DB level so we never load
+      // the entire state's leaders into memory.
       const { data: leaderDataArray } = await supabase
         .from('state_leaders')
         .select('admin, leader')
-        .eq('state', profileData.state);
+        .eq('state', normalizedState)
+        .ilike('leader', normalizedName);
 
-      if (leaderDataArray && leaderDataArray.length > 0) {
-        // Find matching record with case-insensitive name comparison
-        const match = leaderDataArray.find(record => 
-          record.leader?.trim().toLowerCase() === normalizedName
-        );
-
-        // Only grant admin role if admin field is exactly 'AD'
-        if (match?.admin === 'AD') {
-          return {
-            role: 'admin',
-            permissions: rolePermissions.admin,
-          };
-        }
+      // Only grant admin role if the matched record has admin === 'AD'
+      if (leaderDataArray && leaderDataArray.length > 0 && leaderDataArray[0].admin === 'AD') {
+        return {
+          role: 'admin',
+          permissions: rolePermissions.admin,
+        };
       }
     }
   } catch (error) {

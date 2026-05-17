@@ -160,21 +160,28 @@ function AppPageContent() {
     
     let dataMerged: Campaign[] = (data || []) as Campaign[];
     if (adminStatusValue !== 'AD' && adminStatusValue !== 'SR' && sharedOwnersList.length > 0) {
-      const orParts = sharedOwnersList.map(
-        (o) => `and(state.eq.${(o.owner_state || '').replace(/'/g, "''")},leader.eq.${(o.owner_leader || '').replace(/'/g, "''")})`
-      ).join(',');
-      const { data: sharedData, error: sharedError } = await supabase
-        .from('campaigns')
-        .select('*')
-        .or(orParts)
-        .order('date', { ascending: true })
-        .order('state', { ascending: true })
-        .order('place', { ascending: true })
-        .order('time', { ascending: true });
-      if (!sharedError && sharedData?.length) {
-        const ownIds = new Set(dataMerged.map((c) => c.id));
-        const extra = (sharedData as Campaign[]).filter((c) => !ownIds.has(c.id));
-        dataMerged = [...dataMerged, ...extra];
+      // Use individual parameterised .eq() calls per shared owner rather than
+      // string-interpolated .or() to avoid filter injection via crafted DB values.
+      const sharedResults = await Promise.all(
+        sharedOwnersList.map((o) =>
+          supabase
+            .from('campaigns')
+            .select('*')
+            .eq('state', o.owner_state || '')
+            .eq('leader', o.owner_leader || '')
+            .order('date', { ascending: true })
+            .order('state', { ascending: true })
+            .order('place', { ascending: true })
+            .order('time', { ascending: true })
+        )
+      );
+      const ownIds = new Set(dataMerged.map((c) => c.id));
+      for (const { data: sharedData, error: sharedError } of sharedResults) {
+        if (!sharedError && sharedData?.length) {
+          const extra = (sharedData as Campaign[]).filter((c) => !ownIds.has(c.id));
+          extra.forEach((c) => ownIds.add(c.id));
+          dataMerged = [...dataMerged, ...extra];
+        }
       }
     }
     
