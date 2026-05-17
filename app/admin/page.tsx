@@ -202,6 +202,7 @@ export default function AdminPage() {
             botj: campaign.botj,
             user_id: user.id,
             team_size: null,
+            tl_ok: false,
             source: 'RUL',
           }));
           rulesCount += generatedForState.length;
