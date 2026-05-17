@@ -15,4 +15,11 @@ export interface Campaign {
   sr_ok: boolean;
   created_at: string;
   source?: string | null;
+  user_id?: string;
+  /** Results counts — populated when recording results */
+  team_size?: number | null;
+  pp_cnt?: number | null;
+  fp_cnt?: number | null;
+  fpsp_cnt?: number | null;
+  ir_cnt?: number | null;
 }

@@ -3,9 +3,12 @@
 import { useEffect, useState, useRef, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import MobileLayout from '@/components/MobileLayout';
-import { getCurrentUser } from '@/lib/auth';
 import { supabase } from '@/lib/supabaseClient';
-import { logCampaignChange, fetchCampaignData } from '@/lib/campaignLog';
+import { fetchCampaignData } from '@/lib/campaignLog';
+import { normalizeMobile, normalizeName } from '@/lib/auth';
+import { getSharedWithMeOwners } from '@/lib/leaderShares';
+import { useUser } from '@/contexts/UserContext';
+import { updateCampaign, createCampaign } from '@/lib/services/campaignService';
 
 interface InputRow {
   id: string;
@@ -19,6 +22,14 @@ type SectionType = 'partial' | 'full' | 'fullSinners' | 'information';
 function RecordResultsDetailPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const {
+    user: contextUser,
+    isAdmin: contextIsAdmin,
+    userState: contextUserState,
+    userLeader: contextUserLeader,
+    userMobile: contextUserMobile,
+    isLoading: isUserLoading,
+  } = useUser();
   const [isLoading, setIsLoading] = useState(true);
   const [campaignData, setCampaignData] = useState({
     date: '',
@@ -51,6 +62,8 @@ function RecordResultsDetailPageContent() {
   const informationRowsRef = useRef(informationRows);
   const debounceNamesTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const savingNamesRef = useRef(false);
+  // Keep user ID available in cleanup/async callbacks that run after unmount
+  const userIdRef = useRef<string | null>(null);
   
   // Keep refs in sync with state
   useEffect(() => {
@@ -82,15 +95,35 @@ function RecordResultsDetailPageContent() {
   }, [informationRows]);
 
   useEffect(() => {
-    async function checkAuth() {
-      try {
-        const user = await getCurrentUser();
-        if (!user) {
-          router.push('/login');
-          return;
-        }
+    userIdRef.current = contextUser?.id ?? null;
+  }, [contextUser]);
 
-        // Get campaign data from query params
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (isUserLoading) return;
+    if (!contextUser) {
+      router.push('/login');
+      return;
+    }
+
+    const generateId = () =>
+      typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+    const emptyRow = (): InputRow => ({ id: generateId(), field1: '', field2: '', field3: '' });
+
+    const createRowsFromNames = (names: string[]): InputRow[] => {
+      const rows: InputRow[] = [];
+      for (let i = 0; i < names.length; i += 3) {
+        rows.push({ id: generateId(), field1: names[i] || '', field2: names[i + 1] || '', field3: names[i + 2] || '' });
+      }
+      if (rows.length === 0) rows.push(emptyRow());
+      return rows;
+    };
+
+    async function init() {
+      try {
         const date = searchParams.get('date') || '';
         const state = searchParams.get('state') || '';
         const place = searchParams.get('place') || '';
@@ -101,172 +134,84 @@ function RecordResultsDetailPageContent() {
         setCampaignData({ date, state, place, time, leader });
         setReturnFilter(filter);
 
-        // Find or create the campaign
-        const campaignId = await findOrCreateCampaign(user.id, { date, state, place, time, leader });
-        setCampaignId(campaignId);
-        
-        // Load campaign data and results in parallel (they're independent queries)
+        const cid = await findOrCreateCampaign(contextUser!.id, { date, state, place, time, leader });
+        setCampaignId(cid);
+
         const [campaignResponse, resultsResponse] = await Promise.all([
-          supabase
-            .from('campaigns')
-            .select('team_size, pp_cnt, fp_cnt, fpsp_cnt, ir_cnt')
-            .eq('id', campaignId)
-            .single(),
-          supabase
-            .from('results')
-            .select('first_name, category_code, created_at')
-            .eq('campaign_id', campaignId)
-            .order('created_at', { ascending: true })
+          supabase.from('campaigns').select('team_size, pp_cnt, fp_cnt, fpsp_cnt, ir_cnt').eq('id', cid).single(),
+          supabase.from('results').select('first_name, category_code, created_at').eq('campaign_id', cid).order('created_at', { ascending: true }),
         ]);
-        
-        const { data: campaignData, error: campaignError } = campaignResponse;
-        const { data: existingResults, error: resultsError } = resultsResponse;
-        
-        if (!campaignError && campaignData) {
-          setTeamSize(campaignData.team_size?.toString() || '');
-          setPpCnt(campaignData.pp_cnt?.toString() || '');
-          setFpCnt(campaignData.fp_cnt?.toString() || '');
-          setFpspCnt(campaignData.fpsp_cnt?.toString() || '');
-          setIrCnt(campaignData.ir_cnt?.toString() || '');
+
+        if (!campaignResponse.error && campaignResponse.data) {
+          const d = campaignResponse.data;
+          setTeamSize(d.team_size?.toString() || '');
+          setPpCnt(d.pp_cnt?.toString() || '');
+          setFpCnt(d.fp_cnt?.toString() || '');
+          setFpspCnt(d.fpsp_cnt?.toString() || '');
+          setIrCnt(d.ir_cnt?.toString() || '');
         }
 
-        if (!resultsError && existingResults) {
-          // Group results by category code
-          const partialNames = existingResults.filter(r => r.category_code === 'P').map(r => r.first_name);
-          const fullNames = existingResults.filter(r => r.category_code === 'F').map(r => r.first_name);
-          const fullSinnersNames = existingResults.filter(r => r.category_code === 'SP').map(r => r.first_name);
-          const informationNames = existingResults.filter(r => r.category_code === 'IR').map(r => r.first_name);
-
-          // Store original names for deletion tracking
-          const allOriginalNames = new Set(existingResults.map(r => `${r.first_name}:${r.category_code}`));
-          setOriginalNames(allOriginalNames);
-
-          // Helper function to create rows from names
-          const createRowsFromNames = (names: string[], prefix: string) => {
-            const rows: InputRow[] = [];
-            
-            // Generate unique IDs using crypto.randomUUID if available
-            const generateId = () => {
-              if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-                return crypto.randomUUID();
-              }
-              return `${prefix}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-            };
-            
-            for (let i = 0; i < names.length; i += 3) {
-              rows.push({
-                id: generateId(),
-                field1: names[i] || '',
-                field2: names[i + 1] || '',
-                field3: names[i + 2] || '',
-              });
-            }
-            
-            // Ensure at least 1 row for all categories
-            const minRows = 1;
-            while (rows.length < minRows) {
-              rows.push({
-                id: generateId(),
-                field1: '',
-                field2: '',
-                field3: '',
-              });
-            }
-            
-            return rows;
-          };
-
-          // Initialize rows with existing data
-          setPartialRows(createRowsFromNames(partialNames, 'p'));
-          setFullRows(createRowsFromNames(fullNames, 'f'));
-          setFullSinnersRows(createRowsFromNames(fullSinnersNames, 'fs'));
-          setInformationRows(createRowsFromNames(informationNames, 'i'));
+        if (!resultsResponse.error && resultsResponse.data) {
+          const existing = resultsResponse.data;
+          setOriginalNames(new Set(existing.map((r) => `${r.first_name}:${r.category_code}`)));
+          setPartialRows(createRowsFromNames(existing.filter((r) => r.category_code === 'P').map((r) => r.first_name)));
+          setFullRows(createRowsFromNames(existing.filter((r) => r.category_code === 'F').map((r) => r.first_name)));
+          setFullSinnersRows(createRowsFromNames(existing.filter((r) => r.category_code === 'SP').map((r) => r.first_name)));
+          setInformationRows(createRowsFromNames(existing.filter((r) => r.category_code === 'IR').map((r) => r.first_name)));
         } else {
-          // Initialize empty rows if no existing results
-          // Generate unique IDs for each row
-          const generateId = () => {
-            if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-              return crypto.randomUUID();
-            }
-            return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-          };
-          
-          setPartialRows([
-            { id: generateId(), field1: '', field2: '', field3: '' },
-          ]);
-          setFullRows([
-            { id: generateId(), field1: '', field2: '', field3: '' },
-          ]);
-          setFullSinnersRows([
-            { id: generateId(), field1: '', field2: '', field3: '' },
-          ]);
-          setInformationRows([
-            { id: generateId(), field1: '', field2: '', field3: '' },
-          ]);
+          setPartialRows([emptyRow()]);
+          setFullRows([emptyRow()]);
+          setFullSinnersRows([emptyRow()]);
+          setInformationRows([emptyRow()]);
         }
       } catch (error) {
-        router.push('/login');
+        const msg = error instanceof Error ? error.message : String(error);
+        const isAuthError = msg.toLowerCase().includes('auth') || msg.toLowerCase().includes('session') || msg.toLowerCase().includes('jwt');
+        if (isAuthError) router.push('/login');
+        else console.error('Record results init error:', error);
       } finally {
         setIsLoading(false);
       }
     }
-    checkAuth();
-  }, [router, searchParams]);
+    init();
+  }, [isUserLoading, contextUser]);
 
-  // Function to find or create a campaign (optimized to avoid duplicate queries)
-  const findOrCreateCampaign = async (
+  // Find an existing campaign or create one if the user is the owner.
+  const findOrCreateCampaign = useCallback(async (
     userId: string,
-    campaignData: { date: string; state: string; place: string; time: string; leader: string }
+    campaignParams: { date: string; state: string; place: string; time: string; leader: string }
   ): Promise<string> => {
-    // Parallelize: Check admin status, user mobile/leader, and shared owners
-    const [{ hasPermission, Permission }, { getUserAdminStatusAndMobile }, { normalizeMobile, normalizeName }, { getSharedWithMeOwners }] = await Promise.all([
-      import('@/lib/permissions'),
-      import('@/lib/campaignFilter'),
-      import('@/lib/auth'),
-      import('@/lib/leaderShares')
-    ]);
-    
-    const [isAdmin, adminData] = await Promise.all([
-      hasPermission(Permission.ADMIN_ACCESS),
-      getUserAdminStatusAndMobile()
-    ]);
-    
-    const userMobileAndLeader = adminData.mobile && adminData.leader 
-      ? { mobile: adminData.mobile, leader: adminData.leader } 
+    const userMobileAndLeader = contextUserMobile && contextUserLeader
+      ? { mobile: contextUserMobile, leader: contextUserLeader }
       : null;
-    const userState = adminData.state || null;
-    
-    // First, try to find an existing campaign
-    let query = supabase
+
+    const { data: campaigns } = await supabase
       .from('campaigns')
       .select('id, mobile, state, leader')
-      .eq('date', campaignData.date)
-      .eq('state', campaignData.state)
-      .eq('place', campaignData.place)
-      .eq('time', campaignData.time)
-      .eq('leader', campaignData.leader);
-    
-    const { data: campaigns, error: findError } = await query;
-    
-    // For admins, use first matching campaign; for non-admins, allow own (mobile match) or shared
+      .eq('date', campaignParams.date)
+      .eq('state', campaignParams.state)
+      .eq('place', campaignParams.place)
+      .eq('time', campaignParams.time)
+      .eq('leader', campaignParams.leader);
+
     let existingCampaign: { id: string } | null = null;
-    if (isAdmin) {
+    if (contextIsAdmin) {
       existingCampaign = campaigns && campaigns.length > 0 ? campaigns[0] : null;
     } else if (campaigns && campaigns.length > 0) {
       // Own: mobile match
       if (userMobileAndLeader?.mobile) {
         const normalizedMobile = normalizeMobile(userMobileAndLeader.mobile);
-        existingCampaign = campaigns.find((c: { mobile: string | null }) => 
+        existingCampaign = campaigns.find((c: { mobile: string | null }) =>
           c.mobile && normalizeMobile(c.mobile) === normalizedMobile
         ) || null;
       }
       // Shared: campaign's (state, leader) is shared with me
-      if (!existingCampaign && userState && userMobileAndLeader?.leader) {
-        const sharedOwners = await getSharedWithMeOwners(userState, userMobileAndLeader.leader);
+      if (!existingCampaign && contextUserState && userMobileAndLeader?.leader) {
+        const sharedOwners = await getSharedWithMeOwners(contextUserState, userMobileAndLeader.leader);
         const isShared = sharedOwners.some(
           (o) =>
-            (o.owner_state || '').toUpperCase().trim() === (campaignData.state || '').toUpperCase().trim() &&
-            normalizeName(o.owner_leader) === normalizeName(campaignData.leader || '')
+            (o.owner_state || '').toUpperCase().trim() === (campaignParams.state || '').toUpperCase().trim() &&
+            normalizeName(o.owner_leader) === normalizeName(campaignParams.leader || '')
         );
         if (isShared) existingCampaign = campaigns[0];
       }
@@ -275,39 +220,27 @@ function RecordResultsDetailPageContent() {
       }
     }
 
-    if (existingCampaign) {
-      return existingCampaign.id;
-    }
+    if (existingCampaign) return existingCampaign.id;
 
-    // Create only if user is the owner (campaign leader matches user's leader)
-    const isOwner = userMobileAndLeader?.leader && normalizeName(campaignData.leader || '') === normalizeName(userMobileAndLeader.leader);
-    if (!isAdmin && !isOwner) {
+    const isOwner = userMobileAndLeader?.leader &&
+      normalizeName(campaignParams.leader || '') === normalizeName(userMobileAndLeader.leader);
+    if (!contextIsAdmin && !isOwner) {
       throw new Error('You can only create campaigns for your own leader. This campaign is not shared with you or does not exist.');
     }
 
-    const { data: newCampaign, error: createError } = await supabase
-      .from('campaigns')
-      .insert([
-        {
-          date: campaignData.date,
-          state: campaignData.state,
-          place: campaignData.place,
-          time: campaignData.time,
-          leader: campaignData.leader,
-          mobile: userMobileAndLeader?.mobile || null,
-          botj: 'No',
-          user_id: userId,
-        },
-      ])
-      .select('id')
-      .single();
+    const created = await createCampaign({
+      date: campaignParams.date,
+      state: campaignParams.state,
+      place: campaignParams.place,
+      time: campaignParams.time,
+      leader: campaignParams.leader,
+      mobile: userMobileAndLeader?.mobile || null,
+      botj: 'No',
+      user_id: userId,
+    });
 
-    if (createError || !newCampaign) {
-      throw new Error(createError?.message || 'Failed to create campaign');
-    }
-
-    return newCampaign.id;
-  };
+    return created.id;
+  }, [contextIsAdmin, contextUserState, contextUserLeader, contextUserMobile]);
 
   // Function to get category code from section type
   const getCategoryCode = (section: SectionType): 'P' | 'F' | 'SP' | 'IR' => {
@@ -354,71 +287,26 @@ function RecordResultsDetailPageContent() {
     });
   };
 
-  // Function to save team size to the campaign
   const saveTeamSize = async () => {
     if (!campaignId) return;
-    
     try {
-      // Fetch old data for logging
       const oldData = await fetchCampaignData(campaignId);
-      
-      const teamSizeValue = teamSize.trim() ? parseInt(teamSize, 10) : null;
-      
-      const newData = { team_size: teamSizeValue };
-      
-      const { error } = await supabase
-        .from('campaigns')
-        .update(newData)
-        .eq('id', campaignId);
-      
-      if (error) {
-        console.error('Error saving team size:', error);
-        return;
-      }
-      
-      // Log the change (async, won't block)
-      if (oldData) {
-        logCampaignChange(campaignId, 'UPDATE', oldData, { ...oldData, ...newData });
-      }
+      await updateCampaign(campaignId, { team_size: teamSize.trim() ? parseInt(teamSize, 10) : null }, oldData);
     } catch (error) {
       console.error('Error saving team size:', error);
     }
   };
 
-  // Function to save count fields to the campaign
   const saveCountFields = async () => {
     if (!campaignId) return;
-    
     try {
-      // Fetch old data for logging
       const oldData = await fetchCampaignData(campaignId);
-      
-      const ppCntValue = ppCnt.trim() ? parseInt(ppCnt, 10) : 0;
-      const fpCntValue = fpCnt.trim() ? parseInt(fpCnt, 10) : 0;
-      const fpspCntValue = fpspCnt.trim() ? parseInt(fpspCnt, 10) : 0;
-      const irCntValue = irCnt.trim() ? parseInt(irCnt, 10) : 0;
-      
-      const newData = {
-        pp_cnt: ppCntValue,
-        fp_cnt: fpCntValue,
-        fpsp_cnt: fpspCntValue,
-        ir_cnt: irCntValue
-      };
-      
-      const { error } = await supabase
-        .from('campaigns')
-        .update(newData)
-        .eq('id', campaignId);
-      
-      if (error) {
-        console.error('Error saving count fields:', error);
-        return;
-      }
-      
-      // Log the change (async, won't block)
-      if (oldData) {
-        logCampaignChange(campaignId, 'UPDATE', oldData, { ...oldData, ...newData });
-      }
+      await updateCampaign(campaignId, {
+        pp_cnt: ppCnt.trim() ? parseInt(ppCnt, 10) : 0,
+        fp_cnt: fpCnt.trim() ? parseInt(fpCnt, 10) : 0,
+        fpsp_cnt: fpspCnt.trim() ? parseInt(fpspCnt, 10) : 0,
+        ir_cnt: irCnt.trim() ? parseInt(irCnt, 10) : 0,
+      }, oldData);
     } catch (error) {
       console.error('Error saving count fields:', error);
     }
@@ -433,114 +321,64 @@ function RecordResultsDetailPageContent() {
 
     savingNamesRef.current = true;
     try {
-      const currentOriginalNames = originalNamesRef.current;
-      const user = await getCurrentUser();
-      if (!user) {
-        throw new Error('User not authenticated');
-      }
+      const userId = userIdRef.current;
+      if (!userId) throw new Error('User not authenticated');
 
-      // Get all current names from all rows (using refs for latest values)
-      const getCurrentNames = () => {
-        const currentNames = new Set<string>();
-        
-        // Helper to add names from rows
-        // Each field is treated as a single complete name - no splitting
-        const addNamesFromRows = (rows: InputRow[], categoryCode: string) => {
-          rows.forEach(row => {
-            // Each field is a complete name - trim whitespace but preserve the full value
-            const name1 = row.field1.trim();
-            const name2 = row.field2.trim();
-            const name3 = row.field3.trim();
-            
-            if (name1) {
-              currentNames.add(`${name1}:${categoryCode}`);
-            }
-            if (name2) {
-              currentNames.add(`${name2}:${categoryCode}`);
-            }
-            if (name3) {
-              currentNames.add(`${name3}:${categoryCode}`);
-            }
+      const currentOriginalNames = originalNamesRef.current;
+
+      // Build the set of current names from the live row refs
+      const currentNames = new Set<string>();
+      const addNamesFromRows = (rows: InputRow[], categoryCode: string) => {
+        rows.forEach((row) => {
+          [row.field1, row.field2, row.field3].forEach((v) => {
+            const name = v.trim();
+            if (name) currentNames.add(`${name}:${categoryCode}`);
           });
-        };
-        
-        addNamesFromRows(partialRowsRef.current, 'P');
-        addNamesFromRows(fullRowsRef.current, 'F');
-        addNamesFromRows(fullSinnersRowsRef.current, 'SP');
-        addNamesFromRows(informationRowsRef.current, 'IR');
-        
-        return currentNames;
+        });
       };
-      
-      const currentNames = getCurrentNames();
-      
-      console.log('Original names:', Array.from(currentOriginalNames));
-      console.log('Current names:', Array.from(currentNames));
-      
-      // Find names to delete (in original but not in current)
+      addNamesFromRows(partialRowsRef.current, 'P');
+      addNamesFromRows(fullRowsRef.current, 'F');
+      addNamesFromRows(fullSinnersRowsRef.current, 'SP');
+      addNamesFromRows(informationRowsRef.current, 'IR');
+
+      // Delete names that were removed
       const namesToDelete: { name: string; categoryCode: string }[] = [];
-      currentOriginalNames.forEach(nameKey => {
+      currentOriginalNames.forEach((nameKey) => {
         if (!currentNames.has(nameKey)) {
           const lastColon = nameKey.lastIndexOf(':');
-          const name = nameKey.slice(0, lastColon);
-          const categoryCode = nameKey.slice(lastColon + 1);
-          namesToDelete.push({ name, categoryCode });
+          namesToDelete.push({ name: nameKey.slice(0, lastColon), categoryCode: nameKey.slice(lastColon + 1) });
         }
       });
-      
-      // Delete removed names
-      if (namesToDelete.length > 0) {
-        console.log('Deleting names:', namesToDelete);
-        for (const { name, categoryCode } of namesToDelete) {
-          const { error: deleteError } = await supabase
-            .from('results')
-            .delete()
-            .eq('campaign_id', currentCampaignId)
-            .eq('first_name', name)
-            .eq('category_code', categoryCode);
-          
-          if (deleteError) {
-            console.error('Error deleting name:', name, categoryCode, deleteError);
-          } else {
-            console.log('Successfully deleted:', name, categoryCode);
-          }
-        }
+      for (const { name, categoryCode } of namesToDelete) {
+        const { error: deleteError } = await supabase
+          .from('results')
+          .delete()
+          .eq('campaign_id', currentCampaignId)
+          .eq('first_name', name)
+          .eq('category_code', categoryCode);
+        if (deleteError) console.error('Error deleting name:', name, categoryCode, deleteError);
       }
 
-      // Convert current names to array of results to insert/update
-      // Save ALL current names from the rows, not just pending saves
+      // Upsert current names
       const resultsToSave = Array.from(currentNames).map((nameKey) => {
         const lastColon = nameKey.lastIndexOf(':');
-        const name = nameKey.slice(0, lastColon);
-        const categoryCode = nameKey.slice(lastColon + 1);
         return {
           campaign_id: currentCampaignId,
-          first_name: name,
-          category_code: categoryCode,
-          user_id: user.id,
+          first_name: nameKey.slice(0, lastColon),
+          category_code: nameKey.slice(lastColon + 1),
+          user_id: userId,
         };
       });
 
       if (resultsToSave.length > 0) {
-        // Insert or update all results
-        // Using upsert to handle the UNIQUE constraint gracefully
         const { error } = await supabase.from('results').upsert(resultsToSave, {
           onConflict: 'campaign_id,first_name,category_code',
         });
-
-        if (error) {
-          // Log error but don't throw (user is navigating away)
-          console.error('Error saving names:', error);
-        } else {
-          console.log('Successfully saved names:', resultsToSave.length);
-        }
+        if (error) console.error('Error saving names:', error);
       }
-      
-      // Update original names with current names
+
       setOriginalNames(currentNames);
       originalNamesRef.current = currentNames;
-      
-      // Clear pending saves on success
       setPendingSaves(new Map());
       pendingSavesRef.current = new Map();
     } catch (error: unknown) {
@@ -736,7 +574,7 @@ function RecordResultsDetailPageContent() {
     );
   };
 
-  if (isLoading) {
+  if (isUserLoading || isLoading) {
     return (
       <MobileLayout>
         <div className="flex min-h-screen items-center justify-center">
