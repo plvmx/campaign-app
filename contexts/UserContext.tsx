@@ -5,6 +5,7 @@ import { getCurrentUser } from '@/lib/auth';
 import { getUserProfile, upsertUserProfile, UserProfile } from '@/lib/userProfile';
 import { getUserAdminStatusAndMobile } from '@/lib/campaignFilter';
 import { hasPermission, Permission } from '@/lib/permissions';
+import { supabase } from '@/lib/supabaseClient';
 
 interface UserContextValue {
   user: { id: string; email?: string } | null;
@@ -57,7 +58,22 @@ export function UserProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    // Initial load on mount.
+    load();
+
+    // Re-load whenever the Supabase session changes (login / logout / token
+    // refresh).  Without this, navigating to a protected page immediately
+    // after signInWithMobileAndName() would still see user === null because
+    // the context only loaded once — before the session existed.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED') {
+        load();
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [load]);
 
   return (
     <UserContext.Provider value={{
