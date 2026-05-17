@@ -3,8 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import MobileLayout from '@/components/MobileLayout';
-import { getCurrentUser } from '@/lib/auth';
-import { hasPermission, Permission } from '@/lib/permissions';
+import { useUser } from '@/contexts/UserContext';
 import { supabase } from '@/lib/supabaseClient';
 import { getErrorMessage } from '@/lib/errorUtils';
 
@@ -17,7 +16,7 @@ interface CampaignMessage {
 
 export default function CampaignMessagesPage() {
   const router = useRouter();
-  const [isLoading, setIsLoading] = useState(true);
+  const { user, isAdmin, isLoading: isUserLoading } = useUser();
   const [hasAccess, setHasAccess] = useState(false);
   const [messages, setMessages] = useState<CampaignMessage[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -29,29 +28,15 @@ export default function CampaignMessagesPage() {
   const [formState, setFormState] = useState({ date: '', message: '' });
 
   useEffect(() => {
-    async function checkAuthAndPermissions() {
-      try {
-        const currentUser = await getCurrentUser();
-        if (!currentUser) {
-          router.push('/login');
-          return;
-        }
-
-        const canAccess = await hasPermission(Permission.ADMIN_ACCESS);
-        if (!canAccess) {
-          setError('You do not have permission to access this page');
-          return;
-        }
-        setHasAccess(true);
-        await fetchMessages();
-} catch (err: unknown) {
-      setError(getErrorMessage(err, 'Access denied'));
-      } finally {
-        setIsLoading(false);
-      }
+    if (isUserLoading) return;
+    if (!user) { router.push('/login'); return; }
+    if (!isAdmin) {
+      setError('You do not have permission to access this page');
+      return;
     }
-    checkAuthAndPermissions();
-  }, [router]);
+    setHasAccess(true);
+    fetchMessages();
+  }, [isUserLoading, user, isAdmin, router]);
 
   const fetchMessages = async () => {
     try {
@@ -153,7 +138,7 @@ export default function CampaignMessagesPage() {
     setSuccess(null);
   };
 
-  if (isLoading) {
+  if (isUserLoading) {
     return (
       <MobileLayout>
         <div className="flex min-h-screen items-center justify-center">

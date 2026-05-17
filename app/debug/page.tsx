@@ -42,7 +42,7 @@ export default function DebugPage() {
           <h2 className="font-semibold mb-2">If you see different content:</h2>
           <div className="bg-yellow-100 p-4 rounded">
             <ol className="list-decimal list-inside space-y-1">
-              <li>Check you're on the correct Vercel URL</li>
+              <li>Check you&apos;re on the correct Vercel URL</li>
               <li>Verify environment variables are set in Vercel</li>
               <li>Clear Vercel build cache and redeploy</li>
               <li>Hard refresh browser (Ctrl+Shift+R)</li>

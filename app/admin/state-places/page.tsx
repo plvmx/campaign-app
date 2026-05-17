@@ -3,8 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import MobileLayout from '@/components/MobileLayout';
-import { getCurrentUser } from '@/lib/auth';
-import { hasPermission, Permission } from '@/lib/permissions';
+import { useUser } from '@/contexts/UserContext';
 import { supabase } from '@/lib/supabaseClient';
 import { getStateColor } from '@/lib/stateColors';
 import { AUSTRALIAN_STATES } from '@/lib/constants';
@@ -19,7 +18,7 @@ interface StatePlace {
 
 export default function StatePlacesPage() {
   const router = useRouter();
-  const [isLoading, setIsLoading] = useState(true);
+  const { user, isAdmin, isLoading: isUserLoading } = useUser();
   const [hasAccess, setHasAccess] = useState(false);
   const [statePlaces, setStatePlaces] = useState<StatePlace[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -32,29 +31,15 @@ export default function StatePlacesPage() {
   const [filterState, setFilterState] = useState<string>('');
 
   useEffect(() => {
-    async function checkAuthAndPermissions() {
-      try {
-        const currentUser = await getCurrentUser();
-        if (!currentUser) {
-          router.push('/login');
-          return;
-        }
-
-        const canAccess = await hasPermission(Permission.ADMIN_ACCESS);
-        if (!canAccess) {
-          setError('You do not have permission to access this page');
-          return;
-        }
-        setHasAccess(true);
-        await fetchStatePlaces();
-      } catch (err: unknown) {
-        setError(getErrorMessage(err, 'Access denied'));
-      } finally {
-        setIsLoading(false);
-      }
+    if (isUserLoading) return;
+    if (!user) { router.push('/login'); return; }
+    if (!isAdmin) {
+      setError('You do not have permission to access this page');
+      return;
     }
-    checkAuthAndPermissions();
-  }, [router]);
+    setHasAccess(true);
+    fetchStatePlaces();
+  }, [isUserLoading, user, isAdmin, router]);
 
   const fetchStatePlaces = async () => {
     try {
@@ -153,7 +138,7 @@ export default function StatePlacesPage() {
     setSuccess(null);
   };
 
-  if (isLoading) {
+  if (isUserLoading) {
     return (
       <MobileLayout>
         <div className="flex min-h-screen items-center justify-center">

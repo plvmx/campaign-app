@@ -291,7 +291,6 @@ function AppPageContent() {
   // Dropdown data
   const [places, setPlaces] = useState<string[]>([]);
   const [leaders, setLeaders] = useState<string[]>([]);
-  const [availableDates, setAvailableDates] = useState<{ value: string; label: string }[]>([]);
   const [timeOptions, setTimeOptions] = useState<{ value: string; label: string }[]>([]);
   const [loadingPlaces, setLoadingPlaces] = useState(false);
   const [loadingLeaders, setLoadingLeaders] = useState(false);
@@ -450,33 +449,6 @@ function AppPageContent() {
     initPage();
   }, [isUserLoading, contextUser]);
 
-  // Update available dates when campaign dates change
-  useEffect(() => {
-    if (campaignDates) {
-      const dates: { value: string; label: string }[] = [];
-      
-      // Start from Past Campaign Start
-      const startDate = new Date(campaignDates.pastCampaignStart);
-      
-      // End on Sunday after Second Week Start
-      const endDate = new Date(campaignDates.secondWeekStart);
-      endDate.setDate(endDate.getDate() + 6); // Add 6 days to get to Sunday
-      
-      // Generate all dates in the range
-      const currentDate = new Date(startDate);
-      while (currentDate <= endDate) {
-        const dateStr = formatDateForDb(currentDate);
-        dates.push({
-          value: dateStr,
-          label: currentDate.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' }),
-        });
-        currentDate.setDate(currentDate.getDate() + 1);
-      }
-      
-      setAvailableDates(dates);
-    }
-  }, [campaignDates]);
-  
   // Memoize filtered campaigns to avoid recalculating on every render
   const filteredCampaigns = useMemo(() => {
     if (allCampaigns.length === 0) return [];

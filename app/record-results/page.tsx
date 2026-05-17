@@ -26,6 +26,7 @@ export default function RecordResultsPage() {
   const [defaultState, setDefaultState] = useState<string>('');
   const [defaultDate, setDefaultDate] = useState<string>('');
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => {
     if (isUserLoading) return;
     if (!user) { router.push('/login'); return; }

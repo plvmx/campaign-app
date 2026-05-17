@@ -3,7 +3,7 @@
 import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import MobileLayout from '@/components/MobileLayout';
-import { getCurrentUser, type User } from '@/lib/auth';
+import { useUser } from '@/contexts/UserContext';
 import { supabase } from '@/lib/supabaseClient';
 import { getStateColor } from '@/lib/stateColors';
 import { CampaignRule, previewRuleEvaluation } from '@/lib/campaignRules';
@@ -45,12 +45,8 @@ function CampaignRulesPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { dates } = useCampaignDates();
-  const [isLoading, setIsLoading] = useState(true);
+  const { user, adminStatus, userState, userLeader, isLoading: isUserLoading } = useUser();
   const [hasAccess, setHasAccess] = useState(false);
-  const [user, setUser] = useState<User | null>(null);
-  const [adminStatus, setAdminStatus] = useState<string | null>(null);
-  const [userState, setUserState] = useState<string | null>(null);
-  const [userLeader, setUserLeader] = useState<string | null>(null);
   const [isStateLocked, setIsStateLocked] = useState(false);
   const [rules, setRules] = useState<CampaignRule[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -93,64 +89,39 @@ function CampaignRulesPageContent() {
   const [loadingLeaders, setLoadingLeaders] = useState(false);
 
   useEffect(() => {
-    async function checkAuthAndPermissions() {
-      try {
-        const currentUser = await getCurrentUser();
-        if (!currentUser) {
-          router.push('/login');
-          return;
-        }
-        setUser(currentUser);
+    if (isUserLoading) return;
+    if (!user) { router.push('/login'); return; }
 
-        // Check if user is admin (AD), state reporter (SR), or team leader (TL)
-        const { getUserAdminStatusAndMobile } = await import('@/lib/campaignFilter');
-        const { admin: adminStatusValue, state: userStateValue, leader: userLeaderValue } = await getUserAdminStatusAndMobile();
-        setAdminStatus(adminStatusValue);
-        setUserState(userStateValue);
-        setUserLeader(userLeaderValue);
-
-        // Allow access for AD (admin), SR (state reporter), or TL (team leader - has state)
-        const canAccess = adminStatusValue === 'AD' || adminStatusValue === 'SR' || (userStateValue != null && userStateValue.trim() !== '');
-        if (!canAccess) {
-          setError('You do not have permission to access this page');
-          return;
-        }
-
-        // Check for state query parameter
-        const stateParam = searchParams.get('state');
-        if (adminStatusValue === 'SR') {
-          // For SR users, use state from query param or their own state
-          const stateToUse = stateParam || userStateValue;
-          if (stateToUse) {
-            setFormState(prev => ({ ...prev, state: stateToUse.toUpperCase().trim() }));
-            setIsStateLocked(true);
-          }
-        } else if (adminStatusValue !== 'AD' && userStateValue) {
-          // For TL (team leaders), lock state to their state and leader to themselves
-          const stateToUse = stateParam || userStateValue;
-          if (stateToUse) {
-            setFormState(prev => ({
-              ...prev,
-              state: stateToUse.toUpperCase().trim(),
-              ...(userLeaderValue ? { leader: userLeaderValue } : {}),
-            }));
-            setIsStateLocked(true);
-          }
-        } else if (stateParam && adminStatusValue === 'AD') {
-          // For AD users, pre-populate but don't lock
-          setFormState(prev => ({ ...prev, state: stateParam.toUpperCase().trim() }));
-        }
-
-        setHasAccess(true);
-        await fetchRules();
-      } catch (err: unknown) {
-        setError(getErrorMessage(err, 'Access denied'));
-      } finally {
-        setIsLoading(false);
-      }
+    const canAccess = adminStatus === 'AD' || adminStatus === 'SR' || (userState != null && userState.trim() !== '');
+    if (!canAccess) {
+      setError('You do not have permission to access this page');
+      return;
     }
-    checkAuthAndPermissions();
-  }, [router, searchParams]);
+
+    const stateParam = searchParams.get('state');
+    if (adminStatus === 'SR') {
+      const stateToUse = stateParam || userState;
+      if (stateToUse) {
+        setFormState(prev => ({ ...prev, state: stateToUse.toUpperCase().trim() }));
+        setIsStateLocked(true);
+      }
+    } else if (adminStatus !== 'AD' && userState) {
+      const stateToUse = stateParam || userState;
+      if (stateToUse) {
+        setFormState(prev => ({
+          ...prev,
+          state: stateToUse.toUpperCase().trim(),
+          ...(userLeader ? { leader: userLeader } : {}),
+        }));
+        setIsStateLocked(true);
+      }
+    } else if (stateParam && adminStatus === 'AD') {
+      setFormState(prev => ({ ...prev, state: stateParam.toUpperCase().trim() }));
+    }
+
+    setHasAccess(true);
+    fetchRules();
+  }, [isUserLoading, user, adminStatus, userState, userLeader, router, searchParams]);
 
   const fetchRules = async () => {
     try {
@@ -242,8 +213,7 @@ function CampaignRulesPageContent() {
         if (formState.place && !uniquePlaces.includes(formState.place)) {
           setFormState(prev => ({ ...prev, place: '' }));
         }
-      } catch (err) {
-        console.error('Error fetching places:', err);
+      } catch {
         setPlaces([]);
       } finally {
         setLoadingPlaces(false);
@@ -293,8 +263,7 @@ function CampaignRulesPageContent() {
         if (formState.leader && !uniqueLeaders.includes(formState.leader)) {
           setFormState(prev => ({ ...prev, leader: '', mobile: '' }));
         }
-      } catch (err) {
-        console.error('Error fetching leaders:', err);
+      } catch {
         setLeaders([]);
       } finally {
         setLoadingLeaders(false);
@@ -321,8 +290,7 @@ function CampaignRulesPageContent() {
           } else {
             setFormState(prev => ({ ...prev, mobile: '' }));
           }
-        } catch (err) {
-          // Ignore errors - mobile is optional
+        } catch {
           setFormState(prev => ({ ...prev, mobile: '' }));
         }
       } else {
@@ -510,8 +478,8 @@ function CampaignRulesPageContent() {
             setLeaders(uniqueLeaders);
           }
         }
-      } catch (err) {
-        console.error('Error loading places/leaders for edit:', err);
+      } catch {
+        // places/leaders load errors are non-fatal; dropdowns stay empty
       } finally {
         setLoadingPlaces(false);
         if (!isTeamLeader) setLoadingLeaders(false);
@@ -587,7 +555,7 @@ function CampaignRulesPageContent() {
     }
   };
 
-  if (isLoading) {
+  if (isUserLoading) {
     return (
       <MobileLayout>
         <div className="flex min-h-screen items-center justify-center">

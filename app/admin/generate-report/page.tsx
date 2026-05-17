@@ -3,9 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import MobileLayout from '@/components/MobileLayout';
-import { getCurrentUser } from '@/lib/auth';
-import { hasPermission, Permission } from '@/lib/permissions';
-import { getUserAdminStatusAndMobile } from '@/lib/campaignFilter';
+import { useUser } from '@/contexts/UserContext';
 import { supabase } from '@/lib/supabaseClient';
 import JSZip from 'jszip';
 import { useCampaignDates } from '@/contexts/CampaignDatesContext';
@@ -46,49 +44,27 @@ export default function GenerateReportPage() {
   const router = useRouter();
   const reportRef = useRef<HTMLDivElement>(null);
   const { dates: campaignDates } = useCampaignDates();
-  
-  const [isLoading, setIsLoading] = useState(true);
+  const { user, isAdmin, adminStatus, userState, isLoading: isUserLoading } = useUser();
   const [hasAccess, setHasAccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [reportData, setReportData] = useState<ReportRow[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [showReport, setShowReport] = useState(false);
-  const [userState, setUserState] = useState<string | null>(null);
-  const [adminStatus, setAdminStatus] = useState<string | null>(null);
   const [editingCell, setEditingCell] = useState<{ rowIndex: number; field: keyof ReportRow } | null>(null);
 
   useEffect(() => {
-    async function checkAuthAndPermissions() {
-      try {
-        const currentUser = await getCurrentUser();
-        if (!currentUser) {
-          router.push('/login');
-          return;
-        }
-
-        const hasAdminAccess = await hasPermission(Permission.ADMIN_ACCESS);
-        const { admin: adminStatusValue, state: stateValue } = await getUserAdminStatusAndMobile();
-        setAdminStatus(adminStatusValue);
-        setUserState(stateValue ?? null);
-
-        const canAccess = hasAdminAccess || adminStatusValue === 'SR';
-        if (!canAccess) {
-          setError('You do not have permission to access this page');
-          return;
-        }
-        setHasAccess(true);
-      } catch (err: unknown) {
-        setError(getErrorMessage(err, 'Access denied'));
-      } finally {
-        setIsLoading(false);
-      }
+    if (isUserLoading) return;
+    if (!user) { router.push('/login'); return; }
+    if (!isAdmin && adminStatus !== 'SR') {
+      setError('You do not have permission to access this page');
+      return;
     }
-    checkAuthAndPermissions();
-  }, [router]);
+    setHasAccess(true);
+  }, [isUserLoading, user, isAdmin, adminStatus, router]);
 
   // Set default date range when campaign dates are available
   useEffect(() => {
@@ -338,7 +314,7 @@ export default function GenerateReportPage() {
     URL.revokeObjectURL(url);
   };
 
-  if (isLoading) {
+  if (isUserLoading) {
     return (
       <MobileLayout>
         <div className="flex min-h-screen items-center justify-center">
