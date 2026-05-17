@@ -2,11 +2,14 @@
 
 import { ReactNode } from 'react';
 import { CampaignDatesProvider } from '@/contexts/CampaignDatesContext';
+import { UserProvider } from '@/contexts/UserContext';
 
 export function Providers({ children }: { children: ReactNode }) {
   return (
     <CampaignDatesProvider>
-      {children}
+      <UserProvider>
+        {children}
+      </UserProvider>
     </CampaignDatesProvider>
   );
 }

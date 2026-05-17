@@ -3,9 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import MobileLayout from '@/components/MobileLayout';
-import { getCurrentUser } from '@/lib/auth';
-import { getUserAdminStatusAndMobile } from '@/lib/campaignFilter';
-import { getUserProfile } from '@/lib/userProfile';
+import { useUser } from '@/contexts/UserContext';
 import { useCampaignDates } from '@/contexts/CampaignDatesContext';
 import { formatDateReadable } from '@/lib/campaignDates';
 import { getErrorMessage } from '@/lib/errorUtils';
@@ -13,43 +11,33 @@ import { getErrorMessage } from '@/lib/errorUtils';
 export default function TLAdminPage() {
   const router = useRouter();
   const { dates } = useCampaignDates();
-  const [isLoading, setIsLoading] = useState(true);
+  const { user, adminStatus, userState: contextUserState, userProfile, isLoading: isUserLoading } = useUser();
   const [hasAccess, setHasAccess] = useState(false);
   const [userState, setUserState] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => {
-    async function checkAccess() {
-      try {
-        const currentUser = await getCurrentUser();
-        if (!currentUser) {
-          router.push('/login');
-          return;
-        }
-        const { admin, state } = await getUserAdminStatusAndMobile();
-        const isAdmin = admin === 'AD';
-        const isSR = admin === 'SR';
-        if (isAdmin || isSR) {
-          setError('Use the main Admin or SR Admin panel instead.');
-          return;
-        }
-        const stateToUse = state ?? (await getUserProfile())?.state ?? null;
-        if (!stateToUse?.trim()) {
-          setError('No state found for your account.');
-          return;
-        }
-        setUserState(stateToUse);
-        setHasAccess(true);
-} catch (err: unknown) {
-      setError(getErrorMessage(err, 'Access denied'));
-      } finally {
-        setIsLoading(false);
+    if (isUserLoading) return;
+    if (!user) { router.push('/login'); return; }
+    try {
+      if (adminStatus === 'AD' || adminStatus === 'SR') {
+        setError('Use the main Admin or SR Admin panel instead.');
+        return;
       }
+      const stateToUse = contextUserState ?? userProfile?.state ?? null;
+      if (!stateToUse?.trim()) {
+        setError('No state found for your account.');
+        return;
+      }
+      setUserState(stateToUse);
+      setHasAccess(true);
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Access denied'));
     }
-    checkAccess();
-  }, [router]);
+  }, [isUserLoading, user, router, adminStatus, contextUserState, userProfile]);
 
-  if (isLoading) {
+  if (isUserLoading) {
     return (
       <MobileLayout>
         <div className="flex min-h-screen items-center justify-center">

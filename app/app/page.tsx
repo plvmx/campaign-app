@@ -3,33 +3,42 @@
 import { useEffect, useState, useRef, Suspense, useMemo, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import MobileLayout from '@/components/MobileLayout';
-import { getCurrentUser } from '@/lib/auth';
 import { supabase } from '@/lib/supabaseClient';
-import { getUserProfile, upsertUserProfile, UserProfile } from '@/lib/userProfile';
 import { getUserStateCode } from '@/lib/location';
 import { normalizeName, normalizeMobile } from '@/lib/auth';
-import { hasPermission, Permission } from '@/lib/permissions';
+import { useUser, upsertUserProfile } from '@/contexts/UserContext';
 import { useCampaignDates } from '@/contexts/CampaignDatesContext';
 import { formatDateForDb, getTodayDateString } from '@/lib/campaignDates';
 import { getStateColor } from '@/lib/stateColors';
-import { logCampaignChange, fetchCampaignData } from '@/lib/campaignLog';
+import { fetchCampaignData } from '@/lib/campaignLog';
 import { getSharedWithMeOwners, type LeaderShareOwner } from '@/lib/leaderShares';
 import { AUSTRALIAN_STATES } from '@/lib/constants';
 import { getErrorMessage } from '@/lib/errorUtils';
 import type { Campaign } from '@/lib/types';
 import { formatCampaignTimeDisplay, isCampaignPast } from '@/lib/campaignUtils';
+import { getPlacesForState, getLeadersForState, getLeaderMobile } from '@/lib/services/dropdownService';
+import { createCampaign, updateCampaign, deleteCampaign } from '@/lib/services/campaignService';
 
 function AppPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { dates: campaignDates } = useCampaignDates();
-  const [user, setUser] = useState<{ id: string; email?: string } | null>(null);
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const {
+    user: contextUser,
+    userProfile: contextUserProfile,
+    isAdmin: contextIsAdmin,
+    adminStatus: contextAdminStatus,
+    userState: contextUserState,
+    userLeader: contextUserLeader,
+    userMobile: contextUserMobile,
+    isLoading: isUserLoading,
+    updateProfile: updateContextProfile,
+  } = useUser();
+
   const [isLoading, setIsLoading] = useState(true);
-  const [isAdmin, setIsAdmin] = useState<boolean>(false);
-  const [adminStatus, setAdminStatus] = useState<string | null>(null); // Store admin status from state_leaders table
-  const [userState, setUserState] = useState<string | null>(null); // Store user's state from state_leaders table
-  const [userMobileAndLeader, setUserMobileAndLeader] = useState<{ mobile: string | null; leader: string | null } | null>(null); // Store user's mobile and leader for Record Results button visibility
+  const [adminStatus, setAdminStatus] = useState<string | null>(null);
+  const [userState, setUserState] = useState<string | null>(null);
+  const [userMobileAndLeader, setUserMobileAndLeader] = useState<{ mobile: string | null; leader: string | null } | null>(null);
   const [sharedWithMeOwners, setSharedWithMeOwners] = useState<LeaderShareOwner[]>([]); // Leaders who have shared their campaigns with me
   const [showMoreInfo, setShowMoreInfo] = useState(false); // Toggle for More Info section
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
@@ -114,7 +123,7 @@ function AppPageContent() {
 
   // Reusable function to refetch campaigns (optimized to avoid duplicate queries)
   const refetchCampaigns = useCallback(async () => {
-    if (!user) return;
+    if (!contextUser) return;
     
     const { getUserAdminStatusAndMobile } = await import('@/lib/campaignFilter');
     const { normalizeMobile } = await import('@/lib/auth');
@@ -140,13 +149,13 @@ function AppPageContent() {
       if (userStateValue) {
         query = query.eq('state', userStateValue.toUpperCase().trim());
       } else {
-        query = query.eq('user_id', user.id);
+        query = query.eq('user_id', contextUser.id);
       }
     } else {
       if (userMobileAndLeaderData?.mobile && userMobileAndLeaderData?.leader) {
         query = query.eq('leader', userMobileAndLeaderData.leader);
       } else {
-        query = query.eq('user_id', user.id);
+        query = query.eq('user_id', contextUser.id);
       }
     }
     
@@ -215,7 +224,7 @@ function AppPageContent() {
     finalData = applyDateFilter(finalData);
     
     setCampaigns(finalData);
-  }, [user, filterState, applyDateFilter]);
+  }, [contextUser, filterState, applyDateFilter]);
   
   // Load places from state_places table when state changes in inline edit (with caching)
   useEffect(() => {
@@ -232,30 +241,10 @@ function AppPageContent() {
             [campaignId]: placesCache.current[normalizedState],
           }));
         } else {
-          // Load from database and cache
-          async function loadPlacesForEdit() {
-            const { data, error } = await supabase
-              .from('state_places')
-              .select('place')
-              .eq('state', normalizedState)
-              .order('place', { ascending: true });
-            
-            if (error) {
-              console.error('Error loading places:', error);
-              return;
-            }
-            
-            if (data) {
-              const uniquePlaces = Array.from(new Set(data.map(p => p.place).filter(Boolean)));
-              // Cache the result
-              placesCache.current[normalizedState] = uniquePlaces;
-              setCampaignPlaces(prev => ({
-                ...prev,
-                [campaignId]: uniquePlaces,
-              }));
-            }
-          }
-          loadPlacesForEdit();
+          getPlacesForState(normalizedState).then((uniquePlaces) => {
+            placesCache.current[normalizedState] = uniquePlaces;
+            setCampaignPlaces(prev => ({ ...prev, [campaignId]: uniquePlaces }));
+          });
         }
       } else {
         // Clear places if no state selected
@@ -283,30 +272,10 @@ function AppPageContent() {
             [campaignId]: leadersCache.current[normalizedState],
           }));
         } else {
-          // Load from database and cache
-          async function loadLeadersForEdit() {
-            const { data, error } = await supabase
-              .from('state_leaders')
-              .select('leader')
-              .eq('state', normalizedState)
-              .order('leader', { ascending: true });
-            
-            if (error) {
-              console.error('Error loading leaders:', error);
-              return;
-            }
-            
-            if (data) {
-              const uniqueLeaders = Array.from(new Set(data.map(l => l.leader).filter(Boolean)));
-              // Cache the result
-              leadersCache.current[normalizedState] = uniqueLeaders;
-              setCampaignLeaders(prev => ({
-                ...prev,
-                [campaignId]: uniqueLeaders,
-              }));
-            }
-          }
-          loadLeadersForEdit();
+          getLeadersForState(normalizedState).then((uniqueLeaders) => {
+            leadersCache.current[normalizedState] = uniqueLeaders;
+            setCampaignLeaders(prev => ({ ...prev, [campaignId]: uniqueLeaders }));
+          });
         }
       } else {
         // Clear leaders if no state selected
@@ -322,161 +291,96 @@ function AppPageContent() {
   // Dropdown data
   const [places, setPlaces] = useState<string[]>([]);
   const [leaders, setLeaders] = useState<string[]>([]);
-  const [availableDates, setAvailableDates] = useState<{ value: string; label: string }[]>([]);
   const [timeOptions, setTimeOptions] = useState<{ value: string; label: string }[]>([]);
   const [loadingPlaces, setLoadingPlaces] = useState(false);
   const [loadingLeaders, setLoadingLeaders] = useState(false);
   const isEditingRef = useRef(false); // Flag to prevent useEffect interference during edit
   const pendingEditDataRef = useRef<{ campaign: Campaign; timeValue: string } | null>(null); // Store campaign data for edit
 
+  // Initialise page once the user context has finished loading.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
-    async function checkAuthAndLoadCampaigns() {
+    if (isUserLoading) return;
+
+    if (!contextUser) {
+      router.push('/login');
+      return;
+    }
+
+    async function initPage() {
       try {
-        const currentUser = await getCurrentUser();
-        if (!currentUser) {
-          router.push('/login');
-          return;
+        // Seed local campaign-filter state from context (no extra network call)
+        setAdminStatus(contextAdminStatus);
+        setUserState(contextUserState);
+        if (contextUserMobile && contextUserLeader) {
+          setUserMobileAndLeader({ mobile: contextUserMobile, leader: contextUserLeader });
         }
-        setUser(currentUser);
 
-        // Parallelize independent operations
-        const { getUserAdminStatusAndMobile } = await import('@/lib/campaignFilter');
-        const { normalizeMobile } = await import('@/lib/auth');
-        
-        // Load profile and check for pending first name in parallel
-        const [profile, pendingFirstName] = await Promise.all([
-          getUserProfile(),
-          Promise.resolve(sessionStorage.getItem('pendingFirstName'))
-        ]);
-        
-        // Handle new user profile creation if needed
-        let finalProfile = profile;
-        if (!profile && pendingFirstName) {
-          // New user - create profile with first name and state (if permission given)
-          try {
-            let stateCode: string | null = null;
-            
-            // Try to get user's state (this will request location permission)
+        // First-login onboarding: create profile when pendingFirstName is in sessionStorage
+        if (!contextUserProfile) {
+          const pendingFirstName = sessionStorage.getItem('pendingFirstName');
+          if (pendingFirstName) {
             try {
-              const result = await getUserStateCode();
-              stateCode = result.stateCode;
-            } catch (locationError) {
-              console.log('Location permission not granted or error occurred');
+              let stateCode: string | null = null;
+              try {
+                const { stateCode: sc } = await getUserStateCode();
+                stateCode = sc;
+              } catch {}
+              const newProfile = await upsertUserProfile({ name: pendingFirstName, state: stateCode });
+              updateContextProfile(newProfile);
+              sessionStorage.removeItem('pendingFirstName');
+            } catch (profileError) {
+              console.error('Error creating user profile:', profileError);
             }
-            
-            // Create profile with name and state (if available)
-            finalProfile = await upsertUserProfile({
-              name: pendingFirstName,
-              state: stateCode,
-            });
-            
-            // Clear the pending first name from sessionStorage
-            sessionStorage.removeItem('pendingFirstName');
-          } catch (profileError) {
-            console.error('Error creating user profile:', profileError);
-            // Continue even if profile creation fails
           }
-        }
-        
-        // Store profile in state for display
-        if (finalProfile) {
-          setUserProfile(finalProfile);
-        }
-        
-        // Parallelize: Get admin status/mobile/leader and check admin permission
-        // Note: getUserAdminStatusAndMobile needs profile, so we do it after profile is ready
-        const [adminData, adminAccess] = await Promise.all([
-          getUserAdminStatusAndMobile(),
-          hasPermission(Permission.ADMIN_ACCESS)
-        ]);
-        
-        const { admin: adminStatus, state: userStateValue, mobile, leader } = adminData;
-        const userMobileAndLeaderData = mobile && leader ? { mobile, leader } : null;
-        
-        setIsAdmin(adminAccess);
-        setAdminStatus(adminStatus);
-        setUserState(userStateValue);
-        setUserMobileAndLeader(userMobileAndLeaderData);
-        
-        console.log('State Reporter Debug:', { 
-          adminStatus, 
-          userStateValue,
-          userProfileState: finalProfile?.state,
-          adminAccess,
-          hasAdminPermission: adminAccess,
-          userMobileAndLeader: userMobileAndLeaderData,
-          willShowButton: adminStatus === 'SR' && (userStateValue || finalProfile?.state) ? 'YES' : 'NO',
-          buttonCondition: {
-            adminStatusIsSR: adminStatus === 'SR',
-            hasUserState: !!userStateValue,
-            hasProfileState: !!finalProfile?.state,
-            willShow: adminStatus === 'SR' && (userStateValue || finalProfile?.state)
-          }
-        });
-        
-        // Check if returning from a filtered view (URL parameter takes precedence)
-        const filterParam = searchParams.get('filter');
-        if (filterParam && (filterParam === 'past' || filterParam === 'future')) {
-          setDateFilter(filterParam as 'past' | 'future');
-          // Clean up the URL parameter
-          router.replace('/app', { scroll: false });
-        } else {
-          // Set default filter: 'future' for all users
-          setDateFilter('future');
         }
 
-        // Check for success parameter from campaign creation
+        // Handle URL params
+        const filterParam = searchParams.get('filter');
+        if (filterParam === 'past' || filterParam === 'future') {
+          setDateFilter(filterParam as 'past' | 'future');
+          router.replace('/app', { scroll: false });
+        }
         if (searchParams.get('created') === 'true') {
           setShowSuccess(true);
-          // Remove the parameter from URL without reload
           router.replace('/app', { scroll: false });
-          // Hide success message after 5 seconds
           setTimeout(() => setShowSuccess(false), 5000);
         }
-        
-        console.log('Campaign filtering:', { adminStatus, userState: userStateValue, userMobileAndLeader: userMobileAndLeaderData });
-        
-        // Performance logging
-        const queryStartTime = performance.now();
-        
-        let sharedOwnersList: LeaderShareOwner[] = [];
-        let query = supabase
-          .from('campaigns')
-          .select('*');
-        
-        // Apply filtering based on admin status
-        if (adminStatus === 'AD') {
-          // Admin: no filter, see all campaigns
-          // Query remains as is (no filters applied)
-          console.log('Filter: AD - showing all campaigns');
-        } else if (adminStatus === 'SR') {
-          // State Reporter: filter by state only (no name filter)
-          if (userStateValue) {
-            // Normalize state to uppercase for matching
-            const normalizedState = userStateValue.toUpperCase().trim();
-            query = query.eq('state', normalizedState);
-            console.log('Filter: SR - filtering by state:', normalizedState);
-          } else {
-            // If no state found, fallback to user_id
-            console.log('Filter: SR - no state found, using user_id fallback');
-            query = query.eq('user_id', currentUser.id);
-          }
-        } else {
-          // Regular user: filter by name and mobile match, plus campaigns shared with me
-          if (userMobileAndLeaderData?.mobile && userMobileAndLeaderData?.leader) {
-            // Fetch leaders who have shared their campaigns with me (used below for merge and filter)
-            sharedOwnersList = await getSharedWithMeOwners(userStateValue || '', userMobileAndLeaderData.leader);
-            setSharedWithMeOwners(sharedOwnersList);
-            // Own campaigns: filter by leader name (mobile filter applied below)
-            query = query.eq('leader', userMobileAndLeaderData.leader);
-            console.log('Filter: Regular user - filtering by leader:', userMobileAndLeaderData.leader, 'shared owners:', sharedOwnersList.length);
-          } else {
-            // Fallback to user_id if mobile/leader not available
-            console.log('Filter: Regular user - no mobile/leader, using user_id fallback');
-            query = query.eq('user_id', currentUser.id);
+
+        // Generate time options
+        const times: { value: string; label: string }[] = [];
+        for (let hour = 8; hour <= 20; hour++) {
+          for (let minute = 0; minute < 60; minute += 30) {
+            const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+            const displayHour = hour % 12 || 12;
+            const ampm = hour >= 12 ? 'PM' : 'AM';
+            times.push({ value: timeStr, label: `${displayHour}:${minute.toString().padStart(2, '0')} ${ampm}` });
           }
         }
-        
+        setTimeOptions(times);
+
+        // Load campaigns
+        let sharedOwnersList: LeaderShareOwner[] = [];
+        let query = supabase.from('campaigns').select('*');
+
+        if (contextAdminStatus === 'AD') {
+          // no filter — see all campaigns
+        } else if (contextAdminStatus === 'SR') {
+          if (contextUserState) {
+            query = query.eq('state', contextUserState.toUpperCase().trim());
+          } else {
+            query = query.eq('user_id', contextUser!.id);
+          }
+        } else {
+          if (contextUserMobile && contextUserLeader) {
+            sharedOwnersList = await getSharedWithMeOwners(contextUserState || '', contextUserLeader);
+            setSharedWithMeOwners(sharedOwnersList);
+            query = query.eq('leader', contextUserLeader);
+          } else {
+            query = query.eq('user_id', contextUser!.id);
+          }
+        }
+
         const { data, error } = await query
           .order('date', { ascending: true })
           .order('state', { ascending: true })
@@ -484,39 +388,36 @@ function AppPageContent() {
           .order('time', { ascending: true });
 
         if (error) throw error;
-        
-        // For regular users, also fetch campaigns shared with me
+
         let dataMerged: Campaign[] = (data || []) as Campaign[];
-        if (adminStatus !== 'AD' && adminStatus !== 'SR' && sharedOwnersList.length > 0) {
-            const orParts = sharedOwnersList.map(
-              (o) => `and(state.eq.${(o.owner_state || '').replace(/'/g, "''")},leader.eq.${(o.owner_leader || '').replace(/'/g, "''")})`
-            ).join(',');
-            const { data: sharedData, error: sharedError } = await supabase
-              .from('campaigns')
-              .select('*')
-              .or(orParts)
-              .order('date', { ascending: true })
-              .order('state', { ascending: true })
-              .order('place', { ascending: true })
-              .order('time', { ascending: true });
+        if (contextAdminStatus !== 'AD' && contextAdminStatus !== 'SR' && sharedOwnersList.length > 0) {
+          const sharedResults = await Promise.all(
+            sharedOwnersList.map((o) =>
+              supabase
+                .from('campaigns')
+                .select('*')
+                .eq('state', o.owner_state || '')
+                .eq('leader', o.owner_leader || '')
+                .order('date', { ascending: true })
+                .order('state', { ascending: true })
+                .order('place', { ascending: true })
+                .order('time', { ascending: true })
+            )
+          );
+          const ownIds = new Set(dataMerged.map((c) => c.id));
+          for (const { data: sharedData, error: sharedError } of sharedResults) {
             if (!sharedError && sharedData?.length) {
-              const ownIds = new Set(dataMerged.map((c) => c.id));
               const extra = (sharedData as Campaign[]).filter((c) => !ownIds.has(c.id));
+              extra.forEach((c) => ownIds.add(c.id));
               dataMerged = [...dataMerged, ...extra];
             }
+          }
         }
 
-        // Performance logging
-        const queryEndTime = performance.now();
-        const queryDuration = queryEndTime - queryStartTime;
-        console.log(`[Performance] Campaign query took ${queryDuration.toFixed(2)}ms, returned ${dataMerged?.length || 0} campaigns`);
-        
-        // Additional filtering for regular users: own (mobile match) OR shared (campaign's state/leader in sharedWithMe)
-        // SR users see ALL campaigns for their state, so no additional filtering
         let filteredData = dataMerged;
-        if (adminStatus !== 'AD' && adminStatus !== 'SR') {
-          if (userMobileAndLeaderData?.mobile && userStateValue) {
-            const normalizedMobile = normalizeMobile(userMobileAndLeaderData.mobile);
+        if (contextAdminStatus !== 'AD' && contextAdminStatus !== 'SR') {
+          if (contextUserMobile && contextUserState) {
+            const normalizedMobile = normalizeMobile(contextUserMobile);
             const isSharedCampaign = (c: Campaign) =>
               sharedOwnersList.some(
                 (o) =>
@@ -530,72 +431,24 @@ function AppPageContent() {
             );
           }
         }
-        
-        // Store all campaigns (unfiltered by state and date filter)
-        // The memoized filteredCampaigns will automatically update via useEffect
+
         setAllCampaigns(filteredData);
-        
-        // Load dropdown data
-        await loadDropdownData();
       } catch (error) {
-        router.push('/login');
+        const msg = error instanceof Error ? error.message : String(error);
+        const isAuthError =
+          msg.toLowerCase().includes('auth') ||
+          msg.toLowerCase().includes('session') ||
+          msg.toLowerCase().includes('jwt');
+        if (isAuthError) router.push('/login');
+        else console.error('App page initialization error:', error);
       } finally {
         setIsLoading(false);
       }
     }
-    
-    async function loadDropdownData() {
-      // Load time options for dropdowns
-      try {
-        // Generate time options (8:00 AM to 8:00 PM, half-hour intervals)
-        const times: { value: string; label: string }[] = [];
-        for (let hour = 8; hour <= 20; hour++) {
-          for (let minute = 0; minute < 60; minute += 30) {
-            const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-            const displayHour = hour % 12 || 12;
-            const ampm = hour >= 12 ? 'PM' : 'AM';
-            times.push({
-              value: timeStr,
-              label: `${displayHour}:${minute.toString().padStart(2, '0')} ${ampm}`,
-            });
-          }
-        }
-        setTimeOptions(times);
-      } catch (err) {
-        console.error('Error loading dropdown data:', err);
-      }
-    }
-    
-    checkAuthAndLoadCampaigns();
-  }, [router, searchParams]);
 
-  // Update available dates when campaign dates change
-  useEffect(() => {
-    if (campaignDates) {
-      const dates: { value: string; label: string }[] = [];
-      
-      // Start from Past Campaign Start
-      const startDate = new Date(campaignDates.pastCampaignStart);
-      
-      // End on Sunday after Second Week Start
-      const endDate = new Date(campaignDates.secondWeekStart);
-      endDate.setDate(endDate.getDate() + 6); // Add 6 days to get to Sunday
-      
-      // Generate all dates in the range
-      const currentDate = new Date(startDate);
-      while (currentDate <= endDate) {
-        const dateStr = formatDateForDb(currentDate);
-        dates.push({
-          value: dateStr,
-          label: currentDate.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' }),
-        });
-        currentDate.setDate(currentDate.getDate() + 1);
-      }
-      
-      setAvailableDates(dates);
-    }
-  }, [campaignDates]);
-  
+    initPage();
+  }, [isUserLoading, contextUser]);
+
   // Memoize filtered campaigns to avoid recalculating on every render
   const filteredCampaigns = useMemo(() => {
     if (allCampaigns.length === 0) return [];
@@ -640,86 +493,55 @@ function AppPageContent() {
       }
       
       setLoadingPlaces(true);
-      try {
-        const { data, error } = await supabase
-          .from('state_places')
-          .select('place')
-          .eq('state', normalizedState)
-          .order('place', { ascending: true });
-        
-        if (error) throw error;
-        
-        const uniquePlaces = Array.from(new Set((data || []).map(p => p.place).filter(Boolean)));
-        // Cache the result
-        placesCache.current[normalizedState] = uniquePlaces;
-        setPlaces(uniquePlaces);
-      } catch (err) {
-        console.error('Error loading places:', err);
-      } finally {
-        setLoadingPlaces(false);
-      }
+      getPlacesForState(normalizedState)
+        .then((uniquePlaces) => {
+          placesCache.current[normalizedState] = uniquePlaces;
+          setPlaces(uniquePlaces);
+        })
+        .finally(() => setLoadingPlaces(false));
     }
-    
+
     loadPlaces();
   }, [formState.state]);
-  
+
   // Load leaders from state_leaders table when state changes (with caching)
   useEffect(() => {
-    // Skip if we're in the middle of editing (loading data programmatically)
-    if (isEditingRef.current) {
-      return;
-    }
-    
+    if (isEditingRef.current) return;
+
     async function loadLeaders() {
       if (!formState.state) {
         setLeaders([]);
         return;
       }
-      
+
       const normalizedState = formState.state.toUpperCase().trim();
-      
-      // Check cache first
+
       if (leadersCache.current[normalizedState]) {
         setLeaders(leadersCache.current[normalizedState]);
         return;
       }
-      
+
       setLoadingLeaders(true);
-      try {
-        const { data, error } = await supabase
-          .from('state_leaders')
-          .select('leader')
-          .eq('state', normalizedState)
-          .order('leader', { ascending: true });
-        
-        if (error) throw error;
-        
-        const uniqueLeaders = Array.from(new Set((data || []).map(l => l.leader).filter(Boolean)));
-        // Cache the result
-        leadersCache.current[normalizedState] = uniqueLeaders;
-        setLeaders(uniqueLeaders);
-      } catch (err) {
-        console.error('Error loading leaders:', err);
-      } finally {
-        setLoadingLeaders(false);
-      }
+      getLeadersForState(normalizedState)
+        .then((uniqueLeaders) => {
+          leadersCache.current[normalizedState] = uniqueLeaders;
+          setLeaders(uniqueLeaders);
+        })
+        .finally(() => setLoadingLeaders(false));
     }
-    
+
     loadLeaders();
   }, [formState.state]);
   
   // Set default state from user profile when profile is loaded
   useEffect(() => {
-    if (userProfile?.state && !formState.state) {
-      const userState = userProfile.state;
-      if (userState) {
-        setFormState(prev => ({
-          ...prev,
-          state: userState.toUpperCase().trim(),
-        }));
-      }
+    if (contextUserProfile?.state && !formState.state) {
+      setFormState(prev => ({
+        ...prev,
+        state: contextUserProfile.state!.toUpperCase().trim(),
+      }));
     }
-  }, [userProfile]);
+  }, [contextUserProfile]);
 
   // When Create Campaign form expands for non-admin/SR users: set state if empty, then default leader and mobile
   useEffect(() => {
@@ -786,104 +608,58 @@ function AppPageContent() {
     setError(null);
     setSuccess(null);
     setIsSubmitting(true);
-    
+
     try {
-      const user = await getCurrentUser();
-      if (!user) {
-        throw new Error('You must be logged in');
-      }
-      
+      if (!contextUser) throw new Error('You must be logged in');
+
       // Handle "Other Place" - insert into state_places table if needed
       let placeValue = formState.place;
       if (isOtherPlace && customPlace.trim()) {
         if (!formState.state || !formState.state.trim()) {
           throw new Error('Please select a state before entering a new place');
         }
-        
+
         const newPlace = customPlace.trim();
         const stateValue = formState.state.toUpperCase().trim();
-        
-        // Insert new place into state_places table
+
         const { error: placeError } = await supabase
           .from('state_places')
-          .insert([{ 
-            state: stateValue, 
-            place: newPlace 
-          }]);
-        
-        // If it's a duplicate (unique constraint violation), that's okay - just use the place name
-        if (placeError) {
-          if (placeError.code === '23505') {
-            // Duplicate entry - that's fine, the place already exists
-            console.log(`Place "${newPlace}" already exists for state "${stateValue}"`);
-          } else {
-            console.error('Error inserting place:', placeError);
-            throw new Error(`Failed to add new place: ${placeError.message}`);
-          }
+          .insert([{ state: stateValue, place: newPlace }]);
+
+        if (placeError && placeError.code !== '23505') {
+          throw new Error(`Failed to add new place: ${placeError.message}`);
         }
-        
+
         placeValue = newPlace;
-        
-        // Reload places for the state and update cache
-        const { data: placesData } = await supabase
-          .from('state_places')
-          .select('place')
-          .eq('state', stateValue)
-          .order('place', { ascending: true });
-        
-        if (placesData) {
-          const uniquePlaces = Array.from(new Set(placesData.map(p => p.place).filter(Boolean)));
-          // Update cache
-          placesCache.current[stateValue] = uniquePlaces;
-          setPlaces(uniquePlaces);
-        }
+
+        const uniquePlaces = await getPlacesForState(stateValue);
+        placesCache.current[stateValue] = uniquePlaces;
+        setPlaces(uniquePlaces);
       }
-      
-      // Validate that we have a place value
+
       if (!placeValue || placeValue.trim() === '') {
         throw new Error('Please select or enter a place');
       }
-      
-      const mobileValue = formState.mobile.trim() || null;
-      
-      const newCampaignData = {
+
+      await createCampaign({
         date: formState.date,
         state: formState.state,
         place: placeValue,
         time: formState.time,
         leader: formState.leader,
-        mobile: mobileValue,
+        mobile: formState.mobile.trim() || null,
         botj: formState.botj || 'No',
         tl_ok: formState.tl_ok,
         sr_ok: formState.sr_ok,
-        user_id: user.id,
-        created_at: new Date().toISOString(),
+        user_id: contextUser.id,
         source: 'MAN',
-      };
-      
-      // Create new campaign
-      const { data: insertedData, error } = await supabase
-        .from('campaigns')
-        .insert([newCampaignData])
-        .select()
-        .single();
-        
-      if (error) throw error;
-      
-      // Log the insertion (async, won't block)
-      if (insertedData) {
-        logCampaignChange(insertedData.id, 'INSERT', null, insertedData);
-      }
-      
+      });
+
       setSuccess('Campaign created successfully');
-      
-      // Reset form and reload
       setFormState({ date: '', state: '', place: '', time: '', leader: '', mobile: '', botj: 'No', tl_ok: false, sr_ok: false });
       setIsOtherPlace(false);
       setCustomPlace('');
-      setIsFormExpanded(false); // Collapse form after successful save
-      
-      // Reload campaigns using optimized function
+      setIsFormExpanded(false);
       await refetchCampaigns();
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Failed to save campaign'));
@@ -919,54 +695,19 @@ function AppPageContent() {
           [campaign.id]: placesCache.current[normalizedState],
         }));
       } else {
-        try {
-          const { data, error } = await supabase
-            .from('state_places')
-            .select('place')
-            .eq('state', normalizedState)
-            .order('place', { ascending: true });
-          
-          if (!error && data) {
-            const uniquePlaces = Array.from(new Set(data.map(p => p.place).filter(Boolean)));
-            // Cache the result
-            placesCache.current[normalizedState] = uniquePlaces;
-            setCampaignPlaces(prev => ({
-              ...prev,
-              [campaign.id]: uniquePlaces,
-            }));
-          }
-        } catch (err) {
-          console.error('Error loading places:', err);
-        }
+        getPlacesForState(normalizedState).then((uniquePlaces) => {
+          placesCache.current[normalizedState] = uniquePlaces;
+          setCampaignPlaces(prev => ({ ...prev, [campaign.id]: uniquePlaces }));
+        });
       }
-      
-      // Load leaders for the state from state_leaders table (with caching)
-      // Check cache first
+
       if (leadersCache.current[normalizedState]) {
-        setCampaignLeaders(prev => ({
-          ...prev,
-          [campaign.id]: leadersCache.current[normalizedState],
-        }));
+        setCampaignLeaders(prev => ({ ...prev, [campaign.id]: leadersCache.current[normalizedState] }));
       } else {
-        try {
-          const { data, error } = await supabase
-            .from('state_leaders')
-            .select('leader')
-            .eq('state', normalizedState)
-            .order('leader', { ascending: true });
-          
-          if (!error && data) {
-            const uniqueLeaders = Array.from(new Set(data.map(l => l.leader).filter(Boolean)));
-            // Cache the result
-            leadersCache.current[normalizedState] = uniqueLeaders;
-            setCampaignLeaders(prev => ({
-              ...prev,
-              [campaign.id]: uniqueLeaders,
-            }));
-          }
-        } catch (err) {
-          console.error('Error loading leaders:', err);
-        }
+        getLeadersForState(normalizedState).then((uniqueLeaders) => {
+          leadersCache.current[normalizedState] = uniqueLeaders;
+          setCampaignLeaders(prev => ({ ...prev, [campaign.id]: uniqueLeaders }));
+        });
       }
     }
     
@@ -991,116 +732,63 @@ function AppPageContent() {
   const handleSaveInlineEdit = async (campaignId: string) => {
     const editData = inlineEditState[campaignId];
     if (!editData) return;
-    
+
     setError(null);
     setSuccess(null);
-    
+
     try {
-      const user = await getCurrentUser();
-      if (!user) {
-        throw new Error('You must be logged in');
-      }
-      
-      // Handle "Other Place" - insert into state_places table if needed
+      // Handle "Other Place"
       let placeValue = editData.place;
       const isOther = inlineEditOtherPlace[campaignId];
       const customPlaceValue = inlineEditCustomPlace[campaignId];
-      
+
       if (isOther && customPlaceValue && customPlaceValue.trim()) {
         if (!editData.state || !editData.state.trim()) {
           throw new Error('Please select a state before entering a new place');
         }
-        
+
         const newPlace = customPlaceValue.trim();
         const stateValue = editData.state.toUpperCase().trim();
-        
-        // Insert new place into state_places table
+
         const { error: placeError } = await supabase
           .from('state_places')
-          .insert([{ 
-            state: stateValue, 
-            place: newPlace 
-          }]);
-        
-        // If it's a duplicate (unique constraint violation), that's okay - just use the place name
-        if (placeError) {
-          if (placeError.code === '23505') {
-            // Duplicate entry - that's fine, the place already exists
-            console.log(`Place "${newPlace}" already exists for state "${stateValue}"`);
-          } else {
-            console.error('Error inserting place:', placeError);
-            throw new Error(`Failed to add new place: ${placeError.message}`);
-          }
+          .insert([{ state: stateValue, place: newPlace }]);
+
+        if (placeError && placeError.code !== '23505') {
+          throw new Error(`Failed to add new place: ${placeError.message}`);
         }
-        
+
         placeValue = newPlace;
-        
-        // Reload places for the state and update cache
-        const { data: placesData } = await supabase
-          .from('state_places')
-          .select('place')
-          .eq('state', stateValue)
-          .order('place', { ascending: true });
-        
-        if (placesData) {
-          const uniquePlaces = Array.from(new Set(placesData.map(p => p.place).filter(Boolean)));
-          // Update cache
-          placesCache.current[stateValue] = uniquePlaces;
-          setCampaignPlaces(prev => ({
-            ...prev,
-            [campaignId]: uniquePlaces,
-          }));
-        }
+
+        const uniquePlaces = await getPlacesForState(stateValue);
+        placesCache.current[stateValue] = uniquePlaces;
+        setCampaignPlaces(prev => ({ ...prev, [campaignId]: uniquePlaces }));
       }
-      
-      // Validate that we have a place value
+
       if (!placeValue || placeValue.trim() === '') {
         throw new Error('Please select or enter a place');
       }
-      
-      // Fetch old data for logging
+
       const oldData = await fetchCampaignData(campaignId);
-      
-      const mobileValue = editData.mobile.trim() || null;
-      
-      const newData = {
+
+      const updates = {
         date: editData.date,
         state: editData.state,
         place: placeValue,
         time: editData.time,
         leader: editData.leader,
-        mobile: mobileValue,
+        mobile: editData.mobile.trim() || null,
         botj: editData.botj || 'No',
         tl_ok: editData.tl_ok,
         sr_ok: editData.sr_ok,
       };
-      
-      const { error } = await supabase
-        .from('campaigns')
-        .update(newData)
-        .eq('id', campaignId);
-      
-      if (error) throw error;
-      
-      // Log the change (async, won't block)
-      if (oldData) {
-        logCampaignChange(campaignId, 'UPDATE', oldData, newData);
-      }
-      
+
+      await updateCampaign(campaignId, updates, oldData);
+
       setSuccess('Campaign updated successfully');
       setInlineEditingId(null);
-      setInlineEditOtherPlace(prev => {
-        const newState = { ...prev };
-        delete newState[campaignId];
-        return newState;
-      });
-      setInlineEditCustomPlace(prev => {
-        const newState = { ...prev };
-        delete newState[campaignId];
-        return newState;
-      });
-      
-      // Reload campaigns using optimized function
+      setInlineEditOtherPlace(prev => { const s = { ...prev }; delete s[campaignId]; return s; });
+      setInlineEditCustomPlace(prev => { const s = { ...prev }; delete s[campaignId]; return s; });
       await refetchCampaigns();
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Failed to update campaign'));
@@ -1134,28 +822,13 @@ function AppPageContent() {
         // Leader is being set - fetch mobile from state_leaders table
         const editData = inlineEditState[campaignId];
         if (editData?.state) {
-          try {
-            const { data, error } = await supabase
-              .from('state_leaders')
-              .select('mobile')
-              .eq('state', editData.state.toUpperCase().trim())
-              .eq('leader', value)
-              .single();
-            
-            if (!error && data && data.mobile) {
-              // Update both leader and mobile
-              setInlineEditState(prev => ({
-                ...prev,
-                [campaignId]: {
-                  ...prev[campaignId],
-                  leader: value,
-                  mobile: data.mobile || '',
-                }
-              }));
-              return;
-            }
-          } catch (err) {
-            console.error('Error loading mobile for leader:', err);
+          const mobile = await getLeaderMobile(editData.state, value);
+          if (mobile) {
+            setInlineEditState(prev => ({
+              ...prev,
+              [campaignId]: { ...prev[campaignId], leader: value, mobile },
+            }));
+            return;
           }
         }
       } else {
@@ -1183,25 +856,12 @@ function AppPageContent() {
   };
   
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this campaign?')) {
-      return;
-    }
-    
+    if (!confirm('Are you sure you want to delete this campaign?')) return;
+
     try {
-      // Fetch old data for logging before deletion
       const oldData = await fetchCampaignData(id);
-      
-      const { error } = await supabase.from('campaigns').delete().eq('id', id);
-      if (error) throw error;
-      
-      // Log the deletion (async, won't block)
-      if (oldData) {
-        logCampaignChange(id, 'DELETE', oldData, null);
-      }
-      
+      await deleteCampaign(id, oldData);
       setSuccess('Campaign deleted successfully');
-      
-      // Reload campaigns using optimized function
       await refetchCampaigns();
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Failed to delete campaign'));
@@ -1210,60 +870,26 @@ function AppPageContent() {
 
   const handleToggleCheckbox = async (campaignId: string, field: 'tl_ok' | 'sr_ok', currentValue: boolean) => {
     const newValue = !currentValue;
-    
-    // Optimistic update: update UI immediately for better UX
-    setCampaigns(prev => prev.map(campaign => 
-      campaign.id === campaignId 
-        ? { ...campaign, [field]: newValue }
-        : campaign
-    ));
 
-    setAllCampaigns(prev => prev.map(campaign => 
-      campaign.id === campaignId 
-        ? { ...campaign, [field]: newValue }
-        : campaign
-    ));
-    
+    // Optimistic update
+    const applyToRow = (val: boolean) => (c: Campaign) =>
+      c.id === campaignId ? { ...c, [field]: val } : c;
+    setCampaigns(prev => prev.map(applyToRow(newValue)));
+    setAllCampaigns(prev => prev.map(applyToRow(newValue)));
+
     try {
-      // Fetch old data for logging (in parallel with update)
-      const [oldData] = await Promise.all([
-        fetchCampaignData(campaignId)
-      ]);
-      
-      const newData = { [field]: newValue };
-      
-      // Update database
-      const { error } = await supabase
-        .from('campaigns')
-        .update(newData)
-        .eq('id', campaignId);
-
-      if (error) {
-        // Rollback optimistic update on error
-        setCampaigns(prev => prev.map(campaign => 
-          campaign.id === campaignId 
-            ? { ...campaign, [field]: currentValue }
-            : campaign
-        ));
-        setAllCampaigns(prev => prev.map(campaign => 
-          campaign.id === campaignId 
-            ? { ...campaign, [field]: currentValue }
-            : campaign
-        ));
-        throw error;
-      }
-      
-      // Log the change (async, won't block)
-      if (oldData) {
-        logCampaignChange(campaignId, 'UPDATE', oldData, { ...oldData, ...newData });
-      }
+      const oldData = await fetchCampaignData(campaignId);
+      await updateCampaign(campaignId, { [field]: newValue }, oldData);
     } catch (err: unknown) {
+      // Rollback on error
+      setCampaigns(prev => prev.map(applyToRow(currentValue)));
+      setAllCampaigns(prev => prev.map(applyToRow(currentValue)));
       setError(getErrorMessage(err, 'Failed to update verification status'));
     }
   };
   
 
-  if (isLoading) {
+  if (isUserLoading || isLoading) {
     return (
       <MobileLayout>
         <div className="flex min-h-screen items-center justify-center">
@@ -1278,11 +904,11 @@ function AppPageContent() {
       <div className="p-4 max-w-full overflow-x-hidden">
         <div className="mb-6">
           <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 break-words">
-            {userProfile?.name ? (() => {
+            {contextUserProfile?.name ? (() => {
               // Remove underscore and everything after it for display only
-              const displayName = userProfile.name.includes('_') 
-                ? userProfile.name.split('_')[0] 
-                : userProfile.name;
+              const displayName = contextUserProfile!.name!.includes('_')
+                ? contextUserProfile!.name!.split('_')[0]
+                : contextUserProfile!.name!;
               return `Welcome back ${displayName}!`;
             })() : 'Welcome back!'}
           </h1>
@@ -1411,7 +1037,7 @@ function AppPageContent() {
                     setIsOtherPlace(false);
                     setCustomPlace('');
                   }}
-                  disabled={!isAdmin}
+                  disabled={!contextIsAdmin}
                   className="mt-1 block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <option value="">Select a state</option>
@@ -1494,23 +1120,8 @@ function AppPageContent() {
                     const newLeader = e.target.value;
                     // If leader is selected, fetch and update mobile from state_leaders table
                     if (newLeader && formState.state) {
-                      try {
-                        const { data, error } = await supabase
-                          .from('state_leaders')
-                          .select('mobile')
-                          .eq('state', formState.state.toUpperCase().trim())
-                          .eq('leader', newLeader)
-                          .single();
-                        
-                        if (!error && data && data.mobile) {
-                          setFormState({ ...formState, leader: newLeader, mobile: data.mobile || '' });
-                        } else {
-                          setFormState({ ...formState, leader: newLeader });
-                        }
-                      } catch (err) {
-                        console.error('Error loading mobile for leader:', err);
-                        setFormState({ ...formState, leader: newLeader });
-                      }
+                      const mobile = await getLeaderMobile(formState.state, newLeader);
+                      setFormState({ ...formState, leader: newLeader, mobile: mobile || '' });
                     } else {
                       // Clear leader and mobile if leader is cleared
                       setFormState({ ...formState, leader: '', mobile: '' });
@@ -1571,7 +1182,7 @@ function AppPageContent() {
       )}
 
           {/* Filter - Only show for admin users */}
-          {isAdmin && (
+          {contextIsAdmin && (
             <div className="w-full">
               <label htmlFor="filter" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Filter by State
@@ -1680,7 +1291,7 @@ function AppPageContent() {
                                       <select
                                         value={editData.state}
                                         onChange={(e) => updateInlineEditField(campaign.id, 'state', e.target.value)}
-                                        disabled={!isAdmin}
+                                        disabled={!contextIsAdmin}
                                         className="w-full rounded-md border-2 border-gray-400 bg-white px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
                                       >
                                         <option value="">Select state</option>
@@ -1853,7 +1464,7 @@ function AppPageContent() {
                                           <span className="font-normal">{campaign.mobile}</span>
                                         </>
                                       ) : null}
-                                      {isAdmin && campaign.source && (
+                                      {contextIsAdmin && campaign.source && (
                                         <span className="ml-2 text-xs font-normal opacity-75" title={campaign.source === 'MAN' ? 'Manual' : campaign.source === 'CFP' ? 'Copied from past week' : campaign.source === 'RUL' ? 'Created by rule' : campaign.source}>
                                           ({campaign.source})
                                         </span>

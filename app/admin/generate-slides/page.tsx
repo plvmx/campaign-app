@@ -3,9 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import MobileLayout from '@/components/MobileLayout';
-import { getCurrentUser } from '@/lib/auth';
-import { hasPermission, Permission } from '@/lib/permissions';
-import { getUserAdminStatusAndMobile } from '@/lib/campaignFilter';
+import { useUser } from '@/contexts/UserContext';
 import { supabase } from '@/lib/supabaseClient';
 import JSZip from 'jszip';
 import { getErrorMessage } from '@/lib/errorUtils';
@@ -63,43 +61,22 @@ interface Campaign {
 
 export default function GenerateSlidesPage() {
   const router = useRouter();
-  const [isLoading, setIsLoading] = useState(true);
+  const { user, isAdmin, adminStatus, userState, isLoading: isUserLoading } = useUser();
   const [hasAccess, setHasAccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState('');
   const [customStartDate, setCustomStartDate] = useState<string>('');
-  const [userState, setUserState] = useState<string | null>(null);
-  const [adminStatus, setAdminStatus] = useState<string | null>(null);
 
   useEffect(() => {
-    async function checkAuthAndPermissions() {
-      try {
-        const currentUser = await getCurrentUser();
-        if (!currentUser) {
-          router.push('/login');
-          return;
-        }
-
-        const hasAdminAccess = await hasPermission(Permission.ADMIN_ACCESS);
-        const { admin: adminStatusValue, state: stateValue } = await getUserAdminStatusAndMobile();
-        setAdminStatus(adminStatusValue);
-        setUserState(stateValue ?? null);
-
-        const canAccess = hasAdminAccess || adminStatusValue === 'SR';
-        if (!canAccess) {
-          setError('You do not have permission to access this page');
-          return;
-        }
-        setHasAccess(true);
-      } catch (err: unknown) {
-        setError(getErrorMessage(err, 'Access denied'));
-      } finally {
-        setIsLoading(false);
-      }
+    if (isUserLoading) return;
+    if (!user) { router.push('/login'); return; }
+    if (!isAdmin && adminStatus !== 'SR') {
+      setError('You do not have permission to access this page');
+      return;
     }
-    checkAuthAndPermissions();
-  }, [router]);
+    setHasAccess(true);
+  }, [isUserLoading, user, isAdmin, adminStatus, router]);
 
   const inchesToPixels = (inches: number): number => {
     return Math.floor(inches * DPI);
@@ -202,7 +179,6 @@ export default function GenerateSlidesPage() {
     const { data, error } = await query;
     
     if (error) {
-      console.error('Error fetching campaigns:', error);
       return [];
     }
     
@@ -223,9 +199,6 @@ export default function GenerateSlidesPage() {
       .single();
     
     if (error) {
-      if (error.code !== 'PGRST116') { // Not found error is expected
-        console.error('Error fetching campaign message:', error);
-      }
       return null;
     }
     
@@ -240,8 +213,8 @@ export default function GenerateSlidesPage() {
     width: number
   ): number => {
     let bannerText: string | null = null;
-    let bannerColor = 'rgb(255, 165, 0)'; // Bright orange
-    let textColor = 'rgb(0, 0, 0)'; // Black
+    const bannerColor = 'rgb(255, 165, 0)';
+    const textColor = 'rgb(0, 0, 0)';
     
     // Check for December 31st - Happy New Year
     if (date.getMonth() === 11 && date.getDate() === 31) {
@@ -647,14 +620,13 @@ export default function GenerateSlidesPage() {
       
       setProgress(`Successfully generated ${slides.length} slide(s)!`);
     } catch (err: unknown) {
-      console.error('Error generating slides:', err);
       setError(getErrorMessage(err, 'Failed to generate slides'));
     } finally {
       setIsGenerating(false);
     }
   };
 
-  if (isLoading) {
+  if (isUserLoading) {
     return (
       <MobileLayout>
         <div className="flex min-h-screen items-center justify-center">
@@ -734,7 +706,7 @@ export default function GenerateSlidesPage() {
                 })}.
               </p>
               <p className="mt-2 text-sm text-blue-800 dark:text-blue-200">
-                Slides will be generated in portrait format (7.5" × 10") at 300 DPI and downloaded as a ZIP file.
+                Slides will be generated in portrait format (7.5&quot; × 10&quot;) at 300 DPI and downloaded as a ZIP file.
               </p>
             </div>
             
@@ -750,7 +722,7 @@ export default function GenerateSlidesPage() {
                 className="w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
               />
               <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                Leave empty to use the default "Upcoming Campaign Start" date
+                Leave empty to use the default &quot;Upcoming Campaign Start&quot; date
               </p>
             </div>
             

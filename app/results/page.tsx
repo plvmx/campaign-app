@@ -3,11 +3,12 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import MobileLayout from '@/components/MobileLayout';
-import { getCurrentUser } from '@/lib/auth';
+import { useUser } from '@/contexts/UserContext';
 import { getErrorMessage } from '@/lib/errorUtils';
 
 export default function SlideViewerPage() {
   const router = useRouter();
+  const { user, isLoading: isUserLoading } = useUser();
   const [isLoading, setIsLoading] = useState(true);
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
   const [slides, setSlides] = useState<string[]>([]);
@@ -15,14 +16,11 @@ export default function SlideViewerPage() {
   const [imageError, setImageError] = useState(false);
 
   useEffect(() => {
-    async function checkAuthAndLoadSlides() {
-      try {
-        const user = await getCurrentUser();
-        if (!user) {
-          router.push('/login');
-          return;
-        }
+    if (isUserLoading) return;
+    if (!user) { router.push('/login'); return; }
 
+    async function loadSlides() {
+      try {
         // Load slides from public/slides folder
         // We'll try to load slides sequentially starting from slide_1.jpg
         const slidesList: string[] = [];
@@ -50,14 +48,14 @@ export default function SlideViewerPage() {
         } else {
           setSlides(slidesList);
         }
-} catch (err: unknown) {
-      setError(getErrorMessage(err, 'Failed to load slides'));
+      } catch (err: unknown) {
+        setError(getErrorMessage(err, 'Failed to load slides'));
       } finally {
         setIsLoading(false);
       }
     }
-    checkAuthAndLoadSlides();
-  }, [router]);
+    loadSlides();
+  }, [isUserLoading, user, router]);
 
   const handleNext = () => {
     if (currentSlideIndex < slides.length - 1) {
@@ -89,7 +87,7 @@ export default function SlideViewerPage() {
     }
   };
 
-  if (isLoading) {
+  if (isUserLoading || isLoading) {
     return (
       <MobileLayout>
         <div className="flex min-h-screen items-center justify-center">

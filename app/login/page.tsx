@@ -26,7 +26,7 @@ export default function LoginPage() {
           router.push('/app');
           return;
         }
-      } catch (error) {
+      } catch {
         // No session found, continue to login form
       } finally {
         setCheckingSession(false);

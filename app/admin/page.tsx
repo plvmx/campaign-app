@@ -3,8 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import MobileLayout from '@/components/MobileLayout';
-import { getCurrentUser } from '@/lib/auth';
-import { hasPermission, Permission } from '@/lib/permissions';
+import { useUser } from '@/contexts/UserContext';
 import { useCampaignDates } from '@/contexts/CampaignDatesContext';
 import { formatDateReadable, formatDateForDb } from '@/lib/campaignDates';
 import { supabase } from '@/lib/supabaseClient';
@@ -32,9 +31,8 @@ interface NewCampaignRow {
 export default function AdminPage() {
   const router = useRouter();
   const { dates } = useCampaignDates();
-  const [isLoading, setIsLoading] = useState(true);
+  const { user, isAdmin, isLoading: isUserLoading } = useUser();
   const [hasAccess, setHasAccess] = useState(false);
-  const [user, setUser] = useState<{ id: string; email?: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshMessage, setRefreshMessage] = useState<string | null>(null);
@@ -43,34 +41,17 @@ export default function AdminPage() {
   const [isTogglingLogging, setIsTogglingLogging] = useState(false);
 
   useEffect(() => {
-    async function checkAuthAndPermissions() {
-      try {
-        const currentUser = await getCurrentUser();
-        if (!currentUser) {
-          router.push('/login');
-          return;
-        }
-        setUser(currentUser);
-
-        const canAccess = await hasPermission(Permission.ADMIN_ACCESS);
-        if (!canAccess) {
-          setError('You do not have permission to access this page');
-          return;
-        }
-        setHasAccess(true);
-        
-        // Load logging setting
-        const enabled = await isCampaignLoggingEnabled();
-        setLoggingEnabled(enabled);
-      } catch (err: unknown) {
-        setError(getErrorMessage(err, 'Access denied'));
-      } finally {
-        setIsLoading(false);
-        setIsLoadingLoggingSetting(false);
-      }
+    if (isUserLoading) return;
+    if (!user) { router.push('/login'); return; }
+    if (!isAdmin) {
+      setError('You do not have permission to access this page');
+      return;
     }
-    checkAuthAndPermissions();
-  }, [router]);
+    setHasAccess(true);
+    isCampaignLoggingEnabled()
+      .then(setLoggingEnabled)
+      .finally(() => setIsLoadingLoggingSetting(false));
+  }, [isUserLoading, user, isAdmin, router]);
 
   const handleWeeklyRefresh = async () => {
     if (!dates || !user) return;
@@ -156,7 +137,7 @@ export default function AdminPage() {
         }
       }
 
-      let allNewCampaigns: NewCampaignRow[] = [];
+      const allNewCampaigns: NewCampaignRow[] = [];
       let copyCount = 0;
       let rulesCount = 0;
       const rulesUsedInRefresh: CampaignRule[] = [];
@@ -202,6 +183,7 @@ export default function AdminPage() {
             botj: campaign.botj,
             user_id: user.id,
             team_size: null,
+            tl_ok: false,
             source: 'RUL',
           }));
           rulesCount += generatedForState.length;
@@ -223,7 +205,7 @@ export default function AdminPage() {
           copyCount += copyOnlyWhenNoRule.length;
           allNewCampaigns.push(...generatedForState, ...copyOnlyWhenNoRule);
         } else {
-          const conflictMap = new Map<string, any>();
+          const conflictMap = new Map<string, NewCampaignRow>();
           copiedForState.forEach((c) => {
             conflictMap.set(`${c.date}_${c.state}_${c.place}_${c.time}`, c);
           });
@@ -293,7 +275,9 @@ export default function AdminPage() {
       const { error: logError } = await supabase
         .from('weekly_refresh_log')
         .insert({ completed_at: new Date().toISOString(), created_by: user?.id ?? null });
-      if (logError) console.warn('Failed to log weekly refresh:', logError);
+      if (logError) {
+        // Non-fatal: refresh completed but logging failed — silently ignore
+      }
 
       let message = `Successfully created ${toInsert.length} campaign(s) for the week starting ${formatDateReadable(secondWeekStart)}. `;
       message += `Copied ${copyCount} from past week and generated ${rulesCount} from rules (per-state modes). `;
@@ -322,7 +306,7 @@ export default function AdminPage() {
     }
   };
 
-  if (isLoading) {
+  if (isUserLoading) {
     return (
       <MobileLayout>
         <div className="flex min-h-screen items-center justify-center">

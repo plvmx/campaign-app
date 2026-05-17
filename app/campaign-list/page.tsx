@@ -4,10 +4,8 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import MobileLayout from '@/components/MobileLayout';
-import { getCurrentUser } from '@/lib/auth';
-import { hasPermission, Permission } from '@/lib/permissions';
+import { useUser } from '@/contexts/UserContext';
 import { supabase } from '@/lib/supabaseClient';
-import { getErrorMessage } from '@/lib/errorUtils';
 import { calculateCampaignDates, formatDateForDb as formatDateForDbLib } from '@/lib/campaignDates';
 import {
   STATE_CODES,
@@ -61,32 +59,17 @@ function formatCampaignColumns(campaign: Campaign): { place: string; time: strin
 
 export default function CampaignListPage() {
   const router = useRouter();
-  const [isLoading, setIsLoading] = useState(true);
+  const { user, isAdmin, isLoading: isUserLoading } = useUser();
   const [hasAccess, setHasAccess] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dateBlocks, setDateBlocks] = useState<DateBlock[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(false);
 
   useEffect(() => {
-    async function checkAndLoad() {
-      try {
-        const user = await getCurrentUser();
-        if (!user) {
-          router.push('/login');
-          return;
-        }
-        setHasAccess(true);
-        const admin = await hasPermission(Permission.ADMIN_ACCESS);
-        setIsAdmin(admin);
-      } catch (err: unknown) {
-        setError(getErrorMessage(err, 'Access denied'));
-      } finally {
-        setIsLoading(false);
-      }
-    }
-    checkAndLoad();
-  }, [router]);
+    if (isUserLoading) return;
+    if (!user) { router.push('/login'); return; }
+    setHasAccess(true);
+  }, [isUserLoading, user, router]);
 
   useEffect(() => {
     if (!hasAccess) return;
@@ -150,7 +133,7 @@ export default function CampaignListPage() {
     };
   }, [hasAccess]);
 
-  if (isLoading) {
+  if (isUserLoading) {
     return (
       <MobileLayout>
         <div className="flex min-h-screen items-center justify-center">
@@ -217,7 +200,7 @@ export default function CampaignListPage() {
 
           {/* Date blocks and campaigns: minimal left padding on mobile (one space from border); more padding on desktop */}
           <div className="space-y-4 py-4 pl-2 pr-3 lg:px-6">
-            {dateBlocks.map((block, index) => {
+            {dateBlocks.map((block) => {
               if (block.campaigns.length === 0) return null;
 
               return (

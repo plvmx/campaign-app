@@ -3,9 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import MobileLayout from '@/components/MobileLayout';
-import { getCurrentUser } from '@/lib/auth';
-import { getUserAdminStatusAndMobile } from '@/lib/campaignFilter';
-import { getUserProfile } from '@/lib/userProfile';
+import { useUser } from '@/contexts/UserContext';
 import { getLeadersNotSignedInSinceRefreshByState, type LeaderNotSignedIn } from '@/lib/weeklyRefresh';
 import { getStateRefreshMode, setStateRefreshMode, type RefreshMode } from '@/lib/stateRefreshSettings';
 import { useCampaignDates } from '@/contexts/CampaignDatesContext';
@@ -15,7 +13,7 @@ import { getErrorMessage } from '@/lib/errorUtils';
 export default function SRAdminPage() {
   const router = useRouter();
   const { dates } = useCampaignDates();
-  const [isLoading, setIsLoading] = useState(true);
+  const { user, adminStatus, userState: contextUserState, userProfile, isLoading: isUserLoading } = useUser();
   const [hasAccess, setHasAccess] = useState(false);
   const [userState, setUserState] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -28,29 +26,16 @@ export default function SRAdminPage() {
   const [refreshModeMessage, setRefreshModeMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    async function checkAccess() {
-      try {
-        const currentUser = await getCurrentUser();
-        if (!currentUser) {
-          router.push('/login');
-          return;
-        }
-        const { admin, state } = await getUserAdminStatusAndMobile();
-        if (admin !== 'SR') {
-          setError('You do not have permission to access SR Admin.');
-          return;
-        }
-        const stateToUse = state ?? (await getUserProfile())?.state ?? null;
-        setUserState(stateToUse);
-        setHasAccess(true);
-} catch (err: unknown) {
-      setError(getErrorMessage(err, 'Access denied'));
-      } finally {
-        setIsLoading(false);
-      }
+    if (isUserLoading) return;
+    if (!user) { router.push('/login'); return; }
+    if (adminStatus !== 'SR') {
+      setError('You do not have permission to access SR Admin.');
+      return;
     }
-    checkAccess();
-  }, [router]);
+    const stateToUse = contextUserState ?? userProfile?.state ?? null;
+    setUserState(stateToUse);
+    setHasAccess(true);
+  }, [isUserLoading, user, router, adminStatus, contextUserState, userProfile]);
 
   useEffect(() => {
     if (!hasAccess || !userState) return;
@@ -99,8 +84,7 @@ export default function SRAdminPage() {
     setRefreshModeMessage(null);
     setError(null);
     try {
-      const currentUser = await getCurrentUser();
-      await setStateRefreshMode(userState, refreshMode, currentUser?.id ?? null);
+      await setStateRefreshMode(userState, refreshMode, user?.id ?? null);
       setRefreshModeMessage('Saved. This mode will be used when an admin runs Weekly Refresh for your state.');
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Failed to save refresh mode'));
@@ -109,7 +93,7 @@ export default function SRAdminPage() {
     }
   };
 
-  if (isLoading) {
+  if (isUserLoading) {
     return (
       <MobileLayout>
         <div className="flex min-h-screen items-center justify-center">

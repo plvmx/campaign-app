@@ -3,8 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import MobileLayout from '@/components/MobileLayout';
-import { getCurrentUser } from '@/lib/auth';
-import { hasPermission, Permission } from '@/lib/permissions';
+import { useUser } from '@/contexts/UserContext';
 import { supabase } from '@/lib/supabaseClient';
 import { getErrorMessage } from '@/lib/errorUtils';
 import type { Campaign } from '@/lib/types';
@@ -24,7 +23,7 @@ interface CampaignLog {
 
 export default function CampaignLogsPage() {
   const router = useRouter();
-  const [isLoading, setIsLoading] = useState(true);
+  const { user, isAdmin, isLoading: isUserLoading } = useUser();
   const [hasAccess, setHasAccess] = useState(false);
   const [logs, setLogs] = useState<CampaignLog[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -39,29 +38,15 @@ export default function CampaignLogsPage() {
   const [isSearching, setIsSearching] = useState(false);
 
   useEffect(() => {
-    async function checkAuthAndPermissions() {
-      try {
-        const currentUser = await getCurrentUser();
-        if (!currentUser) {
-          router.push('/login');
-          return;
-        }
-
-        const canAccess = await hasPermission(Permission.ADMIN_ACCESS);
-        if (!canAccess) {
-          setError('You do not have permission to access this page');
-          return;
-        }
-        setHasAccess(true);
-        await fetchLogs();
-      } catch (err: unknown) {
-        setError(getErrorMessage(err, 'Access denied'));
-      } finally {
-        setIsLoading(false);
-      }
+    if (isUserLoading) return;
+    if (!user) { router.push('/login'); return; }
+    if (!isAdmin) {
+      setError('You do not have permission to access this page');
+      return;
     }
-    checkAuthAndPermissions();
-  }, [router]);
+    setHasAccess(true);
+    fetchLogs();
+  }, [isUserLoading, user, isAdmin, router]);
 
   const fetchLogs = async () => {
     setIsSearching(true);
@@ -92,12 +77,7 @@ export default function CampaignLogsPage() {
         query = query.eq('campaign_id', searchCampaignId.trim());
       }
 
-      // Filter by user (name or email)
-      if (searchUser.trim()) {
-        const searchTerm = searchUser.trim().toLowerCase();
-        // We'll filter in memory since we need to search both user_name and user_email
-        // For better performance, we could use OR conditions, but Supabase client doesn't support that easily
-      }
+      // User filter is applied in-memory below after fetch
 
       const { data, error: fetchError } = await query;
 
@@ -187,7 +167,7 @@ export default function CampaignLogsPage() {
     }
   };
 
-  if (isLoading) {
+  if (isUserLoading) {
     return (
       <MobileLayout>
         <div className="flex min-h-screen items-center justify-center">
