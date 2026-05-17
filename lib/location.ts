@@ -10,32 +10,45 @@ interface Coordinates {
   longitude: number;
 }
 
+export interface LocationResult {
+  coords: Coordinates | null;
+  /** True when the user explicitly denied the permission prompt. */
+  deniedByUser: boolean;
+}
+
 /**
- * Get user's current location using browser geolocation API
+ * Get user's current location using browser geolocation API.
+ * Returns deniedByUser=true so callers can surface a helpful message
+ * rather than silently showing an empty state field.
  */
-export async function getUserLocation(): Promise<Coordinates | null> {
+export async function getUserLocation(): Promise<LocationResult> {
   return new Promise((resolve) => {
     if (!navigator.geolocation) {
-      console.warn('Geolocation is not supported by this browser');
-      resolve(null);
+      resolve({ coords: null, deniedByUser: false });
       return;
     }
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
         resolve({
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
+          coords: {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+          },
+          deniedByUser: false,
         });
       },
       (error) => {
-        console.warn('Error getting location:', error.message);
-        resolve(null);
+        const deniedByUser = error.code === error.PERMISSION_DENIED;
+        if (!deniedByUser) {
+          console.warn('Error getting location:', error.message);
+        }
+        resolve({ coords: null, deniedByUser });
       },
       {
         enableHighAccuracy: true,
         timeout: 10000,
-        maximumAge: 300000, // Cache for 5 minutes
+        maximumAge: 300000,
       }
     );
   });
@@ -107,43 +120,44 @@ export async function getStateFromLocation(
   }
 }
 
+export interface StateCodeResult {
+  stateCode: StateCode | null;
+  /** True when the user explicitly denied location permission. */
+  deniedByUser: boolean;
+}
+
 /**
- * Get user's state code from their location
- * Caches the result in localStorage to avoid repeated API calls
+ * Get user's state code from their location.
+ * Caches the result in localStorage to avoid repeated API calls.
+ * Returns deniedByUser so callers can prompt the user to select state manually.
  */
-export async function getUserStateCode(): Promise<StateCode | null> {
-  if (typeof window === 'undefined') return null;
+export async function getUserStateCode(): Promise<StateCodeResult> {
+  if (typeof window === 'undefined') return { stateCode: null, deniedByUser: false };
 
   // Check if we have a cached state code (valid for 24 hours)
   const cached = localStorage.getItem('user_state_code');
   const cachedTime = localStorage.getItem('user_state_code_time');
-  
+
   if (cached && cachedTime) {
     const age = Date.now() - parseInt(cachedTime, 10);
-    if (age < 24 * 60 * 60 * 1000) { // 24 hours
-      return cached as StateCode;
+    if (age < 24 * 60 * 60 * 1000) {
+      return { stateCode: cached as StateCode, deniedByUser: false };
     }
   }
 
-  // Get location
-  const location = await getUserLocation();
-  if (!location) {
-    return null;
+  const { coords, deniedByUser } = await getUserLocation();
+  if (!coords) {
+    return { stateCode: null, deniedByUser };
   }
 
-  // Get state code from location
-  const stateCode = await getStateFromLocation(
-    location.latitude,
-    location.longitude
-  );
+  const stateCode = await getStateFromLocation(coords.latitude, coords.longitude);
 
-  // Cache the result
   if (stateCode) {
     localStorage.setItem('user_state_code', stateCode);
     localStorage.setItem('user_state_code_time', Date.now().toString());
   }
 
-  return stateCode;
+  return { stateCode, deniedByUser: false };
 }
 
 /**

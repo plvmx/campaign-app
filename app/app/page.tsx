@@ -358,9 +358,9 @@ function AppPageContent() {
             
             // Try to get user's state (this will request location permission)
             try {
-              stateCode = await getUserStateCode();
+              const result = await getUserStateCode();
+              stateCode = result.stateCode;
             } catch (locationError) {
-              // User denied location permission or error occurred
               console.log('Location permission not granted or error occurred');
             }
             
