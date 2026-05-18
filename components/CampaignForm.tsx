@@ -32,7 +32,7 @@ export default function CampaignForm({
   initialData,
   submitLabel = 'Create Campaign',
   signedInLeader,
-  signedInMobile,
+  signedInMobile: _signedInMobile,
   signedInState,
   isAdminOrStateReporter = false,
 }: CampaignFormProps) {

@@ -7,8 +7,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { getUserStateCode } from '@/lib/location';
 import { normalizeName, normalizeMobile } from '@/lib/auth';
 import { useUser, upsertUserProfile } from '@/contexts/UserContext';
-import { useCampaignDates } from '@/contexts/CampaignDatesContext';
-import { formatDateForDb, getTodayDateString } from '@/lib/campaignDates';
+import { getTodayDateString } from '@/lib/campaignDates';
 import { getStateColor } from '@/lib/stateColors';
 import { fetchCampaignData } from '@/lib/campaignLog';
 import { getSharedWithMeOwners, type LeaderShareOwner } from '@/lib/leaderShares';
@@ -22,7 +21,6 @@ import { createCampaign, updateCampaign, deleteCampaign } from '@/lib/services/c
 function AppPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { dates: campaignDates } = useCampaignDates();
   const {
     user: contextUser,
     userProfile: contextUserProfile,

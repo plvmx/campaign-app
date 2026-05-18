@@ -17,7 +17,7 @@ function isAdminRoute(): boolean {
 /**
  * Get changed fields between old and new data
  */
-function getChangedFields(oldData: Record<string, any>, newData: Record<string, any>): string[] {
+function getChangedFields(oldData: Record<string, unknown>, newData: Record<string, unknown>): string[] {
   const changedFields: string[] = [];
   const allKeys = new Set([...Object.keys(oldData), ...Object.keys(newData)]);
   
@@ -54,8 +54,8 @@ function getChangedFields(oldData: Record<string, any>, newData: Record<string, 
 export async function logCampaignChange(
   campaignId: string | null,
   changeType: 'INSERT' | 'UPDATE' | 'DELETE',
-  oldData?: Record<string, any> | null,
-  newData?: Record<string, any> | null
+  oldData?: Record<string, unknown> | null,
+  newData?: Record<string, unknown> | null
 ): Promise<void> {
   try {
     // Skip logging if this is from an admin route
@@ -80,7 +80,7 @@ export async function logCampaignChange(
 
     // Get user profile for name
     let userName: string | null = null;
-    let userEmail: string | null = user.email || null;
+    const userEmail: string | null = user.email || null;
     
     try {
       const profile = await getUserProfile();
@@ -104,8 +104,8 @@ export async function logCampaignChange(
       campaign_id?: string | null;
       user_id: string;
       change_type: string;
-      old_data?: any;
-      new_data?: any;
+      old_data?: Record<string, unknown>;
+      new_data?: Record<string, unknown>;
       changed_fields?: string[] | null;
       user_email?: string | null;
       user_name?: string | null;
@@ -164,7 +164,7 @@ export async function logCampaignChange(
  * Helper function to fetch current campaign data before updating
  * This is useful when you need to log the old state before an update
  */
-export async function fetchCampaignData(campaignId: string): Promise<Record<string, any> | null> {
+export async function fetchCampaignData(campaignId: string): Promise<Record<string, unknown> | null> {
   try {
     const { data, error } = await supabase
       .from('campaigns')
