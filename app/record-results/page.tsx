@@ -33,21 +33,26 @@ export default function RecordResultsPage() {
     if (isUserLoading) return;
     if (!user) { router.push('/login'); return; }
 
-    // Set default state
-    if (!isAdminOrStateReporter && contextUserState) {
-      setDefaultState(contextUserState);
-      setIsLoading(false);
-      return;
-    }
-    const cachedState = getCachedStateCode();
-    if (cachedState) {
-      setDefaultState(cachedState);
-      setIsLoading(false);
-      return;
-    }
-    getUserStateCode().then(({ stateCode }) => {
+    // Resolve default state via an async helper to keep setState out of the
+    // synchronous effect body (satisfies react-hooks/set-state-in-effect)
+    const resolveDefaultState = async () => {
+      if (!isAdminOrStateReporter && contextUserState) {
+        setDefaultState(contextUserState);
+        setIsLoading(false);
+        return;
+      }
+      const cachedState = getCachedStateCode();
+      if (cachedState) {
+        setDefaultState(cachedState);
+        setIsLoading(false);
+        return;
+      }
+      const { stateCode } = await getUserStateCode();
       if (stateCode) setDefaultState(stateCode);
-    }).finally(() => setIsLoading(false));
+      setIsLoading(false);
+    };
+
+    resolveDefaultState();
   }, [isUserLoading, user, router, isAdminOrStateReporter, contextUserState]);
 
   const handleSubmit = async (data: CampaignData) => {
