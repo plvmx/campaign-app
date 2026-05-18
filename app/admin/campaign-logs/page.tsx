@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import MobileLayout from '@/components/MobileLayout';
 import { useUser } from '@/contexts/UserContext';
@@ -21,14 +21,18 @@ interface CampaignLog {
   created_at: string;
 }
 
+const PAGE_SIZE = 50;
+
 export default function CampaignLogsPage() {
   const router = useRouter();
   const { user, isAdmin, isLoading: isUserLoading } = useUser();
   const [hasAccess, setHasAccess] = useState(false);
   const [logs, setLogs] = useState<CampaignLog[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
   const [error, setError] = useState<string | null>(null);
   const [expandedLogs, setExpandedLogs] = useState<Set<string>>(new Set());
-  
+
   // Search and filter state
   const [searchUser, setSearchUser] = useState('');
   const [filterChangeType, setFilterChangeType] = useState<string>('');
@@ -36,6 +40,57 @@ export default function CampaignLogsPage() {
   const [filterDateTo, setFilterDateTo] = useState('');
   const [searchCampaignId, setSearchCampaignId] = useState('');
   const [isSearching, setIsSearching] = useState(false);
+
+  const fetchLogs = useCallback(async (page = 1) => {
+    setIsSearching(true);
+    setError(null);
+
+    const from = (page - 1) * PAGE_SIZE;
+    const to = from + PAGE_SIZE - 1;
+
+    try {
+      let query = supabase
+        .from('campaign_changes_log')
+        .select('*', { count: 'exact' })
+        .order('created_at', { ascending: false })
+        .range(from, to);
+
+      if (filterChangeType) {
+        query = query.eq('change_type', filterChangeType);
+      }
+      if (filterDateFrom) {
+        query = query.gte('created_at', filterDateFrom + 'T00:00:00');
+      }
+      if (filterDateTo) {
+        query = query.lte('created_at', filterDateTo + 'T23:59:59');
+      }
+      if (searchCampaignId.trim()) {
+        query = query.eq('campaign_id', searchCampaignId.trim());
+      }
+
+      const { data, count, error: fetchError } = await query;
+      if (fetchError) throw fetchError;
+
+      // User search is applied in-memory (name/email not indexed for full-text)
+      let filteredData = data ?? [];
+      if (searchUser.trim()) {
+        const term = searchUser.trim().toLowerCase();
+        filteredData = filteredData.filter(
+          (log) =>
+            log.user_name?.toLowerCase().includes(term) ||
+            log.user_email?.toLowerCase().includes(term)
+        );
+      }
+
+      setLogs(filteredData);
+      setTotalCount(count ?? 0);
+      setCurrentPage(page);
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to fetch logs'));
+    } finally {
+      setIsSearching(false);
+    }
+  }, [filterChangeType, filterDateFrom, filterDateTo, searchCampaignId, searchUser]);
 
   useEffect(() => {
     if (isUserLoading) return;
@@ -45,64 +100,12 @@ export default function CampaignLogsPage() {
       return;
     }
     setHasAccess(true);
-    fetchLogs();
+    fetchLogs(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isUserLoading, user, isAdmin, router]);
 
-  const fetchLogs = async () => {
-    setIsSearching(true);
-    setError(null);
-    
-    try {
-      let query = supabase
-        .from('campaign_changes_log')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(500); // Limit to most recent 500 logs
-
-      // Filter by change type
-      if (filterChangeType) {
-        query = query.eq('change_type', filterChangeType);
-      }
-
-      // Filter by date range
-      if (filterDateFrom) {
-        query = query.gte('created_at', filterDateFrom + 'T00:00:00');
-      }
-      if (filterDateTo) {
-        query = query.lte('created_at', filterDateTo + 'T23:59:59');
-      }
-
-      // Filter by campaign ID
-      if (searchCampaignId.trim()) {
-        query = query.eq('campaign_id', searchCampaignId.trim());
-      }
-
-      // User filter is applied in-memory below after fetch
-
-      const { data, error: fetchError } = await query;
-
-      if (fetchError) throw fetchError;
-
-      // Filter by user in memory if search term provided
-      let filteredData = data || [];
-      if (searchUser.trim()) {
-        const searchTerm = searchUser.trim().toLowerCase();
-        filteredData = filteredData.filter(log => 
-          (log.user_name?.toLowerCase().includes(searchTerm) || 
-           log.user_email?.toLowerCase().includes(searchTerm))
-        );
-      }
-
-      setLogs(filteredData);
-    } catch (err: unknown) {
-      setError(getErrorMessage(err, 'Failed to fetch logs'));
-    } finally {
-      setIsSearching(false);
-    }
-  };
-
   const handleSearch = () => {
-    fetchLogs();
+    fetchLogs(1);
   };
 
   const handleClearFilters = async () => {
@@ -111,20 +114,18 @@ export default function CampaignLogsPage() {
     setFilterDateFrom('');
     setFilterDateTo('');
     setSearchCampaignId('');
-    
-    // Fetch logs with cleared filters
     setIsSearching(true);
     setError(null);
-    
     try {
-      const { data, error: fetchError } = await supabase
+      const { data, count, error: fetchError } = await supabase
         .from('campaign_changes_log')
-        .select('*')
+        .select('*', { count: 'exact' })
         .order('created_at', { ascending: false })
-        .limit(500);
-
+        .range(0, PAGE_SIZE - 1);
       if (fetchError) throw fetchError;
-      setLogs(data || []);
+      setLogs(data ?? []);
+      setTotalCount(count ?? 0);
+      setCurrentPage(1);
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Failed to fetch logs'));
     } finally {
@@ -133,13 +134,12 @@ export default function CampaignLogsPage() {
   };
 
   const toggleExpand = (logId: string) => {
-    const newExpanded = new Set(expandedLogs);
-    if (newExpanded.has(logId)) {
-      newExpanded.delete(logId);
-    } else {
-      newExpanded.add(logId);
-    }
-    setExpandedLogs(newExpanded);
+    setExpandedLogs((prev) => {
+      const next = new Set(prev);
+      if (next.has(logId)) next.delete(logId);
+      else next.add(logId);
+      return next;
+    });
   };
 
   const formatDateTime = (dateString: string) => {
@@ -166,6 +166,10 @@ export default function CampaignLogsPage() {
         return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
     }
   };
+
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+  const firstItem = totalCount === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
+  const lastItem = Math.min(currentPage * PAGE_SIZE, totalCount);
 
   if (isUserLoading) {
     return (
@@ -233,7 +237,7 @@ export default function CampaignLogsPage() {
           <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
             Search & Filters
           </h2>
-          
+
           <div className="space-y-4">
             {/* User Search */}
             <div>
@@ -251,7 +255,6 @@ export default function CampaignLogsPage() {
 
             {/* Filters Row */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Change Type Filter */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Change Type
@@ -267,8 +270,6 @@ export default function CampaignLogsPage() {
                   <option value="DELETE">Delete</option>
                 </select>
               </div>
-
-              {/* Campaign ID Search */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Campaign ID
@@ -328,110 +329,162 @@ export default function CampaignLogsPage() {
           </div>
         </div>
 
-        {/* Results Count */}
-        <div className="mb-4 text-sm text-gray-600 dark:text-gray-400">
-          Found {logs.length} log record{logs.length !== 1 ? 's' : ''}
+        {/* Results count + pagination (top) */}
+        <div className="mb-4 flex items-center justify-between">
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            {totalCount === 0
+              ? 'No records found'
+              : `Showing ${firstItem}–${lastItem} of ${totalCount} record${totalCount !== 1 ? 's' : ''}`}
+          </p>
+          {totalPages > 1 && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => fetchLogs(currentPage - 1)}
+                disabled={currentPage <= 1 || isSearching}
+                className="rounded-md border border-gray-300 bg-white px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+              >
+                ← Prev
+              </button>
+              <span className="text-sm text-gray-700 dark:text-gray-300">
+                {currentPage} / {totalPages}
+              </span>
+              <button
+                onClick={() => fetchLogs(currentPage + 1)}
+                disabled={currentPage >= totalPages || isSearching}
+                className="rounded-md border border-gray-300 bg-white px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+              >
+                Next →
+              </button>
+            </div>
+          )}
         </div>
 
-        {/* Logs Table */}
+        {/* Logs */}
         {logs.length === 0 ? (
           <div className="rounded-lg border border-gray-200 bg-white p-8 text-center dark:border-gray-700 dark:bg-gray-800">
-            <p className="text-gray-500 dark:text-gray-400">No log records found</p>
+            <p className="text-gray-500 dark:text-gray-400">
+              {isSearching ? 'Searching...' : 'No log records found'}
+            </p>
           </div>
         ) : (
-          <div className="space-y-3">
-            {logs.map((log) => (
-              <div
-                key={log.id}
-                className="rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800"
-              >
+          <>
+            <div className="space-y-3">
+              {logs.map((log) => (
                 <div
-                  className="p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50"
-                  onClick={() => toggleExpand(log.id)}
+                  key={log.id}
+                  className="rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800"
                 >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${getChangeTypeColor(log.change_type)}`}>
-                          {log.change_type}
-                        </span>
-                        <span className="text-sm text-gray-500 dark:text-gray-400">
-                          {formatDateTime(log.created_at)}
-                        </span>
-                      </div>
-                      <div className="text-sm text-gray-900 dark:text-gray-100">
-                        <div>
-                          <span className="font-medium">User:</span>{' '}
-                          {log.user_name || log.user_email || 'Unknown'}
-                          {log.user_email && log.user_name && ` (${log.user_email})`}
+                  <div
+                    className="p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                    onClick={() => toggleExpand(log.id)}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${getChangeTypeColor(log.change_type)}`}>
+                            {log.change_type}
+                          </span>
+                          <span className="text-sm text-gray-500 dark:text-gray-400">
+                            {formatDateTime(log.created_at)}
+                          </span>
                         </div>
-                        {log.campaign_id && (
-                          <div className="mt-1">
-                            <span className="font-medium">Campaign ID:</span>{' '}
-                            <span className="font-mono text-xs">{log.campaign_id}</span>
+                        <div className="text-sm text-gray-900 dark:text-gray-100">
+                          <div>
+                            <span className="font-medium">User:</span>{' '}
+                            {log.user_name || log.user_email || 'Unknown'}
+                            {log.user_email && log.user_name && ` (${log.user_email})`}
                           </div>
-                        )}
-                        {log.change_type === 'UPDATE' && log.changed_fields && log.changed_fields.length > 0 && (
-                          <div className="mt-1">
-                            <span className="font-medium">Changed Fields:</span>{' '}
-                            {log.changed_fields.join(', ')}
-                          </div>
-                        )}
+                          {log.campaign_id && (
+                            <div className="mt-1">
+                              <span className="font-medium">Campaign ID:</span>{' '}
+                              <span className="font-mono text-xs">{log.campaign_id}</span>
+                            </div>
+                          )}
+                          {log.change_type === 'UPDATE' && log.changed_fields && log.changed_fields.length > 0 && (
+                            <div className="mt-1">
+                              <span className="font-medium">Changed Fields:</span>{' '}
+                              {log.changed_fields.join(', ')}
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                    <div className="ml-4">
-                      <svg
-                        className={`h-5 w-5 text-gray-400 transition-transform ${expandedLogs.has(log.id) ? 'rotate-180' : ''}`}
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
+                      <div className="ml-4">
+                        <svg
+                          className={`h-5 w-5 text-gray-400 transition-transform ${expandedLogs.has(log.id) ? 'rotate-180' : ''}`}
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </div>
                     </div>
                   </div>
+
+                  {expandedLogs.has(log.id) && (
+                    <div className="border-t border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900/50">
+                      <div className="space-y-4">
+                        {(log.change_type === 'UPDATE' || log.change_type === 'DELETE') && log.old_data && (
+                          <div>
+                            <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                              Previous Values:
+                            </h4>
+                            <pre className="overflow-x-auto rounded-md bg-white p-3 text-xs text-gray-800 dark:bg-gray-800 dark:text-gray-200 border border-gray-200 dark:border-gray-700">
+                              {JSON.stringify(log.old_data, null, 2)}
+                            </pre>
+                          </div>
+                        )}
+                        {(log.change_type === 'INSERT' || log.change_type === 'UPDATE') && log.new_data && (
+                          <div>
+                            <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                              {log.change_type === 'INSERT' ? 'New Values:' : 'Updated Values:'}
+                            </h4>
+                            <pre className="overflow-x-auto rounded-md bg-white p-3 text-xs text-gray-800 dark:bg-gray-800 dark:text-gray-200 border border-gray-200 dark:border-gray-700">
+                              {JSON.stringify(log.new_data, null, 2)}
+                            </pre>
+                          </div>
+                        )}
+                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                          <div>Log ID: <span className="font-mono">{log.id}</span></div>
+                          {log.user_id && (
+                            <div>User ID: <span className="font-mono">{log.user_id}</span></div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
+              ))}
+            </div>
 
-                {expandedLogs.has(log.id) && (
-                  <div className="border-t border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900/50">
-                    <div className="space-y-4">
-                      {/* Old Data */}
-                      {(log.change_type === 'UPDATE' || log.change_type === 'DELETE') && log.old_data && (
-                        <div>
-                          <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">
-                            Previous Values:
-                          </h4>
-                          <pre className="overflow-x-auto rounded-md bg-white p-3 text-xs text-gray-800 dark:bg-gray-800 dark:text-gray-200 border border-gray-200 dark:border-gray-700">
-                            {JSON.stringify(log.old_data, null, 2)}
-                          </pre>
-                        </div>
-                      )}
-
-                      {/* New Data */}
-                      {(log.change_type === 'INSERT' || log.change_type === 'UPDATE') && log.new_data && (
-                        <div>
-                          <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">
-                            {log.change_type === 'INSERT' ? 'New Values:' : 'Updated Values:'}
-                          </h4>
-                          <pre className="overflow-x-auto rounded-md bg-white p-3 text-xs text-gray-800 dark:bg-gray-800 dark:text-gray-200 border border-gray-200 dark:border-gray-700">
-                            {JSON.stringify(log.new_data, null, 2)}
-                          </pre>
-                        </div>
-                      )}
-
-                      {/* Metadata */}
-                      <div className="text-xs text-gray-500 dark:text-gray-400">
-                        <div>Log ID: <span className="font-mono">{log.id}</span></div>
-                        {log.user_id && (
-                          <div>User ID: <span className="font-mono">{log.user_id}</span></div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
+            {/* Bottom pagination */}
+            {totalPages > 1 && (
+              <div className="mt-6 flex items-center justify-between">
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Showing {firstItem}–{lastItem} of {totalCount} records
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => fetchLogs(currentPage - 1)}
+                    disabled={currentPage <= 1 || isSearching}
+                    className="rounded-md border border-gray-300 bg-white px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+                  >
+                    ← Prev
+                  </button>
+                  <span className="text-sm text-gray-700 dark:text-gray-300">
+                    {currentPage} / {totalPages}
+                  </span>
+                  <button
+                    onClick={() => fetchLogs(currentPage + 1)}
+                    disabled={currentPage >= totalPages || isSearching}
+                    className="rounded-md border border-gray-300 bg-white px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+                  >
+                    Next →
+                  </button>
+                </div>
               </div>
-            ))}
-          </div>
+            )}
+          </>
         )}
       </div>
     </MobileLayout>
