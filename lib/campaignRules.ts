@@ -4,6 +4,14 @@
  * Evaluates campaign rules and generates campaign records based on scheduling patterns.
  */
 
+/** Typed shape for the JSONB rule_config column. */
+export interface RuleConfig {
+  reference_date?: string;
+  exceptions?: string[];
+  override_fields?: Record<string, Record<string, unknown>>;
+  [key: string]: unknown;
+}
+
 export interface CampaignRule {
   id: string;
   name: string;
@@ -21,7 +29,7 @@ export interface CampaignRule {
   end_date: string | null;
   is_active: boolean;
   priority: number;
-  rule_config: any; // JSONB field
+  rule_config: RuleConfig;
   notes: string | null;
 }
 
@@ -34,29 +42,6 @@ export interface GeneratedCampaign {
   mobile: string | null;
   botj: string;
   rule_id: string;
-}
-
-/**
- * Get the week number of a date within its month (1-4 or -1 for last week)
- */
-function getWeekOfMonth(date: Date): number {
-  const firstDay = new Date(date.getFullYear(), date.getMonth(), 1);
-  const firstDayOfWeek = firstDay.getDay(); // 0 = Sunday, 1 = Monday, etc.
-  
-  // Calculate which week of the month this date falls in
-  const dayOfMonth = date.getDate();
-  const weekNumber = Math.ceil((dayOfMonth + firstDayOfWeek) / 7);
-  
-  // Check if this is the last week
-  const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0);
-  const lastDayOfWeek = lastDay.getDay();
-  const lastWeekNumber = Math.ceil((lastDay.getDate() + firstDayOfWeek) / 7);
-  
-  if (weekNumber === lastWeekNumber) {
-    return -1; // Last week
-  }
-  
-  return weekNumber;
 }
 
 /**
@@ -210,7 +195,7 @@ function findBiweeklyOccurrences(
     nextOccurrence = new Date(refDate.getTime() + (frequencyValue * millisecondsPerWeek));
   } else {
     // No reference date - find the first occurrence of the target day in the target period
-    let baseDate = new Date(normalizedStartDate);
+    const baseDate = new Date(normalizedStartDate);
     baseDate.setHours(0, 0, 0, 0);
     
     // Find the first occurrence of the target day of week from start date
@@ -254,9 +239,9 @@ function findBiweeklyOccurrences(
  * Evaluate a custom pattern from rule_config
  */
 function evaluateCustomPattern(
-  ruleConfig: any,
-  startDate: Date,
-  endDate: Date
+  ruleConfig: RuleConfig,
+  _startDate: Date,
+  _endDate: Date
 ): Date[] {
   // For now, return empty array - can be extended later
   // This allows for future complex patterns via JSONB
@@ -283,7 +268,7 @@ function isDateInRange(date: Date, startDate: string | null, endDate: string | n
 /**
  * Check if a date is in the exceptions list
  */
-function isDateExcepted(date: Date, ruleConfig: any): boolean {
+function isDateExcepted(date: Date, ruleConfig: RuleConfig): boolean {
   if (!ruleConfig?.exceptions) {
     return false;
   }
