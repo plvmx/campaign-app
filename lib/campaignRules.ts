@@ -373,7 +373,7 @@ export function evaluateRule(
       date: dateStr,
       state: rule.state,
       place: rule.place,
-      time: overrideFields.time || rule.time,
+      time: typeof overrideFields.time === 'string' ? overrideFields.time : rule.time,
       leader: rule.leader,
       mobile: rule.mobile,
       botj: 'No',

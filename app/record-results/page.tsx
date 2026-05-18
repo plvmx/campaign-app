@@ -24,16 +24,14 @@ export default function RecordResultsPage() {
   const isAdminOrStateReporter = adminStatus === 'AD' || adminStatus === 'SR';
   const [isLoading, setIsLoading] = useState(true);
   const [defaultState, setDefaultState] = useState<string>('');
-  const [defaultDate, setDefaultDate] = useState<string>('');
+  const [defaultDate] = useState<string>(() => {
+    const today = new Date();
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  });
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => {
     if (isUserLoading) return;
     if (!user) { router.push('/login'); return; }
-
-    // Set default date
-    const today = new Date();
-    setDefaultDate(`${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`);
 
     // Set default state
     if (!isAdminOrStateReporter && contextUserState) {

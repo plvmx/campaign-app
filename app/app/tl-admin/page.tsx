@@ -1,41 +1,33 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import MobileLayout from '@/components/MobileLayout';
 import { useUser } from '@/contexts/UserContext';
 import { useCampaignDates } from '@/contexts/CampaignDatesContext';
 import { formatDateReadable } from '@/lib/campaignDates';
-import { getErrorMessage } from '@/lib/errorUtils';
 
 export default function TLAdminPage() {
   const router = useRouter();
   const { dates } = useCampaignDates();
   const { user, adminStatus, userState: contextUserState, userProfile, isLoading: isUserLoading } = useUser();
-  const [hasAccess, setHasAccess] = useState(false);
-  const [userState, setUserState] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect
+  // Derive access state from context — avoids setState-in-effect anti-pattern
+  const derivedUserState = contextUserState ?? userProfile?.state ?? null;
+  const accessError = !isUserLoading && user
+    ? (adminStatus === 'AD' || adminStatus === 'SR')
+      ? 'Use the main Admin or SR Admin panel instead.'
+      : !derivedUserState?.trim()
+      ? 'No state found for your account.'
+      : null
+    : null;
+  const hasAccess = !isUserLoading && !!user && accessError === null;
+
   useEffect(() => {
-    if (isUserLoading) return;
-    if (!user) { router.push('/login'); return; }
-    try {
-      if (adminStatus === 'AD' || adminStatus === 'SR') {
-        setError('Use the main Admin or SR Admin panel instead.');
-        return;
-      }
-      const stateToUse = contextUserState ?? userProfile?.state ?? null;
-      if (!stateToUse?.trim()) {
-        setError('No state found for your account.');
-        return;
-      }
-      setUserState(stateToUse);
-      setHasAccess(true);
-    } catch (err: unknown) {
-      setError(getErrorMessage(err, 'Access denied'));
+    if (!isUserLoading && !user) {
+      router.push('/login');
     }
-  }, [isUserLoading, user, router, adminStatus, contextUserState, userProfile]);
+  }, [isUserLoading, user, router]);
 
   if (isUserLoading) {
     return (
@@ -47,13 +39,15 @@ export default function TLAdminPage() {
     );
   }
 
+  if (!user) return null;
+
   if (!hasAccess) {
     return (
       <MobileLayout>
         <div className="p-4">
           <div className="rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20">
             <h2 className="text-lg font-semibold text-red-800 dark:text-red-200">Access Denied</h2>
-            <p className="mt-1 text-sm text-red-600 dark:text-red-300">{error}</p>
+            <p className="mt-1 text-sm text-red-600 dark:text-red-300">{accessError}</p>
             <button
               onClick={() => router.push('/app')}
               className="mt-4 rounded-md bg-red-600 px-4 py-2 text-base font-bold text-white hover:bg-red-700 border-2 border-gray-800 dark:border-gray-600"
@@ -66,7 +60,7 @@ export default function TLAdminPage() {
     );
   }
 
-  const stateToUse = userState ?? '';
+  const stateToUse = derivedUserState ?? '';
 
   return (
     <MobileLayout>
@@ -79,12 +73,6 @@ export default function TLAdminPage() {
             Team Leader admin options for your state
           </p>
         </div>
-
-        {error && (
-          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20">
-            <p className="text-sm text-red-800 dark:text-red-200">{error}</p>
-          </div>
-        )}
 
         <div className="space-y-4">
           {/* Campaign Dates Info */}
