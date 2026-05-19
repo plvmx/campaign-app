@@ -46,6 +46,11 @@ const FONT_SIZES = {
   campaign: 84
 };
 
+// Horizontal scale applied to campaign text lines only.
+// 1.0 = no compression; 0.82 ≈ 18% narrower characters, fitting more per line.
+// Adjust this value to taste (try 0.78–0.88).
+const CAMPAIGN_SCALE_X = 0.82;
+
 interface Campaign {
   id: string;
   date: string;
@@ -455,29 +460,33 @@ export default function GenerateSlidesPage() {
       // Draw campaigns
       const campaignY = currentY + dateHeaderHeight + dateHeaderSpacing;
       
-      // Calculate center position for campaigns (using reference text)
+      // Calculate center position for campaigns (using reference text).
+      // campaignX is the canvas x where the scaled text block should start.
+      // After applying CAMPAIGN_SCALE_X the rendered width is naturalWidth * scale,
+      // so we centre based on that compressed width.
       ctx.font = `bold ${FONT_SIZES.campaign}px "Courier New", monospace`;
       const referenceText = 'PlaceName1234 10:30 AM Leader12 0434885320  ';
-      const referenceWidth = ctx.measureText(referenceText).width;
-      let campaignX = (SLIDE_WIDTH - referenceWidth) / 2;
-      
+      const referenceNaturalWidth = ctx.measureText(referenceText).width;
+      const referenceScaledWidth = referenceNaturalWidth * CAMPAIGN_SCALE_X;
+      let campaignX = (SLIDE_WIDTH - referenceScaledWidth) / 2;
+
       // Minimum left margin (1 character width)
       const oneCharWidth = Math.floor(FONT_SIZES.campaign * 0.6);
       const minLeftMargin = oneCharWidth;
       if (campaignX < minLeftMargin) {
         campaignX = minLeftMargin;
       }
-      
+
       ctx.textAlign = 'left';
       ctx.textBaseline = 'top';
-      
+
       finalCampaigns.forEach((campaign, j) => {
         let place = campaign.place;
-        
+
         // Check BOTJ - handle different data types (boolean, string, number)
         const bofjValue = campaign.botj;
         let shouldAppendBOTJ = false;
-        
+
         if (typeof bofjValue === 'boolean') {
           shouldAppendBOTJ = bofjValue;
         } else if (typeof bofjValue === 'number') {
@@ -485,18 +494,18 @@ export default function GenerateSlidesPage() {
         } else if (typeof bofjValue === 'string') {
           shouldAppendBOTJ = bofjValue === '1' || bofjValue.toLowerCase() === 'yes' || bofjValue.toLowerCase() === 'true';
         }
-        
+
         if (shouldAppendBOTJ) {
           place = `${place} BOTJ`;
         }
         if (place.length > 13) {
           place = place.substring(0, 13);
         }
-        
+
         const time = formatTime(campaign.time);
         const leader = campaign.leader;
         const mobile = (campaign.mobile || '').replace(/\s/g, '');
-        
+
         // Format with fixed widths
         const placePadded = place.padEnd(13, ' ');
         const timePadded = time.padStart(9, ' ');
@@ -504,8 +513,15 @@ export default function GenerateSlidesPage() {
         const mobilePadded = mobile.padEnd(12, ' ');
         const campaignText = `${placePadded} ${timePadded} ${leaderPadded} ${mobilePadded}`;
 
+        // Draw with horizontal compression: translate to position, scale x only,
+        // draw at origin, then restore — this keeps y-positions unchanged.
+        const yDrawPos = campaignY + (j * lineSpacing);
         ctx.fillStyle = getStateColor(campaign.state);
-        ctx.fillText(campaignText, campaignX, campaignY + (j * lineSpacing));
+        ctx.save();
+        ctx.translate(campaignX, yDrawPos);
+        ctx.scale(CAMPAIGN_SCALE_X, 1);
+        ctx.fillText(campaignText, 0, 0);
+        ctx.restore();
       });
       
       // Update position
