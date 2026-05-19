@@ -46,10 +46,12 @@ const FONT_SIZES = {
   campaign: 84
 };
 
-// Horizontal scale applied to campaign text lines only.
-// 1.0 = no compression; 0.82 ≈ 18% narrower characters, fitting more per line.
-// Adjust this value to taste (try 0.78–0.88).
-const CAMPAIGN_SCALE_X = 0.82;
+// Column widths (in monospace characters) for campaign lines.
+// Increase these to allow more content per field.
+const PLACE_COLS  = 18;  // place name (was 13)
+const TIME_COLS   = 9;   // time e.g. " 10:30 AM"
+const LEADER_COLS = 12;  // leader name (was 8)
+const MOBILE_COLS = 12;  // mobile number
 
 interface Campaign {
   id: string;
@@ -460,22 +462,20 @@ export default function GenerateSlidesPage() {
       // Draw campaigns
       const campaignY = currentY + dateHeaderHeight + dateHeaderSpacing;
       
-      // Calculate center position for campaigns (using reference text).
-      // campaignX is the canvas x where the scaled text block should start.
-      // After applying CAMPAIGN_SCALE_X the rendered width is naturalWidth * scale,
-      // so we centre based on that compressed width.
+      // Scale campaign text to fill edge-to-edge with exactly 1-char margin each side.
+      // The scale is calculated from the actual column layout, so it self-adjusts if
+      // column widths change above.
       ctx.font = `bold ${FONT_SIZES.campaign}px "Courier New", monospace`;
-      const referenceText = 'PlaceName1234 10:30 AM Leader12 0434885320  ';
-      const referenceNaturalWidth = ctx.measureText(referenceText).width;
-      const referenceScaledWidth = referenceNaturalWidth * CAMPAIGN_SCALE_X;
-      let campaignX = (SLIDE_WIDTH - referenceScaledWidth) / 2;
 
-      // Minimum left margin (1 character width)
-      const oneCharWidth = Math.floor(FONT_SIZES.campaign * 0.6);
-      const minLeftMargin = oneCharWidth;
-      if (campaignX < minLeftMargin) {
-        campaignX = minLeftMargin;
-      }
+      // In Courier New every character has identical width — measure one char.
+      const oneCharWidth = Math.round(ctx.measureText('M').width);
+      const campaignX = oneCharWidth;                          // 1-char left margin
+      const availableWidth = SLIDE_WIDTH - 2 * oneCharWidth;  // right margin mirrors left
+
+      // Total characters in one line: columns + 3 separator spaces
+      const totalCols = PLACE_COLS + 1 + TIME_COLS + 1 + LEADER_COLS + 1 + MOBILE_COLS;
+      const naturalLineWidth = ctx.measureText('M'.repeat(totalCols)).width;
+      const campaignScaleX = availableWidth / naturalLineWidth;
 
       ctx.textAlign = 'left';
       ctx.textBaseline = 'top';
@@ -498,28 +498,30 @@ export default function GenerateSlidesPage() {
         if (shouldAppendBOTJ) {
           place = `${place} BOTJ`;
         }
-        if (place.length > 13) {
-          place = place.substring(0, 13);
+        if (place.length > PLACE_COLS) {
+          place = place.substring(0, PLACE_COLS);
         }
 
         const time = formatTime(campaign.time);
-        const leader = campaign.leader;
+        const leader = campaign.leader.length > LEADER_COLS
+          ? campaign.leader.substring(0, LEADER_COLS)
+          : campaign.leader;
         const mobile = (campaign.mobile || '').replace(/\s/g, '');
 
-        // Format with fixed widths
-        const placePadded = place.padEnd(13, ' ');
-        const timePadded = time.padStart(9, ' ');
-        const leaderPadded = leader.padEnd(8, ' ');
-        const mobilePadded = mobile.padEnd(12, ' ');
+        // Format with fixed column widths
+        const placePadded  = place.padEnd(PLACE_COLS, ' ');
+        const timePadded   = time.padStart(TIME_COLS, ' ');
+        const leaderPadded = leader.padEnd(LEADER_COLS, ' ');
+        const mobilePadded = mobile.padEnd(MOBILE_COLS, ' ');
         const campaignText = `${placePadded} ${timePadded} ${leaderPadded} ${mobilePadded}`;
 
-        // Draw with horizontal compression: translate to position, scale x only,
-        // draw at origin, then restore — this keeps y-positions unchanged.
+        // Draw with horizontal compression to fill the available width.
+        // translate → scale(x only) → fillText at origin → restore keeps y-positions intact.
         const yDrawPos = campaignY + (j * lineSpacing);
         ctx.fillStyle = getStateColor(campaign.state);
         ctx.save();
         ctx.translate(campaignX, yDrawPos);
-        ctx.scale(CAMPAIGN_SCALE_X, 1);
+        ctx.scale(campaignScaleX, 1);
         ctx.fillText(campaignText, 0, 0);
         ctx.restore();
       });
