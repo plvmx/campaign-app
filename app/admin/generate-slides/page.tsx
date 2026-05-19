@@ -46,6 +46,12 @@ const FONT_SIZES = {
   campaign: 84
 };
 
+// Column widths (in monospace characters) for campaign lines.
+const PLACE_COLS      = 18;  // place name — truncated if longer
+const TIME_COLS       = 9;   // time e.g. " 10:30 AM"
+const LEADER_COLS     = 12;  // leader name — truncated if longer
+const MOBILE_MAX_COLS = 10;  // AU mobile = 10 digits; last column, NOT padded
+
 interface Campaign {
   id: string;
   date: string;
@@ -455,29 +461,32 @@ export default function GenerateSlidesPage() {
       // Draw campaigns
       const campaignY = currentY + dateHeaderHeight + dateHeaderSpacing;
       
-      // Calculate center position for campaigns (using reference text)
+      // Scale campaign text to fill edge-to-edge with exactly 1-char margin each side.
+      // The scale is calculated from the actual column layout, so it self-adjusts if
+      // column widths change above.
       ctx.font = `bold ${FONT_SIZES.campaign}px "Courier New", monospace`;
-      const referenceText = 'PlaceName1234 10:30 AM Leader12 0434885320  ';
-      const referenceWidth = ctx.measureText(referenceText).width;
-      let campaignX = (SLIDE_WIDTH - referenceWidth) / 2;
-      
-      // Minimum left margin (1 character width)
-      const oneCharWidth = Math.floor(FONT_SIZES.campaign * 0.6);
-      const minLeftMargin = oneCharWidth;
-      if (campaignX < minLeftMargin) {
-        campaignX = minLeftMargin;
-      }
-      
+
+      // In Courier New every character has identical width — measure one char.
+      const oneCharWidth = Math.round(ctx.measureText('M').width);
+      const campaignX = oneCharWidth;                          // 1-char left margin
+      const availableWidth = SLIDE_WIDTH - 2 * oneCharWidth;  // right margin mirrors left
+
+      // Total characters in one line: columns + 3 separator spaces.
+      // Mobile is the last column and is NOT padded, so MOBILE_MAX_COLS is its natural max.
+      const totalCols = PLACE_COLS + 1 + TIME_COLS + 1 + LEADER_COLS + 1 + MOBILE_MAX_COLS;
+      const naturalLineWidth = ctx.measureText('M'.repeat(totalCols)).width;
+      const campaignScaleX = availableWidth / naturalLineWidth;
+
       ctx.textAlign = 'left';
       ctx.textBaseline = 'top';
-      
+
       finalCampaigns.forEach((campaign, j) => {
         let place = campaign.place;
-        
+
         // Check BOTJ - handle different data types (boolean, string, number)
         const bofjValue = campaign.botj;
         let shouldAppendBOTJ = false;
-        
+
         if (typeof bofjValue === 'boolean') {
           shouldAppendBOTJ = bofjValue;
         } else if (typeof bofjValue === 'number') {
@@ -485,27 +494,36 @@ export default function GenerateSlidesPage() {
         } else if (typeof bofjValue === 'string') {
           shouldAppendBOTJ = bofjValue === '1' || bofjValue.toLowerCase() === 'yes' || bofjValue.toLowerCase() === 'true';
         }
-        
+
         if (shouldAppendBOTJ) {
           place = `${place} BOTJ`;
         }
-        if (place.length > 13) {
-          place = place.substring(0, 13);
+        if (place.length > PLACE_COLS) {
+          place = place.substring(0, PLACE_COLS);
         }
-        
-        const time = formatTime(campaign.time);
-        const leader = campaign.leader;
-        const mobile = (campaign.mobile || '').replace(/\s/g, '');
-        
-        // Format with fixed widths
-        const placePadded = place.padEnd(13, ' ');
-        const timePadded = time.padStart(9, ' ');
-        const leaderPadded = leader.padEnd(8, ' ');
-        const mobilePadded = mobile.padEnd(12, ' ');
-        const campaignText = `${placePadded} ${timePadded} ${leaderPadded} ${mobilePadded}`;
 
+        const time = formatTime(campaign.time);
+        const leader = campaign.leader.length > LEADER_COLS
+          ? campaign.leader.substring(0, LEADER_COLS)
+          : campaign.leader;
+        const mobile = (campaign.mobile || '').replace(/\s/g, '');
+
+        // Format with fixed column widths.
+        // Mobile is the last column — do NOT pad it; trailing spaces would create a visual right margin.
+        const placePadded  = place.padEnd(PLACE_COLS, ' ');
+        const timePadded   = time.padStart(TIME_COLS, ' ');
+        const leaderPadded = leader.padEnd(LEADER_COLS, ' ');
+        const campaignText = `${placePadded} ${timePadded} ${leaderPadded} ${mobile}`;
+
+        // Draw with horizontal compression to fill the available width.
+        // translate → scale(x only) → fillText at origin → restore keeps y-positions intact.
+        const yDrawPos = campaignY + (j * lineSpacing);
         ctx.fillStyle = getStateColor(campaign.state);
-        ctx.fillText(campaignText, campaignX, campaignY + (j * lineSpacing));
+        ctx.save();
+        ctx.translate(campaignX, yDrawPos);
+        ctx.scale(campaignScaleX, 1);
+        ctx.fillText(campaignText, 0, 0);
+        ctx.restore();
       });
       
       // Update position
