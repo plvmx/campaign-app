@@ -47,11 +47,10 @@ const FONT_SIZES = {
 };
 
 // Column widths (in monospace characters) for campaign lines.
-// Increase these to allow more content per field.
-const PLACE_COLS  = 18;  // place name (was 13)
-const TIME_COLS   = 9;   // time e.g. " 10:30 AM"
-const LEADER_COLS = 12;  // leader name (was 8)
-const MOBILE_COLS = 12;  // mobile number
+const PLACE_COLS      = 18;  // place name — truncated if longer
+const TIME_COLS       = 9;   // time e.g. " 10:30 AM"
+const LEADER_COLS     = 12;  // leader name — truncated if longer
+const MOBILE_MAX_COLS = 10;  // AU mobile = 10 digits; last column, NOT padded
 
 interface Campaign {
   id: string;
@@ -472,8 +471,9 @@ export default function GenerateSlidesPage() {
       const campaignX = oneCharWidth;                          // 1-char left margin
       const availableWidth = SLIDE_WIDTH - 2 * oneCharWidth;  // right margin mirrors left
 
-      // Total characters in one line: columns + 3 separator spaces
-      const totalCols = PLACE_COLS + 1 + TIME_COLS + 1 + LEADER_COLS + 1 + MOBILE_COLS;
+      // Total characters in one line: columns + 3 separator spaces.
+      // Mobile is the last column and is NOT padded, so MOBILE_MAX_COLS is its natural max.
+      const totalCols = PLACE_COLS + 1 + TIME_COLS + 1 + LEADER_COLS + 1 + MOBILE_MAX_COLS;
       const naturalLineWidth = ctx.measureText('M'.repeat(totalCols)).width;
       const campaignScaleX = availableWidth / naturalLineWidth;
 
@@ -508,12 +508,12 @@ export default function GenerateSlidesPage() {
           : campaign.leader;
         const mobile = (campaign.mobile || '').replace(/\s/g, '');
 
-        // Format with fixed column widths
+        // Format with fixed column widths.
+        // Mobile is the last column — do NOT pad it; trailing spaces would create a visual right margin.
         const placePadded  = place.padEnd(PLACE_COLS, ' ');
         const timePadded   = time.padStart(TIME_COLS, ' ');
         const leaderPadded = leader.padEnd(LEADER_COLS, ' ');
-        const mobilePadded = mobile.padEnd(MOBILE_COLS, ' ');
-        const campaignText = `${placePadded} ${timePadded} ${leaderPadded} ${mobilePadded}`;
+        const campaignText = `${placePadded} ${timePadded} ${leaderPadded} ${mobile}`;
 
         // Draw with horizontal compression to fill the available width.
         // translate → scale(x only) → fillText at origin → restore keeps y-positions intact.
