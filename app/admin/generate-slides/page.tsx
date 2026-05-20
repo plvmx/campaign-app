@@ -61,6 +61,7 @@ interface Campaign {
   leader: string;
   mobile: string;
   botj: boolean | string | number | null;
+  category: string | null;
   tl_ok: boolean;
   sr_ok: boolean;
 }
@@ -483,20 +484,10 @@ export default function GenerateSlidesPage() {
       finalCampaigns.forEach((campaign, j) => {
         let place = campaign.place;
 
-        // Check BOTJ - handle different data types (boolean, string, number)
-        const bofjValue = campaign.botj;
-        let shouldAppendBOTJ = false;
-
-        if (typeof bofjValue === 'boolean') {
-          shouldAppendBOTJ = bofjValue;
-        } else if (typeof bofjValue === 'number') {
-          shouldAppendBOTJ = bofjValue === 1;
-        } else if (typeof bofjValue === 'string') {
-          shouldAppendBOTJ = bofjValue === '1' || bofjValue.toLowerCase() === 'yes' || bofjValue.toLowerCase() === 'true';
-        }
-
-        if (shouldAppendBOTJ) {
-          place = `${place} BOTJ`;
+        // Append category code for all non-TWOL campaigns
+        const cat = campaign.category ?? 'TWOL';
+        if (cat !== 'TWOL') {
+          place = `${place} ${cat}`;
         }
         if (place.length > PLACE_COLS) {
           place = place.substring(0, PLACE_COLS);

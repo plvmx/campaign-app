@@ -3,7 +3,7 @@
 import { useState, FormEvent, useEffect } from 'react';
 import { getTodayDateString } from '@/lib/campaignDates';
 import { getErrorMessage } from '@/lib/errorUtils';
-import { getPlacesForState, getLeadersForState } from '@/lib/services/dropdownService';
+import { getPlacesForState, getLeadersForState, getCampaignCategories } from '@/lib/services/dropdownService';
 
 export interface CampaignData {
   date: string;
@@ -12,7 +12,7 @@ export interface CampaignData {
   time: string;
   leader: string;
   mobile: string;
-  botj: string;
+  category: string;
 }
 
 interface CampaignFormProps {
@@ -45,7 +45,7 @@ export default function CampaignForm({
     time: initialData?.time || '',
     leader: initialData?.leader || '',
     mobile: initialData?.mobile || '',
-    botj: initialData?.botj ?? 'No',
+    category: initialData?.category ?? 'TWOL',
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -54,6 +54,11 @@ export default function CampaignForm({
   const [timeOptions, setTimeOptions] = useState<{ value: string; label: string }[]>([]);
   const [leaders, setLeaders] = useState<string[]>([]);
   const [loadingLeaders, setLoadingLeaders] = useState(false);
+  const [categories, setCategories] = useState<{ code: string; name: string }[]>([
+    { code: 'TWOL', name: 'Two Weekly' },
+    { code: 'BOTJ', name: 'Book of the Judgement' },
+    { code: 'TLT', name: 'TLT' },
+  ]);
 
   // Generate time options (half-hour intervals from 8:00 AM to 9:00 PM)
   useEffect(() => {
@@ -82,6 +87,13 @@ export default function CampaignForm({
     }
 
     generateTimeOptions();
+  }, []);
+
+  // Load campaign categories from DB (fallback to hardcoded defaults if table not ready)
+  useEffect(() => {
+    getCampaignCategories().then((cats) => {
+      if (cats.length > 0) setCategories(cats);
+    });
   }, []);
 
   // Fetch places when state changes
@@ -331,27 +343,27 @@ export default function CampaignForm({
 
       <div>
         <label
-          htmlFor="botj"
+          htmlFor="category"
           className="block text-sm font-medium text-gray-700 dark:text-gray-300"
         >
-          BOTJ
+          Category
         </label>
         <select
-          id="botj"
-          name="botj"
+          id="category"
+          name="category"
           required
-          value={formData.botj}
+          value={formData.category}
           onChange={(e) => {
-            setFormData((prev) => ({
-              ...prev,
-              botj: e.target.value,
-            }));
+            setFormData((prev) => ({ ...prev, category: e.target.value }));
             setError(null);
           }}
           className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
         >
-          <option value="No">No</option>
-          <option value="Yes">Yes</option>
+          {categories.map((cat) => (
+            <option key={cat.code} value={cat.code}>
+              {cat.name}
+            </option>
+          ))}
         </select>
       </div>
 

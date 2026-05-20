@@ -44,6 +44,24 @@ export async function getLeaderMobile(state: string, leader: string): Promise<st
 }
 
 /**
+ * Fetch the list of campaign categories from the campaign_categories table.
+ * Returns [{code, name}] ordered by code. Falls back to an empty array on error.
+ */
+export async function getCampaignCategories(): Promise<{ code: string; name: string }[]> {
+  const { data, error } = await supabase
+    .from('campaign_categories')
+    .select('code, name')
+    .order('code', { ascending: true });
+
+  if (error) {
+    console.error('getCampaignCategories error:', error);
+    return [];
+  }
+
+  return (data ?? []) as { code: string; name: string }[];
+}
+
+/**
  * Fetch the sorted list of leader names for a given state.
  * Single source of truth — replaces ~5 identical inline queries across the codebase.
  */

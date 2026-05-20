@@ -62,7 +62,7 @@ export default function CapturePage() {
         time: data.time,
         leader: data.leader,
         mobile: data.mobile || userMobile || null,
-        botj: data.botj || 'No',
+        category: data.category ?? 'TWOL',
         user_id: user.id,
         source: 'MAN',
       });
