@@ -22,6 +22,7 @@ interface Campaign {
   leader: string;
   mobile: string | null;
   botj: boolean | string | number | null;
+  category: string | null;
   tl_ok: boolean;
   sr_ok: boolean;
   source?: string | null;
@@ -63,13 +64,9 @@ function endOfWeek(date: Date): Date {
 /** Format campaign for display with aligned columns (place, time, leader, mobile). */
 function formatCampaignColumns(campaign: Campaign): { place: string; time: string; leader: string; mobile: string } {
   let place = campaign.place;
-  const bofj = campaign.botj;
-  let appendBOTJ = false;
-  if (typeof bofj === 'boolean') appendBOTJ = bofj;
-  else if (typeof bofj === 'number') appendBOTJ = bofj === 1;
-  else if (typeof bofj === 'string')
-    appendBOTJ = bofj === '1' || bofj.toLowerCase() === 'yes' || bofj.toLowerCase() === 'true';
-  if (appendBOTJ) place = `${place} BOTJ`;
+  // Append category code for all non-TWOL campaigns
+  const cat = campaign.category ?? 'TWOL';
+  if (cat !== 'TWOL') place = `${place} ${cat}`;
   if (place.length > 13) place = place.substring(0, 13);
 
   const time = formatSlideTime(campaign.time);

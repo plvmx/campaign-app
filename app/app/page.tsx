@@ -15,7 +15,7 @@ import { AUSTRALIAN_STATES } from '@/lib/constants';
 import { getErrorMessage } from '@/lib/errorUtils';
 import type { Campaign } from '@/lib/types';
 import { formatCampaignTimeDisplay, isCampaignPast } from '@/lib/campaignUtils';
-import { getPlacesForState, getLeadersForState, getLeaderMobile } from '@/lib/services/dropdownService';
+import { getPlacesForState, getLeadersForState, getLeaderMobile, getCampaignCategories } from '@/lib/services/dropdownService';
 import { createCampaign, updateCampaign, deleteCampaign } from '@/lib/services/campaignService';
 
 function AppPageContent() {
@@ -55,7 +55,7 @@ function AppPageContent() {
     time: string;
     leader: string;
     mobile: string;
-    botj: string;
+    category: string;
     tl_ok: boolean;
     sr_ok: boolean;
   }>>({});
@@ -66,10 +66,15 @@ function AppPageContent() {
     time: '',
     leader: '',
     mobile: '',
-    botj: 'No',
+    category: 'TWOL',
     tl_ok: false,
     sr_ok: false,
   });
+  const [campaignCategories, setCampaignCategories] = useState<{ code: string; name: string }[]>([
+    { code: 'TWOL', name: 'Two Weekly' },
+    { code: 'BOTJ', name: 'Book of the Judgement' },
+    { code: 'TLT', name: 'TLT' },
+  ]);
   const [filterState, setFilterState] = useState<string>('');
   const [isFormExpanded, setIsFormExpanded] = useState<boolean>(false);
   const [dateFilter, setDateFilter] = useState<'past' | 'future'>('future');
@@ -224,6 +229,13 @@ function AppPageContent() {
     setCampaigns(finalData);
   }, [contextUser, filterState, applyDateFilter]);
   
+  // Load campaign categories from DB on mount (fallback to hardcoded defaults if table not ready)
+  useEffect(() => {
+    getCampaignCategories().then((cats) => {
+      if (cats.length > 0) setCampaignCategories(cats);
+    });
+  }, []);
+
   // Load places from state_places table when state changes in inline edit (with caching)
   useEffect(() => {
     if (inlineEditingId && inlineEditState[inlineEditingId]) {
@@ -587,7 +599,7 @@ function AppPageContent() {
           time: timeValue,
           leader: campaign.leader,
           mobile: campaign.mobile || '',
-          botj: campaign.botj || 'No',
+          category: campaign.category ?? 'TWOL',
           tl_ok: campaign.tl_ok || false,
           sr_ok: campaign.sr_ok || false,
         });
@@ -646,7 +658,7 @@ function AppPageContent() {
         time: formState.time,
         leader: formState.leader,
         mobile: formState.mobile.trim() || null,
-        botj: formState.botj || 'No',
+        category: formState.category ?? 'TWOL',
         tl_ok: formState.tl_ok,
         sr_ok: formState.sr_ok,
         user_id: contextUser.id,
@@ -654,7 +666,7 @@ function AppPageContent() {
       });
 
       setSuccess('Campaign created successfully');
-      setFormState({ date: '', state: '', place: '', time: '', leader: '', mobile: '', botj: 'No', tl_ok: false, sr_ok: false });
+      setFormState({ date: '', state: '', place: '', time: '', leader: '', mobile: '', category: 'TWOL', tl_ok: false, sr_ok: false });
       setIsOtherPlace(false);
       setCustomPlace('');
       setIsFormExpanded(false);
@@ -719,14 +731,14 @@ function AppPageContent() {
         time: timeValue || '',
         leader: campaign.leader || '',
         mobile: campaign.mobile || '',
-        botj: campaign.botj || 'No',
+        category: campaign.category ?? 'TWOL',
         tl_ok: campaign.tl_ok || false,
         sr_ok: campaign.sr_ok || false,
       }
     });
   };
-  
-  
+
+
   const handleSaveInlineEdit = async (campaignId: string) => {
     const editData = inlineEditState[campaignId];
     if (!editData) return;
@@ -776,7 +788,7 @@ function AppPageContent() {
         time: editData.time,
         leader: editData.leader,
         mobile: editData.mobile.trim() || null,
-        botj: editData.botj || 'No',
+        category: editData.category ?? 'TWOL',
         tl_ok: editData.tl_ok,
         sr_ok: editData.sr_ok,
       };
@@ -1150,18 +1162,19 @@ function AppPageContent() {
                 />
               </div>
               <div>
-                <label htmlFor="botj" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  BOTJ
+                <label htmlFor="category" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Category
                 </label>
                 <select
-                  id="botj"
+                  id="category"
                   required
-                  value={formState.botj}
-                  onChange={(e) => setFormState({ ...formState, botj: e.target.value })}
+                  value={formState.category}
+                  onChange={(e) => setFormState({ ...formState, category: e.target.value })}
                   className="mt-1 block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
                 >
-                  <option value="No">No</option>
-                  <option value="Yes">Yes</option>
+                  {campaignCategories.map((cat) => (
+                    <option key={cat.code} value={cat.code}>{cat.name}</option>
+                  ))}
                 </select>
               </div>
               
@@ -1393,15 +1406,16 @@ function AppPageContent() {
                                     </div>
                                     <div>
                                       <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                        BOTJ
+                                        Category
                                       </label>
                                       <select
-                                        value={editData.botj}
-                                        onChange={(e) => updateInlineEditField(campaign.id, 'botj', e.target.value)}
+                                        value={editData.category}
+                                        onChange={(e) => updateInlineEditField(campaign.id, 'category', e.target.value)}
                                         className="w-full rounded-md border-2 border-gray-400 bg-white px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
                                       >
-                                        <option value="No">No</option>
-                                        <option value="Yes">Yes</option>
+                                        {campaignCategories.map((cat) => (
+                                          <option key={cat.code} value={cat.code}>{cat.name}</option>
+                                        ))}
                                       </select>
                                     </div>
                                   </div>
@@ -1427,29 +1441,24 @@ function AppPageContent() {
                             // Display mode - show read-only fields
                             const displayTime = formatCampaignTimeDisplay(campaign.time);
                             
-                            // BOTJ: only show "BOTJ" when value is Yes; show nothing when No
-                            let showBOTJ = false;
-                            if (campaign.botj === 'Yes') {
-                              showBOTJ = true;
-                            } else if (campaign.botj !== 'No' && campaign.botj !== null && campaign.botj !== '') {
-                              const botjStr = String(campaign.botj).trim();
-                              showBOTJ = botjStr === '1' || botjStr.toLowerCase() === 'yes' || parseInt(botjStr, 10) > 0;
-                            }
-                            
+                            // Show category badge for all non-TWOL campaigns
+                            const campaignCat = campaign.category ?? 'TWOL';
+                            const showCategoryBadge = campaignCat !== 'TWOL';
+
                             // Get state color for campaign line
                             const stateColor = getStateColor(campaign.state);
-                            
+
                             result.push(
                               <div key={campaign.id} className={`p-4 sm:p-5 ${stateColor.bg} border-b-2 border-gray-800 dark:border-gray-600`}>
                                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                                   <div className="flex-1 min-w-0">
-                                    {/* Top line: Place State • Time, with BOTJ right-justified at end */}
+                                    {/* Top line: Place State • Time, with category badge right-justified */}
                                     <div className={`flex items-center justify-between gap-2 text-lg sm:text-xl font-bold ${stateColor.text} mb-2 break-words`}>
                                       <span>
                                         {place} {campaign.state} • {displayTime}
                                       </span>
-                                      {showBOTJ && (
-                                        <span className="shrink-0 ml-2">BOTJ</span>
+                                      {showCategoryBadge && (
+                                        <span className="shrink-0 ml-2">{campaignCat}</span>
                                       )}
                                     </div>
                                     {/* Leader (bold) and mobile (normal) on same line */}

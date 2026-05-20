@@ -235,7 +235,7 @@ function RecordResultsDetailPageContent() {
       time: campaignParams.time,
       leader: campaignParams.leader,
       mobile: userMobileAndLeader?.mobile || null,
-      botj: 'No',
+      category: 'TWOL',
       user_id: userId,
     });
 

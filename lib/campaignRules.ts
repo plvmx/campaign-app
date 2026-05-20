@@ -40,7 +40,7 @@ export interface GeneratedCampaign {
   time: string;
   leader: string;
   mobile: string | null;
-  botj: string;
+  category: string;
   rule_id: string;
 }
 
@@ -376,7 +376,7 @@ export function evaluateRule(
       time: typeof overrideFields.time === 'string' ? overrideFields.time : rule.time,
       leader: rule.leader,
       mobile: rule.mobile,
-      botj: 'No',
+      category: 'TWOL',
       rule_id: rule.id,
     };
   });

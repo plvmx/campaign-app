@@ -1,5 +1,9 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
+# Claude Code project settings (may contain secrets like GH_TOKEN)
+.claude/settings.json
+.claude/settings.local.json
+
 # dependencies
 /node_modules
 /.pnp

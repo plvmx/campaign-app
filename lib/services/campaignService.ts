@@ -9,7 +9,7 @@ export interface NewCampaignData {
   time: string;
   leader: string;
   mobile: string | null;
-  botj: string;
+  category: string;
   tl_ok?: boolean;
   sr_ok?: boolean;
   user_id: string;

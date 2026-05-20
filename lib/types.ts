@@ -11,6 +11,8 @@ export interface Campaign {
   leader: string;
   mobile: string | null;
   botj: string | null;
+  /** Campaign category code — references campaign_categories.code. Default 'TWOL'. */
+  category: string | null;
   tl_ok: boolean;
   sr_ok: boolean;
   created_at: string;
