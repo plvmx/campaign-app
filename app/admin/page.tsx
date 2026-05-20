@@ -5,27 +5,20 @@ import { useRouter } from 'next/navigation';
 import MobileLayout from '@/components/MobileLayout';
 import { useUser } from '@/contexts/UserContext';
 import { useCampaignDates } from '@/contexts/CampaignDatesContext';
-import { formatDateReadable, formatDateForDb } from '@/lib/campaignDates';
+import { formatDateReadable } from '@/lib/campaignDates';
 import { supabase } from '@/lib/supabaseClient';
 import { isCampaignLoggingEnabled, setCampaignLoggingEnabled } from '@/lib/appSettings';
-import { CampaignRule, evaluateRules } from '@/lib/campaignRules';
+import { runWeeklyRefresh } from '@/lib/services/weeklyRefreshService';
 import { getErrorMessage } from '@/lib/errorUtils';
 
-/** Shape of a campaign row being prepared for DB insert (no id/created_at yet). */
-interface NewCampaignRow {
-  date: string;
-  state: string;
-  place: string;
-  time: string;
-  leader: string;
-  mobile: string | null;
-  botj: string | null;
-  category: string | null;
-  user_id: string | null | undefined;
-  team_size: null;
-  tl_ok: boolean;
-  sr_ok?: boolean;
-  source: string;
+/** Most-recent row from weekly_refresh_log (new columns may be null on older rows). */
+interface LastRefreshInfo {
+  completed_at: string;
+  triggered_by: string | null;
+  campaigns_created: number | null;
+  campaigns_deleted: number | null;
+  campaigns_skipped: number | null;
+  error_message: string | null;
 }
 
 export default function AdminPage() {
@@ -39,6 +32,19 @@ export default function AdminPage() {
   const [loggingEnabled, setLoggingEnabled] = useState<boolean>(true);
   const [isLoadingLoggingSetting, setIsLoadingLoggingSetting] = useState(true);
   const [isTogglingLogging, setIsTogglingLogging] = useState(false);
+  const [lastRefresh, setLastRefresh] = useState<LastRefreshInfo | null>(null);
+  const [isLoadingLastRefresh, setIsLoadingLastRefresh] = useState(true);
+
+  const fetchLastRefresh = async () => {
+    const { data } = await supabase
+      .from('weekly_refresh_log')
+      .select('completed_at, triggered_by, campaigns_created, campaigns_deleted, campaigns_skipped, error_message')
+      .order('completed_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    setLastRefresh(data as LastRefreshInfo | null);
+    setIsLoadingLastRefresh(false);
+  };
 
   useEffect(() => {
     if (isUserLoading) return;
@@ -51,168 +57,32 @@ export default function AdminPage() {
     isCampaignLoggingEnabled()
       .then(setLoggingEnabled)
       .finally(() => setIsLoadingLoggingSetting(false));
+    fetchLastRefresh();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isUserLoading, user, isAdmin, router]);
 
   const handleWeeklyRefresh = async () => {
-    if (!dates || !user) return;
+    if (!user) return;
 
     setIsRefreshing(true);
     setRefreshMessage(null);
     setError(null);
 
     try {
-      const secondWeekStart = new Date(dates.secondWeekStart);
-      const secondWeekEnd = new Date(secondWeekStart);
-      secondWeekEnd.setDate(secondWeekEnd.getDate() + 6); // Single week (Mon–Sun)
+      const result = await runWeeklyRefresh(supabase, user.id);
 
-      const secondWeekStartStr = formatDateForDb(secondWeekStart);
-      const secondWeekEndStr = formatDateForDb(secondWeekEnd);
-
-      // Distinct states from state_leaders
-      const { data: stateRows, error: statesError } = await supabase
-        .from('state_leaders')
-        .select('state');
-      if (statesError) throw statesError;
-      const states = Array.from(new Set((stateRows || []).map((r: { state: string }) => r.state)));
-
-      // Fetch all active rules once
-      const { data: fetchedRules, error: rulesError } = await supabase
-        .from('campaign_rules')
-        .select('*')
-        .eq('is_active', true)
-        .order('priority', { ascending: false });
-      if (rulesError) throw rulesError;
-      const allRules = (fetchedRules || []) as CampaignRule[];
-
-      // Fetch existing campaigns in target week to avoid duplicate inserts
-      const { data: existingInTargetWeek, error: existingError } = await supabase
-        .from('campaigns')
-        .select('date, state, place, time, leader')
-        .gte('date', secondWeekStartStr)
-        .lte('date', secondWeekEndStr);
-      if (existingError) throw existingError;
-      const existingSlotKeys = new Set(
-        (existingInTargetWeek || []).map(
-          (c: { date: string; state: string; place: string; time: string; leader: string }) =>
-            `${c.date}_${c.state}_${c.place}_${c.time}_${c.leader}`
-        )
-      );
-
-      // Biweekly rules: backfill reference_date from existing campaigns where missing
-      for (const rule of allRules) {
-        if (rule.frequency_type === 'biweekly' && !rule.rule_config?.reference_date) {
-          const { data: existingCampaigns, error: existingError } = await supabase
-            .from('campaigns')
-            .select('date')
-            .eq('state', rule.state)
-            .eq('place', rule.place)
-            .eq('time', rule.time)
-            .eq('leader', rule.leader)
-            .order('date', { ascending: false })
-            .limit(1);
-          if (!existingError && existingCampaigns?.length > 0) {
-            rule.rule_config = rule.rule_config || {};
-            rule.rule_config.reference_date = existingCampaigns[0].date;
-          }
-        }
-      }
-
-      const allNewCampaigns: NewCampaignRow[] = [];
-      let rulesCount = 0;
-      const rulesUsedInRefresh: CampaignRule[] = [];
-
-      for (const state of states) {
-        const stateRules = allRules.filter((r) => r.state === state);
-        const ruleCampaigns = evaluateRules(stateRules, secondWeekStart, secondWeekEnd);
-        const generatedForState: NewCampaignRow[] = ruleCampaigns.map((campaign) => ({
-          date: campaign.date,
-          state: campaign.state,
-          place: campaign.place,
-          time: campaign.time,
-          leader: campaign.leader,
-          mobile: campaign.mobile,
-          botj: null,
-          category: campaign.category ?? 'TWOL',
-          user_id: user.id,
-          team_size: null,
-          tl_ok: false,
-          source: 'RUL',
-        }));
-        rulesCount += generatedForState.length;
-        rulesUsedInRefresh.push(...stateRules);
-        allNewCampaigns.push(...generatedForState);
-      }
-
-      if (allNewCampaigns.length === 0) {
-        setRefreshMessage('No campaigns to create. Check your campaign rules.');
-        return;
-      }
-
-      // Skip campaigns that already exist (same date, state, place, time, leader)
-      const slotKey = (c: { date: string; state: string; place: string; time: string; leader: string }) =>
-        `${c.date}_${c.state}_${c.place}_${c.time}_${c.leader}`;
-      const toInsert = allNewCampaigns.filter((c) => !existingSlotKeys.has(slotKey(c)));
-      const skippedCount = allNewCampaigns.length - toInsert.length;
-
-      if (toInsert.length === 0) {
-        setRefreshMessage(
-          skippedCount > 0
-            ? `No new campaigns created; ${skippedCount} already existed for the week starting ${formatDateReadable(secondWeekStart)}.`
-            : 'No campaigns to create. Check your campaign rules.'
-        );
-        return;
-      }
-
-      const { error: insertError } = await supabase
-        .from('campaigns')
-        .insert(toInsert);
-      if (insertError) throw insertError;
-
-      // Update biweekly rule reference_date for rules that generated campaigns
-      for (const rule of rulesUsedInRefresh) {
-        if (rule.frequency_type === 'biweekly') {
-          const ruleCampaigns = toInsert.filter(
-            (c) =>
-              c.state === rule.state &&
-              c.place === rule.place &&
-              c.time === rule.time &&
-              c.leader === rule.leader
-          );
-          if (ruleCampaigns.length > 0) {
-            const newReferenceDate = ruleCampaigns.map((c) => c.date).sort()[0];
-            await supabase
-              .from('campaign_rules')
-              .update({
-                rule_config: { ...(rule.rule_config || {}), reference_date: newReferenceDate },
-              })
-              .eq('id', rule.id);
-          }
-        }
-      }
-
-      const pastWeekStartStrDel = formatDateForDb(dates.pastCampaignStart);
-      const { data: deletedCampaigns, error: deleteError } = await supabase
-        .from('campaigns')
-        .delete()
-        .lt('date', pastWeekStartStrDel)
-        .select();
-      if (deleteError) throw deleteError;
-      const deletedCount = deletedCampaigns?.length || 0;
-
-      const { error: logError } = await supabase
-        .from('weekly_refresh_log')
-        .insert({ completed_at: new Date().toISOString(), created_by: user?.id ?? null });
-      if (logError) {
-        // Non-fatal: refresh completed but logging failed — silently ignore
-      }
-
-      let message = `Successfully created ${toInsert.length} campaign(s) for the week starting ${formatDateReadable(secondWeekStart)}. `;
-      message += `Generated ${rulesCount} from rules. `;
-      if (skippedCount > 0) message += `${skippedCount} already existed and were skipped. `;
-      message += `Deleted ${deletedCount} old campaign(s).`;
+      const weekLabel = formatDateReadable(result.secondWeekStart);
+      let message = result.created > 0
+        ? `Created ${result.created} campaign(s) for the week starting ${weekLabel}. `
+        : `No new campaigns for the week starting ${weekLabel}. `;
+      if (result.skipped > 0) message += `${result.skipped} already existed and were skipped. `;
+      message += `Deleted ${result.deleted} old campaign(s).`;
       setRefreshMessage(message);
-} catch (err: unknown) {
-    setError(getErrorMessage(err, 'Failed to refresh campaigns'));
+
+      // Refresh last-run info in the card
+      await fetchLastRefresh();
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to refresh campaigns'));
     } finally {
       setIsRefreshing(false);
     }
@@ -319,18 +189,65 @@ export default function AdminPage() {
 
           {/* Weekly Refresh */}
           <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-              Weekly Refresh
-            </h2>
-            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-              Generate campaigns for the second week period from campaign rules, and clean up old campaigns.
+            {/* Header row with automation badge */}
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                Weekly Refresh
+              </h2>
+              <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-semibold text-green-800 dark:bg-green-900/40 dark:text-green-300">
+                🤖 Automated
+              </span>
+            </div>
+            <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+              Runs automatically every Sunday at 1 AM UTC
+            </p>
+
+            {/* Last run info */}
+            <div className="mt-3 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-600 dark:bg-gray-700/50">
+              {isLoadingLastRefresh ? (
+                <p className="text-xs text-gray-500 dark:text-gray-400">Loading last run…</p>
+              ) : lastRefresh ? (
+                <div className="text-xs">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-medium text-gray-700 dark:text-gray-300">Last run</span>
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                      lastRefresh.triggered_by === 'auto'
+                        ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
+                        : 'bg-gray-200 text-gray-700 dark:bg-gray-600 dark:text-gray-300'
+                    }`}>
+                      {lastRefresh.triggered_by === 'auto' ? '🤖 auto' : '👤 manual'}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-gray-600 dark:text-gray-400">
+                    {new Date(lastRefresh.completed_at).toLocaleString()}
+                  </p>
+                  {lastRefresh.error_message ? (
+                    <p className="mt-1 font-medium text-red-600 dark:text-red-400">
+                      ⚠ Failed: {lastRefresh.error_message}
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-gray-600 dark:text-gray-400">
+                      {lastRefresh.campaigns_created ?? '—'} created ·{' '}
+                      {lastRefresh.campaigns_skipped ?? '—'} skipped ·{' '}
+                      {lastRefresh.campaigns_deleted ?? '—'} deleted
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <p className="text-xs text-gray-500 dark:text-gray-400">No runs recorded yet.</p>
+              )}
+            </div>
+
+            <p className="mt-3 text-sm text-gray-600 dark:text-gray-400">
+              Use the button below to run manually if the automated refresh didn&apos;t complete,
+              or to preview the outcome of new rules.
             </p>
             <button
               onClick={handleWeeklyRefresh}
-              disabled={isRefreshing || !dates}
+              disabled={isRefreshing}
               className="mt-4 w-full rounded-md bg-purple-600 px-4 py-2 text-base font-bold text-white hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 disabled:bg-gray-400 disabled:cursor-not-allowed border-2 border-gray-800 dark:border-gray-600"
             >
-              {isRefreshing ? 'Refreshing...' : 'Weekly Refresh'}
+              {isRefreshing ? 'Refreshing…' : 'Run Manually'}
             </button>
           </div>
 
