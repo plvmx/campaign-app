@@ -239,8 +239,9 @@ export default function AdminPage() {
             </div>
 
             <p className="mt-3 text-sm text-gray-600 dark:text-gray-400">
-              Use the button below to run manually if the automated refresh didn&apos;t complete,
-              or to preview the outcome of new rules.
+              The button below runs the same process as the automated job — it will create
+              campaigns and delete old ones immediately. Use it if the automated refresh
+              didn&apos;t complete, or to apply newly-added rules without waiting until Sunday.
             </p>
             <button
               onClick={handleWeeklyRefresh}
