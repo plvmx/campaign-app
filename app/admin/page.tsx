@@ -9,7 +9,6 @@ import { formatDateReadable, formatDateForDb } from '@/lib/campaignDates';
 import { supabase } from '@/lib/supabaseClient';
 import { isCampaignLoggingEnabled, setCampaignLoggingEnabled } from '@/lib/appSettings';
 import { CampaignRule, evaluateRules } from '@/lib/campaignRules';
-import { getAllStateRefreshSettings, DEFAULT_REFRESH_MODE, type RefreshMode } from '@/lib/stateRefreshSettings';
 import { getErrorMessage } from '@/lib/errorUtils';
 
 /** Shape of a campaign row being prepared for DB insert (no id/created_at yet). */
@@ -64,39 +63,19 @@ export default function AdminPage() {
     try {
       const secondWeekStart = new Date(dates.secondWeekStart);
       const secondWeekEnd = new Date(secondWeekStart);
-      secondWeekEnd.setDate(secondWeekEnd.getDate() + 6); // Single week (Mon–Sun), matching copy window
+      secondWeekEnd.setDate(secondWeekEnd.getDate() + 6); // Single week (Mon–Sun)
 
       const secondWeekStartStr = formatDateForDb(secondWeekStart);
       const secondWeekEndStr = formatDateForDb(secondWeekEnd);
 
-      const pastWeekStart = new Date(dates.pastCampaignStart);
-      const pastWeekEnd = new Date(pastWeekStart);
-      pastWeekEnd.setDate(pastWeekEnd.getDate() + 6); // Add 6 days to get to Sunday
-      const pastWeekStartStr = formatDateForDb(pastWeekStart);
-      const pastWeekEndStr = formatDateForDb(pastWeekEnd);
-      const daysDifference = Math.floor(
-        (secondWeekStart.getTime() - pastWeekStart.getTime()) / (1000 * 60 * 60 * 24)
-      );
-
-      // Per-state refresh mode (state reporters set this in SR Admin)
-      const stateSettings = await getAllStateRefreshSettings();
-
-      // Distinct states from state_leaders (states that can have a refresh mode)
+      // Distinct states from state_leaders
       const { data: stateRows, error: statesError } = await supabase
         .from('state_leaders')
         .select('state');
       if (statesError) throw statesError;
       const states = Array.from(new Set((stateRows || []).map((r: { state: string }) => r.state)));
 
-      // Fetch all past week campaigns and all active rules once
-      const { data: pastCampaigns, error: fetchError } = await supabase
-        .from('campaigns')
-        .select('*')
-        .gte('date', pastWeekStartStr)
-        .lte('date', pastWeekEndStr)
-        .order('date', { ascending: true });
-      if (fetchError) throw fetchError;
-
+      // Fetch all active rules once
       const { data: fetchedRules, error: rulesError } = await supabase
         .from('campaign_rules')
         .select('*')
@@ -139,88 +118,33 @@ export default function AdminPage() {
       }
 
       const allNewCampaigns: NewCampaignRow[] = [];
-      let copyCount = 0;
       let rulesCount = 0;
       const rulesUsedInRefresh: CampaignRule[] = [];
 
       for (const state of states) {
-        const mode: RefreshMode = stateSettings.get(state) ?? DEFAULT_REFRESH_MODE;
-        const statePast = (pastCampaigns || []).filter((c: { state: string }) => c.state === state);
         const stateRules = allRules.filter((r) => r.state === state);
-
-        let copiedForState: NewCampaignRow[] = [];
-        if (mode === 'copy' || mode === 'both' || mode === 'either') {
-          copiedForState = statePast.map((campaign) => {
-            const originalDate = new Date(campaign.date);
-            const newDate = new Date(originalDate);
-            newDate.setDate(newDate.getDate() + daysDifference);
-            return {
-              date: formatDateForDb(newDate),
-              state: campaign.state,
-              place: campaign.place,
-              time: campaign.time,
-              leader: campaign.leader,
-              mobile: campaign.mobile,
-              botj: campaign.botj,
-              category: campaign.category ?? 'TWOL',
-              user_id: campaign.user_id,
-              team_size: null,
-              tl_ok: false,
-              source: 'CFP',
-            };
-          });
-          if (mode !== 'either') copyCount += copiedForState.length;
-        }
-
-        let generatedForState: NewCampaignRow[] = [];
-        if (mode === 'rules' || mode === 'both' || mode === 'either') {
-          const ruleCampaigns = evaluateRules(stateRules, secondWeekStart, secondWeekEnd);
-          generatedForState = ruleCampaigns.map((campaign) => ({
-            date: campaign.date,
-            state: campaign.state,
-            place: campaign.place,
-            time: campaign.time,
-            leader: campaign.leader,
-            mobile: campaign.mobile,
-            botj: null,
-            category: campaign.category ?? 'TWOL',
-            user_id: user.id,
-            team_size: null,
-            tl_ok: false,
-            source: 'RUL',
-          }));
-          rulesCount += generatedForState.length;
-          rulesUsedInRefresh.push(...stateRules);
-        }
-
-        if (mode === 'copy') {
-          allNewCampaigns.push(...copiedForState);
-        } else if (mode === 'rules') {
-          allNewCampaigns.push(...generatedForState);
-        } else if (mode === 'either') {
-          // Slots covered by rules (state, place, time, leader) — do not copy for these
-          const ruleSlots = new Set(
-            generatedForState.map((c) => `${c.state}_${c.place}_${c.time}_${c.leader}`)
-          );
-          const copyOnlyWhenNoRule = copiedForState.filter(
-            (c) => !ruleSlots.has(`${c.state}_${c.place}_${c.time}_${c.leader}`)
-          );
-          copyCount += copyOnlyWhenNoRule.length;
-          allNewCampaigns.push(...generatedForState, ...copyOnlyWhenNoRule);
-        } else {
-          const conflictMap = new Map<string, NewCampaignRow>();
-          copiedForState.forEach((c) => {
-            conflictMap.set(`${c.date}_${c.state}_${c.place}_${c.time}`, c);
-          });
-          generatedForState.forEach((c) => {
-            conflictMap.set(`${c.date}_${c.state}_${c.place}_${c.time}`, c);
-          });
-          allNewCampaigns.push(...Array.from(conflictMap.values()));
-        }
+        const ruleCampaigns = evaluateRules(stateRules, secondWeekStart, secondWeekEnd);
+        const generatedForState: NewCampaignRow[] = ruleCampaigns.map((campaign) => ({
+          date: campaign.date,
+          state: campaign.state,
+          place: campaign.place,
+          time: campaign.time,
+          leader: campaign.leader,
+          mobile: campaign.mobile,
+          botj: null,
+          category: campaign.category ?? 'TWOL',
+          user_id: user.id,
+          team_size: null,
+          tl_ok: false,
+          source: 'RUL',
+        }));
+        rulesCount += generatedForState.length;
+        rulesUsedInRefresh.push(...stateRules);
+        allNewCampaigns.push(...generatedForState);
       }
 
       if (allNewCampaigns.length === 0) {
-        setRefreshMessage('No campaigns to create. Check your rules or past week campaigns.');
+        setRefreshMessage('No campaigns to create. Check your campaign rules.');
         return;
       }
 
@@ -234,7 +158,7 @@ export default function AdminPage() {
         setRefreshMessage(
           skippedCount > 0
             ? `No new campaigns created; ${skippedCount} already existed for the week starting ${formatDateReadable(secondWeekStart)}.`
-            : 'No campaigns to create. Check your rules or past week campaigns.'
+            : 'No campaigns to create. Check your campaign rules.'
         );
         return;
       }
@@ -283,7 +207,7 @@ export default function AdminPage() {
       }
 
       let message = `Successfully created ${toInsert.length} campaign(s) for the week starting ${formatDateReadable(secondWeekStart)}. `;
-      message += `Copied ${copyCount} from past week and generated ${rulesCount} from rules (per-state modes). `;
+      message += `Generated ${rulesCount} from rules. `;
       if (skippedCount > 0) message += `${skippedCount} already existed and were skipped. `;
       message += `Deleted ${deletedCount} old campaign(s).`;
       setRefreshMessage(message);
@@ -399,7 +323,7 @@ export default function AdminPage() {
               Weekly Refresh
             </h2>
             <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-              Generate campaigns for the second week period and clean up old campaigns. Refresh mode is controlled per state by state reporters in State Reporter Admin (copy, rules, or both).
+              Generate campaigns for the second week period from campaign rules, and clean up old campaigns.
             </p>
             <button
               onClick={handleWeeklyRefresh}
