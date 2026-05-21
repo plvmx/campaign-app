@@ -46,29 +46,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ match: null });
     }
 
-    const match = data.find((rec: { mobile?: string; leader?: string }) => {
-      // Normalise the stored name (trim + lowercase) so extra whitespace in the DB
-      // doesn't prevent a valid login.
+    // Collect ALL records that pass the name + mobile check so the client can
+    // present a state-picker when a leader has records in multiple states.
+    const matches = data.filter((rec: { mobile?: string; leader?: string }) => {
       const storedNameNormalized = normalizeName(rec.leader ?? '');
       if (storedNameNormalized !== firstNameNormalized) return false;
-
       const mobileValue = rec.mobile;
       if (!mobileValue) return false;
-      const recordMobileNormalized = normalizeMobile(mobileValue);
-      return recordMobileNormalized === mobileNormalized;
+      return normalizeMobile(mobileValue) === mobileNormalized;
     });
 
-    if (!match) {
-      return NextResponse.json({ match: null });
-    }
-
     return NextResponse.json({
-      match: {
-        id: match.id,
-        state: match.state,
-        leader: match.leader,
-        admin: match.admin,
-      },
+      matches: matches.map((m: { id: string; state: string; leader: string; admin: string | null }) => ({
+        id:     m.id,
+        state:  m.state,
+        leader: m.leader,
+        admin:  m.admin,
+      })),
     });
   } catch (err) {
     console.error('validate-leader API exception:', err);
