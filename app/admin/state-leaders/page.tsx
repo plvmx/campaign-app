@@ -74,16 +74,17 @@ export default function StateLeadersPage() {
     setIsSubmitting(true);
 
     try {
+      const leaderValue = formState.leader.trim();
       const mobileValue = formState.mobile.trim() || null;
       const adminValue = formState.admin.trim() || null;
-      
+
       if (editingId) {
         // Update existing record
         const { error } = await supabase
           .from('state_leaders')
-          .update({ 
-            state: formState.state, 
-            leader: formState.leader,
+          .update({
+            state: formState.state,
+            leader: leaderValue,
             mobile: mobileValue,
             admin: adminValue
           })
@@ -95,9 +96,9 @@ export default function StateLeadersPage() {
         // Create new record
         const { error } = await supabase
           .from('state_leaders')
-          .insert([{ 
-            state: formState.state, 
-            leader: formState.leader,
+          .insert([{
+            state: formState.state,
+            leader: leaderValue,
             mobile: mobileValue,
             admin: adminValue
           }]);

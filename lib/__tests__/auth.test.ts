@@ -67,4 +67,14 @@ describe('normalizeName', () => {
   it('returns empty string for empty input', () => {
     expect(normalizeName('')).toBe('');
   });
+
+  // Regression: a name stored in the DB with accidental trailing whitespace must
+  // normalize to the same value as the cleanly typed login attempt.
+  it('stored name with trailing space normalizes same as typed first name', () => {
+    expect(normalizeName('Rosheen ')).toBe(normalizeName('Rosheen'));
+  });
+
+  it('stored name with leading space normalizes same as typed first name', () => {
+    expect(normalizeName(' Rosheen')).toBe(normalizeName('Rosheen'));
+  });
 });

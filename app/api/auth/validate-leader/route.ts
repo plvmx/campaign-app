@@ -28,13 +28,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ match: null });
     }
 
-    // Filter by leader name at the DB level (case-insensitive exact match) so we never
-    // load the entire table into memory. Mobile normalization still verified in JS below
-    // because stored values may be formatted differently (spaces, country codes, etc.).
+    // Use a wildcard ilike to cast a wide net at the DB level — this tolerates leading/
+    // trailing whitespace in stored names (e.g. "Rosheen " stored with a trailing space).
+    // The JS layer below then verifies the normalised first-name matches exactly, so a
+    // stored full name like "Rosheen Thompson" will NOT match a login attempt of "Rosheen".
     const { data, error } = await supabaseAdmin
       .from('state_leaders')
       .select('id, state, leader, mobile, admin')
-      .ilike('leader', firstNameNormalized);
+      .ilike('leader', `%${firstNameNormalized}%`);
 
     if (error) {
       console.error('validate-leader API error:', error);
@@ -46,6 +47,11 @@ export async function POST(request: NextRequest) {
     }
 
     const match = data.find((rec: { mobile?: string; leader?: string }) => {
+      // Normalise the stored name (trim + lowercase) so extra whitespace in the DB
+      // doesn't prevent a valid login.
+      const storedNameNormalized = normalizeName(rec.leader ?? '');
+      if (storedNameNormalized !== firstNameNormalized) return false;
+
       const mobileValue = rec.mobile;
       if (!mobileValue) return false;
       const recordMobileNormalized = normalizeMobile(mobileValue);
