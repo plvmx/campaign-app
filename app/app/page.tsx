@@ -11,6 +11,7 @@ import { getTodayDateString, calculateCampaignDates, formatDateForDb } from '@/l
 import { getStateColor } from '@/lib/stateColors';
 import { generateAndDownloadSlides } from '@/lib/slideGenerator';
 import { generateAndDownloadReport } from '@/lib/reportGenerator';
+import { generateAndDownloadAriseList } from '@/lib/ariseGenerator';
 import { fetchCampaignData } from '@/lib/campaignLog';
 import { getSharedWithMeOwners, type LeaderShareOwner } from '@/lib/leaderShares';
 import { AUSTRALIAN_STATES } from '@/lib/constants';
@@ -84,6 +85,7 @@ function AppPageContent() {
   // Admin quick-action bar state
   const [isGeneratingSlides, setIsGeneratingSlides]   = useState(false);
   const [isGeneratingReport, setIsGeneratingReport]   = useState(false);
+  const [isGeneratingArise, setIsGeneratingArise]     = useState(false);
   const [quickActionError, setQuickActionError]       = useState<string | null>(null);
   const [quickActionProgress, setQuickActionProgress] = useState<string>('');
   
@@ -953,6 +955,26 @@ function AppPageContent() {
     }
   };
 
+  const handleQuickArise = async () => {
+    setIsGeneratingArise(true);
+    setQuickActionError(null);
+    setQuickActionProgress('');
+    try {
+      const { upcomingCampaignStart } = calculateCampaignDates();
+      await generateAndDownloadAriseList({
+        supabase,
+        startDate:   upcomingCampaignStart,
+        adminStatus: contextAdminStatus,
+        userState:   contextUserState,
+        onProgress:  setQuickActionProgress,
+      });
+    } catch (err: unknown) {
+      setQuickActionError(err instanceof Error ? err.message : 'Failed to generate ARISE list');
+    } finally {
+      setIsGeneratingArise(false);
+    }
+  };
+
   if (isUserLoading || isLoading) {
     return (
       <MobileLayout>
@@ -1013,24 +1035,24 @@ function AppPageContent() {
               <div className="flex flex-wrap gap-2">
                 <button
                   onClick={handleQuickSlides}
-                  disabled={isGeneratingSlides || isGeneratingReport}
+                  disabled={isGeneratingSlides || isGeneratingReport || isGeneratingArise}
                   className="rounded-md bg-purple-600 px-4 py-2 text-sm font-bold text-white hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-gray-400 border-2 border-gray-800 dark:border-gray-600"
                 >
                   {isGeneratingSlides ? 'Generating…' : 'Campaign Lists'}
                 </button>
                 <button
                   onClick={handleQuickReport}
-                  disabled={isGeneratingSlides || isGeneratingReport}
+                  disabled={isGeneratingSlides || isGeneratingReport || isGeneratingArise}
                   className="rounded-md bg-purple-600 px-4 py-2 text-sm font-bold text-white hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-gray-400 border-2 border-gray-800 dark:border-gray-600"
                 >
                   {isGeneratingReport ? 'Generating…' : 'Campaign Results'}
                 </button>
                 <button
-                  disabled
-                  className="rounded-md bg-gray-300 px-4 py-2 text-sm font-bold text-gray-500 cursor-not-allowed border-2 border-gray-400 dark:bg-gray-700 dark:text-gray-500 dark:border-gray-600"
-                  title="Coming soon"
+                  onClick={handleQuickArise}
+                  disabled={isGeneratingSlides || isGeneratingReport || isGeneratingArise}
+                  className="rounded-md bg-purple-600 px-4 py-2 text-sm font-bold text-white hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-gray-400 border-2 border-gray-800 dark:border-gray-600"
                 >
-                  ARISE Lists
+                  {isGeneratingArise ? 'Generating…' : 'ARISE Lists'}
                 </button>
               </div>
               {quickActionProgress && !quickActionError && (
