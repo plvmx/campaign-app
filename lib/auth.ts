@@ -54,9 +54,10 @@ export function normalizeName(name: string): string {
 
 /**
  * Validate mobile number and first name against state_leaders table.
- * Uses server-side API route with service role to bypass RLS - works regardless of RLS policies.
+ * Returns ALL matching records — callers must handle the multi-state case.
+ * Uses server-side API route with service role to bypass RLS.
  */
-export async function validateStateLeader(mobile: string, firstName: string): Promise<StateLeaderMatch | null> {
+export async function validateStateLeader(mobile: string, firstName: string): Promise<StateLeaderMatch[]> {
   try {
     const res = await fetch('/api/auth/validate-leader', {
       method: 'POST',
@@ -71,16 +72,13 @@ export async function validateStateLeader(mobile: string, firstName: string): Pr
       throw new Error(json.error || 'Validation failed');
     }
 
-    const match = json.match;
-    if (!match || !match.id) return null;
-
-    return {
-      id: match.id,
-      state: match.state,
-      leader: match.leader,
+    return (json.matches ?? []).map((m: StateLeaderMatch) => ({
+      id:     m.id,
+      state:  m.state,
+      leader: m.leader,
       mobile: null,
-      admin: match.admin,
-    };
+      admin:  m.admin,
+    }));
   } catch (err) {
     console.error('Error validating state leader:', err);
     throw err;
@@ -88,20 +86,14 @@ export async function validateStateLeader(mobile: string, firstName: string): Pr
 }
 
 /**
- * Sign in with mobile and first name validation
- * Creates an anonymous session after validation
+ * Complete sign-in once a specific state_leaders record has been chosen.
+ * Creates an anonymous Supabase session and writes user_profiles / user_roles.
  */
-export async function signInWithMobileAndName(mobile: string, firstName: string): Promise<{ user: User; stateLeader: StateLeaderMatch }> {
-  // First validate against state_leaders table
-  const stateLeader = await validateStateLeader(mobile, firstName);
-  
-  if (!stateLeader) {
-    throw new Error('No matching record found. Please check your mobile number and first name.');
-  }
-
-  // Sign in anonymously to create a session
+export async function completeSignIn(
+  stateLeader: StateLeaderMatch,
+): Promise<{ user: User; stateLeader: StateLeaderMatch }> {
   const { data: authData, error: authError } = await supabase.auth.signInAnonymously();
-  
+
   if (authError) {
     const msg = authError.message || authError.toString();
     throw new Error(
@@ -115,53 +107,48 @@ export async function signInWithMobileAndName(mobile: string, firstName: string)
     throw new Error('Failed to create user session');
   }
 
-  // Store mobile and first name in user_profiles
+  // Store name + active state in user_profiles
   const { error: profileError } = await supabase
     .from('user_profiles')
-    .upsert({
-      user_id: authData.user.id,
-      name: firstName.trim(),
-      state: stateLeader.state,
-    }, {
-      onConflict: 'user_id'
-    });
+    .upsert(
+      { user_id: authData.user.id, name: stateLeader.leader.trim(), state: stateLeader.state },
+      { onConflict: 'user_id' },
+    );
+  if (profileError) console.warn('Failed to save user profile:', profileError);
 
-  if (profileError) {
-    console.warn('Failed to save user profile:', profileError);
-    // Don't throw - authentication succeeded, profile is optional
-  }
-
-  // Only grant admin role if admin field is exactly 'AD' (not 'SR' or other values)
+  // Grant admin role only for full admins (not SR)
   if (stateLeader.admin === 'AD') {
     const { error: roleError } = await supabase
       .from('user_roles')
-      .upsert({
-        user_id: authData.user.id,
-        role: 'admin',
-      }, {
-        onConflict: 'user_id'
-      });
-
-    if (roleError) {
-      console.warn('Failed to grant admin role:', roleError);
-      // Don't throw - authentication succeeded, role assignment can be retried
-    }
+      .upsert({ user_id: authData.user.id, role: 'admin' }, { onConflict: 'user_id' });
+    if (roleError) console.warn('Failed to grant admin role:', roleError);
   }
 
-  // Record last sign-in for this leader (used to find leaders not signed in since weekly refresh)
+  // Record sign-in timestamp
   const { error: signInUpdateError } = await supabase
     .from('state_leaders')
     .update({ last_sign_in_at: new Date().toISOString() })
     .eq('id', stateLeader.id);
+  if (signInUpdateError) console.warn('Failed to update last_sign_in_at:', signInUpdateError);
 
-  if (signInUpdateError) {
-    console.warn('Failed to update last_sign_in_at:', signInUpdateError);
+  return { user: { id: authData.user.id, email: authData.user.email }, stateLeader };
+}
+
+/**
+ * Convenience wrapper: validate then sign in immediately.
+ * Errors if credentials are invalid; picks the first record if multiple states
+ * match (legacy behaviour — prefer validateStateLeader + completeSignIn for
+ * full multi-state support).
+ */
+export async function signInWithMobileAndName(
+  mobile: string,
+  firstName: string,
+): Promise<{ user: User; stateLeader: StateLeaderMatch }> {
+  const matches = await validateStateLeader(mobile, firstName);
+  if (matches.length === 0) {
+    throw new Error('No matching record found. Please check your mobile number and first name.');
   }
-
-  return {
-    user: { id: authData.user.id, email: authData.user.email },
-    stateLeader,
-  };
+  return completeSignIn(matches[0]);
 }
 
 export async function sendMagicLink(email: string) {
