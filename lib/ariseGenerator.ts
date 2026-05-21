@@ -5,12 +5,12 @@
  *   - Week 1: all 7 days (Mon → Sun)
  *   - Week 2: Mon and Tue only
  *
- * Layout: two equal columns, no phone-number column, same red banner and colour
- * key legend as the portrait Campaign Lists. A red asterisk row separates week 1
- * from week 2. Date headers are repeated when a day's campaigns overflow into the
- * right column.
+ * Layout: equal columns (2 by default; a 3rd is added automatically if needed),
+ * no phone-number column, same red banner and colour key legend as the portrait
+ * Campaign Lists. A red asterisk row separates week 1 from week 2. Date headers
+ * are repeated when a day's campaigns overflow into the next column.
  *
- * Used by the "ARISE Lists" admin quick-action in app/app/page.tsx.
+ * Used by the "Week 1 Campaigns" admin quick-action in app/app/page.tsx.
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -42,23 +42,18 @@ function apx(inches: number): number {
   return Math.floor(inches * DPI);
 }
 
-const SIDE_MARGIN    = apx(0.5);  // 150 px
-// COL_GAP = 0 so the only visual space between the two lists is the 1-char
-// inner margin on each column edge — giving exactly a 2-char gap between texts.
-const COL_GAP        = 0;
-const COL_WIDTH      = Math.floor((WIDTH - 2 * SIDE_MARGIN - COL_GAP) / 2); // 1950 px
-const LEFT_COL_X     = SIDE_MARGIN;
-const RIGHT_COL_X    = SIDE_MARGIN + COL_WIDTH + COL_GAP;
-
+const SIDE_MARGIN    = apx(0.5);           // 150 px — equal on each side (centres the block)
 const CONTENT_TOP    = apx(1.0);           // 300 px
 const BOTTOM_MARGIN  = apx(0.5);           // 150 px
 const CONTENT_BOTTOM = HEIGHT - BOTTOM_MARGIN; // 2850 px
 
-const DATE_PAD       = apx(0.08); // 24 px — inner padding of the yellow date header box
-const DATE_BLOCK_H   = FONT_DATE + 2 * DATE_PAD; // ~118 px
-const DATE_HDR_SPACE = apx(0.05); // 15 px — gap below date header before first campaign
-const DATE_TOP_MARGIN = apx(0.1); // 30 px — gap above a new date group (not first in col)
-const LINE_SPACING   = apx(0.3);  // 90 px — vertical advance per campaign line
+const DATE_PAD        = apx(0.08); // 24 px — inner padding of the yellow date header box
+const DATE_BLOCK_H    = FONT_DATE + 2 * DATE_PAD; // ~118 px
+const DATE_HDR_SPACE  = apx(0.05); // 15 px — gap below date header before first campaign
+const DATE_TOP_MARGIN = apx(0.1);  // 30 px — gap above a new date group (not first in col)
+const LINE_SPACING    = apx(0.3);  // 90 px — vertical advance per campaign line
+// One line of asterisks at FONT_KEY height plus a small bottom gap
+const SEP_H           = FONT_KEY + apx(0.08); // ~78 px
 
 // ---------------------------------------------------------------------------
 // Types
@@ -115,6 +110,81 @@ async function fetchCampaigns(
 }
 
 // ---------------------------------------------------------------------------
+// Layout helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Simulates placing 9 days of campaigns into columns and returns how many
+ * columns are required. The simulation mirrors the drawing algorithm exactly
+ * but performs no canvas operations. Column heights are fixed and independent
+ * of column width, so the count is valid regardless of the final column widths.
+ */
+function simulateColumnCount(allCampaigns: AriseCampaign[][]): number {
+  let colCount  = 1;
+  let currentY  = CONTENT_TOP;
+  let firstInCol = true;
+
+  for (let dayIndex = 0; dayIndex < allCampaigns.length; dayIndex++) {
+    // Week separator before day 7 (Monday of week 2)
+    if (dayIndex === 7) {
+      const topM   = firstInCol ? 0 : DATE_TOP_MARGIN;
+      const needed = topM + SEP_H;
+      if (currentY + needed > CONTENT_BOTTOM) {
+        colCount++;
+        currentY   = CONTENT_TOP;
+        firstInCol = true;
+      }
+      currentY  += (firstInCol ? 0 : DATE_TOP_MARGIN) + SEP_H;
+      firstInCol = false;
+    }
+
+    const count = allCampaigns[dayIndex].length;
+    if (count === 0) continue;
+
+    let remaining = count;
+    while (remaining > 0) {
+      const topM      = firstInCol ? 0 : DATE_TOP_MARGIN;
+      const minNeeded = topM + DATE_BLOCK_H + DATE_HDR_SPACE + LINE_SPACING;
+
+      if (currentY + minNeeded > CONTENT_BOTTOM) {
+        colCount++;
+        currentY   = CONTENT_TOP;
+        firstInCol = true;
+        continue; // re-check after moving to new column
+      }
+
+      const lineY = currentY + (firstInCol ? 0 : DATE_TOP_MARGIN) + DATE_BLOCK_H + DATE_HDR_SPACE;
+      const avail = CONTENT_BOTTOM - lineY;
+      const nFit  = Math.max(0, Math.floor(avail / LINE_SPACING));
+
+      if (nFit === 0) {
+        colCount++;
+        currentY   = CONTENT_TOP;
+        firstInCol = true;
+        continue;
+      }
+
+      currentY   = lineY + Math.min(remaining, nFit) * LINE_SPACING;
+      firstInCol = false;
+      remaining  = Math.max(0, remaining - nFit);
+    }
+  }
+
+  return colCount;
+}
+
+/**
+ * Returns the column width and left-edge X positions for `nCols` equal columns.
+ * COL_GAP is 0 so the only visual space between columns is the 1-char inner
+ * margin on each column edge — giving a ~2-char gap between the text regions.
+ */
+function computeColLayout(nCols: number): { colWidth: number; colXs: number[] } {
+  const colWidth = Math.floor((WIDTH - 2 * SIDE_MARGIN) / nCols);
+  const colXs    = Array.from({ length: nCols }, (_, i) => SIDE_MARGIN + i * colWidth);
+  return { colWidth, colXs };
+}
+
+// ---------------------------------------------------------------------------
 // Canvas draw helpers
 // ---------------------------------------------------------------------------
 
@@ -162,11 +232,12 @@ function drawDateHeader(
   date: Date,
   colX: number,
   y: number,
+  colWidth: number,
 ): void {
   ctx.font = `italic ${FONT_DATE}px Arial`;
   const text = formatSlideDateText(date);
   const tw   = ctx.measureText(text).width;
-  const bw   = Math.min(tw + 2 * DATE_PAD, COL_WIDTH);
+  const bw   = Math.min(tw + 2 * DATE_PAD, colWidth);
   const bh   = DATE_BLOCK_H;
   ctx.fillStyle = 'rgb(255, 255, 0)';
   ctx.fillRect(colX, y, bw, bh);
@@ -181,6 +252,7 @@ function drawCampaignLine(
   campaign: AriseCampaign,
   colX: number,
   y: number,
+  colWidth: number,
 ): void {
   let place = campaign.place;
   const cat = campaign.category ?? 'TWOL';
@@ -195,10 +267,10 @@ function drawCampaignLine(
   const text = `${place.padEnd(PLACE_COLS)} ${time.padStart(TIME_COLS)} ${leader.padEnd(LEADER_COLS)}`;
 
   ctx.font = `bold ${FONT_CAMP}px "Courier New", monospace`;
-  const oneCharW = Math.round(ctx.measureText('M').width);
+  const oneCharW  = Math.round(ctx.measureText('M').width);
   const totalCols = PLACE_COLS + 1 + TIME_COLS + 1 + LEADER_COLS;
   const naturalW  = ctx.measureText('M'.repeat(totalCols)).width;
-  const scaleX    = (COL_WIDTH - 2 * oneCharW) / naturalW;
+  const scaleX    = (colWidth - 2 * oneCharW) / naturalW;
 
   ctx.fillStyle = getSlideStateColor(campaign.state);
   ctx.save();
@@ -214,12 +286,13 @@ function drawWeekSeparator(
   ctx: CanvasRenderingContext2D,
   colX: number,
   y: number,
+  colWidth: number,
 ): void {
   ctx.font = `bold ${FONT_KEY}px Arial`;
   ctx.fillStyle = 'rgb(255, 0, 0)';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
-  ctx.fillText('*'.repeat(40), colX + COL_WIDTH / 2, y);
+  ctx.fillText('*'.repeat(40), colX + colWidth / 2, y);
   ctx.textAlign = 'left';
 }
 
@@ -234,18 +307,6 @@ async function renderAriseCanvas(
   userState: string | null | undefined,
   onProgress?: (msg: string) => void,
 ): Promise<HTMLCanvasElement> {
-  const canvas = document.createElement('canvas');
-  canvas.width  = WIDTH;
-  canvas.height = HEIGHT;
-  const ctx = canvas.getContext('2d')!;
-  if (!ctx) throw new Error('Failed to get canvas context');
-
-  // White background
-  ctx.fillStyle = 'white';
-  ctx.fillRect(0, 0, WIDTH, HEIGHT);
-
-  drawBannerAndKey(ctx);
-
   // Build the 9 date targets: week-1 days 0–6, week-2 Mon+Tue = days 7–8
   const dates = Array.from({ length: 9 }, (_, i) => {
     const d = new Date(startDate);
@@ -253,52 +314,65 @@ async function renderAriseCanvas(
     return d;
   });
 
-  const colXs: [number, number] = [LEFT_COL_X, RIGHT_COL_X];
+  // ── Pass 1: fetch all campaign data ────────────────────────────────────────
+  const allCampaigns: AriseCampaign[][] = [];
+  for (let i = 0; i < dates.length; i++) {
+    onProgress?.(`Fetching day ${i + 1} of ${dates.length}…`);
+    allCampaigns.push(await fetchCampaigns(client, dates[i], adminStatus, userState));
+  }
+
+  // ── Pass 2: simulate layout to find required column count ──────────────────
+  const nCols = Math.max(2, simulateColumnCount(allCampaigns));
+  const { colWidth, colXs } = computeColLayout(nCols);
+
+  onProgress?.(`Rendering ARISE list (${nCols} columns)…`);
+
+  // ── Pass 3: draw ────────────────────────────────────────────────────────────
+  const canvas = document.createElement('canvas');
+  canvas.width  = WIDTH;
+  canvas.height = HEIGHT;
+  const ctx = canvas.getContext('2d')!;
+  if (!ctx) throw new Error('Failed to get canvas context');
+
+  ctx.fillStyle = 'white';
+  ctx.fillRect(0, 0, WIDTH, HEIGHT);
+  drawBannerAndKey(ctx);
+
   let colIdx    = 0;
   let currentY  = CONTENT_TOP;
   let firstInCol = true;
 
-  // Separator height (one line of * at FONT_KEY plus small bottom gap)
-  const SEP_H = FONT_KEY + apx(0.08);
-
   for (let dayIndex = 0; dayIndex < dates.length; dayIndex++) {
     const date = dates[dayIndex];
 
-    // ── Week separator before day 7 (first day of week 2) ──────────────────
+    // ── Week separator before day 7 (first day of week 2) ────────────────────
     if (dayIndex === 7) {
       const topM   = firstInCol ? 0 : DATE_TOP_MARGIN;
       const needed = topM + SEP_H;
 
-      if (currentY + needed > CONTENT_BOTTOM) {
-        if (colIdx < 1) {
-          colIdx++;
-          currentY  = CONTENT_TOP;
-          firstInCol = true;
-        }
+      if (currentY + needed > CONTENT_BOTTOM && colIdx < colXs.length - 1) {
+        colIdx++;
+        currentY   = CONTENT_TOP;
+        firstInCol = true;
       }
 
       const sepY = currentY + (firstInCol ? 0 : DATE_TOP_MARGIN);
-      drawWeekSeparator(ctx, colXs[colIdx], sepY);
+      drawWeekSeparator(ctx, colXs[colIdx], sepY, colWidth);
       currentY   = sepY + SEP_H;
       firstInCol = false;
     }
 
-    onProgress?.(`Fetching day ${dayIndex + 1} of ${dates.length}…`);
-
-    const campaigns = await fetchCampaigns(client, date, adminStatus, userState);
+    const campaigns = allCampaigns[dayIndex];
     if (campaigns.length === 0) continue;
 
-    // Place as many campaigns as fit in the current (then next) column
     let remaining = [...campaigns];
 
     while (remaining.length > 0) {
-      const topM     = firstInCol ? 0 : DATE_TOP_MARGIN;
-      // Minimum needed = margin + date header + gap + at least one campaign line
+      const topM      = firstInCol ? 0 : DATE_TOP_MARGIN;
       const minNeeded = topM + DATE_BLOCK_H + DATE_HDR_SPACE + LINE_SPACING;
 
       if (currentY + minNeeded > CONTENT_BOTTOM) {
-        // Overflow to right column — if already in right column, stop
-        if (colIdx >= 1) break;
+        if (colIdx >= colXs.length - 1) break; // all columns exhausted
         colIdx++;
         currentY   = CONTENT_TOP;
         firstInCol = true;
@@ -306,15 +380,14 @@ async function renderAriseCanvas(
 
       const topM2   = firstInCol ? 0 : DATE_TOP_MARGIN;
       const headerY = currentY + topM2;
-      drawDateHeader(ctx, date, colXs[colIdx], headerY);
+      drawDateHeader(ctx, date, colXs[colIdx], headerY, colWidth);
 
       const lineY = headerY + DATE_BLOCK_H + DATE_HDR_SPACE;
       const avail = CONTENT_BOTTOM - lineY;
       const nFit  = Math.max(0, Math.floor(avail / LINE_SPACING));
 
       if (nFit === 0) {
-        // No room for even one line; try next column
-        if (colIdx >= 1) break;
+        if (colIdx >= colXs.length - 1) break;
         colIdx++;
         currentY   = CONTENT_TOP;
         firstInCol = true;
@@ -323,7 +396,7 @@ async function renderAriseCanvas(
 
       const batch = remaining.slice(0, nFit);
       batch.forEach((c, j) => {
-        drawCampaignLine(ctx, c, colXs[colIdx], lineY + j * LINE_SPACING);
+        drawCampaignLine(ctx, c, colXs[colIdx], lineY + j * LINE_SPACING, colWidth);
       });
 
       currentY   = lineY + batch.length * LINE_SPACING;
@@ -346,7 +419,7 @@ async function renderAriseCanvas(
 export async function generateAndDownloadAriseList(options: GenerateAriseOptions): Promise<void> {
   const { supabase: client, startDate, adminStatus, userState, onProgress } = options;
 
-  onProgress?.('Rendering ARISE list…');
+  onProgress?.('Fetching campaign data…');
   const canvas = await renderAriseCanvas(client, startDate, adminStatus, userState, onProgress);
 
   onProgress?.('Creating JPEG…');
