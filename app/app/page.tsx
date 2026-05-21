@@ -7,8 +7,10 @@ import { supabase } from '@/lib/supabaseClient';
 import { getUserStateCode } from '@/lib/location';
 import { normalizeName, normalizeMobile } from '@/lib/auth';
 import { useUser, upsertUserProfile } from '@/contexts/UserContext';
-import { getTodayDateString } from '@/lib/campaignDates';
+import { getTodayDateString, calculateCampaignDates, formatDateForDb } from '@/lib/campaignDates';
 import { getStateColor } from '@/lib/stateColors';
+import { generateAndDownloadSlides } from '@/lib/slideGenerator';
+import { generateAndDownloadReport } from '@/lib/reportGenerator';
 import { fetchCampaignData } from '@/lib/campaignLog';
 import { getSharedWithMeOwners, type LeaderShareOwner } from '@/lib/leaderShares';
 import { AUSTRALIAN_STATES } from '@/lib/constants';
@@ -78,6 +80,12 @@ function AppPageContent() {
   const [filterState, setFilterState] = useState<string>('');
   const [isFormExpanded, setIsFormExpanded] = useState<boolean>(false);
   const [dateFilter, setDateFilter] = useState<'past' | 'future'>('future');
+
+  // Admin quick-action bar state
+  const [isGeneratingSlides, setIsGeneratingSlides]   = useState(false);
+  const [isGeneratingReport, setIsGeneratingReport]   = useState(false);
+  const [quickActionError, setQuickActionError]       = useState<string | null>(null);
+  const [quickActionProgress, setQuickActionProgress] = useState<string>('');
   
   // State for "Other Place" functionality
   const [isOtherPlace, setIsOtherPlace] = useState<boolean>(false);
@@ -899,6 +907,52 @@ function AppPageContent() {
   };
   
 
+  // -------------------------------------------------------------------------
+  // Admin quick-action handlers
+  // -------------------------------------------------------------------------
+
+  const handleQuickSlides = async () => {
+    setIsGeneratingSlides(true);
+    setQuickActionError(null);
+    setQuickActionProgress('');
+    try {
+      const { upcomingCampaignStart } = calculateCampaignDates();
+      await generateAndDownloadSlides({
+        supabase,
+        startDate:   upcomingCampaignStart,
+        adminStatus: contextAdminStatus,
+        userState:   contextUserState,
+        onProgress:  setQuickActionProgress,
+      });
+    } catch (err: unknown) {
+      setQuickActionError(err instanceof Error ? err.message : 'Failed to generate campaign lists');
+    } finally {
+      setIsGeneratingSlides(false);
+    }
+  };
+
+  const handleQuickReport = async () => {
+    setIsGeneratingReport(true);
+    setQuickActionError(null);
+    setQuickActionProgress('');
+    try {
+      const { pastCampaignStart } = calculateCampaignDates();
+      const pastEnd = new Date(pastCampaignStart);
+      pastEnd.setDate(pastEnd.getDate() + 6);
+      await generateAndDownloadReport({
+        supabase,
+        startDate:   formatDateForDb(pastCampaignStart),
+        endDate:     formatDateForDb(pastEnd),
+        adminStatus: contextAdminStatus,
+        userState:   contextUserState,
+      });
+    } catch (err: unknown) {
+      setQuickActionError(err instanceof Error ? err.message : 'Failed to generate campaign results');
+    } finally {
+      setIsGeneratingReport(false);
+    }
+  };
+
   if (isUserLoading || isLoading) {
     return (
       <MobileLayout>
@@ -949,7 +1003,45 @@ function AppPageContent() {
               </div>
             )}
           </div>
-          
+
+          {/* Admin Quick Actions — visible to full admins only */}
+          {contextAdminStatus === 'AD' && (
+            <div className="mt-4 rounded-lg border-2 border-purple-300 bg-purple-50 p-3 dark:border-purple-700 dark:bg-purple-900/20">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-purple-700 dark:text-purple-400">
+                Admin Quick Actions
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={handleQuickSlides}
+                  disabled={isGeneratingSlides || isGeneratingReport}
+                  className="rounded-md bg-purple-600 px-4 py-2 text-sm font-bold text-white hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-gray-400 border-2 border-gray-800 dark:border-gray-600"
+                >
+                  {isGeneratingSlides ? 'Generating…' : 'Campaign Lists'}
+                </button>
+                <button
+                  onClick={handleQuickReport}
+                  disabled={isGeneratingSlides || isGeneratingReport}
+                  className="rounded-md bg-purple-600 px-4 py-2 text-sm font-bold text-white hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-gray-400 border-2 border-gray-800 dark:border-gray-600"
+                >
+                  {isGeneratingReport ? 'Generating…' : 'Campaign Results'}
+                </button>
+                <button
+                  disabled
+                  className="rounded-md bg-gray-300 px-4 py-2 text-sm font-bold text-gray-500 cursor-not-allowed border-2 border-gray-400 dark:bg-gray-700 dark:text-gray-500 dark:border-gray-600"
+                  title="Coming soon"
+                >
+                  ARISE Lists
+                </button>
+              </div>
+              {quickActionProgress && !quickActionError && (
+                <p className="mt-2 text-xs text-purple-700 dark:text-purple-300">{quickActionProgress}</p>
+              )}
+              {quickActionError && (
+                <p className="mt-2 text-xs font-medium text-red-600 dark:text-red-400">⚠ {quickActionError}</p>
+              )}
+            </div>
+          )}
+
           {/* Date Filter Buttons */}
           <div className="mt-4 flex justify-center gap-3 flex-wrap">
             <button

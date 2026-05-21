@@ -5,10 +5,9 @@ import { useRouter } from 'next/navigation';
 import MobileLayout from '@/components/MobileLayout';
 import { useUser } from '@/contexts/UserContext';
 import { supabase } from '@/lib/supabaseClient';
-import JSZip from 'jszip';
 import { useCampaignDates } from '@/contexts/CampaignDatesContext';
 import { formatDateForDb } from '@/lib/campaignDates';
-import { drawReportPage, canvasToJpegBlob } from '@/lib/reportCanvas';
+import { downloadReportRows } from '@/lib/reportGenerator';
 import { getErrorMessage } from '@/lib/errorUtils';
 
 interface Campaign {
@@ -182,37 +181,11 @@ export default function GenerateReportPage() {
     }
   };
 
-  const LINES_PER_JPEG = 12;
-
   const downloadReport = async () => {
     if (reportData.length === 0) return;
-
     setIsDownloading(true);
     try {
-      const chunkCount = Math.ceil(reportData.length / LINES_PER_JPEG);
-      const zip = new JSZip();
-
-      for (let partIndex = 0; partIndex < chunkCount; partIndex++) {
-        const chunk = reportData.slice(
-          partIndex * LINES_PER_JPEG,
-          (partIndex + 1) * LINES_PER_JPEG
-        );
-        const canvas = drawReportPage(chunk);
-        const blob = await canvasToJpegBlob(canvas);
-        const arrayBuffer = await blob.arrayBuffer();
-        const partSuffix = chunkCount > 1 ? `_part${partIndex + 1}` : '';
-        zip.file(`Campaign_Results_Report_${startDate}_to_${endDate}${partSuffix}.jpeg`, arrayBuffer);
-      }
-
-      const zipBlob = await zip.generateAsync({ type: 'blob' });
-      const url = URL.createObjectURL(zipBlob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `Campaign_Results_Report_${startDate}_to_${endDate}.zip`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+      await downloadReportRows(reportData, startDate, endDate);
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Error downloading report'));
     } finally {
