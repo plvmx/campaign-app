@@ -37,11 +37,21 @@ export async function getCampaignById(id: string): Promise<Campaign | null> {
   return data as Campaign;
 }
 
+/** Trim string fields that must never carry leading/trailing whitespace. */
+function trimCampaignStrings<T extends { leader?: string | null; place?: string | null; state?: string | null }>(input: T): T {
+  return {
+    ...input,
+    ...(typeof input.leader === 'string' && { leader: input.leader.trim() }),
+    ...(typeof input.place  === 'string' && { place:  input.place.trim()  }),
+    ...(typeof input.state  === 'string' && { state:  input.state.trim()  }),
+  };
+}
+
 /** Create a new campaign and log the insertion. Returns the created campaign. */
 export async function createCampaign(input: NewCampaignData): Promise<Campaign> {
   const { data, error } = await supabase
     .from('campaigns')
-    .insert([{ ...input, created_at: new Date().toISOString() }])
+    .insert([{ ...trimCampaignStrings(input), created_at: new Date().toISOString() }])
     .select()
     .single();
 
@@ -59,7 +69,7 @@ export async function updateCampaign(
 ): Promise<Campaign> {
   const { data, error } = await supabase
     .from('campaigns')
-    .update(updates)
+    .update(trimCampaignStrings(updates))
     .eq('id', id)
     .select()
     .single();

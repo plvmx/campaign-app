@@ -166,7 +166,7 @@ function AppPageContent() {
       }
     } else {
       if (userMobileAndLeaderData?.mobile && userMobileAndLeaderData?.leader) {
-        query = query.eq('leader', userMobileAndLeaderData.leader);
+        query = query.eq('leader', userMobileAndLeaderData.leader.trim());
       } else {
         query = query.eq('user_id', contextUser.id);
       }
@@ -190,7 +190,7 @@ function AppPageContent() {
             .from('campaigns')
             .select('*')
             .eq('state', o.owner_state || '')
-            .eq('leader', o.owner_leader || '')
+            .eq('leader', (o.owner_leader || '').trim())
             .order('date', { ascending: true })
             .order('state', { ascending: true })
             .order('place', { ascending: true })
@@ -417,7 +417,7 @@ function AppPageContent() {
                 .from('campaigns')
                 .select('*')
                 .eq('state', o.owner_state || '')
-                .eq('leader', o.owner_leader || '')
+                .eq('leader', (o.owner_leader || '').trim())
                 .order('date', { ascending: true })
                 .order('state', { ascending: true })
                 .order('place', { ascending: true })
