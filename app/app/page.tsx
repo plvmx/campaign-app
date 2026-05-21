@@ -969,7 +969,7 @@ function AppPageContent() {
         onProgress:  setQuickActionProgress,
       });
     } catch (err: unknown) {
-      setQuickActionError(err instanceof Error ? err.message : 'Failed to generate ARISE list');
+      setQuickActionError(err instanceof Error ? err.message : 'Failed to generate Week 1 Campaigns list');
     } finally {
       setIsGeneratingArise(false);
     }

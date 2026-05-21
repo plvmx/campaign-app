@@ -1,5 +1,5 @@
 /**
- * ARISE List Generator
+ * Week 1 Campaigns List Generator
  *
  * Renders a single landscape JPEG showing the upcoming campaign schedule:
  *   - Week 1: all 7 days (Mon → Sun)
@@ -32,7 +32,7 @@ const HEIGHT = Math.floor(10 * DPI); // 3000 px  (10" landscape)
 const FONT_TITLE = 72;
 const FONT_KEY   = 54;
 const FONT_DATE  = 70;
-const FONT_CAMP  = 62;
+const FONT_CAMP  = 84; // matches portrait Campaign Lists — gives scaleX ≈ 0.80 (condensed)
 
 const PLACE_COLS  = 20;
 const TIME_COLS   = 9;
@@ -325,7 +325,7 @@ async function renderAriseCanvas(
   const nCols = Math.max(2, simulateColumnCount(allCampaigns));
   const { colWidth, colXs } = computeColLayout(nCols);
 
-  onProgress?.(`Rendering ARISE list (${nCols} columns)…`);
+  onProgress?.(`Rendering Week 1 Campaigns list (${nCols} columns)…`);
 
   // ── Pass 3: draw ────────────────────────────────────────────────────────────
   const canvas = document.createElement('canvas');
@@ -413,13 +413,13 @@ async function renderAriseCanvas(
 // ---------------------------------------------------------------------------
 
 /**
- * Renders the ARISE campaign list as a single landscape JPEG and triggers a
+ * Renders the Week 1 Campaigns list as a single landscape JPEG and triggers a
  * browser download.
  */
 export async function generateAndDownloadAriseList(options: GenerateAriseOptions): Promise<void> {
   const { supabase: client, startDate, adminStatus, userState, onProgress } = options;
 
-  onProgress?.('Fetching campaign data…');
+  onProgress?.('Fetching Week 1 campaign data…');
   const canvas = await renderAriseCanvas(client, startDate, adminStatus, userState, onProgress);
 
   onProgress?.('Creating JPEG…');
@@ -434,11 +434,11 @@ export async function generateAndDownloadAriseList(options: GenerateAriseOptions
   const url  = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href     = url;
-  link.download = 'arise_campaign_list.jpg';
+  link.download = 'week1_campaign_list.jpg';
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
 
-  onProgress?.('Done — ARISE list downloaded.');
+  onProgress?.('Done — Week 1 Campaigns list downloaded.');
 }
