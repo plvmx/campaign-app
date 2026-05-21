@@ -43,8 +43,10 @@ function apx(inches: number): number {
 }
 
 const SIDE_MARGIN    = apx(0.5);  // 150 px
-const COL_GAP        = 200;       // px between columns
-const COL_WIDTH      = Math.floor((WIDTH - 2 * SIDE_MARGIN - COL_GAP) / 2); // 1850 px
+// COL_GAP = 0 so the only visual space between the two lists is the 1-char
+// inner margin on each column edge — giving exactly a 2-char gap between texts.
+const COL_GAP        = 0;
+const COL_WIDTH      = Math.floor((WIDTH - 2 * SIDE_MARGIN - COL_GAP) / 2); // 1950 px
 const LEFT_COL_X     = SIDE_MARGIN;
 const RIGHT_COL_X    = SIDE_MARGIN + COL_WIDTH + COL_GAP;
 

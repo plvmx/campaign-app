@@ -1052,7 +1052,7 @@ function AppPageContent() {
                   disabled={isGeneratingSlides || isGeneratingReport || isGeneratingArise}
                   className="rounded-md bg-purple-600 px-4 py-2 text-sm font-bold text-white hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-gray-400 border-2 border-gray-800 dark:border-gray-600"
                 >
-                  {isGeneratingArise ? 'Generating…' : 'ARISE Lists'}
+                  {isGeneratingArise ? 'Generating…' : 'Week 1 Campaigns'}
                 </button>
               </div>
               {quickActionProgress && !quickActionError && (
