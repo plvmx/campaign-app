@@ -272,12 +272,17 @@ function drawCampaignLine(
   const naturalW  = ctx.measureText('M'.repeat(totalCols)).width;
   const scaleX    = (colWidth - 2 * oneCharW) / naturalW;
 
-  ctx.fillStyle = getSlideStateColor(campaign.state);
+  const color = getSlideStateColor(campaign.state);
   ctx.save();
   ctx.translate(colX + oneCharW, y);
   ctx.scale(scaleX, 1);
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 3;
+  ctx.lineJoin = 'round';
+  ctx.strokeText(text, 0, 0);
+  ctx.fillStyle = color;
   ctx.fillText(text, 0, 0);
   ctx.restore();
 }
