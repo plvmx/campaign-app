@@ -308,10 +308,15 @@ async function renderSlide(
       const mobile = (c.mobile ?? '').replace(/\s/g, '');
 
       const text = `${place.padEnd(PLACE_COLS)} ${time.padStart(TIME_COLS)} ${leader.padEnd(LEADER_COLS)} ${mobile}`;
-      ctx.fillStyle = getSlideStateColor(c.state);
+      const color = getSlideStateColor(c.state);
       ctx.save();
       ctx.translate(oneCharW, campaignY + j * lineSpacing);
       ctx.scale(scaleX, 1);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 3;
+      ctx.lineJoin = 'round';
+      ctx.strokeText(text, 0, 0);
+      ctx.fillStyle = color;
       ctx.fillText(text, 0, 0);
       ctx.restore();
     });
