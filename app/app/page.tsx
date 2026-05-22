@@ -1625,11 +1625,14 @@ function AppPageContent() {
                                     )}
                                   </div>
                                   <div className="flex flex-row gap-2 sm:ml-4 w-full sm:w-auto">
-                                    {/* Show Record Results only if campaign date+time is in the past (same as Past tab) AND (admin OR own OR shared with me) */}
+                                    {/* Show Record Results only if campaign date+time is in the past (same as Past tab) AND
+                                        (full admin OR state reporter for same state OR own campaign OR shared with me) */}
                                     {(() => {
                                       const isPast = isCampaignPast(campaign.date, campaign.time);
                                       if (!isPast) return false;
                                       if (adminStatus === 'AD') return true;
+                                      // State reporters can record results for any past campaign in their state
+                                      if (adminStatus === 'SR' && (campaign.state || '').toUpperCase().trim() === (userState || '').toUpperCase().trim()) return true;
                                       const isOwn = userMobileAndLeader?.leader && userState && normalizeName(campaign.leader || '') === normalizeName(userMobileAndLeader.leader) && (campaign.state || '').toUpperCase().trim() === (userState || '').toUpperCase().trim() && userMobileAndLeader.mobile && normalizeMobile(campaign.mobile || '') === normalizeMobile(userMobileAndLeader.mobile);
                                       const isShared = sharedWithMeOwners.some((o) => (o.owner_state || '').toUpperCase().trim() === (campaign.state || '').toUpperCase().trim() && normalizeName(o.owner_leader) === normalizeName(campaign.leader || ''));
                                       return isOwn || isShared;
