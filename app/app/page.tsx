@@ -1036,21 +1036,39 @@ function AppPageContent() {
                 <button
                   onClick={handleQuickSlides}
                   disabled={isGeneratingSlides || isGeneratingReport || isGeneratingArise}
-                  className="rounded-md bg-purple-600 px-4 py-2 text-sm font-bold text-white hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-gray-400 border-2 border-gray-800 dark:border-gray-600"
+                  className={`rounded-md px-4 py-2 text-sm font-bold text-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600 cursor-pointer ${
+                    isGeneratingSlides
+                      ? 'bg-gray-400 cursor-not-allowed'
+                      : (isGeneratingReport || isGeneratingArise)
+                        ? 'bg-purple-600 opacity-40 cursor-not-allowed'
+                        : 'bg-purple-600 hover:bg-purple-700'
+                  }`}
                 >
                   {isGeneratingSlides ? 'Generating…' : 'Campaign Lists'}
                 </button>
                 <button
                   onClick={handleQuickReport}
                   disabled={isGeneratingSlides || isGeneratingReport || isGeneratingArise}
-                  className="rounded-md bg-purple-600 px-4 py-2 text-sm font-bold text-white hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-gray-400 border-2 border-gray-800 dark:border-gray-600"
+                  className={`rounded-md px-4 py-2 text-sm font-bold text-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600 cursor-pointer ${
+                    isGeneratingReport
+                      ? 'bg-gray-400 cursor-not-allowed'
+                      : (isGeneratingSlides || isGeneratingArise)
+                        ? 'bg-purple-600 opacity-40 cursor-not-allowed'
+                        : 'bg-purple-600 hover:bg-purple-700'
+                  }`}
                 >
                   {isGeneratingReport ? 'Generating…' : 'Campaign Results'}
                 </button>
                 <button
                   onClick={handleQuickArise}
                   disabled={isGeneratingSlides || isGeneratingReport || isGeneratingArise}
-                  className="rounded-md bg-purple-600 px-4 py-2 text-sm font-bold text-white hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-gray-400 border-2 border-gray-800 dark:border-gray-600"
+                  className={`rounded-md px-4 py-2 text-sm font-bold text-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600 cursor-pointer ${
+                    isGeneratingArise
+                      ? 'bg-gray-400 cursor-not-allowed'
+                      : (isGeneratingSlides || isGeneratingReport)
+                        ? 'bg-purple-600 opacity-40 cursor-not-allowed'
+                        : 'bg-purple-600 hover:bg-purple-700'
+                  }`}
                 >
                   {isGeneratingArise ? 'Generating…' : 'Week 1 Campaigns'}
                 </button>
