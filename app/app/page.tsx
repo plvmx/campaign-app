@@ -79,7 +79,10 @@ function AppPageContent() {
     { code: 'BOTJ', name: 'Book of the Judgement' },
     { code: 'TLT', name: 'TLT' },
   ]);
-  const [filterState, setFilterState] = useState<string>('');
+  const [filterState,  setFilterState]  = useState<string>('');
+  const [filterPlace,  setFilterPlace]  = useState<string>('');
+  const [filterLeader, setFilterLeader] = useState<string>('');
+  const [filterMobile, setFilterMobile] = useState<string>('');
   const [isFormExpanded, setIsFormExpanded] = useState<boolean>(false);
   const [dateFilter, setDateFilter] = useState<'past' | 'future'>('future');
 
@@ -473,19 +476,18 @@ function AppPageContent() {
   // Memoize filtered campaigns to avoid recalculating on every render
   const filteredCampaigns = useMemo(() => {
     if (allCampaigns.length === 0) return [];
-    
+
     let filtered = allCampaigns;
-    
-    // Apply state filter if set
-    if (filterState) {
-      filtered = filtered.filter(c => c.state.toUpperCase() === filterState.toUpperCase());
-    }
-    
-    // Apply date filter
+
+    if (filterState)  filtered = filtered.filter(c => c.state.toUpperCase() === filterState.toUpperCase());
+    if (filterPlace)  filtered = filtered.filter(c => (c.place  ?? '').toLowerCase().includes(filterPlace.toLowerCase()));
+    if (filterLeader) filtered = filtered.filter(c => (c.leader ?? '').toLowerCase().includes(filterLeader.toLowerCase()));
+    if (filterMobile) filtered = filtered.filter(c => (c.mobile ?? '').replace(/\s/g, '').includes(filterMobile.replace(/\s/g, '')));
+
     filtered = applyDateFilter(filtered);
-    
+
     return filtered;
-  }, [allCampaigns, filterState, applyDateFilter]);
+  }, [allCampaigns, filterState, filterPlace, filterLeader, filterMobile, applyDateFilter]);
 
   // Apply state and date filters when they change
   useEffect(() => {
@@ -1331,25 +1333,79 @@ function AppPageContent() {
         </div>
       )}
 
-          {/* Filter - Only show for admin users */}
+          {/* Filters — admin only */}
           {contextIsAdmin && (
-            <div className="w-full">
-              <label htmlFor="filter" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                Filter by State
-              </label>
-              <select
-                id="filter"
-                value={filterState}
-                onChange={(e) => setFilterState(e.target.value)}
-                className="mt-1 block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
-              >
-                <option value="">All States</option>
-                {AUSTRALIAN_STATES.map((state) => (
-                  <option key={state} value={state}>
-                    {state}
-                  </option>
-                ))}
-              </select>
+            <div className="w-full space-y-2">
+              <div className="grid grid-cols-2 gap-2">
+                {/* State */}
+                <div>
+                  <label htmlFor="filter-state" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                    State
+                  </label>
+                  <select
+                    id="filter-state"
+                    value={filterState}
+                    onChange={(e) => setFilterState(e.target.value)}
+                    className="block w-full rounded-md border-2 border-gray-400 bg-white px-2 py-1.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
+                  >
+                    <option value="">All States</option>
+                    {AUSTRALIAN_STATES.map((state) => (
+                      <option key={state} value={state}>{state}</option>
+                    ))}
+                  </select>
+                </div>
+                {/* Place */}
+                <div>
+                  <label htmlFor="filter-place" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                    Place
+                  </label>
+                  <input
+                    id="filter-place"
+                    type="text"
+                    value={filterPlace}
+                    onChange={(e) => setFilterPlace(e.target.value)}
+                    placeholder="e.g. CBD"
+                    className="block w-full rounded-md border-2 border-gray-400 bg-white px-2 py-1.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
+                  />
+                </div>
+                {/* Leader */}
+                <div>
+                  <label htmlFor="filter-leader" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                    Leader
+                  </label>
+                  <input
+                    id="filter-leader"
+                    type="text"
+                    value={filterLeader}
+                    onChange={(e) => setFilterLeader(e.target.value)}
+                    placeholder="e.g. Peter"
+                    className="block w-full rounded-md border-2 border-gray-400 bg-white px-2 py-1.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
+                  />
+                </div>
+                {/* Mobile */}
+                <div>
+                  <label htmlFor="filter-mobile" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                    Mobile
+                  </label>
+                  <input
+                    id="filter-mobile"
+                    type="tel"
+                    value={filterMobile}
+                    onChange={(e) => setFilterMobile(e.target.value)}
+                    placeholder="e.g. 0429"
+                    className="block w-full rounded-md border-2 border-gray-400 bg-white px-2 py-1.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
+                  />
+                </div>
+              </div>
+              {/* Clear all filters */}
+              {(filterState || filterPlace || filterLeader || filterMobile) && (
+                <button
+                  onClick={() => { setFilterState(''); setFilterPlace(''); setFilterLeader(''); setFilterMobile(''); }}
+                  className="text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                >
+                  ✕ Clear filters
+                </button>
+              )}
             </div>
           )}
 
