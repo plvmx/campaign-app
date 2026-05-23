@@ -9,6 +9,7 @@ import { normalizeMobile, normalizeName } from '@/lib/auth';
 import { getSharedWithMeOwners } from '@/lib/leaderShares';
 import { useUser } from '@/contexts/UserContext';
 import { updateCampaign, createCampaign } from '@/lib/services/campaignService';
+import { trackEvent } from '@/lib/analytics';
 
 interface InputRow {
   id: string;
@@ -63,6 +64,8 @@ function RecordResultsDetailPageContent() {
   const informationRowsRef = useRef(informationRows);
   const debounceNamesTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const savingNamesRef = useRef(false);
+  // Ensure we only fire the record_results_save event once per page session.
+  const hasTrackedSaveRef = useRef(false);
   // Keep user ID available in cleanup/async callbacks that run after unmount
   const userIdRef = useRef<string | null>(null);
   
@@ -386,12 +389,21 @@ function RecordResultsDetailPageContent() {
       originalNamesRef.current = currentNames;
       setPendingSaves(new Map());
       pendingSavesRef.current = new Map();
+
+      // Track first save per session so we know the page was actively used.
+      if (!hasTrackedSaveRef.current) {
+        hasTrackedSaveRef.current = true;
+        trackEvent('record_results_save', {
+          state:  campaignData.state  || undefined,
+          leader: campaignData.leader || undefined,
+        });
+      }
     } catch (error: unknown) {
       console.error('Error saving names:', error);
     } finally {
       savingNamesRef.current = false;
     }
-  }, []);
+  }, [campaignData.state, campaignData.leader]);
 
   // Debounce name saves so we only persist after the user stops typing (prevents "M", "Muh", "Muhammad" as separate records).
   const DEBOUNCE_MS = 2000;

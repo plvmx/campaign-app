@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { getSession, validateStateLeader, completeSignIn, type StateLeaderMatch } from '@/lib/auth';
 import { getErrorMessage } from '@/lib/errorUtils';
+import { trackEvent } from '@/lib/analytics';
 
 const STORAGE_KEYS = { mobile: 'login_mobile', firstName: 'login_firstName' };
 
@@ -88,6 +89,7 @@ export default function LoginPage() {
       if (matches.length === 1) {
         // Single state — sign in immediately, no extra step
         await completeSignIn(matches[0]);
+        trackEvent('sign_in', { state: matches[0].state });
         router.push('/app');
       } else {
         // Multiple states — show state picker
@@ -106,6 +108,7 @@ export default function LoginPage() {
     setIsLoading(true);
     try {
       await completeSignIn(match);
+      trackEvent('sign_in', { state: match.state });
       router.push('/app');
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Failed to sign in. Please try again.'));
