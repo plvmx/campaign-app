@@ -473,6 +473,31 @@ function AppPageContent() {
     initPage();
   }, [isUserLoading, contextUser]);
 
+  // Derive unique option lists for Place/Leader/Mobile dropdowns.
+  // First apply the date filter (past/future) so options only reflect what is currently
+  // visible on screen, then narrow further by the state filter if one is chosen.
+  const dateFilteredForOptions = useMemo(() => applyDateFilter(allCampaigns), [allCampaigns, applyDateFilter]);
+
+  const stateFilteredForOptions = useMemo(() => {
+    if (!filterState) return dateFilteredForOptions;
+    return dateFilteredForOptions.filter(c => c.state.toUpperCase() === filterState.toUpperCase());
+  }, [dateFilteredForOptions, filterState]);
+
+  const filterPlaceOptions = useMemo(() => {
+    const vals = stateFilteredForOptions.map(c => c.place ?? '').filter(Boolean);
+    return [...new Set(vals)].sort();
+  }, [stateFilteredForOptions]);
+
+  const filterLeaderOptions = useMemo(() => {
+    const vals = stateFilteredForOptions.map(c => c.leader ?? '').filter(Boolean);
+    return [...new Set(vals)].sort();
+  }, [stateFilteredForOptions]);
+
+  const filterMobileOptions = useMemo(() => {
+    const vals = stateFilteredForOptions.map(c => c.mobile ?? '').filter(Boolean);
+    return [...new Set(vals)].sort();
+  }, [stateFilteredForOptions]);
+
   // Memoize filtered campaigns to avoid recalculating on every render
   const filteredCampaigns = useMemo(() => {
     if (allCampaigns.length === 0) return [];
@@ -1345,7 +1370,13 @@ function AppPageContent() {
                   <select
                     id="filter-state"
                     value={filterState}
-                    onChange={(e) => setFilterState(e.target.value)}
+                    onChange={(e) => {
+                      setFilterState(e.target.value);
+                      // Reset dependent filters when state changes
+                      setFilterPlace('');
+                      setFilterLeader('');
+                      setFilterMobile('');
+                    }}
                     className="block w-full rounded-md border-2 border-gray-400 bg-white px-2 py-1.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
                   >
                     <option value="">All States</option>
@@ -1359,42 +1390,51 @@ function AppPageContent() {
                   <label htmlFor="filter-place" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
                     Place
                   </label>
-                  <input
+                  <select
                     id="filter-place"
-                    type="text"
                     value={filterPlace}
                     onChange={(e) => setFilterPlace(e.target.value)}
-                    placeholder="e.g. CBD"
                     className="block w-full rounded-md border-2 border-gray-400 bg-white px-2 py-1.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
-                  />
+                  >
+                    <option value="">All Places</option>
+                    {filterPlaceOptions.map((p) => (
+                      <option key={p} value={p}>{p}</option>
+                    ))}
+                  </select>
                 </div>
                 {/* Leader */}
                 <div>
                   <label htmlFor="filter-leader" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
                     Leader
                   </label>
-                  <input
+                  <select
                     id="filter-leader"
-                    type="text"
                     value={filterLeader}
                     onChange={(e) => setFilterLeader(e.target.value)}
-                    placeholder="e.g. Peter"
                     className="block w-full rounded-md border-2 border-gray-400 bg-white px-2 py-1.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
-                  />
+                  >
+                    <option value="">All Leaders</option>
+                    {filterLeaderOptions.map((l) => (
+                      <option key={l} value={l}>{l}</option>
+                    ))}
+                  </select>
                 </div>
                 {/* Mobile */}
                 <div>
                   <label htmlFor="filter-mobile" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
                     Mobile
                   </label>
-                  <input
+                  <select
                     id="filter-mobile"
-                    type="tel"
                     value={filterMobile}
                     onChange={(e) => setFilterMobile(e.target.value)}
-                    placeholder="e.g. 0429"
                     className="block w-full rounded-md border-2 border-gray-400 bg-white px-2 py-1.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
-                  />
+                  >
+                    <option value="">All Mobiles</option>
+                    {filterMobileOptions.map((m) => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
               {/* Clear all filters */}
