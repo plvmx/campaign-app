@@ -1060,6 +1060,24 @@ function AppPageContent() {
             )}
           </div>
 
+          {/* Campaign Rules shortcut — visible to team leaders only */}
+          {adminStatus !== null && adminStatus !== 'AD' && adminStatus !== 'SR' && (
+            <div className="mt-4 rounded-lg border-2 border-green-300 bg-green-50 p-3 dark:border-green-700 dark:bg-green-900/20">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-green-700 dark:text-green-400">
+                Campaign Rules
+              </p>
+              <p className="mb-3 text-sm text-green-800 dark:text-green-300">
+                Set up recurring rules so your campaigns are created automatically each fortnight.
+              </p>
+              <button
+                onClick={() => router.push('/admin/campaign-rules')}
+                className="rounded-md bg-green-600 px-4 py-2 text-sm font-bold text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
+              >
+                Manage Campaign Rules
+              </button>
+            </div>
+          )}
+
           {/* Admin Quick Actions — visible to full admins only */}
           {contextAdminStatus === 'AD' && (
             <div className="mt-4 rounded-lg border-2 border-purple-300 bg-purple-50 p-3 dark:border-purple-700 dark:bg-purple-900/20">

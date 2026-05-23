@@ -1,6 +1,6 @@
 /**
  * Campaign Rules Engine
- * 
+ *
  * Evaluates campaign rules and generates campaign records based on scheduling patterns.
  */
 
@@ -20,11 +20,15 @@ export interface CampaignRule {
   place: string;
   time: string;
   mobile: string | null;
+  /**
+   * 'custom' is deprecated — existing DB rows only; no longer creatable via the UI.
+   * Legacy custom rules generate no campaigns until migrated to a supported type.
+   */
   frequency_type: 'weekly' | 'biweekly' | 'monthly' | 'custom';
   frequency_value: number | null;
-  month_week_number: number | null; // 1-4 or -1 for last week
-  month_day_of_week: number | null; // 0=Sunday, 6=Saturday
-  day_of_week: number | null; // 0=Sunday, 6=Saturday
+  month_week_number: number | null; // 1–4 or –1 for last week
+  month_day_of_week: number | null; // 0=Sunday … 6=Saturday
+  day_of_week: number | null;       // 0=Sunday … 6=Saturday
   start_date: string | null;
   end_date: string | null;
   is_active: boolean;
@@ -45,7 +49,13 @@ export interface GeneratedCampaign {
 }
 
 /**
- * Find all dates matching a monthly pattern
+ * Find the Nth occurrence of a given day-of-week within each month in the range,
+ * or the last occurrence when weekNumber === -1.
+ *
+ * Fix vs. previous implementation: the old algorithm subtracted firstDayOfWeek from
+ * the week offset, which could produce a date in the prior month that then failed the
+ * month-boundary check — silently dropping valid first-week dates. This version uses
+ * the correct "find first occurrence, add (N-1)*7" approach.
  */
 function findMonthlyOccurrences(
   weekNumber: number,
@@ -53,80 +63,48 @@ function findMonthlyOccurrences(
   startDate: Date,
   endDate: Date
 ): Date[] {
+  if (dayOfWeek === null) return []; // required field; guard defensively
+
   const matches: Date[] = [];
-  const current = new Date(startDate);
-  current.setDate(1); // Start from first day of month
-  
-  // If start date is not the first, move to the start date's month
-  if (current < startDate) {
-    current.setMonth(current.getMonth() + 1);
-  }
-  
-  while (current <= endDate) {
-    const year = current.getFullYear();
-    const month = current.getMonth();
-    
-    // Get all days in the target week
-    const firstDay = new Date(year, month, 1);
-    const firstDayOfWeek = firstDay.getDay();
-    
+  // Start iterating from the first day of startDate's month.
+  const cursor = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+
+  while (cursor <= endDate) {
+    const year = cursor.getFullYear();
+    const month = cursor.getMonth();
+
     let targetDate: Date | null = null;
-    
+
     if (weekNumber === -1) {
-      // Last week of month
+      // Last occurrence of dayOfWeek in the month.
       const lastDay = new Date(year, month + 1, 0);
-      const lastDayOfWeek = lastDay.getDay();
-      const lastWeekStart = new Date(lastDay);
-      lastWeekStart.setDate(lastDay.getDate() - lastDayOfWeek);
-      
-      if (dayOfWeek !== null) {
-        targetDate = new Date(lastWeekStart);
-        targetDate.setDate(targetDate.getDate() + dayOfWeek);
-        // Make sure it's still in the same month
-        if (targetDate.getMonth() !== month) {
-          targetDate = null;
-        }
-      } else {
-        // Use the last day of the month
-        targetDate = new Date(lastDay);
-      }
+      let daysBack = lastDay.getDay() - dayOfWeek;
+      if (daysBack < 0) daysBack += 7;
+      targetDate = new Date(year, month, lastDay.getDate() - daysBack);
     } else {
-      // Specific week (1-4)
-      const weekStart = new Date(year, month, 1);
-      const daysToAdd = (weekNumber - 1) * 7 - firstDayOfWeek;
-      weekStart.setDate(weekStart.getDate() + daysToAdd);
-      
-      if (dayOfWeek !== null) {
-        targetDate = new Date(weekStart);
-        targetDate.setDate(targetDate.getDate() + dayOfWeek);
-      } else {
-        // Use the first day of that week (Monday)
-        targetDate = new Date(weekStart);
-        // Adjust to Monday if needed
-        const dayOfWeekStart = weekStart.getDay();
-        const daysToMonday = dayOfWeekStart === 0 ? 6 : dayOfWeekStart - 1;
-        targetDate.setDate(targetDate.getDate() - daysToMonday);
-      }
-      
-      // Make sure the date is still in the target month
-      if (targetDate.getMonth() !== month) {
-        targetDate = null;
+      // Nth occurrence (1–4): find first occurrence of dayOfWeek, then add (N-1) weeks.
+      const firstDayOfMonth = new Date(year, month, 1).getDay();
+      let daysToFirst = dayOfWeek - firstDayOfMonth;
+      if (daysToFirst < 0) daysToFirst += 7;
+      const nthDay = 1 + daysToFirst + (weekNumber - 1) * 7;
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      if (nthDay <= daysInMonth) {
+        targetDate = new Date(year, month, nthDay);
       }
     }
-    
+
     if (targetDate && targetDate >= startDate && targetDate <= endDate) {
-      matches.push(new Date(targetDate));
+      matches.push(targetDate);
     }
-    
-    // Move to next month
-    current.setMonth(current.getMonth() + 1);
+
+    cursor.setMonth(cursor.getMonth() + 1);
   }
-  
+
   return matches;
 }
 
 /**
- * Find all dates matching a weekly pattern
+ * Find all dates matching a weekly pattern within the given range.
  */
 function findWeeklyOccurrences(
   dayOfWeek: number,
@@ -135,25 +113,30 @@ function findWeeklyOccurrences(
 ): Date[] {
   const matches: Date[] = [];
   const current = new Date(startDate);
-  
-  // Find the first occurrence of the target day of week
-  const currentDayOfWeek = current.getDay();
-  let daysToAdd = dayOfWeek - currentDayOfWeek;
-  if (daysToAdd < 0) {
-    daysToAdd += 7;
-  }
-  current.setDate(current.getDate() + daysToAdd);
-  
+
+  // Advance to the first occurrence of dayOfWeek on or after startDate.
+  const diff = (dayOfWeek - current.getDay() + 7) % 7;
+  current.setDate(current.getDate() + diff);
+
   while (current <= endDate) {
     matches.push(new Date(current));
     current.setDate(current.getDate() + 7);
   }
-  
+
   return matches;
 }
 
 /**
- * Find all dates matching a biweekly pattern
+ * Find ALL dates matching a biweekly pattern within the given range.
+ *
+ * Fix vs. previous implementation: the old function always returned at most one result,
+ * which worked by accident for the 14-day cron window but would silently produce
+ * incomplete results for any wider evaluation window (e.g. the live "first campaign"
+ * preview or any future wider-range query).
+ *
+ * Uses referenceDate (a known past occurrence) to anchor the repeating pattern so the
+ * cycle stays consistent across cron runs. Falls back to the first matching dayOfWeek
+ * on or after startDate when no reference is available.
  */
 function findBiweeklyOccurrences(
   frequencyValue: number,
@@ -163,144 +146,92 @@ function findBiweeklyOccurrences(
   referenceDate: string | null
 ): Date[] {
   const matches: Date[] = [];
-  
-  // Normalize dates to midnight (local time) to avoid timezone issues
-  const normalizedStartDate = new Date(startDate);
-  normalizedStartDate.setHours(0, 0, 0, 0);
-  const normalizedEndDate = new Date(endDate);
-  normalizedEndDate.setHours(23, 59, 59, 999);
-  
-  // Calculate the next occurrence
-  let nextOccurrence: Date;
-  
+  const msPerPeriod = frequencyValue * 7 * 24 * 60 * 60 * 1000;
+
+  const normStart = new Date(startDate); normStart.setHours(0, 0, 0, 0);
+  const normEnd   = new Date(endDate);   normEnd.setHours(23, 59, 59, 999);
+
+  // Establish an anchor: any confirmed occurrence of this biweekly pattern.
+  let anchor: Date;
   if (referenceDate) {
-    // Reference date exists - it should already be on the correct day of week
-    // Parse reference date string (YYYY-MM-DD format) in local timezone
-    const [year, month, day] = referenceDate.split('-').map(Number);
-    const refDate = new Date(year, month - 1, day);
-    refDate.setHours(0, 0, 0, 0);
-    
-    // Verify the reference date is on the correct day of week
-    // If it's not, adjust it (this shouldn't happen, but handle it gracefully)
-    if (refDate.getDay() !== dayOfWeek) {
-      // Reference date is not on the expected day - adjust it
-      const currentDay = refDate.getDay();
-      const daysToAdd = (dayOfWeek - currentDay + 7) % 7;
-      refDate.setDate(refDate.getDate() + daysToAdd);
+    const [y, m, d] = referenceDate.split('-').map(Number);
+    anchor = new Date(y, m - 1, d);
+    anchor.setHours(0, 0, 0, 0);
+    // Correct day-of-week if the stored reference doesn't match (defensive).
+    if (anchor.getDay() !== dayOfWeek) {
+      anchor.setDate(anchor.getDate() + (dayOfWeek - anchor.getDay() + 7) % 7);
     }
-    
-    // Next occurrence is exactly frequencyValue weeks after the reference date
-    // Use milliseconds to ensure precise calculation
-    const millisecondsPerWeek = 7 * 24 * 60 * 60 * 1000;
-    nextOccurrence = new Date(refDate.getTime() + (frequencyValue * millisecondsPerWeek));
   } else {
-    // No reference date - find the first occurrence of the target day in the target period
-    const baseDate = new Date(normalizedStartDate);
-    baseDate.setHours(0, 0, 0, 0);
-    
-    // Find the first occurrence of the target day of week from start date
-    const baseDayOfWeek = baseDate.getDay();
-    let daysToAdd = dayOfWeek - baseDayOfWeek;
-    if (daysToAdd < 0) {
-      daysToAdd += 7;
-    }
-    baseDate.setDate(baseDate.getDate() + daysToAdd);
-    
-    // Verify we're on the correct day of week
-    if (baseDate.getDay() !== dayOfWeek) {
-      const currentDay = baseDate.getDay();
-      const correction = (dayOfWeek - currentDay + 7) % 7;
-      baseDate.setDate(baseDate.getDate() + correction);
-    }
-    
-    nextOccurrence = new Date(baseDate);
+    // No reference: the first dayOfWeek on or after normStart becomes the anchor.
+    anchor = new Date(normStart);
+    anchor.setDate(anchor.getDate() + (dayOfWeek - anchor.getDay() + 7) % 7);
   }
-  
-  nextOccurrence.setHours(0, 0, 0, 0);
-  
-  // Verify the calculated date is on the correct day of week
-  if (nextOccurrence.getDay() !== dayOfWeek) {
-    // This should never happen, but if it does, log and fix it
-    console.warn(`Calculated date ${nextOccurrence.toISOString()} is not on day ${dayOfWeek}, correcting...`);
-    const currentDay = nextOccurrence.getDay();
-    const correction = (dayOfWeek - currentDay + 7) % 7;
-    nextOccurrence.setDate(nextOccurrence.getDate() + correction);
+
+  // Walk the anchor to the first occurrence at or after normStart using integer arithmetic
+  // to avoid floating-point drift across many period steps.
+  let firstInRange: Date;
+  if (anchor <= normStart) {
+    const periods = Math.ceil((normStart.getTime() - anchor.getTime()) / msPerPeriod);
+    firstInRange = new Date(anchor.getTime() + periods * msPerPeriod);
+  } else {
+    // Anchor is after normStart: step back to the earliest occurrence still >= normStart.
+    const periods = Math.floor((anchor.getTime() - normStart.getTime()) / msPerPeriod);
+    const candidate = new Date(anchor.getTime() - periods * msPerPeriod);
+    firstInRange = candidate >= normStart ? candidate : anchor;
   }
-  
-  // Only add if the next occurrence is within the target period
-  if (nextOccurrence >= normalizedStartDate && nextOccurrence <= normalizedEndDate) {
-    matches.push(new Date(nextOccurrence));
+
+  // Collect every occurrence from firstInRange to normEnd.
+  let current = new Date(firstInRange);
+  while (current <= normEnd) {
+    matches.push(new Date(current));
+    current = new Date(current.getTime() + msPerPeriod);
   }
-  
+
   return matches;
 }
 
 /**
- * Evaluate a custom pattern from rule_config
- */
-function evaluateCustomPattern(
-  ruleConfig: RuleConfig,
-  _startDate: Date,
-  _endDate: Date
-): Date[] {
-  // For now, return empty array - can be extended later
-  // This allows for future complex patterns via JSONB
-  if (ruleConfig?.exceptions) {
-    // Handle exceptions
-  }
-  
-  return [];
-}
-
-/**
- * Check if a date is within the rule's active date range
+ * Returns true if `date` falls within the rule's start_date / end_date window.
+ *
+ * Fix vs. previous implementation: date-only strings (YYYY-MM-DD) are parsed by
+ * the JS Date constructor as UTC midnight, but campaign dates are local midnight.
+ * In AEST (UTC+10) the 10-hour gap caused boundary-day campaigns to be incorrectly
+ * excluded. Appending 'T00:00:00' forces local-time parsing.
  */
 function isDateInRange(date: Date, startDate: string | null, endDate: string | null): boolean {
-  if (startDate && date < new Date(startDate)) {
-    return false;
-  }
-  if (endDate && date > new Date(endDate)) {
-    return false;
-  }
+  if (startDate && date < new Date(startDate + 'T00:00:00')) return false;
+  if (endDate   && date > new Date(endDate   + 'T00:00:00')) return false;
   return true;
 }
 
 /**
- * Check if a date is in the exceptions list
+ * Returns true if `date` appears in the rule's exceptions list.
  */
 function isDateExcepted(date: Date, ruleConfig: RuleConfig): boolean {
-  if (!ruleConfig?.exceptions) {
-    return false;
-  }
-  
-  // Format date in local timezone (not UTC) to avoid day shifts
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  const dateStr = `${year}-${month}-${day}`;
-  return ruleConfig.exceptions.includes(dateStr);
+  if (!ruleConfig?.exceptions?.length) return false;
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return ruleConfig.exceptions.includes(`${y}-${m}-${d}`);
 }
 
 /**
- * Evaluate a single rule and generate campaign dates
- * For biweekly rules, this will use the reference_date if set, or check existing campaigns
+ * Evaluate a single rule and return generated campaign records for the given period.
  */
 export function evaluateRule(
   rule: CampaignRule,
   targetStartDate: Date,
   targetEndDate: Date
 ): GeneratedCampaign[] {
-  if (!rule.is_active) {
-    return [];
-  }
-  
+  if (!rule.is_active) return [];
+
   let matchingDates: Date[] = [];
-  
+
   switch (rule.frequency_type) {
     case 'monthly':
-      if (rule.month_week_number === null) {
-        return [];
-      }
+      // Both fields are required; month_day_of_week was made required in the UI
+      // (was previously optional and silently fell back to Monday).
+      if (rule.month_week_number === null || rule.month_day_of_week === null) return [];
       matchingDates = findMonthlyOccurrences(
         rule.month_week_number,
         rule.month_day_of_week,
@@ -308,13 +239,10 @@ export function evaluateRule(
         targetEndDate
       );
       break;
-      
-    case 'biweekly':
-      if (rule.day_of_week === null || rule.frequency_value === null) {
-        return [];
-      }
-      // Use reference_date from rule_config if set
-      const refDate = rule.rule_config?.reference_date || null;
+
+    case 'biweekly': {
+      if (rule.day_of_week === null || rule.frequency_value === null) return [];
+      const refDate = rule.rule_config?.reference_date ?? null;
       matchingDates = findBiweeklyOccurrences(
         rule.frequency_value,
         rule.day_of_week,
@@ -323,99 +251,82 @@ export function evaluateRule(
         refDate
       );
       break;
-      
+    }
+
     case 'weekly':
-      if (rule.day_of_week === null) {
-        return [];
-      }
+      if (rule.day_of_week === null) return [];
       matchingDates = findWeeklyOccurrences(
         rule.day_of_week,
         targetStartDate,
         targetEndDate
       );
       break;
-      
+
     case 'custom':
-      matchingDates = evaluateCustomPattern(
-        rule.rule_config,
-        targetStartDate,
-        targetEndDate
-      );
-      break;
-      
+      // 'custom' rules are no longer creatable via the UI and cannot generate campaigns.
+      // Legacy rows of this type are preserved in the DB but silently skipped here.
+      return [];
+
     default:
       return [];
   }
-  
-  // Filter by date range constraints and exceptions
-  const validDates = matchingDates.filter(date => {
-    if (!isDateInRange(date, rule.start_date, rule.end_date)) {
-      return false;
-    }
-    if (isDateExcepted(date, rule.rule_config)) {
-      return false;
-    }
-    return true;
-  });
-  
-  // Generate campaign records
+
+  // Filter by the rule's own active date window and exception list.
+  const validDates = matchingDates.filter(
+    date => isDateInRange(date, rule.start_date, rule.end_date) && !isDateExcepted(date, rule.rule_config)
+  );
+
+  // Build campaign records.
   return validDates.map(date => {
-    // Format date in local timezone (not UTC) to avoid day shifts
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    const dateStr = `${year}-${month}-${day}`;
-    
-    // Check for field overrides in rule_config
-    const overrideFields = rule.rule_config?.override_fields?.[dateStr] || {};
-    
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    const dateStr = `${y}-${m}-${d}`;
+
+    const overrideFields = rule.rule_config?.override_fields?.[dateStr] ?? {};
+
     return {
-      date: dateStr,
-      state: rule.state,
-      place: rule.place,
-      time: typeof overrideFields.time === 'string' ? overrideFields.time : rule.time,
-      leader: rule.leader,
-      mobile: rule.mobile,
+      date:     dateStr,
+      state:    rule.state,
+      place:    rule.place,
+      time:     typeof overrideFields.time === 'string' ? overrideFields.time : rule.time,
+      leader:   rule.leader,
+      mobile:   rule.mobile,
       category: 'TWOL',
-      rule_id: rule.id,
+      rule_id:  rule.id,
     };
   });
 }
 
 /**
- * Evaluate multiple rules and generate campaigns
- * Handles conflicts by priority (higher priority wins)
+ * Evaluate multiple rules for a period and return deduplicated campaigns.
+ * Conflicts (same date/state/place/time) are resolved by priority — higher wins.
  */
 export function evaluateRules(
   rules: CampaignRule[],
   targetStartDate: Date,
   targetEndDate: Date
 ): GeneratedCampaign[] {
-  // Sort rules by priority (higher first)
   const sortedRules = [...rules].sort((a, b) => b.priority - a.priority);
-  
-  const allCampaigns: GeneratedCampaign[] = [];
-  const conflictMap = new Map<string, GeneratedCampaign>(); // key: date_state_place_time
-  
+  const seen = new Map<string, GeneratedCampaign>();
+  const all: GeneratedCampaign[] = [];
+
   for (const rule of sortedRules) {
-    const campaigns = evaluateRule(rule, targetStartDate, targetEndDate);
-    
-    for (const campaign of campaigns) {
-      const conflictKey = `${campaign.date}_${campaign.state}_${campaign.place}_${campaign.time}`;
-      
-      // If there's a conflict, higher priority rule wins (we're already sorted by priority)
-      if (!conflictMap.has(conflictKey)) {
-        conflictMap.set(conflictKey, campaign);
-        allCampaigns.push(campaign);
+    for (const campaign of evaluateRule(rule, targetStartDate, targetEndDate)) {
+      const key = `${campaign.date}_${campaign.state}_${campaign.place}_${campaign.time}`;
+      if (!seen.has(key)) {
+        seen.set(key, campaign);
+        all.push(campaign);
       }
     }
   }
-  
-  return allCampaigns;
+
+  return all;
 }
 
 /**
- * Preview rule evaluation for a date range
+ * Preview rule evaluation for a date range.
+ * Returns both the raw Date objects and the full GeneratedCampaign records.
  */
 export function previewRuleEvaluation(
   rule: CampaignRule,
@@ -423,7 +334,6 @@ export function previewRuleEvaluation(
   previewEndDate: Date
 ): { dates: Date[]; campaigns: GeneratedCampaign[] } {
   const campaigns = evaluateRule(rule, previewStartDate, previewEndDate);
-  const dates = campaigns.map(c => new Date(c.date));
-  
+  const dates = campaigns.map(c => new Date(c.date + 'T00:00:00'));
   return { dates, campaigns };
 }

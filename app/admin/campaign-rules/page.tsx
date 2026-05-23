@@ -1,14 +1,13 @@
 'use client';
 
-import { useEffect, useState, Suspense } from 'react';
+import { useCallback, useEffect, useMemo, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import MobileLayout from '@/components/MobileLayout';
 import { useUser } from '@/contexts/UserContext';
 import { supabase } from '@/lib/supabaseClient';
 import { getStateColor } from '@/lib/stateColors';
-import { CampaignRule, previewRuleEvaluation } from '@/lib/campaignRules';
+import { CampaignRule, evaluateRule, previewRuleEvaluation } from '@/lib/campaignRules';
 import { formatDateReadable } from '@/lib/campaignDates';
-import { useCampaignDates } from '@/contexts/CampaignDatesContext';
 import { AUSTRALIAN_STATES } from '@/lib/constants';
 import { getErrorMessage } from '@/lib/errorUtils';
 const DAYS_OF_WEEK = [
@@ -29,6 +28,52 @@ const MONTH_WEEKS = [
   { value: -1, label: 'Last Week' },
 ];
 
+/** Time options for the campaign time picker (8 AM – 8 PM, 30-min intervals). */
+const TIME_OPTIONS: { value: string; label: string }[] = (() => {
+  const times: { value: string; label: string }[] = [];
+  for (let hour = 8; hour <= 20; hour++) {
+    for (let minute = 0; minute < 60; minute += 30) {
+      const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+      const displayHour = hour % 12 || 12;
+      const ampm = hour >= 12 ? 'PM' : 'AM';
+      times.push({ value: timeStr, label: `${displayHour}:${minute.toString().padStart(2, '0')} ${ampm}` });
+    }
+  }
+  return times;
+})();
+
+/**
+ * Convert form selections into a plain-English schedule description.
+ * Shown in the create-confirmation modal so leaders can sanity-check their settings.
+ */
+function buildScheduleSummary(
+  frequencyType: 'weekly' | 'biweekly' | 'monthly',
+  dayOfWeek: number,
+  monthWeekNumber: number | null,
+  monthDayOfWeek: number | null,
+  frequencyValue: number,
+): string {
+  const dayName      = DAYS_OF_WEEK.find(d => d.value === dayOfWeek)?.label      ?? 'Unknown day';
+  const monthDayName = DAYS_OF_WEEK.find(d => d.value === monthDayOfWeek)?.label ?? 'Unknown day';
+
+  switch (frequencyType) {
+    case 'weekly':
+      return `Every ${dayName}`;
+    case 'biweekly':
+      return `Every ${frequencyValue} weeks on ${dayName}`;
+    case 'monthly': {
+      if (monthWeekNumber === null || monthDayOfWeek === null) return 'Monthly (incomplete settings)';
+      const ordinal =
+        monthWeekNumber === -1 ? 'last'
+        : monthWeekNumber === 1 ? '1st'
+        : monthWeekNumber === 2 ? '2nd'
+        : monthWeekNumber === 3 ? '3rd'
+        : '4th';
+      return `The ${ordinal} ${monthDayName} of each month`;
+    }
+  }
+}
+
 /** Normalize time string from DB (e.g. "10:00:00") to HH:MM for form/display. */
 function timeToHHMM(timeStr: string | null | undefined): string {
   if (!timeStr) return '';
@@ -44,7 +89,6 @@ function timeToHHMM(timeStr: string | null | undefined): string {
 function CampaignRulesPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { dates } = useCampaignDates();
   const { user, adminStatus, userState, userLeader, isLoading: isUserLoading } = useUser();
   const [hasAccess, setHasAccess] = useState(false);
   const [isStateLocked, setIsStateLocked] = useState(false);
@@ -62,7 +106,7 @@ function CampaignRulesPageContent() {
     place: '',
     time: '',
     mobile: '',
-    frequency_type: 'weekly' as 'weekly' | 'biweekly' | 'monthly' | 'custom',
+    frequency_type: 'weekly' as 'weekly' | 'biweekly' | 'monthly',
     frequency_value: 2,
     month_week_number: null as number | null,
     month_day_of_week: null as number | null,
@@ -75,16 +119,21 @@ function CampaignRulesPageContent() {
     notes: '',
   });
   
+  const [isFormExpanded, setIsFormExpanded] = useState(false); // collapsed until we know rule count
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  // Create-confirmation modal
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [confirmDates, setConfirmDates] = useState<string[]>([]);
+  const [pendingRuleData, setPendingRuleData] = useState<Omit<CampaignRule, 'id'> | null>(null);
   const [filterActive, setFilterActive] = useState<string>('all'); // 'all', 'active', 'inactive'
   const [filterFrequency, setFilterFrequency] = useState<string>('');
   const [previewRuleId, setPreviewRuleId] = useState<string | null>(null);
   const [previewDates, setPreviewDates] = useState<Date[]>([]);
-  const [isLoadingPreview, setIsLoadingPreview] = useState(false);
-  
+
   // Dropdown data
   const [places, setPlaces] = useState<string[]>([]);
   const [leaders, setLeaders] = useState<string[]>([]);
-  const [timeOptions, setTimeOptions] = useState<{ value: string; label: string }[]>([]);
   const [loadingPlaces, setLoadingPlaces] = useState(false);
   const [loadingLeaders, setLoadingLeaders] = useState(false);
 
@@ -120,16 +169,15 @@ function CampaignRulesPageContent() {
     }
 
     setHasAccess(true);
-    fetchRules();
   }, [isUserLoading, user, adminStatus, userState, userLeader, router, searchParams]);
 
-  const fetchRules = async () => {
+  const fetchRules = useCallback(async () => {
     try {
-      const isTeamLeader = adminStatus !== 'AD' && adminStatus !== 'SR' && !!userState;
+      const isTeamLeaderFetch = adminStatus !== 'AD' && adminStatus !== 'SR' && !!userState;
       const isStateReporter = adminStatus === 'SR';
 
       // Team Leaders without a matched leader name see no rules
-      if (isTeamLeader && !userLeader) {
+      if (isTeamLeaderFetch && !userLeader) {
         setRules([]);
         return;
       }
@@ -138,12 +186,12 @@ function CampaignRulesPageContent() {
         .from('campaign_rules')
         .select('*');
 
-      // State Reporters: only see rules for their state (leaders in their state)
+      // State Reporters: only see rules for their state
       if (isStateReporter && userState) {
         query = query.eq('state', userState.toUpperCase().trim());
       }
       // Team Leaders: only see their own rules (state + leader = themselves)
-      if (isTeamLeader && userState && userLeader) {
+      if (isTeamLeaderFetch && userState && userLeader) {
         query = query
           .eq('state', userState.toUpperCase().trim())
           .eq('leader', userLeader);
@@ -152,37 +200,22 @@ function CampaignRulesPageContent() {
       const { data, error } = await query
         .order('priority', { ascending: false })
         .order('created_at', { ascending: false });
-      
+
       if (error) throw error;
-      setRules(data || []);
+      const fetched = data || [];
+      setRules(fetched);
+      // Auto-expand the form when the user has no rules yet so they can create their first one
+      setIsFormExpanded(prev => prev || fetched.length === 0);
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Failed to fetch campaign rules'));
     }
-  };
+  }, [adminStatus, userState, userLeader]);
 
   useEffect(() => {
     if (hasAccess) {
       fetchRules();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasAccess, adminStatus, userState, userLeader]);
-
-  // Generate time options (8:00 AM to 8:00 PM, half-hour intervals)
-  useEffect(() => {
-    const times: { value: string; label: string }[] = [];
-    for (let hour = 8; hour <= 20; hour++) {
-      for (let minute = 0; minute < 60; minute += 30) {
-        const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-        const displayHour = hour % 12 || 12;
-        const ampm = hour >= 12 ? 'PM' : 'AM';
-        times.push({
-          value: timeStr,
-          label: `${displayHour}:${minute.toString().padStart(2, '0')} ${ampm}`,
-        });
-      }
-    }
-    setTimeOptions(times);
-  }, []);
+  }, [hasAccess, fetchRules]);
 
   // Fetch places from state_places table when state changes
   useEffect(() => {
@@ -208,11 +241,13 @@ function CampaignRulesPageContent() {
         ).sort();
 
         setPlaces(uniquePlaces);
-        
-        // If current place is not in the filtered list, clear it
-        if (formState.place && !uniquePlaces.includes(formState.place)) {
-          setFormState(prev => ({ ...prev, place: '' }));
-        }
+
+        // If current place is not in the list for the new state, clear it (functional update).
+        setFormState(prev => (
+          prev.place && !uniquePlaces.includes(prev.place)
+            ? { ...prev, place: '' }
+            : prev
+        ));
       } catch {
         setPlaces([]);
       } finally {
@@ -223,7 +258,8 @@ function CampaignRulesPageContent() {
     fetchPlaces();
   }, [formState.state]);
 
-  // Fetch leaders from state_leaders table when state changes (or for TL, only show themselves)
+  // Derived access-level flags — computed once and used throughout.
+  const isNonAdmin   = adminStatus !== 'AD';                                       // SR or TL or regular
   const isTeamLeader = adminStatus !== 'AD' && adminStatus !== 'SR' && !!userState;
   const isLeaderLocked = isTeamLeader && !!userLeader;
 
@@ -259,10 +295,12 @@ function CampaignRulesPageContent() {
 
         setLeaders(uniqueLeaders);
         
-        // If current leader is not in the filtered list, clear it
-        if (formState.leader && !uniqueLeaders.includes(formState.leader)) {
-          setFormState(prev => ({ ...prev, leader: '', mobile: '' }));
-        }
+        // If current leader is not in the list for the new state, clear it (functional update).
+        setFormState(prev => (
+          prev.leader && !uniqueLeaders.includes(prev.leader)
+            ? { ...prev, leader: '', mobile: '' }
+            : prev
+        ));
       } catch {
         setLeaders([]);
       } finally {
@@ -307,8 +345,8 @@ function CampaignRulesPageContent() {
     setIsSubmitting(true);
 
     try {
-      // Validate state for SR and TL users - they can only manage rules for their state
-      if ((adminStatus === 'SR' || (adminStatus !== 'AD' && adminStatus !== 'SR')) && userState) {
+      // Validate state for SR and TL users — they can only manage rules for their state
+      if (isNonAdmin && userState) {
         const formStateNormalized = formState.state.trim().toUpperCase();
         const userStateNormalized = userState.trim().toUpperCase();
         if (formStateNormalized !== userStateNormalized) {
@@ -320,16 +358,28 @@ function CampaignRulesPageContent() {
         throw new Error('As a Team Leader you can only create rules for yourself.');
       }
 
-      // Validate required fields based on frequency type
-      if (formState.frequency_type === 'monthly' && formState.month_week_number === null) {
-        throw new Error('Week of month is required for monthly rules');
+      // Validate required fields based on frequency type — collect all errors up front
+      const newFieldErrors: Record<string, string> = {};
+      if (formState.frequency_type === 'monthly') {
+        if (formState.month_week_number === null) {
+          newFieldErrors.month_week_number = 'Please select which week of the month.';
+        }
+        if (formState.month_day_of_week === null) {
+          newFieldErrors.month_day_of_week = 'Please select which day of the week.';
+        }
       }
       if ((formState.frequency_type === 'weekly' || formState.frequency_type === 'biweekly') && formState.day_of_week === null) {
-        throw new Error('Day of week is required for weekly/biweekly rules');
+        newFieldErrors.day_of_week = 'Please select the day of week.';
       }
       if (formState.frequency_type === 'biweekly' && !formState.frequency_value) {
-        throw new Error('Frequency value is required for biweekly rules');
+        newFieldErrors.frequency_value = 'Please enter how many weeks between campaigns (minimum 2).';
       }
+      if (Object.keys(newFieldErrors).length > 0) {
+        setFieldErrors(newFieldErrors);
+        setIsSubmitting(false);
+        return;
+      }
+      setFieldErrors({});
 
       const mobileValue = formState.mobile.trim() || null;
       const ruleData: Omit<CampaignRule, 'id'> = {
@@ -357,7 +407,7 @@ function CampaignRulesPageContent() {
       };
 
       if (editingId) {
-        // Update existing rule
+        // Update existing rule — proceed directly, no confirmation needed.
         const { error } = await supabase
           .from('campaign_rules')
           .update(ruleData)
@@ -365,24 +415,62 @@ function CampaignRulesPageContent() {
 
         if (error) throw error;
         setSuccess('Campaign rule updated successfully');
+        setIsFormExpanded(false);
+        resetForm();
+        await fetchRules();
       } else {
-        // Create new rule
-        const { error } = await supabase
-          .from('campaign_rules')
-          .insert([{ ...ruleData, created_by: user?.id }]);
+        // New rule — compute upcoming dates and show confirmation modal before writing.
+        const searchStart = ruleData.start_date
+          ? new Date(ruleData.start_date + 'T00:00:00')
+          : (() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; })();
+        const searchEnd = new Date(searchStart);
+        searchEnd.setMonth(searchEnd.getMonth() + 6);
 
-        if (error) throw error;
-        setSuccess('Campaign rule created successfully');
+        const previewRule: CampaignRule = { id: '__preview__', ...ruleData };
+        const upcomingCampaigns = evaluateRule(previewRule, searchStart, searchEnd);
+        const upcomingDates = upcomingCampaigns.slice(0, 5).map(c => c.date);
+
+        setPendingRuleData(ruleData);
+        setConfirmDates(upcomingDates);
+        setShowConfirmModal(true);
+        setIsSubmitting(false);
+        return; // Wait for user confirmation before inserting.
       }
-
-      // Reset form
-      resetForm();
-      await fetchRules();
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Failed to save campaign rule'));
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  /** Called when the leader confirms the creation modal — performs the actual DB insert. */
+  const handleConfirmCreate = async () => {
+    if (!pendingRuleData) return;
+    setIsSubmitting(true);
+    setShowConfirmModal(false);
+    try {
+      const { error } = await supabase
+        .from('campaign_rules')
+        .insert([{ ...pendingRuleData, created_by: user?.id }]);
+      if (error) throw error;
+      setSuccess('Campaign rule created successfully');
+      setIsFormExpanded(false);
+      resetForm();
+      await fetchRules();
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to create campaign rule'));
+    } finally {
+      setIsSubmitting(false);
+      setPendingRuleData(null);
+      setConfirmDates([]);
+    }
+  };
+
+  /** Dismisses the confirmation modal without writing anything. */
+  const handleCancelConfirm = () => {
+    setShowConfirmModal(false);
+    setPendingRuleData(null);
+    setConfirmDates([]);
   };
 
   const resetForm = () => {
@@ -409,18 +497,20 @@ function CampaignRulesPageContent() {
       priority: 0,
       notes: '',
     });
+    setFieldErrors({});
     setPreviewRuleId(null);
     setPreviewDates([]);
   };
 
-  const handleEdit = async (rule: CampaignRule) => {
+  const handleEdit = (rule: CampaignRule) => {
     // Team Leaders can only edit their own rules
     if (isTeamLeader && userLeader && rule.leader?.trim() !== userLeader.trim()) {
       setError('You can only edit your own campaign rules.');
       return;
     }
     setEditingId(rule.id);
-    // For SR/TL users with locked state, use the locked state instead of rule's state
+    setIsFormExpanded(true); // always show form when editing
+    // For SR/TL users with locked state, use the locked state instead of the rule's state
     const stateToUse = isStateLocked && userState ? userState.toUpperCase().trim() : rule.state;
     setFormState({
       name: rule.name,
@@ -429,7 +519,8 @@ function CampaignRulesPageContent() {
       place: rule.place,
       time: timeToHHMM(rule.time),
       mobile: rule.mobile || '',
-      frequency_type: rule.frequency_type,
+      // 'custom' is no longer a supported frequency type in the UI; fall back to 'weekly'
+      frequency_type: (rule.frequency_type === 'custom' ? 'weekly' : rule.frequency_type) as 'weekly' | 'biweekly' | 'monthly',
       frequency_value: rule.frequency_value || 2,
       month_week_number: rule.month_week_number,
       month_day_of_week: rule.month_day_of_week,
@@ -441,51 +532,7 @@ function CampaignRulesPageContent() {
       priority: rule.priority,
       notes: rule.notes || '',
     });
-    
-    // Load places and leaders for the state (use locked state for SR/TL users)
-    if (stateToUse) {
-      setLoadingPlaces(true);
-      setLoadingLeaders(true);
-      try {
-        // Team Leaders: only show themselves as leader option
-        if (isTeamLeader && userLeader) {
-          setLeaders([userLeader]);
-          setLoadingLeaders(false);
-        }
-        const placesResult = await supabase
-          .from('state_places')
-          .select('place')
-          .eq('state', stateToUse)
-          .order('place', { ascending: true });
-
-        if (placesResult.data) {
-          const uniquePlaces = Array.from(
-            new Set(placesResult.data.map((item) => item.place).filter(Boolean))
-          ).sort();
-          setPlaces(uniquePlaces);
-        }
-
-        if (!isTeamLeader) {
-          const leadersResult = await supabase
-            .from('state_leaders')
-            .select('leader')
-            .eq('state', stateToUse)
-            .order('leader', { ascending: true });
-          if (leadersResult.data) {
-            const uniqueLeaders = Array.from(
-              new Set(leadersResult.data.map((item) => item.leader).filter(Boolean))
-            ).sort();
-            setLeaders(uniqueLeaders);
-          }
-        }
-      } catch {
-        // places/leaders load errors are non-fatal; dropdowns stay empty
-      } finally {
-        setLoadingPlaces(false);
-        if (!isTeamLeader) setLoadingLeaders(false);
-      }
-    }
-    
+    // Places and leaders are loaded reactively by the useEffects watching formState.state.
     setError(null);
     setSuccess(null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -512,27 +559,34 @@ function CampaignRulesPageContent() {
     }
   };
 
-  const handlePreview = async (rule: CampaignRule) => {
-    if (!dates) {
-      setError('Campaign dates not available');
+  const handlePreview = (rule: CampaignRule) => {
+    // Toggle off if already showing this rule's preview.
+    if (previewRuleId === rule.id) {
+      setPreviewRuleId(null);
+      setPreviewDates([]);
       return;
     }
 
-    setIsLoadingPreview(true);
-    setPreviewRuleId(rule.id);
     setError(null);
 
-    try {
-      const previewStart = new Date(dates.secondWeekStart);
-      const previewEnd = new Date(previewStart);
-      previewEnd.setDate(previewEnd.getDate() + 13); // Preview 2 weeks
+    // Adaptive window: wider for less-frequent rule types so there's always something to show.
+    const previewStart = new Date();
+    previewStart.setHours(0, 0, 0, 0);
+    const previewEnd = new Date(previewStart);
+    if (rule.frequency_type === 'monthly') {
+      previewEnd.setMonth(previewEnd.getMonth() + 4);      // 4 months
+    } else if (rule.frequency_type === 'biweekly') {
+      previewEnd.setDate(previewEnd.getDate() + (rule.frequency_value ?? 2) * 7 * 4); // 4 periods
+    } else {
+      previewEnd.setDate(previewEnd.getDate() + 56);       // 8 weeks for weekly
+    }
 
+    try {
       const { dates: previewDatesResult } = previewRuleEvaluation(rule, previewStart, previewEnd);
       setPreviewDates(previewDatesResult);
+      setPreviewRuleId(rule.id);
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Failed to preview rule'));
-    } finally {
-      setIsLoadingPreview(false);
     }
   };
 
@@ -554,6 +608,59 @@ function CampaignRulesPageContent() {
       setError(getErrorMessage(err, 'Failed to update rule status'));
     }
   };
+
+  // ── Live "first campaign" hint ─────────────────────────────────────────────
+  // Compute the first date the rule would generate a campaign, updating live as
+  // the user fills in the form. Shown near the "Active From" field.
+  // Must be declared before any early returns to satisfy the Rules of Hooks.
+  const firstCampaignDate = useMemo(() => {
+    const {
+      frequency_type, day_of_week, month_week_number, month_day_of_week,
+      frequency_value, start_date, end_date, reference_date,
+    } = formState;
+
+    // Monthly requires both week-of-month and day-of-week to be set
+    if (frequency_type === 'monthly' && (month_week_number === null || month_day_of_week === null)) return null;
+
+    const tempRule: CampaignRule = {
+      id:                '__preview__',
+      name:              'preview',
+      leader:            formState.leader || '',
+      state:             formState.state  || 'NSW',
+      place:             formState.place  || 'Preview',
+      time:              formState.time   || '09:00',
+      mobile:            null,
+      frequency_type,
+      frequency_value:   frequency_value ?? null,
+      month_week_number: month_week_number ?? null,
+      month_day_of_week: month_day_of_week ?? null,
+      day_of_week:       day_of_week ?? 0,
+      start_date:        start_date || null,
+      end_date:          end_date   || null,
+      is_active:         true,
+      priority:          0,
+      rule_config:       reference_date ? { reference_date } : {},
+      notes:             null,
+    };
+
+    // Search from the Active From date (or today) up to 6 months ahead
+    const searchStart = start_date
+      ? new Date(start_date + 'T00:00:00')
+      : (() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; })();
+    const searchEnd = new Date(searchStart);
+    searchEnd.setMonth(searchEnd.getMonth() + 6);
+
+    try {
+      const campaigns = evaluateRule(tempRule, searchStart, searchEnd);
+      return campaigns.length > 0 ? new Date(campaigns[0].date + 'T00:00:00') : null;
+    } catch {
+      return null;
+    }
+  }, [
+    formState.frequency_type, formState.day_of_week, formState.month_week_number,
+    formState.month_day_of_week, formState.frequency_value, formState.start_date,
+    formState.end_date, formState.reference_date,
+  ]);
 
   if (isUserLoading) {
     return (
@@ -577,7 +684,7 @@ function CampaignRulesPageContent() {
               {error || 'You do not have permission to access this page.'}
             </p>
             <button
-              onClick={() => router.push(adminStatus === 'SR' || (adminStatus !== 'AD' && adminStatus !== 'SR') ? '/app' : '/admin')}
+              onClick={() => router.push(isNonAdmin ? '/app' : '/admin')}
               className="mt-4 rounded-md bg-red-600 px-4 py-2 text-base font-bold text-white hover:bg-red-700 border-2 border-gray-800 dark:border-gray-600"
             >
               Go Back
@@ -609,10 +716,10 @@ function CampaignRulesPageContent() {
               </p>
             </div>
             <button
-              onClick={() => router.push(adminStatus === 'SR' || (adminStatus !== 'AD' && adminStatus !== 'SR') ? '/app' : '/admin')}
+              onClick={() => router.push(isNonAdmin ? '/app' : '/admin')}
               className="rounded-md bg-gray-200 px-3 py-2 text-base font-bold text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 border-2 border-gray-800 dark:border-gray-600"
             >
-              {adminStatus === 'SR' || (adminStatus !== 'AD' && adminStatus !== 'SR') ? 'Back to Home' : 'Back to Admin Panel'}
+              {isNonAdmin ? 'Back to Home' : 'Back to Admin Panel'}
             </button>
           </div>
         </div>
@@ -630,10 +737,25 @@ function CampaignRulesPageContent() {
         )}
 
         {/* Add/Edit Form */}
-        <div className="mb-6 rounded-lg border border-gray-200 bg-blue-50 p-4 shadow-sm dark:border-gray-700 dark:bg-blue-900/20">
-          <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-gray-100">
-            {editingId ? 'Edit Campaign Rule' : 'Add New Campaign Rule'}
-          </h2>
+        <div className="mb-6 rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-blue-50 shadow-sm dark:bg-blue-900/20">
+          {/* Collapsible header */}
+          <button
+            type="button"
+            onClick={() => {
+              if (isFormExpanded && editingId) { resetForm(); }
+              setIsFormExpanded(v => !v);
+            }}
+            className="flex w-full items-center justify-between p-4 text-left"
+          >
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+              {editingId ? 'Edit Campaign Rule' : 'Add New Campaign Rule'}
+            </h2>
+            <span className="ml-2 text-xl text-gray-600 dark:text-gray-400 select-none">
+              {isFormExpanded ? '▲' : '▼'}
+            </span>
+          </button>
+          {isFormExpanded && (
+          <div className="px-4 pb-4">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label htmlFor="name" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -744,7 +866,7 @@ function CampaignRulesPageContent() {
                   className="mt-1 block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
                 >
                   <option value="">Select a time</option>
-                  {timeOptions.map((time) => (
+                  {TIME_OPTIONS.map((time) => (
                     <option key={time.value} value={time.value}>
                       {time.label}
                     </option>
@@ -775,13 +897,12 @@ function CampaignRulesPageContent() {
                 id="frequency_type"
                 required
                 value={formState.frequency_type}
-                onChange={(e) => setFormState({ ...formState, frequency_type: e.target.value as 'weekly' | 'biweekly' | 'monthly' | 'custom' })}
+                onChange={(e) => setFormState({ ...formState, frequency_type: e.target.value as 'weekly' | 'biweekly' | 'monthly' })}
                 className="mt-1 block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
               >
                 <option value="weekly">Weekly</option>
                 <option value="biweekly">Biweekly (Every N weeks)</option>
                 <option value="monthly">Monthly</option>
-                <option value="custom">Custom (Advanced)</option>
               </select>
             </div>
 
@@ -853,8 +974,11 @@ function CampaignRulesPageContent() {
                     id="month_week_number"
                     required
                     value={formState.month_week_number || ''}
-                    onChange={(e) => setFormState({ ...formState, month_week_number: parseInt(e.target.value) || null })}
-                    className="mt-1 block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
+                    onChange={(e) => {
+                      setFormState({ ...formState, month_week_number: parseInt(e.target.value) || null });
+                      setFieldErrors(prev => { const next = { ...prev }; delete next.month_week_number; return next; });
+                    }}
+                    className={`mt-1 block w-full rounded-md border-2 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:bg-gray-900 dark:text-white ${fieldErrors.month_week_number ? 'border-red-500 dark:border-red-400' : 'border-gray-400 dark:border-gray-500'}`}
                   >
                     <option value="">Select week</option>
                     {MONTH_WEEKS.map((week) => (
@@ -863,24 +987,34 @@ function CampaignRulesPageContent() {
                       </option>
                     ))}
                   </select>
+                  {fieldErrors.month_week_number && (
+                    <p className="mt-1 text-xs text-red-600 dark:text-red-400">{fieldErrors.month_week_number}</p>
+                  )}
                 </div>
                 <div>
                   <label htmlFor="month_day_of_week" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Day of Week (Optional - leave blank for first day of week)
+                    Day of Week *
                   </label>
                   <select
                     id="month_day_of_week"
-                    value={formState.month_day_of_week || ''}
-                    onChange={(e) => setFormState({ ...formState, month_day_of_week: e.target.value ? parseInt(e.target.value) : null })}
-                    className="mt-1 block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
+                    required
+                    value={formState.month_day_of_week !== null ? formState.month_day_of_week : ''}
+                    onChange={(e) => {
+                      setFormState({ ...formState, month_day_of_week: e.target.value !== '' ? parseInt(e.target.value) : null });
+                      setFieldErrors(prev => { const next = { ...prev }; delete next.month_day_of_week; return next; });
+                    }}
+                    className={`mt-1 block w-full rounded-md border-2 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:bg-gray-900 dark:text-white ${fieldErrors.month_day_of_week ? 'border-red-500 dark:border-red-400' : 'border-gray-400 dark:border-gray-500'}`}
                   >
-                    <option value="">Any day in week</option>
+                    <option value="">Select day</option>
                     {DAYS_OF_WEEK.map((day) => (
                       <option key={day.value} value={day.value}>
                         {day.label}
                       </option>
                     ))}
                   </select>
+                  {fieldErrors.month_day_of_week && (
+                    <p className="mt-1 text-xs text-red-600 dark:text-red-400">{fieldErrors.month_day_of_week}</p>
+                  )}
                 </div>
               </>
             )}
@@ -888,7 +1022,7 @@ function CampaignRulesPageContent() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label htmlFor="start_date" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Start Date (Optional)
+                  Active From (Optional)
                 </label>
                 <input
                   id="start_date"
@@ -897,10 +1031,27 @@ function CampaignRulesPageContent() {
                   onChange={(e) => setFormState({ ...formState, start_date: e.target.value })}
                   className="mt-1 block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
                 />
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  Campaigns won&apos;t be generated before this date. Leave blank to start from the next campaign cycle.
+                </p>
+                {/* Live first-campaign hint */}
+                {firstCampaignDate && (
+                  <p className="mt-1.5 rounded-md bg-blue-50 dark:bg-blue-900/30 px-2 py-1 text-xs font-medium text-blue-700 dark:text-blue-300">
+                    📅 First campaign under this rule:{' '}
+                    {firstCampaignDate.toLocaleDateString('en-AU', {
+                      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+                    })}
+                  </p>
+                )}
+                {!firstCampaignDate && formState.start_date && (
+                  <p className="mt-1.5 text-xs text-amber-600 dark:text-amber-400">
+                    ⚠ No campaigns found in the next 6 months with these settings.
+                  </p>
+                )}
               </div>
               <div>
                 <label htmlFor="end_date" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  End Date (Optional)
+                  Active Until (Optional)
                 </label>
                 <input
                   id="end_date"
@@ -909,23 +1060,29 @@ function CampaignRulesPageContent() {
                   onChange={(e) => setFormState({ ...formState, end_date: e.target.value })}
                   className="mt-1 block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
                 />
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  Campaigns won&apos;t be generated after this date. Leave blank to run indefinitely.
+                </p>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="priority" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Priority (Higher = Override)
-                </label>
-                <input
-                  id="priority"
-                  type="number"
-                  value={formState.priority}
-                  onChange={(e) => setFormState({ ...formState, priority: parseInt(e.target.value) || 0 })}
-                  className="mt-1 block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
-                />
-              </div>
-              <div className="flex items-center pt-8">
+            {/* Priority is a conflict-resolution tool — only meaningful for admins. */}
+            <div className={`grid gap-4 ${!isNonAdmin ? 'grid-cols-2' : 'grid-cols-1'}`}>
+              {!isNonAdmin && (
+                <div>
+                  <label htmlFor="priority" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Priority (Higher = Override)
+                  </label>
+                  <input
+                    id="priority"
+                    type="number"
+                    value={formState.priority}
+                    onChange={(e) => setFormState({ ...formState, priority: parseInt(e.target.value) || 0 })}
+                    className="mt-1 block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
+                  />
+                </div>
+              )}
+              <div className={`flex items-center ${!isNonAdmin ? 'pt-8' : ''}`}>
                 <label className="flex items-center">
                   <input
                     type="checkbox"
@@ -963,7 +1120,7 @@ function CampaignRulesPageContent() {
               {editingId && (
                 <button
                   type="button"
-                  onClick={resetForm}
+                  onClick={() => { resetForm(); setIsFormExpanded(false); }}
                   className="rounded-md bg-gray-200 px-4 py-2 text-base font-bold text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 border-2 border-gray-800 dark:border-gray-600"
                 >
                   Cancel
@@ -971,6 +1128,8 @@ function CampaignRulesPageContent() {
               )}
             </div>
           </form>
+          </div>
+          )}
         </div>
 
         {/* Filters */}
@@ -1004,7 +1163,6 @@ function CampaignRulesPageContent() {
               <option value="weekly">Weekly</option>
               <option value="biweekly">Biweekly</option>
               <option value="monthly">Monthly</option>
-              <option value="custom">Custom</option>
             </select>
           </div>
         </div>
@@ -1024,19 +1182,26 @@ function CampaignRulesPageContent() {
             ) : (
               filteredRules.map((rule) => {
                 const stateColor = getStateColor(rule.state);
-                const frequencyLabel = rule.frequency_type === 'monthly' 
-                  ? `${MONTH_WEEKS.find(w => w.value === rule.month_week_number)?.label || 'Unknown'} of month`
+                const frequencyLabel = rule.frequency_type === 'monthly'
+                  ? `${MONTH_WEEKS.find(w => w.value === rule.month_week_number)?.label ?? 'Unknown'} of month`
                   : rule.frequency_type === 'biweekly'
                   ? `Every ${rule.frequency_value} weeks`
                   : rule.frequency_type === 'weekly'
                   ? 'Every week'
-                  : 'Custom';
-                
-                const dayLabel = rule.day_of_week !== null 
+                  : 'Custom (legacy — not generating campaigns)';
+
+                const dayLabel = rule.day_of_week !== null
                   ? DAYS_OF_WEEK.find(d => d.value === rule.day_of_week)?.label
                   : rule.month_day_of_week !== null
                   ? DAYS_OF_WEEK.find(d => d.value === rule.month_day_of_week)?.label
                   : null;
+
+                // Expiry warning: amber if the rule ends within the next 30 days.
+                const today = new Date(); today.setHours(0, 0, 0, 0);
+                const endDate = rule.end_date ? new Date(rule.end_date + 'T00:00:00') : null;
+                const expiringSoon = endDate !== null
+                  && endDate >= today
+                  && endDate.getTime() - today.getTime() <= 30 * 24 * 60 * 60 * 1000;
 
                 return (
                   <div key={rule.id} className={`p-4 ${stateColor.bg}`}>
@@ -1063,6 +1228,14 @@ function CampaignRulesPageContent() {
                         <div className={`text-xs ${stateColor.text} opacity-60 mt-1`}>
                           {frequencyLabel}{dayLabel ? ` on ${dayLabel}` : ''}
                         </div>
+                        {(rule.start_date || rule.end_date) && (
+                          <div className={`text-xs mt-0.5 ${expiringSoon ? 'font-medium text-amber-600 dark:text-amber-400' : `${stateColor.text} opacity-60`}`}>
+                            {rule.start_date ? `Active from ${rule.start_date}` : ''}
+                            {rule.start_date && rule.end_date ? ' · ' : ''}
+                            {rule.end_date ? `Until ${rule.end_date}` : ''}
+                            {expiringSoon ? ' ⚠ Expiring soon' : ''}
+                          </div>
+                        )}
                         {rule.notes && (
                           <div className={`text-xs ${stateColor.text} opacity-60 mt-1 italic`}>
                             {rule.notes}
@@ -1071,11 +1244,9 @@ function CampaignRulesPageContent() {
                         {previewRuleId === rule.id && (
                           <div className="mt-2 rounded bg-white/50 p-2 dark:bg-gray-900/50">
                             <div className="text-xs font-medium text-gray-700 dark:text-gray-300">
-                              Preview (next 2 weeks):
+                              Upcoming campaign dates:
                             </div>
-                            {isLoadingPreview ? (
-                              <div className="text-xs text-gray-500 dark:text-gray-400">Loading...</div>
-                            ) : previewDates.length > 0 ? (
+                            {previewDates.length > 0 ? (
                               <div className="text-xs text-gray-600 dark:text-gray-400">
                                 {previewDates.map((d, i) => (
                                   <span key={i} className="mr-2">
@@ -1129,6 +1300,121 @@ function CampaignRulesPageContent() {
           </div>
         </div>
       </div>
+
+      {/* ── Create-confirmation modal ──────────────────────────────────────── */}
+      {showConfirmModal && pendingRuleData && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center"
+          onClick={(e) => { if (e.target === e.currentTarget) handleCancelConfirm(); }}
+        >
+          <div className="w-full max-w-lg rounded-t-2xl bg-white p-6 shadow-xl dark:bg-gray-900 sm:rounded-2xl">
+
+            {/* Header */}
+            <h2 className="mb-1 text-xl font-bold text-gray-900 dark:text-gray-100">
+              Confirm New Campaign Rule
+            </h2>
+            <p className="mb-5 text-sm text-gray-500 dark:text-gray-400">
+              Please review what this rule will do before confirming.
+            </p>
+
+            {/* Rule summary card */}
+            <div className="mb-5 rounded-lg border-2 border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
+              <div className="mb-3 text-sm font-semibold text-blue-900 dark:text-blue-200">
+                {pendingRuleData.name}
+              </div>
+              <div className="space-y-1 text-sm text-blue-800 dark:text-blue-300">
+                <div>
+                  <span className="font-medium">Who: </span>
+                  {pendingRuleData.leader}
+                </div>
+                <div>
+                  <span className="font-medium">Where: </span>
+                  {pendingRuleData.place}, {pendingRuleData.state}
+                </div>
+                <div>
+                  <span className="font-medium">Time: </span>
+                  {TIME_OPTIONS.find(t => t.value === pendingRuleData.time)?.label ?? pendingRuleData.time}
+                </div>
+                <div>
+                  <span className="font-medium">Schedule: </span>
+                  {buildScheduleSummary(
+                    pendingRuleData.frequency_type as 'weekly' | 'biweekly' | 'monthly',
+                    pendingRuleData.day_of_week ?? 0,
+                    pendingRuleData.month_week_number,
+                    pendingRuleData.month_day_of_week,
+                    pendingRuleData.frequency_value ?? 2,
+                  )}
+                </div>
+                {pendingRuleData.start_date && (
+                  <div>
+                    <span className="font-medium">Starting: </span>
+                    {new Date(pendingRuleData.start_date + 'T00:00:00').toLocaleDateString('en-AU', {
+                      day: 'numeric', month: 'long', year: 'numeric',
+                    })}
+                  </div>
+                )}
+                {pendingRuleData.end_date && (
+                  <div>
+                    <span className="font-medium">Until: </span>
+                    {new Date(pendingRuleData.end_date + 'T00:00:00').toLocaleDateString('en-AU', {
+                      day: 'numeric', month: 'long', year: 'numeric',
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Upcoming dates */}
+            <div className="mb-5">
+              <p className="mb-2 text-sm font-semibold text-gray-700 dark:text-gray-300">
+                📅 Next upcoming campaign dates:
+              </p>
+              {confirmDates.length > 0 ? (
+                <ul className="space-y-1">
+                  {confirmDates.map(dateStr => (
+                    <li key={dateStr} className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                      <span className="text-green-500">✓</span>
+                      {new Date(dateStr + 'T00:00:00').toLocaleDateString('en-AU', {
+                        weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+                      })}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-300">
+                  ⚠ No campaigns will be generated in the next 6 months with these settings.
+                  You can still create the rule and activate it later, or go back and adjust the settings.
+                </div>
+              )}
+            </div>
+
+            {/* Footer note */}
+            <p className="mb-5 text-xs text-gray-500 dark:text-gray-400">
+              Campaigns are created automatically during the weekly system refresh.
+              You can edit, deactivate, or delete this rule at any time.
+            </p>
+
+            {/* Actions */}
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={handleCancelConfirm}
+                className="flex-1 rounded-md border-2 border-gray-400 bg-white px-4 py-2.5 text-base font-bold text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+              >
+                ← Go Back
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmCreate}
+                disabled={isSubmitting}
+                className="flex-1 rounded-md border-2 border-gray-800 bg-blue-600 px-4 py-2.5 text-base font-bold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600"
+              >
+                {isSubmitting ? 'Creating…' : 'Confirm & Create'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </MobileLayout>
   );
 }
