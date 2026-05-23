@@ -172,23 +172,32 @@ function StateDonut({ data }: { data: StateStat[] }) {
   const cy = 100;
   const innerR = 46;
 
-  // Build arc paths
-  let cursor = -Math.PI / 2; // start at top
-  const slices = data.map((d) => {
-    const angle = (d.count / total) * 2 * Math.PI;
-    const x1 = cx + R * Math.cos(cursor);
-    const y1 = cy + R * Math.sin(cursor);
-    cursor += angle;
-    const x2 = cx + R * Math.cos(cursor);
-    const y2 = cy + R * Math.sin(cursor);
-    const large = angle > Math.PI ? 1 : 0;
-    return {
-      state: d.user_state,
-      count: d.count,
-      pct: Math.round((d.count / total) * 100),
-      path: `M ${cx} ${cy} L ${x1} ${y1} A ${R} ${R} 0 ${large} 1 ${x2} ${y2} Z`,
-    };
-  });
+  // Build arc paths — use reduce so no let-variable is mutated during render
+  type SliceShape = { state: string; count: number; pct: number; path: string };
+  const slices = data.reduce<{ result: SliceShape[]; cursor: number }>(
+    (acc, d) => {
+      const angle   = (d.count / total) * 2 * Math.PI;
+      const x1      = cx + R * Math.cos(acc.cursor);
+      const y1      = cy + R * Math.sin(acc.cursor);
+      const end     = acc.cursor + angle;
+      const x2      = cx + R * Math.cos(end);
+      const y2      = cy + R * Math.sin(end);
+      const large   = angle > Math.PI ? 1 : 0;
+      return {
+        cursor: end,
+        result: [
+          ...acc.result,
+          {
+            state: d.user_state,
+            count: d.count,
+            pct:  Math.round((d.count / total) * 100),
+            path: `M ${cx} ${cy} L ${x1} ${y1} A ${R} ${R} 0 ${large} 1 ${x2} ${y2} Z`,
+          },
+        ],
+      };
+    },
+    { result: [], cursor: -Math.PI / 2 },
+  ).result;
 
   return (
     <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-start">
