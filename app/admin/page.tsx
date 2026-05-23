@@ -10,6 +10,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { isCampaignLoggingEnabled, setCampaignLoggingEnabled } from '@/lib/appSettings';
 import { runWeeklyRefresh } from '@/lib/services/weeklyRefreshService';
 import { getErrorMessage } from '@/lib/errorUtils';
+import { trackEvent } from '@/lib/analytics';
 
 /** Most-recent row from weekly_refresh_log (new columns may be null on older rows). */
 interface LastRefreshInfo {
@@ -78,6 +79,7 @@ export default function AdminPage() {
       if (result.skipped > 0) message += `${result.skipped} already existed and were skipped. `;
       message += `Deleted ${result.deleted} old campaign(s).`;
       setRefreshMessage(message);
+      trackEvent('weekly_refresh_manual', { created: result.created, deleted: result.deleted });
 
       // Refresh last-run info in the card
       await fetchLastRefresh();
@@ -453,16 +455,16 @@ export default function AdminPage() {
 
           <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-              Analytics
+              Metrics
             </h2>
             <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-              View system-wide analytics and reports
+              Usage analytics, active users, and database row counts
             </p>
             <button
-              disabled
-              className="mt-4 rounded-md bg-gray-200 px-4 py-2 text-base font-bold text-gray-600 dark:bg-gray-700 dark:text-gray-400 border-2 border-gray-800 dark:border-gray-600"
+              onClick={() => router.push('/admin/metrics')}
+              className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 border-2 border-gray-800 dark:border-gray-600"
             >
-              Coming Soon
+              View Metrics
             </button>
           </div>
         </div>

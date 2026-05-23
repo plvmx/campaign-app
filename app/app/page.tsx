@@ -20,6 +20,7 @@ import type { Campaign } from '@/lib/types';
 import { formatCampaignTimeDisplay, isCampaignPast } from '@/lib/campaignUtils';
 import { getPlacesForState, getLeadersForState, getLeaderMobile, getCampaignCategories } from '@/lib/services/dropdownService';
 import { createCampaign, updateCampaign, deleteCampaign } from '@/lib/services/campaignService';
+import { trackEvent } from '@/lib/analytics';
 
 function AppPageContent() {
   const router = useRouter();
@@ -675,6 +676,7 @@ function AppPageContent() {
         source: 'MAN',
       });
 
+      trackEvent('campaign_create', { state: formState.state, category: formState.category ?? 'TWOL' });
       setSuccess('Campaign created successfully');
       setFormState({ date: '', state: '', place: '', time: '', leader: '', mobile: '', category: 'TWOL', tl_ok: false, sr_ok: false });
       setIsOtherPlace(false);
@@ -805,6 +807,7 @@ function AppPageContent() {
 
       await updateCampaign(campaignId, updates, oldData);
 
+      trackEvent('campaign_update', { state: editData.state });
       setSuccess('Campaign updated successfully');
       setInlineEditingId(null);
       setInlineEditOtherPlace(prev => { const s = { ...prev }; delete s[campaignId]; return s; });
@@ -881,6 +884,7 @@ function AppPageContent() {
     try {
       const oldData = await fetchCampaignData(id);
       await deleteCampaign(id, oldData);
+      trackEvent('campaign_delete');
       setSuccess('Campaign deleted successfully');
       await refetchCampaigns();
     } catch (err: unknown) {
@@ -926,6 +930,7 @@ function AppPageContent() {
         userState:   contextUserState,
         onProgress:  setQuickActionProgress,
       });
+      trackEvent('generate_slides', { state: contextUserState });
     } catch (err: unknown) {
       setQuickActionError(err instanceof Error ? err.message : 'Failed to generate campaign lists');
     } finally {
@@ -948,6 +953,7 @@ function AppPageContent() {
         adminStatus: contextAdminStatus,
         userState:   contextUserState,
       });
+      trackEvent('generate_report', { state: contextUserState });
     } catch (err: unknown) {
       setQuickActionError(err instanceof Error ? err.message : 'Failed to generate campaign results');
     } finally {
@@ -968,6 +974,7 @@ function AppPageContent() {
         userState:   contextUserState,
         onProgress:  setQuickActionProgress,
       });
+      trackEvent('generate_week1', { state: contextUserState });
     } catch (err: unknown) {
       setQuickActionError(err instanceof Error ? err.message : 'Failed to generate Week 1 Campaigns list');
     } finally {
