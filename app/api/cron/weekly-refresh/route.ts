@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
   try {
     const result = await runWeeklyRefresh(supabaseAdmin, null);
     console.log(
-      `[cron/weekly-refresh] OK — created=${result.created} skipped=${result.skipped} deleted=${result.deleted}`
+      `[cron/weekly-refresh] OK — created=${result.created} skipped=${result.skipped} deleted=${result.deleted} logsPruned=${result.logsPruned}`
     );
     return NextResponse.json({ success: true, ...result });
   } catch (err) {

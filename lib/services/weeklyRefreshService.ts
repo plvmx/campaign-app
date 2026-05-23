@@ -39,6 +39,8 @@ export interface WeeklyRefreshResult {
   skipped: number;
   /** Old campaigns deleted (older than pastCampaignStart). */
   deleted: number;
+  /** Audit log rows pruned (older than LOG_RETENTION_DAYS). */
+  logsPruned: number;
   /** Start of the week that was targeted. */
   secondWeekStart: Date;
 }
@@ -211,6 +213,23 @@ export async function runWeeklyRefresh(
     const deletedCount = deletedRows?.length ?? 0;
 
     // -----------------------------------------------------------------------
+    // Prune audit log — rolling 90-day retention
+    // -----------------------------------------------------------------------
+    const LOG_RETENTION_DAYS = 90;
+    const logCutoff = new Date();
+    logCutoff.setDate(logCutoff.getDate() - LOG_RETENTION_DAYS);
+    const { data: deletedLogs, error: logsDeleteError } = await client
+      .from('campaign_changes_log')
+      .delete()
+      .lt('created_at', logCutoff.toISOString())
+      .select('id');
+    if (logsDeleteError) {
+      // Non-fatal: log the error but don't fail the whole refresh
+      console.error('[weeklyRefresh] log pruning error:', logsDeleteError);
+    }
+    const logsPrunedCount = deletedLogs?.length ?? 0;
+
+    // -----------------------------------------------------------------------
     // Log success
     // -----------------------------------------------------------------------
     await client
@@ -227,7 +246,7 @@ export async function runWeeklyRefresh(
         if (error) console.error('[weeklyRefresh] log insert error:', error);
       });
 
-    return { created: createdCount, skipped: skippedCount, deleted: deletedCount, secondWeekStart };
+    return { created: createdCount, skipped: skippedCount, deleted: deletedCount, logsPruned: logsPrunedCount, secondWeekStart };
 
   } catch (err) {
     // Log the failure (best-effort — don't let a log failure mask the original error)
