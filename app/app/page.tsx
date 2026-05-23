@@ -1116,28 +1116,31 @@ function AppPageContent() {
             </div>
           )}
 
-          {/* Date Filter Buttons */}
-          <div className="mt-4 flex justify-center gap-3 flex-wrap">
-            <button
-              onClick={() => setDateFilter('past')}
-              className={`rounded-md px-4 py-2 text-base font-bold transition-colors shadow-sm border-2 border-gray-800 dark:border-gray-600 ${
-                dateFilter === 'past'
-                  ? 'bg-blue-600 text-white shadow-md'
-                  : 'bg-gradient-to-b from-gray-100 to-gray-200 text-gray-700 hover:from-gray-200 hover:to-gray-300 dark:from-gray-700 dark:to-gray-800 dark:text-gray-300 dark:hover:from-gray-600 dark:hover:to-gray-700'
-              }`}
-            >
-              Past
-            </button>
-            <button
-              onClick={() => setDateFilter('future')}
-              className={`rounded-md px-4 py-2 text-base font-bold transition-colors shadow-sm border-2 border-gray-800 dark:border-gray-600 ${
-                dateFilter === 'future'
-                  ? 'bg-blue-600 text-white shadow-md'
-                  : 'bg-gradient-to-b from-gray-100 to-gray-200 text-gray-700 hover:from-gray-200 hover:to-gray-300 dark:from-gray-700 dark:to-gray-800 dark:text-gray-300 dark:hover:from-gray-600 dark:hover:to-gray-700'
-              }`}
-            >
-              Future
-            </button>
+          {/* Date Filter Segmented Control + Create Button */}
+          <div className="mt-4 flex justify-center gap-3 flex-wrap items-center">
+            <div className="inline-flex rounded-lg border-2 border-gray-800 dark:border-gray-600 overflow-hidden shadow-sm">
+              <button
+                onClick={() => setDateFilter('past')}
+                className={`px-5 py-2 text-base font-bold transition-colors ${
+                  dateFilter === 'past'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gradient-to-b from-gray-100 to-gray-200 text-gray-700 hover:from-gray-200 hover:to-gray-300 dark:from-gray-700 dark:to-gray-800 dark:text-gray-300 dark:hover:from-gray-600 dark:hover:to-gray-700'
+                }`}
+              >
+                Past
+              </button>
+              <div className="w-px bg-gray-800 dark:bg-gray-600" />
+              <button
+                onClick={() => setDateFilter('future')}
+                className={`px-5 py-2 text-base font-bold transition-colors ${
+                  dateFilter === 'future'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gradient-to-b from-gray-100 to-gray-200 text-gray-700 hover:from-gray-200 hover:to-gray-300 dark:from-gray-700 dark:to-gray-800 dark:text-gray-300 dark:hover:from-gray-600 dark:hover:to-gray-700'
+                }`}
+              >
+                Future
+              </button>
+            </div>
             <button
               onClick={() => setIsFormExpanded(!isFormExpanded)}
               className={`rounded-md px-4 py-2 text-base font-bold transition-colors shadow-sm border-2 border-gray-800 dark:border-gray-600 ${
