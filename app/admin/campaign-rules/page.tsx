@@ -8,7 +8,6 @@ import { supabase } from '@/lib/supabaseClient';
 import { getStateColor } from '@/lib/stateColors';
 import { CampaignRule, evaluateRule, previewRuleEvaluation } from '@/lib/campaignRules';
 import { formatDateReadable } from '@/lib/campaignDates';
-import { useCampaignDates } from '@/contexts/CampaignDatesContext';
 import { AUSTRALIAN_STATES } from '@/lib/constants';
 import { getErrorMessage } from '@/lib/errorUtils';
 const DAYS_OF_WEEK = [
@@ -90,7 +89,6 @@ function timeToHHMM(timeStr: string | null | undefined): string {
 function CampaignRulesPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { dates } = useCampaignDates();
   const { user, adminStatus, userState, userLeader, isLoading: isUserLoading } = useUser();
   const [hasAccess, setHasAccess] = useState(false);
   const [isStateLocked, setIsStateLocked] = useState(false);
