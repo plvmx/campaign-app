@@ -1,12 +1,12 @@
 'use client';
 
-import { useEffect, useState, Suspense } from 'react';
+import { useEffect, useMemo, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import MobileLayout from '@/components/MobileLayout';
 import { useUser } from '@/contexts/UserContext';
 import { supabase } from '@/lib/supabaseClient';
 import { getStateColor } from '@/lib/stateColors';
-import { CampaignRule, previewRuleEvaluation } from '@/lib/campaignRules';
+import { CampaignRule, evaluateRule, previewRuleEvaluation } from '@/lib/campaignRules';
 import { formatDateReadable } from '@/lib/campaignDates';
 import { useCampaignDates } from '@/contexts/CampaignDatesContext';
 import { AUSTRALIAN_STATES } from '@/lib/constants';
@@ -595,6 +595,60 @@ function CampaignRulesPageContent() {
     );
   }
 
+  // ── Live "first campaign" hint ─────────────────────────────────────────────
+  // Compute the first date the rule would generate a campaign, updating live as
+  // the user fills in the form. Shown near the "Active From" field.
+  const firstCampaignDate = useMemo(() => {
+    const {
+      frequency_type, day_of_week, month_week_number, month_day_of_week,
+      frequency_value, start_date, end_date, reference_date,
+    } = formState;
+
+    // Monthly requires both week-of-month and day-of-week to be set
+    if (frequency_type === 'monthly' && (month_week_number === null || month_day_of_week === null)) return null;
+    // Custom rules have ad-hoc logic — skip inline preview
+    if (frequency_type === 'custom') return null;
+
+    const tempRule: CampaignRule = {
+      id:                '__preview__',
+      name:              'preview',
+      leader:            formState.leader || '',
+      state:             formState.state  || 'NSW',
+      place:             formState.place  || 'Preview',
+      time:              formState.time   || '09:00',
+      mobile:            null,
+      frequency_type,
+      frequency_value:   frequency_value ?? null,
+      month_week_number: month_week_number ?? null,
+      month_day_of_week: month_day_of_week ?? null,
+      day_of_week:       day_of_week ?? 0,
+      start_date:        start_date || null,
+      end_date:          end_date   || null,
+      is_active:         true,
+      priority:          0,
+      rule_config:       reference_date ? { reference_date } : {},
+      notes:             null,
+    };
+
+    // Search from the Active From date (or today) up to 6 months ahead
+    const searchStart = start_date
+      ? new Date(start_date + 'T00:00:00')
+      : (() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; })();
+    const searchEnd = new Date(searchStart);
+    searchEnd.setMonth(searchEnd.getMonth() + 6);
+
+    try {
+      const campaigns = evaluateRule(tempRule, searchStart, searchEnd);
+      return campaigns.length > 0 ? new Date(campaigns[0].date + 'T00:00:00') : null;
+    } catch {
+      return null;
+    }
+  }, [
+    formState.frequency_type, formState.day_of_week, formState.month_week_number,
+    formState.month_day_of_week, formState.frequency_value, formState.start_date,
+    formState.end_date, formState.reference_date,
+  ]);
+
   const filteredRules = rules.filter(rule => {
     if (filterActive === 'active' && !rule.is_active) return false;
     if (filterActive === 'inactive' && rule.is_active) return false;
@@ -910,7 +964,7 @@ function CampaignRulesPageContent() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label htmlFor="start_date" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Start Date (Optional)
+                  Active From (Optional)
                 </label>
                 <input
                   id="start_date"
@@ -919,10 +973,27 @@ function CampaignRulesPageContent() {
                   onChange={(e) => setFormState({ ...formState, start_date: e.target.value })}
                   className="mt-1 block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
                 />
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  Campaigns won&apos;t be generated before this date. Leave blank to start from the next campaign cycle.
+                </p>
+                {/* Live first-campaign hint */}
+                {firstCampaignDate && formState.frequency_type !== 'custom' && (
+                  <p className="mt-1.5 rounded-md bg-blue-50 dark:bg-blue-900/30 px-2 py-1 text-xs font-medium text-blue-700 dark:text-blue-300">
+                    📅 First campaign under this rule:{' '}
+                    {firstCampaignDate.toLocaleDateString('en-AU', {
+                      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+                    })}
+                  </p>
+                )}
+                {!firstCampaignDate && formState.start_date && formState.frequency_type !== 'custom' && (
+                  <p className="mt-1.5 text-xs text-amber-600 dark:text-amber-400">
+                    ⚠ No campaigns found in the next 6 months with these settings.
+                  </p>
+                )}
               </div>
               <div>
                 <label htmlFor="end_date" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  End Date (Optional)
+                  Active Until (Optional)
                 </label>
                 <input
                   id="end_date"
@@ -931,6 +1002,9 @@ function CampaignRulesPageContent() {
                   onChange={(e) => setFormState({ ...formState, end_date: e.target.value })}
                   className="mt-1 block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
                 />
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  Campaigns won&apos;t be generated after this date. Leave blank to run indefinitely.
+                </p>
               </div>
             </div>
 
