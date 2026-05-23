@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, Suspense } from 'react';
+import { useCallback, useEffect, useMemo, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import MobileLayout from '@/components/MobileLayout';
 import { useUser } from '@/contexts/UserContext';
@@ -28,6 +28,20 @@ const MONTH_WEEKS = [
   { value: 4, label: '4th Week' },
   { value: -1, label: 'Last Week' },
 ];
+
+/** Time options for the campaign time picker (8 AM – 8 PM, 30-min intervals). */
+const TIME_OPTIONS: { value: string; label: string }[] = (() => {
+  const times: { value: string; label: string }[] = [];
+  for (let hour = 8; hour <= 20; hour++) {
+    for (let minute = 0; minute < 60; minute += 30) {
+      const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+      const displayHour = hour % 12 || 12;
+      const ampm = hour >= 12 ? 'PM' : 'AM';
+      times.push({ value: timeStr, label: `${displayHour}:${minute.toString().padStart(2, '0')} ${ampm}` });
+    }
+  }
+  return times;
+})();
 
 /** Normalize time string from DB (e.g. "10:00:00") to HH:MM for form/display. */
 function timeToHHMM(timeStr: string | null | undefined): string {
@@ -81,12 +95,10 @@ function CampaignRulesPageContent() {
   const [filterFrequency, setFilterFrequency] = useState<string>('');
   const [previewRuleId, setPreviewRuleId] = useState<string | null>(null);
   const [previewDates, setPreviewDates] = useState<Date[]>([]);
-  const [isLoadingPreview, setIsLoadingPreview] = useState(false);
-  
+
   // Dropdown data
   const [places, setPlaces] = useState<string[]>([]);
   const [leaders, setLeaders] = useState<string[]>([]);
-  const [timeOptions, setTimeOptions] = useState<{ value: string; label: string }[]>([]);
   const [loadingPlaces, setLoadingPlaces] = useState(false);
   const [loadingLeaders, setLoadingLeaders] = useState(false);
 
@@ -122,16 +134,15 @@ function CampaignRulesPageContent() {
     }
 
     setHasAccess(true);
-    fetchRules();
   }, [isUserLoading, user, adminStatus, userState, userLeader, router, searchParams]);
 
-  const fetchRules = async () => {
+  const fetchRules = useCallback(async () => {
     try {
-      const isTeamLeader = adminStatus !== 'AD' && adminStatus !== 'SR' && !!userState;
+      const isTeamLeaderFetch = adminStatus !== 'AD' && adminStatus !== 'SR' && !!userState;
       const isStateReporter = adminStatus === 'SR';
 
       // Team Leaders without a matched leader name see no rules
-      if (isTeamLeader && !userLeader) {
+      if (isTeamLeaderFetch && !userLeader) {
         setRules([]);
         return;
       }
@@ -140,12 +151,12 @@ function CampaignRulesPageContent() {
         .from('campaign_rules')
         .select('*');
 
-      // State Reporters: only see rules for their state (leaders in their state)
+      // State Reporters: only see rules for their state
       if (isStateReporter && userState) {
         query = query.eq('state', userState.toUpperCase().trim());
       }
       // Team Leaders: only see their own rules (state + leader = themselves)
-      if (isTeamLeader && userState && userLeader) {
+      if (isTeamLeaderFetch && userState && userLeader) {
         query = query
           .eq('state', userState.toUpperCase().trim())
           .eq('leader', userLeader);
@@ -163,31 +174,13 @@ function CampaignRulesPageContent() {
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Failed to fetch campaign rules'));
     }
-  };
+  }, [adminStatus, userState, userLeader]);
 
   useEffect(() => {
     if (hasAccess) {
       fetchRules();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasAccess, adminStatus, userState, userLeader]);
-
-  // Generate time options (8:00 AM to 8:00 PM, half-hour intervals)
-  useEffect(() => {
-    const times: { value: string; label: string }[] = [];
-    for (let hour = 8; hour <= 20; hour++) {
-      for (let minute = 0; minute < 60; minute += 30) {
-        const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-        const displayHour = hour % 12 || 12;
-        const ampm = hour >= 12 ? 'PM' : 'AM';
-        times.push({
-          value: timeStr,
-          label: `${displayHour}:${minute.toString().padStart(2, '0')} ${ampm}`,
-        });
-      }
-    }
-    setTimeOptions(times);
-  }, []);
+  }, [hasAccess, fetchRules]);
 
   // Fetch places from state_places table when state changes
   useEffect(() => {
@@ -213,11 +206,13 @@ function CampaignRulesPageContent() {
         ).sort();
 
         setPlaces(uniquePlaces);
-        
-        // If current place is not in the filtered list, clear it
-        if (formState.place && !uniquePlaces.includes(formState.place)) {
-          setFormState(prev => ({ ...prev, place: '' }));
-        }
+
+        // If current place is not in the list for the new state, clear it (functional update).
+        setFormState(prev => (
+          prev.place && !uniquePlaces.includes(prev.place)
+            ? { ...prev, place: '' }
+            : prev
+        ));
       } catch {
         setPlaces([]);
       } finally {
@@ -228,7 +223,8 @@ function CampaignRulesPageContent() {
     fetchPlaces();
   }, [formState.state]);
 
-  // Fetch leaders from state_leaders table when state changes (or for TL, only show themselves)
+  // Derived access-level flags — computed once and used throughout.
+  const isNonAdmin   = adminStatus !== 'AD';                                       // SR or TL or regular
   const isTeamLeader = adminStatus !== 'AD' && adminStatus !== 'SR' && !!userState;
   const isLeaderLocked = isTeamLeader && !!userLeader;
 
@@ -264,10 +260,12 @@ function CampaignRulesPageContent() {
 
         setLeaders(uniqueLeaders);
         
-        // If current leader is not in the filtered list, clear it
-        if (formState.leader && !uniqueLeaders.includes(formState.leader)) {
-          setFormState(prev => ({ ...prev, leader: '', mobile: '' }));
-        }
+        // If current leader is not in the list for the new state, clear it (functional update).
+        setFormState(prev => (
+          prev.leader && !uniqueLeaders.includes(prev.leader)
+            ? { ...prev, leader: '', mobile: '' }
+            : prev
+        ));
       } catch {
         setLeaders([]);
       } finally {
@@ -312,8 +310,8 @@ function CampaignRulesPageContent() {
     setIsSubmitting(true);
 
     try {
-      // Validate state for SR and TL users - they can only manage rules for their state
-      if ((adminStatus === 'SR' || (adminStatus !== 'AD' && adminStatus !== 'SR')) && userState) {
+      // Validate state for SR and TL users — they can only manage rules for their state
+      if (isNonAdmin && userState) {
         const formStateNormalized = formState.state.trim().toUpperCase();
         const userStateNormalized = userState.trim().toUpperCase();
         if (formStateNormalized !== userStateNormalized) {
@@ -433,7 +431,7 @@ function CampaignRulesPageContent() {
     setPreviewDates([]);
   };
 
-  const handleEdit = async (rule: CampaignRule) => {
+  const handleEdit = (rule: CampaignRule) => {
     // Team Leaders can only edit their own rules
     if (isTeamLeader && userLeader && rule.leader?.trim() !== userLeader.trim()) {
       setError('You can only edit your own campaign rules.');
@@ -441,7 +439,7 @@ function CampaignRulesPageContent() {
     }
     setEditingId(rule.id);
     setIsFormExpanded(true); // always show form when editing
-    // For SR/TL users with locked state, use the locked state instead of rule's state
+    // For SR/TL users with locked state, use the locked state instead of the rule's state
     const stateToUse = isStateLocked && userState ? userState.toUpperCase().trim() : rule.state;
     setFormState({
       name: rule.name,
@@ -463,51 +461,7 @@ function CampaignRulesPageContent() {
       priority: rule.priority,
       notes: rule.notes || '',
     });
-    
-    // Load places and leaders for the state (use locked state for SR/TL users)
-    if (stateToUse) {
-      setLoadingPlaces(true);
-      setLoadingLeaders(true);
-      try {
-        // Team Leaders: only show themselves as leader option
-        if (isTeamLeader && userLeader) {
-          setLeaders([userLeader]);
-          setLoadingLeaders(false);
-        }
-        const placesResult = await supabase
-          .from('state_places')
-          .select('place')
-          .eq('state', stateToUse)
-          .order('place', { ascending: true });
-
-        if (placesResult.data) {
-          const uniquePlaces = Array.from(
-            new Set(placesResult.data.map((item) => item.place).filter(Boolean))
-          ).sort();
-          setPlaces(uniquePlaces);
-        }
-
-        if (!isTeamLeader) {
-          const leadersResult = await supabase
-            .from('state_leaders')
-            .select('leader')
-            .eq('state', stateToUse)
-            .order('leader', { ascending: true });
-          if (leadersResult.data) {
-            const uniqueLeaders = Array.from(
-              new Set(leadersResult.data.map((item) => item.leader).filter(Boolean))
-            ).sort();
-            setLeaders(uniqueLeaders);
-          }
-        }
-      } catch {
-        // places/leaders load errors are non-fatal; dropdowns stay empty
-      } finally {
-        setLoadingPlaces(false);
-        if (!isTeamLeader) setLoadingLeaders(false);
-      }
-    }
-    
+    // Places and leaders are loaded reactively by the useEffects watching formState.state.
     setError(null);
     setSuccess(null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -534,27 +488,34 @@ function CampaignRulesPageContent() {
     }
   };
 
-  const handlePreview = async (rule: CampaignRule) => {
-    if (!dates) {
-      setError('Campaign dates not available');
+  const handlePreview = (rule: CampaignRule) => {
+    // Toggle off if already showing this rule's preview.
+    if (previewRuleId === rule.id) {
+      setPreviewRuleId(null);
+      setPreviewDates([]);
       return;
     }
 
-    setIsLoadingPreview(true);
-    setPreviewRuleId(rule.id);
     setError(null);
 
-    try {
-      const previewStart = new Date(dates.secondWeekStart);
-      const previewEnd = new Date(previewStart);
-      previewEnd.setDate(previewEnd.getDate() + 13); // Preview 2 weeks
+    // Adaptive window: wider for less-frequent rule types so there's always something to show.
+    const previewStart = new Date();
+    previewStart.setHours(0, 0, 0, 0);
+    const previewEnd = new Date(previewStart);
+    if (rule.frequency_type === 'monthly') {
+      previewEnd.setMonth(previewEnd.getMonth() + 4);      // 4 months
+    } else if (rule.frequency_type === 'biweekly') {
+      previewEnd.setDate(previewEnd.getDate() + (rule.frequency_value ?? 2) * 7 * 4); // 4 periods
+    } else {
+      previewEnd.setDate(previewEnd.getDate() + 56);       // 8 weeks for weekly
+    }
 
+    try {
       const { dates: previewDatesResult } = previewRuleEvaluation(rule, previewStart, previewEnd);
       setPreviewDates(previewDatesResult);
+      setPreviewRuleId(rule.id);
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Failed to preview rule'));
-    } finally {
-      setIsLoadingPreview(false);
     }
   };
 
@@ -652,7 +613,7 @@ function CampaignRulesPageContent() {
               {error || 'You do not have permission to access this page.'}
             </p>
             <button
-              onClick={() => router.push(adminStatus === 'SR' || (adminStatus !== 'AD' && adminStatus !== 'SR') ? '/app' : '/admin')}
+              onClick={() => router.push(isNonAdmin ? '/app' : '/admin')}
               className="mt-4 rounded-md bg-red-600 px-4 py-2 text-base font-bold text-white hover:bg-red-700 border-2 border-gray-800 dark:border-gray-600"
             >
               Go Back
@@ -684,10 +645,10 @@ function CampaignRulesPageContent() {
               </p>
             </div>
             <button
-              onClick={() => router.push(adminStatus === 'SR' || (adminStatus !== 'AD' && adminStatus !== 'SR') ? '/app' : '/admin')}
+              onClick={() => router.push(isNonAdmin ? '/app' : '/admin')}
               className="rounded-md bg-gray-200 px-3 py-2 text-base font-bold text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 border-2 border-gray-800 dark:border-gray-600"
             >
-              {adminStatus === 'SR' || (adminStatus !== 'AD' && adminStatus !== 'SR') ? 'Back to Home' : 'Back to Admin Panel'}
+              {isNonAdmin ? 'Back to Home' : 'Back to Admin Panel'}
             </button>
           </div>
         </div>
@@ -834,7 +795,7 @@ function CampaignRulesPageContent() {
                   className="mt-1 block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
                 >
                   <option value="">Select a time</option>
-                  {timeOptions.map((time) => (
+                  {TIME_OPTIONS.map((time) => (
                     <option key={time.value} value={time.value}>
                       {time.label}
                     </option>
@@ -1034,20 +995,23 @@ function CampaignRulesPageContent() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="priority" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Priority (Higher = Override)
-                </label>
-                <input
-                  id="priority"
-                  type="number"
-                  value={formState.priority}
-                  onChange={(e) => setFormState({ ...formState, priority: parseInt(e.target.value) || 0 })}
-                  className="mt-1 block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
-                />
-              </div>
-              <div className="flex items-center pt-8">
+            {/* Priority is a conflict-resolution tool — only meaningful for admins. */}
+            <div className={`grid gap-4 ${!isNonAdmin ? 'grid-cols-2' : 'grid-cols-1'}`}>
+              {!isNonAdmin && (
+                <div>
+                  <label htmlFor="priority" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Priority (Higher = Override)
+                  </label>
+                  <input
+                    id="priority"
+                    type="number"
+                    value={formState.priority}
+                    onChange={(e) => setFormState({ ...formState, priority: parseInt(e.target.value) || 0 })}
+                    className="mt-1 block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
+                  />
+                </div>
+              )}
+              <div className={`flex items-center ${!isNonAdmin ? 'pt-8' : ''}`}>
                 <label className="flex items-center">
                   <input
                     type="checkbox"
@@ -1147,19 +1111,26 @@ function CampaignRulesPageContent() {
             ) : (
               filteredRules.map((rule) => {
                 const stateColor = getStateColor(rule.state);
-                const frequencyLabel = rule.frequency_type === 'monthly' 
-                  ? `${MONTH_WEEKS.find(w => w.value === rule.month_week_number)?.label || 'Unknown'} of month`
+                const frequencyLabel = rule.frequency_type === 'monthly'
+                  ? `${MONTH_WEEKS.find(w => w.value === rule.month_week_number)?.label ?? 'Unknown'} of month`
                   : rule.frequency_type === 'biweekly'
                   ? `Every ${rule.frequency_value} weeks`
                   : rule.frequency_type === 'weekly'
                   ? 'Every week'
-                  : 'Custom';
-                
-                const dayLabel = rule.day_of_week !== null 
+                  : 'Custom (legacy — not generating campaigns)';
+
+                const dayLabel = rule.day_of_week !== null
                   ? DAYS_OF_WEEK.find(d => d.value === rule.day_of_week)?.label
                   : rule.month_day_of_week !== null
                   ? DAYS_OF_WEEK.find(d => d.value === rule.month_day_of_week)?.label
                   : null;
+
+                // Expiry warning: amber if the rule ends within the next 30 days.
+                const today = new Date(); today.setHours(0, 0, 0, 0);
+                const endDate = rule.end_date ? new Date(rule.end_date + 'T00:00:00') : null;
+                const expiringSoon = endDate !== null
+                  && endDate >= today
+                  && endDate.getTime() - today.getTime() <= 30 * 24 * 60 * 60 * 1000;
 
                 return (
                   <div key={rule.id} className={`p-4 ${stateColor.bg}`}>
@@ -1186,6 +1157,14 @@ function CampaignRulesPageContent() {
                         <div className={`text-xs ${stateColor.text} opacity-60 mt-1`}>
                           {frequencyLabel}{dayLabel ? ` on ${dayLabel}` : ''}
                         </div>
+                        {(rule.start_date || rule.end_date) && (
+                          <div className={`text-xs mt-0.5 ${expiringSoon ? 'font-medium text-amber-600 dark:text-amber-400' : `${stateColor.text} opacity-60`}`}>
+                            {rule.start_date ? `Active from ${rule.start_date}` : ''}
+                            {rule.start_date && rule.end_date ? ' · ' : ''}
+                            {rule.end_date ? `Until ${rule.end_date}` : ''}
+                            {expiringSoon ? ' ⚠ Expiring soon' : ''}
+                          </div>
+                        )}
                         {rule.notes && (
                           <div className={`text-xs ${stateColor.text} opacity-60 mt-1 italic`}>
                             {rule.notes}
@@ -1194,11 +1173,9 @@ function CampaignRulesPageContent() {
                         {previewRuleId === rule.id && (
                           <div className="mt-2 rounded bg-white/50 p-2 dark:bg-gray-900/50">
                             <div className="text-xs font-medium text-gray-700 dark:text-gray-300">
-                              Preview (next 2 weeks):
+                              Upcoming campaign dates:
                             </div>
-                            {isLoadingPreview ? (
-                              <div className="text-xs text-gray-500 dark:text-gray-400">Loading...</div>
-                            ) : previewDates.length > 0 ? (
+                            {previewDates.length > 0 ? (
                               <div className="text-xs text-gray-600 dark:text-gray-400">
                                 {previewDates.map((d, i) => (
                                   <span key={i} className="mr-2">
