@@ -25,6 +25,7 @@ function RecordResultsDetailPageContent() {
   const {
     user: contextUser,
     isAdmin: contextIsAdmin,
+    adminStatus: contextAdminStatus,
     userState: contextUserState,
     userLeader: contextUserLeader,
     userMobile: contextUserMobile,
@@ -194,8 +195,12 @@ function RecordResultsDetailPageContent() {
       .eq('time', campaignParams.time)
       .eq('leader', campaignParams.leader);
 
+    // SR users can access any campaign in their own state
+    const isSRInState = contextAdminStatus === 'SR' &&
+      (campaignParams.state || '').toUpperCase().trim() === (contextUserState || '').toUpperCase().trim();
+
     let existingCampaign: { id: string } | null = null;
-    if (contextIsAdmin) {
+    if (contextIsAdmin || isSRInState) {
       existingCampaign = campaigns && campaigns.length > 0 ? campaigns[0] : null;
     } else if (campaigns && campaigns.length > 0) {
       // Own: mobile match
@@ -224,8 +229,8 @@ function RecordResultsDetailPageContent() {
 
     const isOwner = userMobileAndLeader?.leader &&
       normalizeName(campaignParams.leader || '') === normalizeName(userMobileAndLeader.leader);
-    if (!contextIsAdmin && !isOwner) {
-      throw new Error('You can only create campaigns for your own leader. This campaign is not shared with you or does not exist.');
+    if (!contextIsAdmin && !isSRInState && !isOwner) {
+      throw new Error('You can only record results for your own campaigns. This campaign is not in your state or shared with you.');
     }
 
     const created = await createCampaign({
@@ -240,7 +245,7 @@ function RecordResultsDetailPageContent() {
     });
 
     return created.id;
-  }, [contextIsAdmin, contextUserState, contextUserLeader, contextUserMobile]);
+  }, [contextIsAdmin, contextAdminStatus, contextUserState, contextUserLeader, contextUserMobile]);
 
   // Function to get category code from section type
   const getCategoryCode = (section: SectionType): 'P' | 'F' | 'SP' | 'IR' => {
