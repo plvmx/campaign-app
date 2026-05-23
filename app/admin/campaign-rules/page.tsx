@@ -75,6 +75,7 @@ function CampaignRulesPageContent() {
     notes: '',
   });
   
+  const [isFormExpanded, setIsFormExpanded] = useState(false); // collapsed until we know rule count
   const [filterActive, setFilterActive] = useState<string>('all'); // 'all', 'active', 'inactive'
   const [filterFrequency, setFilterFrequency] = useState<string>('');
   const [previewRuleId, setPreviewRuleId] = useState<string | null>(null);
@@ -152,9 +153,12 @@ function CampaignRulesPageContent() {
       const { data, error } = await query
         .order('priority', { ascending: false })
         .order('created_at', { ascending: false });
-      
+
       if (error) throw error;
-      setRules(data || []);
+      const fetched = data || [];
+      setRules(fetched);
+      // Auto-expand the form when the user has no rules yet so they can create their first one
+      setIsFormExpanded(prev => prev || fetched.length === 0);
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Failed to fetch campaign rules'));
     }
@@ -365,6 +369,7 @@ function CampaignRulesPageContent() {
 
         if (error) throw error;
         setSuccess('Campaign rule updated successfully');
+        setIsFormExpanded(false);
       } else {
         // Create new rule
         const { error } = await supabase
@@ -373,6 +378,7 @@ function CampaignRulesPageContent() {
 
         if (error) throw error;
         setSuccess('Campaign rule created successfully');
+        setIsFormExpanded(false); // collapse after first create — rule list is now visible
       }
 
       // Reset form
@@ -420,6 +426,7 @@ function CampaignRulesPageContent() {
       return;
     }
     setEditingId(rule.id);
+    setIsFormExpanded(true); // always show form when editing
     // For SR/TL users with locked state, use the locked state instead of rule's state
     const stateToUse = isStateLocked && userState ? userState.toUpperCase().trim() : rule.state;
     setFormState({
@@ -630,10 +637,25 @@ function CampaignRulesPageContent() {
         )}
 
         {/* Add/Edit Form */}
-        <div className="mb-6 rounded-lg border border-gray-200 bg-blue-50 p-4 shadow-sm dark:border-gray-700 dark:bg-blue-900/20">
-          <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-gray-100">
-            {editingId ? 'Edit Campaign Rule' : 'Add New Campaign Rule'}
-          </h2>
+        <div className="mb-6 rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-blue-50 shadow-sm dark:bg-blue-900/20">
+          {/* Collapsible header */}
+          <button
+            type="button"
+            onClick={() => {
+              if (isFormExpanded && editingId) { resetForm(); }
+              setIsFormExpanded(v => !v);
+            }}
+            className="flex w-full items-center justify-between p-4 text-left"
+          >
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+              {editingId ? 'Edit Campaign Rule' : 'Add New Campaign Rule'}
+            </h2>
+            <span className="ml-2 text-xl text-gray-600 dark:text-gray-400 select-none">
+              {isFormExpanded ? '▲' : '▼'}
+            </span>
+          </button>
+          {isFormExpanded && (
+          <div className="px-4 pb-4">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label htmlFor="name" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -963,7 +985,7 @@ function CampaignRulesPageContent() {
               {editingId && (
                 <button
                   type="button"
-                  onClick={resetForm}
+                  onClick={() => { resetForm(); setIsFormExpanded(false); }}
                   className="rounded-md bg-gray-200 px-4 py-2 text-base font-bold text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 border-2 border-gray-800 dark:border-gray-600"
                 >
                   Cancel
@@ -971,6 +993,8 @@ function CampaignRulesPageContent() {
               )}
             </div>
           </form>
+          </div>
+          )}
         </div>
 
         {/* Filters */}
