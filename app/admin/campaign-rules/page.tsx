@@ -43,6 +43,38 @@ const TIME_OPTIONS: { value: string; label: string }[] = (() => {
   return times;
 })();
 
+/**
+ * Convert form selections into a plain-English schedule description.
+ * Shown in the create-confirmation modal so leaders can sanity-check their settings.
+ */
+function buildScheduleSummary(
+  frequencyType: 'weekly' | 'biweekly' | 'monthly',
+  dayOfWeek: number,
+  monthWeekNumber: number | null,
+  monthDayOfWeek: number | null,
+  frequencyValue: number,
+): string {
+  const dayName      = DAYS_OF_WEEK.find(d => d.value === dayOfWeek)?.label      ?? 'Unknown day';
+  const monthDayName = DAYS_OF_WEEK.find(d => d.value === monthDayOfWeek)?.label ?? 'Unknown day';
+
+  switch (frequencyType) {
+    case 'weekly':
+      return `Every ${dayName}`;
+    case 'biweekly':
+      return `Every ${frequencyValue} weeks on ${dayName}`;
+    case 'monthly': {
+      if (monthWeekNumber === null || monthDayOfWeek === null) return 'Monthly (incomplete settings)';
+      const ordinal =
+        monthWeekNumber === -1 ? 'last'
+        : monthWeekNumber === 1 ? '1st'
+        : monthWeekNumber === 2 ? '2nd'
+        : monthWeekNumber === 3 ? '3rd'
+        : '4th';
+      return `The ${ordinal} ${monthDayName} of each month`;
+    }
+  }
+}
+
 /** Normalize time string from DB (e.g. "10:00:00") to HH:MM for form/display. */
 function timeToHHMM(timeStr: string | null | undefined): string {
   if (!timeStr) return '';
@@ -91,6 +123,11 @@ function CampaignRulesPageContent() {
   
   const [isFormExpanded, setIsFormExpanded] = useState(false); // collapsed until we know rule count
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  // Create-confirmation modal
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [confirmDates, setConfirmDates] = useState<string[]>([]);
+  const [pendingRuleData, setPendingRuleData] = useState<Omit<CampaignRule, 'id'> | null>(null);
   const [filterActive, setFilterActive] = useState<string>('all'); // 'all', 'active', 'inactive'
   const [filterFrequency, setFilterFrequency] = useState<string>('');
   const [previewRuleId, setPreviewRuleId] = useState<string | null>(null);
@@ -372,7 +409,7 @@ function CampaignRulesPageContent() {
       };
 
       if (editingId) {
-        // Update existing rule
+        // Update existing rule — proceed directly, no confirmation needed.
         const { error } = await supabase
           .from('campaign_rules')
           .update(ruleData)
@@ -381,25 +418,61 @@ function CampaignRulesPageContent() {
         if (error) throw error;
         setSuccess('Campaign rule updated successfully');
         setIsFormExpanded(false);
+        resetForm();
+        await fetchRules();
       } else {
-        // Create new rule
-        const { error } = await supabase
-          .from('campaign_rules')
-          .insert([{ ...ruleData, created_by: user?.id }]);
+        // New rule — compute upcoming dates and show confirmation modal before writing.
+        const searchStart = ruleData.start_date
+          ? new Date(ruleData.start_date + 'T00:00:00')
+          : (() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; })();
+        const searchEnd = new Date(searchStart);
+        searchEnd.setMonth(searchEnd.getMonth() + 6);
 
-        if (error) throw error;
-        setSuccess('Campaign rule created successfully');
-        setIsFormExpanded(false); // collapse after first create — rule list is now visible
+        const previewRule: CampaignRule = { id: '__preview__', ...ruleData };
+        const upcomingCampaigns = evaluateRule(previewRule, searchStart, searchEnd);
+        const upcomingDates = upcomingCampaigns.slice(0, 5).map(c => c.date);
+
+        setPendingRuleData(ruleData);
+        setConfirmDates(upcomingDates);
+        setShowConfirmModal(true);
+        setIsSubmitting(false);
+        return; // Wait for user confirmation before inserting.
       }
-
-      // Reset form
-      resetForm();
-      await fetchRules();
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Failed to save campaign rule'));
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  /** Called when the leader confirms the creation modal — performs the actual DB insert. */
+  const handleConfirmCreate = async () => {
+    if (!pendingRuleData) return;
+    setIsSubmitting(true);
+    setShowConfirmModal(false);
+    try {
+      const { error } = await supabase
+        .from('campaign_rules')
+        .insert([{ ...pendingRuleData, created_by: user?.id }]);
+      if (error) throw error;
+      setSuccess('Campaign rule created successfully');
+      setIsFormExpanded(false);
+      resetForm();
+      await fetchRules();
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to create campaign rule'));
+    } finally {
+      setIsSubmitting(false);
+      setPendingRuleData(null);
+      setConfirmDates([]);
+    }
+  };
+
+  /** Dismisses the confirmation modal without writing anything. */
+  const handleCancelConfirm = () => {
+    setShowConfirmModal(false);
+    setPendingRuleData(null);
+    setConfirmDates([]);
   };
 
   const resetForm = () => {
@@ -1229,6 +1302,121 @@ function CampaignRulesPageContent() {
           </div>
         </div>
       </div>
+
+      {/* ── Create-confirmation modal ──────────────────────────────────────── */}
+      {showConfirmModal && pendingRuleData && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center"
+          onClick={(e) => { if (e.target === e.currentTarget) handleCancelConfirm(); }}
+        >
+          <div className="w-full max-w-lg rounded-t-2xl bg-white p-6 shadow-xl dark:bg-gray-900 sm:rounded-2xl">
+
+            {/* Header */}
+            <h2 className="mb-1 text-xl font-bold text-gray-900 dark:text-gray-100">
+              Confirm New Campaign Rule
+            </h2>
+            <p className="mb-5 text-sm text-gray-500 dark:text-gray-400">
+              Please review what this rule will do before confirming.
+            </p>
+
+            {/* Rule summary card */}
+            <div className="mb-5 rounded-lg border-2 border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
+              <div className="mb-3 text-sm font-semibold text-blue-900 dark:text-blue-200">
+                {pendingRuleData.name}
+              </div>
+              <div className="space-y-1 text-sm text-blue-800 dark:text-blue-300">
+                <div>
+                  <span className="font-medium">Who: </span>
+                  {pendingRuleData.leader}
+                </div>
+                <div>
+                  <span className="font-medium">Where: </span>
+                  {pendingRuleData.place}, {pendingRuleData.state}
+                </div>
+                <div>
+                  <span className="font-medium">Time: </span>
+                  {TIME_OPTIONS.find(t => t.value === pendingRuleData.time)?.label ?? pendingRuleData.time}
+                </div>
+                <div>
+                  <span className="font-medium">Schedule: </span>
+                  {buildScheduleSummary(
+                    pendingRuleData.frequency_type as 'weekly' | 'biweekly' | 'monthly',
+                    pendingRuleData.day_of_week ?? 0,
+                    pendingRuleData.month_week_number,
+                    pendingRuleData.month_day_of_week,
+                    pendingRuleData.frequency_value ?? 2,
+                  )}
+                </div>
+                {pendingRuleData.start_date && (
+                  <div>
+                    <span className="font-medium">Starting: </span>
+                    {new Date(pendingRuleData.start_date + 'T00:00:00').toLocaleDateString('en-AU', {
+                      day: 'numeric', month: 'long', year: 'numeric',
+                    })}
+                  </div>
+                )}
+                {pendingRuleData.end_date && (
+                  <div>
+                    <span className="font-medium">Until: </span>
+                    {new Date(pendingRuleData.end_date + 'T00:00:00').toLocaleDateString('en-AU', {
+                      day: 'numeric', month: 'long', year: 'numeric',
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Upcoming dates */}
+            <div className="mb-5">
+              <p className="mb-2 text-sm font-semibold text-gray-700 dark:text-gray-300">
+                📅 Next upcoming campaign dates:
+              </p>
+              {confirmDates.length > 0 ? (
+                <ul className="space-y-1">
+                  {confirmDates.map(dateStr => (
+                    <li key={dateStr} className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                      <span className="text-green-500">✓</span>
+                      {new Date(dateStr + 'T00:00:00').toLocaleDateString('en-AU', {
+                        weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+                      })}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-300">
+                  ⚠ No campaigns will be generated in the next 6 months with these settings.
+                  You can still create the rule and activate it later, or go back and adjust the settings.
+                </div>
+              )}
+            </div>
+
+            {/* Footer note */}
+            <p className="mb-5 text-xs text-gray-500 dark:text-gray-400">
+              Campaigns are created automatically during the weekly system refresh.
+              You can edit, deactivate, or delete this rule at any time.
+            </p>
+
+            {/* Actions */}
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={handleCancelConfirm}
+                className="flex-1 rounded-md border-2 border-gray-400 bg-white px-4 py-2.5 text-base font-bold text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+              >
+                ← Go Back
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmCreate}
+                disabled={isSubmitting}
+                className="flex-1 rounded-md border-2 border-gray-800 bg-blue-600 px-4 py-2.5 text-base font-bold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600"
+              >
+                {isSubmitting ? 'Creating…' : 'Confirm & Create'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </MobileLayout>
   );
 }
