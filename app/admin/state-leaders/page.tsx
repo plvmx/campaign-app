@@ -31,6 +31,8 @@ export default function StateLeadersPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formState, setFormState] = useState({ state: '', leader: '', mobile: '', admin: '' });
   const [filterState, setFilterState] = useState<string>('');
+  const [filterName, setFilterName]   = useState<string>('');
+  const [filterMobile, setFilterMobile] = useState<string>('');
 
   useEffect(() => {
     if (isUserLoading) return;
@@ -192,9 +194,12 @@ export default function StateLeadersPage() {
     );
   }
 
-  const filteredLeaders = filterState
-    ? stateLeaders.filter(sl => sl.state === filterState)
-    : stateLeaders;
+  const filteredLeaders = stateLeaders.filter((sl) => {
+    if (filterState  && sl.state !== filterState) return false;
+    if (filterName   && !sl.leader.toLowerCase().includes(filterName.toLowerCase())) return false;
+    if (filterMobile && !(sl.mobile ?? '').toLowerCase().includes(filterMobile.toLowerCase())) return false;
+    return true;
+  });
 
   return (
     <MobileLayout>
@@ -316,24 +321,52 @@ export default function StateLeadersPage() {
           </form>
         </div>
 
-        {/* Filter */}
-        <div className="mb-4">
-          <label htmlFor="filter" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-            Filter by State
-          </label>
-          <select
-            id="filter"
-            value={filterState}
-            onChange={(e) => setFilterState(e.target.value)}
-            className="mt-1 block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
-          >
-            <option value="">All States</option>
-            {AUSTRALIAN_STATES.map((state) => (
-              <option key={state} value={state}>
-                {state}
-              </option>
-            ))}
-          </select>
+        {/* Filters */}
+        <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div>
+            <label htmlFor="filter-state" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Filter by State
+            </label>
+            <select
+              id="filter-state"
+              value={filterState}
+              onChange={(e) => setFilterState(e.target.value)}
+              className="mt-1 block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
+            >
+              <option value="">All States</option>
+              {AUSTRALIAN_STATES.map((state) => (
+                <option key={state} value={state}>
+                  {state}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="filter-name" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Filter by Name
+            </label>
+            <input
+              id="filter-name"
+              type="text"
+              value={filterName}
+              onChange={(e) => setFilterName(e.target.value)}
+              placeholder="e.g. Peter"
+              className="mt-1 block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
+            />
+          </div>
+          <div>
+            <label htmlFor="filter-mobile" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Filter by Phone No
+            </label>
+            <input
+              id="filter-mobile"
+              type="tel"
+              value={filterMobile}
+              onChange={(e) => setFilterMobile(e.target.value)}
+              placeholder="e.g. 0429"
+              className="mt-1 block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
+            />
+          </div>
         </div>
 
         {/* List of State Leaders */}
