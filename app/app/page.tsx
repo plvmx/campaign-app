@@ -1060,8 +1060,8 @@ function AppPageContent() {
             )}
           </div>
 
-          {/* Campaign Rules shortcut — visible to team leaders only */}
-          {adminStatus !== null && adminStatus !== 'AD' && adminStatus !== 'SR' && (
+          {/* Campaign Rules shortcut — visible to team leaders only (adminStatus is null for regular leaders) */}
+          {adminStatus !== 'AD' && adminStatus !== 'SR' && userState && (
             <div className="mt-4 rounded-lg border-2 border-green-300 bg-green-50 p-3 dark:border-green-700 dark:bg-green-900/20">
               <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-green-700 dark:text-green-400">
                 Campaign Rules
