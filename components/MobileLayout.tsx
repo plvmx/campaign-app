@@ -83,22 +83,22 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
     checkAdminAndSr();
   }, []);
 
-  // Home and All Campaigns shown to all signed-in users; Admin for AD; SR Admin for SR; TL Admin for TL
-  const baseNavItems: NavItem[] = [
-    { href: '/app', label: 'Home', icon: '🏠' },
-    { href: '/campaign-list', label: 'All Campaigns', iconImage: '/flame_icon.png' },
-  ];
-  const adminNavItem: NavItem = { href: '/admin', label: 'Admin', icon: '⚙️' };
-  const srAdminNavItem: NavItem = { href: '/app/sr-admin', label: 'SR Admin', icon: '⚙️', isSrAdmin: true };
-  const tlAdminNavItem: NavItem = { href: '/app/tl-admin', label: 'TL Admin', icon: '⚙️', isTlAdmin: true };
+  const homeNavItem: NavItem    = { href: '/app',           label: 'Home',    icon: '🏠' };
+  const metricsNavItem: NavItem = { href: '/admin/metrics', label: 'Metrics', icon: '📊' };
+  const adminNavItem: NavItem   = { href: '/admin',         label: 'Admin',   icon: '⚙️' };
+  const srAdminNavItem: NavItem = { href: '/app/sr-admin',  label: 'SR Admin', icon: '⚙️', isSrAdmin: true };
+  const tlAdminNavItem: NavItem = { href: '/app/tl-admin',  label: 'TL Admin', icon: '⚙️', isTlAdmin: true };
 
+  // Full admins (AD): Home | Metrics | Admin
+  // State reporters (SR): Home | SR Admin
+  // Team leaders: Home | TL Admin
   const navItems: NavItem[] = isAdmin === null
     ? []
     : isAdmin
-      ? [...baseNavItems, adminNavItem]
+      ? [homeNavItem, metricsNavItem, adminNavItem]
       : adminStatus === 'SR'
-        ? [...baseNavItems, srAdminNavItem]
-        : [...baseNavItems, tlAdminNavItem];
+        ? [homeNavItem, srAdminNavItem]
+        : [homeNavItem, tlAdminNavItem];
 
   const handleSignOut = async () => {
     try {
