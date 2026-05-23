@@ -62,7 +62,7 @@ function CampaignRulesPageContent() {
     place: '',
     time: '',
     mobile: '',
-    frequency_type: 'weekly' as 'weekly' | 'biweekly' | 'monthly' | 'custom',
+    frequency_type: 'weekly' as 'weekly' | 'biweekly' | 'monthly',
     frequency_value: 2,
     month_week_number: null as number | null,
     month_day_of_week: null as number | null,
@@ -76,6 +76,7 @@ function CampaignRulesPageContent() {
   });
   
   const [isFormExpanded, setIsFormExpanded] = useState(false); // collapsed until we know rule count
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [filterActive, setFilterActive] = useState<string>('all'); // 'all', 'active', 'inactive'
   const [filterFrequency, setFilterFrequency] = useState<string>('');
   const [previewRuleId, setPreviewRuleId] = useState<string | null>(null);
@@ -324,16 +325,28 @@ function CampaignRulesPageContent() {
         throw new Error('As a Team Leader you can only create rules for yourself.');
       }
 
-      // Validate required fields based on frequency type
-      if (formState.frequency_type === 'monthly' && formState.month_week_number === null) {
-        throw new Error('Week of month is required for monthly rules');
+      // Validate required fields based on frequency type — collect all errors up front
+      const newFieldErrors: Record<string, string> = {};
+      if (formState.frequency_type === 'monthly') {
+        if (formState.month_week_number === null) {
+          newFieldErrors.month_week_number = 'Please select which week of the month.';
+        }
+        if (formState.month_day_of_week === null) {
+          newFieldErrors.month_day_of_week = 'Please select which day of the week.';
+        }
       }
       if ((formState.frequency_type === 'weekly' || formState.frequency_type === 'biweekly') && formState.day_of_week === null) {
-        throw new Error('Day of week is required for weekly/biweekly rules');
+        newFieldErrors.day_of_week = 'Please select the day of week.';
       }
       if (formState.frequency_type === 'biweekly' && !formState.frequency_value) {
-        throw new Error('Frequency value is required for biweekly rules');
+        newFieldErrors.frequency_value = 'Please enter how many weeks between campaigns (minimum 2).';
       }
+      if (Object.keys(newFieldErrors).length > 0) {
+        setFieldErrors(newFieldErrors);
+        setIsSubmitting(false);
+        return;
+      }
+      setFieldErrors({});
 
       const mobileValue = formState.mobile.trim() || null;
       const ruleData: Omit<CampaignRule, 'id'> = {
@@ -415,6 +428,7 @@ function CampaignRulesPageContent() {
       priority: 0,
       notes: '',
     });
+    setFieldErrors({});
     setPreviewRuleId(null);
     setPreviewDates([]);
   };
@@ -436,7 +450,8 @@ function CampaignRulesPageContent() {
       place: rule.place,
       time: timeToHHMM(rule.time),
       mobile: rule.mobile || '',
-      frequency_type: rule.frequency_type,
+      // 'custom' is no longer a supported frequency type in the UI; fall back to 'weekly'
+      frequency_type: (rule.frequency_type === 'custom' ? 'weekly' : rule.frequency_type) as 'weekly' | 'biweekly' | 'monthly',
       frequency_value: rule.frequency_value || 2,
       month_week_number: rule.month_week_number,
       month_day_of_week: rule.month_day_of_week,
@@ -562,42 +577,10 @@ function CampaignRulesPageContent() {
     }
   };
 
-  if (isUserLoading) {
-    return (
-      <MobileLayout>
-        <div className="flex min-h-screen items-center justify-center">
-          <div className="text-gray-600 dark:text-gray-400">Loading...</div>
-        </div>
-      </MobileLayout>
-    );
-  }
-
-  if (!hasAccess) {
-    return (
-      <MobileLayout>
-        <div className="p-4">
-          <div className="rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20">
-            <h2 className="text-lg font-semibold text-red-800 dark:text-red-200">
-              Access Denied
-            </h2>
-            <p className="mt-1 text-sm text-red-600 dark:text-red-300">
-              {error || 'You do not have permission to access this page.'}
-            </p>
-            <button
-              onClick={() => router.push(adminStatus === 'SR' || (adminStatus !== 'AD' && adminStatus !== 'SR') ? '/app' : '/admin')}
-              className="mt-4 rounded-md bg-red-600 px-4 py-2 text-base font-bold text-white hover:bg-red-700 border-2 border-gray-800 dark:border-gray-600"
-            >
-              Go Back
-            </button>
-          </div>
-        </div>
-      </MobileLayout>
-    );
-  }
-
   // ── Live "first campaign" hint ─────────────────────────────────────────────
   // Compute the first date the rule would generate a campaign, updating live as
   // the user fills in the form. Shown near the "Active From" field.
+  // Must be declared before any early returns to satisfy the Rules of Hooks.
   const firstCampaignDate = useMemo(() => {
     const {
       frequency_type, day_of_week, month_week_number, month_day_of_week,
@@ -606,8 +589,6 @@ function CampaignRulesPageContent() {
 
     // Monthly requires both week-of-month and day-of-week to be set
     if (frequency_type === 'monthly' && (month_week_number === null || month_day_of_week === null)) return null;
-    // Custom rules have ad-hoc logic — skip inline preview
-    if (frequency_type === 'custom') return null;
 
     const tempRule: CampaignRule = {
       id:                '__preview__',
@@ -648,6 +629,39 @@ function CampaignRulesPageContent() {
     formState.month_day_of_week, formState.frequency_value, formState.start_date,
     formState.end_date, formState.reference_date,
   ]);
+
+  if (isUserLoading) {
+    return (
+      <MobileLayout>
+        <div className="flex min-h-screen items-center justify-center">
+          <div className="text-gray-600 dark:text-gray-400">Loading...</div>
+        </div>
+      </MobileLayout>
+    );
+  }
+
+  if (!hasAccess) {
+    return (
+      <MobileLayout>
+        <div className="p-4">
+          <div className="rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20">
+            <h2 className="text-lg font-semibold text-red-800 dark:text-red-200">
+              Access Denied
+            </h2>
+            <p className="mt-1 text-sm text-red-600 dark:text-red-300">
+              {error || 'You do not have permission to access this page.'}
+            </p>
+            <button
+              onClick={() => router.push(adminStatus === 'SR' || (adminStatus !== 'AD' && adminStatus !== 'SR') ? '/app' : '/admin')}
+              className="mt-4 rounded-md bg-red-600 px-4 py-2 text-base font-bold text-white hover:bg-red-700 border-2 border-gray-800 dark:border-gray-600"
+            >
+              Go Back
+            </button>
+          </div>
+        </div>
+      </MobileLayout>
+    );
+  }
 
   const filteredRules = rules.filter(rule => {
     if (filterActive === 'active' && !rule.is_active) return false;
@@ -851,13 +865,12 @@ function CampaignRulesPageContent() {
                 id="frequency_type"
                 required
                 value={formState.frequency_type}
-                onChange={(e) => setFormState({ ...formState, frequency_type: e.target.value as 'weekly' | 'biweekly' | 'monthly' | 'custom' })}
+                onChange={(e) => setFormState({ ...formState, frequency_type: e.target.value as 'weekly' | 'biweekly' | 'monthly' })}
                 className="mt-1 block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
               >
                 <option value="weekly">Weekly</option>
                 <option value="biweekly">Biweekly (Every N weeks)</option>
                 <option value="monthly">Monthly</option>
-                <option value="custom">Custom (Advanced)</option>
               </select>
             </div>
 
@@ -929,8 +942,11 @@ function CampaignRulesPageContent() {
                     id="month_week_number"
                     required
                     value={formState.month_week_number || ''}
-                    onChange={(e) => setFormState({ ...formState, month_week_number: parseInt(e.target.value) || null })}
-                    className="mt-1 block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
+                    onChange={(e) => {
+                      setFormState({ ...formState, month_week_number: parseInt(e.target.value) || null });
+                      setFieldErrors(prev => { const next = { ...prev }; delete next.month_week_number; return next; });
+                    }}
+                    className={`mt-1 block w-full rounded-md border-2 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:bg-gray-900 dark:text-white ${fieldErrors.month_week_number ? 'border-red-500 dark:border-red-400' : 'border-gray-400 dark:border-gray-500'}`}
                   >
                     <option value="">Select week</option>
                     {MONTH_WEEKS.map((week) => (
@@ -939,24 +955,34 @@ function CampaignRulesPageContent() {
                       </option>
                     ))}
                   </select>
+                  {fieldErrors.month_week_number && (
+                    <p className="mt-1 text-xs text-red-600 dark:text-red-400">{fieldErrors.month_week_number}</p>
+                  )}
                 </div>
                 <div>
                   <label htmlFor="month_day_of_week" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Day of Week (Optional - leave blank for first day of week)
+                    Day of Week *
                   </label>
                   <select
                     id="month_day_of_week"
-                    value={formState.month_day_of_week || ''}
-                    onChange={(e) => setFormState({ ...formState, month_day_of_week: e.target.value ? parseInt(e.target.value) : null })}
-                    className="mt-1 block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
+                    required
+                    value={formState.month_day_of_week !== null ? formState.month_day_of_week : ''}
+                    onChange={(e) => {
+                      setFormState({ ...formState, month_day_of_week: e.target.value !== '' ? parseInt(e.target.value) : null });
+                      setFieldErrors(prev => { const next = { ...prev }; delete next.month_day_of_week; return next; });
+                    }}
+                    className={`mt-1 block w-full rounded-md border-2 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:bg-gray-900 dark:text-white ${fieldErrors.month_day_of_week ? 'border-red-500 dark:border-red-400' : 'border-gray-400 dark:border-gray-500'}`}
                   >
-                    <option value="">Any day in week</option>
+                    <option value="">Select day</option>
                     {DAYS_OF_WEEK.map((day) => (
                       <option key={day.value} value={day.value}>
                         {day.label}
                       </option>
                     ))}
                   </select>
+                  {fieldErrors.month_day_of_week && (
+                    <p className="mt-1 text-xs text-red-600 dark:text-red-400">{fieldErrors.month_day_of_week}</p>
+                  )}
                 </div>
               </>
             )}
@@ -977,7 +1003,7 @@ function CampaignRulesPageContent() {
                   Campaigns won&apos;t be generated before this date. Leave blank to start from the next campaign cycle.
                 </p>
                 {/* Live first-campaign hint */}
-                {firstCampaignDate && formState.frequency_type !== 'custom' && (
+                {firstCampaignDate && (
                   <p className="mt-1.5 rounded-md bg-blue-50 dark:bg-blue-900/30 px-2 py-1 text-xs font-medium text-blue-700 dark:text-blue-300">
                     📅 First campaign under this rule:{' '}
                     {firstCampaignDate.toLocaleDateString('en-AU', {
@@ -985,7 +1011,7 @@ function CampaignRulesPageContent() {
                     })}
                   </p>
                 )}
-                {!firstCampaignDate && formState.start_date && formState.frequency_type !== 'custom' && (
+                {!firstCampaignDate && formState.start_date && (
                   <p className="mt-1.5 text-xs text-amber-600 dark:text-amber-400">
                     ⚠ No campaigns found in the next 6 months with these settings.
                   </p>
@@ -1102,7 +1128,6 @@ function CampaignRulesPageContent() {
               <option value="weekly">Weekly</option>
               <option value="biweekly">Biweekly</option>
               <option value="monthly">Monthly</option>
-              <option value="custom">Custom</option>
             </select>
           </div>
         </div>
