@@ -5,93 +5,52 @@ import { useRouter } from 'next/navigation';
 import MobileLayout from '@/components/MobileLayout';
 import { useUser } from '@/contexts/UserContext';
 import { getLeadersNotSignedInSinceRefreshByState, type LeaderNotSignedIn } from '@/lib/weeklyRefresh';
-import { getStateRefreshMode, setStateRefreshMode, type RefreshMode } from '@/lib/stateRefreshSettings';
 import { useCampaignDates } from '@/contexts/CampaignDatesContext';
 import { formatDateReadable } from '@/lib/campaignDates';
-import { getErrorMessage } from '@/lib/errorUtils';
 
 export default function SRAdminPage() {
   const router = useRouter();
   const { dates } = useCampaignDates();
   const { user, adminStatus, userState: contextUserState, userProfile, isLoading: isUserLoading } = useUser();
-  const [hasAccess, setHasAccess] = useState(false);
-  const [userState, setUserState] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [leadersNotSignedIn, setLeadersNotSignedIn] = useState<LeaderNotSignedIn[]>([]);
   const [lastRefreshAt, setLastRefreshAt] = useState<Date | null>(null);
   const [loadingLeaders, setLoadingLeaders] = useState(false);
-  const [refreshMode, setRefreshMode] = useState<RefreshMode>('either');
-  const [loadingRefreshMode, setLoadingRefreshMode] = useState(false);
-  const [savingRefreshMode, setSavingRefreshMode] = useState(false);
-  const [refreshModeMessage, setRefreshModeMessage] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (isUserLoading) return;
-    if (!user) { router.push('/login'); return; }
-    if (adminStatus !== 'SR') {
-      setError('You do not have permission to access SR Admin.');
-      return;
-    }
-    const stateToUse = contextUserState ?? userProfile?.state ?? null;
-    setUserState(stateToUse);
-    setHasAccess(true);
-  }, [isUserLoading, user, router, adminStatus, contextUserState, userProfile]);
+  // Derive access state during render — avoids synchronous setState inside effects.
+  const stateToUse = contextUserState ?? userProfile?.state ?? null;
+  const hasAccess = !isUserLoading && !!user && adminStatus === 'SR';
+  const accessError = !isUserLoading && !!user && adminStatus !== 'SR'
+    ? 'You do not have permission to access SR Admin.'
+    : null;
 
+  // Redirect to login — side-effect only, no setState.
   useEffect(() => {
-    if (!hasAccess || !userState) return;
+    if (!isUserLoading && !user) router.push('/login');
+  }, [isUserLoading, user, router]);
+
+  // Fetch leaders who haven't signed in since the last refresh.
+  useEffect(() => {
+    if (!hasAccess || !stateToUse) return;
     let cancelled = false;
-    setLoadingLeaders(true);
-    getLeadersNotSignedInSinceRefreshByState(userState)
-      .then(({ leaders, lastRefreshAt: at }) => {
+    void (async () => {
+      setLoadingLeaders(true);
+      try {
+        const { leaders, lastRefreshAt: at } = await getLeadersNotSignedInSinceRefreshByState(stateToUse);
         if (!cancelled) {
           setLeadersNotSignedIn(leaders);
           setLastRefreshAt(at);
         }
-      })
-      .catch(() => {
+      } catch {
         if (!cancelled) {
           setLeadersNotSignedIn([]);
           setLastRefreshAt(null);
         }
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) setLoadingLeaders(false);
-      });
+      }
+    })();
     return () => { cancelled = true; };
-  }, [hasAccess, userState]);
-
-  // Load current weekly refresh mode for this state
-  useEffect(() => {
-    if (!hasAccess || !userState) return;
-    let cancelled = false;
-    setLoadingRefreshMode(true);
-    getStateRefreshMode(userState)
-      .then((mode) => {
-        if (!cancelled) setRefreshMode(mode);
-      })
-      .catch(() => {
-        if (!cancelled) setRefreshMode('either');
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingRefreshMode(false);
-      });
-    return () => { cancelled = true; };
-  }, [hasAccess, userState]);
-
-  const handleSaveRefreshMode = async () => {
-    if (!userState) return;
-    setSavingRefreshMode(true);
-    setRefreshModeMessage(null);
-    setError(null);
-    try {
-      await setStateRefreshMode(userState, refreshMode, user?.id ?? null);
-      setRefreshModeMessage('Saved. This mode will be used when an admin runs Weekly Refresh for your state.');
-    } catch (err: unknown) {
-      setError(getErrorMessage(err, 'Failed to save refresh mode'));
-    } finally {
-      setSavingRefreshMode(false);
-    }
-  };
+  }, [hasAccess, stateToUse]);
 
   if (isUserLoading) {
     return (
@@ -109,7 +68,7 @@ export default function SRAdminPage() {
         <div className="p-4">
           <div className="rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20">
             <h2 className="text-lg font-semibold text-red-800 dark:text-red-200">Access Denied</h2>
-            <p className="mt-1 text-sm text-red-600 dark:text-red-300">{error}</p>
+            <p className="mt-1 text-sm text-red-600 dark:text-red-300">{accessError}</p>
             <button
               onClick={() => router.push('/app')}
               className="mt-4 rounded-md bg-red-600 px-4 py-2 text-base font-bold text-white hover:bg-red-700 border-2 border-gray-800 dark:border-gray-600"
@@ -122,7 +81,7 @@ export default function SRAdminPage() {
     );
   }
 
-  const stateToUse = userState ?? '';
+  const state = stateToUse ?? '';
 
   return (
     <MobileLayout>
@@ -135,12 +94,6 @@ export default function SRAdminPage() {
             State Reporter admin options for your state
           </p>
         </div>
-
-        {error && (
-          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20">
-            <p className="text-sm text-red-800 dark:text-red-200">{error}</p>
-          </div>
-        )}
 
         <div className="space-y-4">
           {/* Campaign Dates Info */}
@@ -178,53 +131,11 @@ export default function SRAdminPage() {
               Manage rules for automatic campaign generation. Create rules for recurring campaigns (weekly, biweekly, monthly) for your state.
             </p>
             <button
-              onClick={() => router.push(`/admin/campaign-rules?state=${encodeURIComponent(stateToUse)}`)}
+              onClick={() => router.push(`/admin/campaign-rules?state=${encodeURIComponent(state)}`)}
               className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
             >
               Manage Campaign Rules
             </button>
-          </div>
-
-          {/* Weekly Refresh Mode */}
-          <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-              Weekly Refresh Mode
-            </h2>
-            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-              Choose how campaigns are created for your state when an admin runs Weekly Refresh. Either: copy from past week only when there is no rule for that leader/place/time; otherwise the rule runs and nothing is copied for that campaign.
-            </p>
-            {loadingRefreshMode ? (
-              <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">Loading…</p>
-            ) : (
-              <div className="mt-4 space-y-3">
-                <div>
-                  <label htmlFor="sr-refresh-mode" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Refresh mode for {stateToUse}
-                  </label>
-                  <select
-                    id="sr-refresh-mode"
-                    value={refreshMode}
-                    onChange={(e) => setRefreshMode(e.target.value as RefreshMode)}
-                    className="block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
-                  >
-                    <option value="either">Either (Copy if no Rule for Campaign)</option>
-                    <option value="copy">Copy from Past Week</option>
-                    <option value="rules">Generate from Rules Only</option>
-                    <option value="both">Both (Rules override conflicts)</option>
-                  </select>
-                </div>
-                {refreshModeMessage && (
-                  <p className="text-sm text-green-700 dark:text-green-300">{refreshModeMessage}</p>
-                )}
-                <button
-                  onClick={handleSaveRefreshMode}
-                  disabled={savingRefreshMode}
-                  className="rounded-md bg-purple-600 px-4 py-2 text-base font-bold text-white hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 disabled:opacity-70 border-2 border-gray-800 dark:border-gray-600"
-                >
-                  {savingRefreshMode ? 'Saving…' : 'Save Refresh Mode'}
-                </button>
-              </div>
-            )}
           </div>
 
           {/* Campaign Slides */}
