@@ -29,6 +29,8 @@ export default function LoginPage() {
   const [checkingSession, setCheckingSession] = useState(true);
   // Set when credentials validate but the leader has records in multiple states
   const [pendingMatches, setPendingMatches] = useState<StateLeaderMatch[] | null>(null);
+  // Tracks which state button was clicked while sign-in is in progress
+  const [selectedStateId, setSelectedStateId] = useState<string | null>(null);
 
   // Check if user is already signed in
   useEffect(() => {
@@ -106,13 +108,15 @@ export default function LoginPage() {
   const handleStateSelect = async (match: StateLeaderMatch) => {
     setError(null);
     setIsLoading(true);
+    setSelectedStateId(match.id);
     try {
       await completeSignIn(match);
       trackEvent('sign_in', { state: match.state });
       router.push('/app');
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Failed to sign in. Please try again.'));
-      setPendingMatches(null); // Return to credentials form on error
+      setPendingMatches(null);
+      setSelectedStateId(null);
     } finally {
       setIsLoading(false);
     }
@@ -171,21 +175,38 @@ export default function LoginPage() {
             </div>
 
             <div className="flex flex-col gap-3">
-              {pendingMatches.map(match => (
-                <button
-                  key={match.id}
-                  onClick={() => handleStateSelect(match)}
-                  disabled={isLoading}
-                  className="w-full rounded-md bg-blue-600 px-4 py-3 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-gray-400 border-2 border-gray-800 dark:border-gray-600"
-                >
-                  {match.state}
-                  {STATE_NAMES[match.state] && (
-                    <span className="ml-2 text-sm font-normal opacity-90">
-                      — {STATE_NAMES[match.state]}
-                    </span>
-                  )}
-                </button>
-              ))}
+              {pendingMatches.map(match => {
+                const isSelected = selectedStateId === match.id;
+                const isOther    = isLoading && !isSelected;
+                return (
+                  <button
+                    key={match.id}
+                    onClick={() => handleStateSelect(match)}
+                    disabled={isLoading}
+                    className={[
+                      'w-full rounded-md px-4 py-3 text-base font-bold text-white',
+                      'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2',
+                      'border-2 border-gray-800 dark:border-gray-600',
+                      'disabled:cursor-not-allowed',
+                      isSelected
+                        ? 'bg-blue-600 opacity-75'   // selected: stays blue, slightly dimmed
+                        : isOther
+                          ? 'bg-gray-400'             // others: greyed out while one is loading
+                          : 'bg-blue-600 hover:bg-blue-700', // normal state
+                    ].join(' ')}
+                  >
+                    {match.state}
+                    {STATE_NAMES[match.state] && (
+                      <span className="ml-2 text-sm font-normal opacity-90">
+                        — {STATE_NAMES[match.state]}
+                      </span>
+                    )}
+                    {isSelected && (
+                      <span className="ml-2 text-sm font-normal opacity-90">Signing in…</span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
 
             <button
