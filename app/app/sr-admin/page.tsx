@@ -5,10 +5,8 @@ import { useRouter } from 'next/navigation';
 import MobileLayout from '@/components/MobileLayout';
 import { useUser } from '@/contexts/UserContext';
 import { getLeadersNotSignedInSinceRefreshByState, type LeaderNotSignedIn } from '@/lib/weeklyRefresh';
-import { getStateRefreshMode, setStateRefreshMode, type RefreshMode } from '@/lib/stateRefreshSettings';
 import { useCampaignDates } from '@/contexts/CampaignDatesContext';
 import { formatDateReadable } from '@/lib/campaignDates';
-import { getErrorMessage } from '@/lib/errorUtils';
 
 export default function SRAdminPage() {
   const router = useRouter();
@@ -20,10 +18,6 @@ export default function SRAdminPage() {
   const [leadersNotSignedIn, setLeadersNotSignedIn] = useState<LeaderNotSignedIn[]>([]);
   const [lastRefreshAt, setLastRefreshAt] = useState<Date | null>(null);
   const [loadingLeaders, setLoadingLeaders] = useState(false);
-  const [refreshMode, setRefreshMode] = useState<RefreshMode>('either');
-  const [loadingRefreshMode, setLoadingRefreshMode] = useState(false);
-  const [savingRefreshMode, setSavingRefreshMode] = useState(false);
-  const [refreshModeMessage, setRefreshModeMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (isUserLoading) return;
@@ -60,38 +54,6 @@ export default function SRAdminPage() {
     return () => { cancelled = true; };
   }, [hasAccess, userState]);
 
-  // Load current weekly refresh mode for this state
-  useEffect(() => {
-    if (!hasAccess || !userState) return;
-    let cancelled = false;
-    setLoadingRefreshMode(true);
-    getStateRefreshMode(userState)
-      .then((mode) => {
-        if (!cancelled) setRefreshMode(mode);
-      })
-      .catch(() => {
-        if (!cancelled) setRefreshMode('either');
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingRefreshMode(false);
-      });
-    return () => { cancelled = true; };
-  }, [hasAccess, userState]);
-
-  const handleSaveRefreshMode = async () => {
-    if (!userState) return;
-    setSavingRefreshMode(true);
-    setRefreshModeMessage(null);
-    setError(null);
-    try {
-      await setStateRefreshMode(userState, refreshMode, user?.id ?? null);
-      setRefreshModeMessage('Saved. This mode will be used when an admin runs Weekly Refresh for your state.');
-    } catch (err: unknown) {
-      setError(getErrorMessage(err, 'Failed to save refresh mode'));
-    } finally {
-      setSavingRefreshMode(false);
-    }
-  };
 
   if (isUserLoading) {
     return (
@@ -183,48 +145,6 @@ export default function SRAdminPage() {
             >
               Manage Campaign Rules
             </button>
-          </div>
-
-          {/* Weekly Refresh Mode */}
-          <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-              Weekly Refresh Mode
-            </h2>
-            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-              Choose how campaigns are created for your state when an admin runs Weekly Refresh. Either: copy from past week only when there is no rule for that leader/place/time; otherwise the rule runs and nothing is copied for that campaign.
-            </p>
-            {loadingRefreshMode ? (
-              <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">Loading…</p>
-            ) : (
-              <div className="mt-4 space-y-3">
-                <div>
-                  <label htmlFor="sr-refresh-mode" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Refresh mode for {stateToUse}
-                  </label>
-                  <select
-                    id="sr-refresh-mode"
-                    value={refreshMode}
-                    onChange={(e) => setRefreshMode(e.target.value as RefreshMode)}
-                    className="block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
-                  >
-                    <option value="either">Either (Copy if no Rule for Campaign)</option>
-                    <option value="copy">Copy from Past Week</option>
-                    <option value="rules">Generate from Rules Only</option>
-                    <option value="both">Both (Rules override conflicts)</option>
-                  </select>
-                </div>
-                {refreshModeMessage && (
-                  <p className="text-sm text-green-700 dark:text-green-300">{refreshModeMessage}</p>
-                )}
-                <button
-                  onClick={handleSaveRefreshMode}
-                  disabled={savingRefreshMode}
-                  className="rounded-md bg-purple-600 px-4 py-2 text-base font-bold text-white hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 disabled:opacity-70 border-2 border-gray-800 dark:border-gray-600"
-                >
-                  {savingRefreshMode ? 'Saving…' : 'Save Refresh Mode'}
-                </button>
-              </div>
-            )}
           </div>
 
           {/* Campaign Slides */}
