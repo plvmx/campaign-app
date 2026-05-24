@@ -53,6 +53,7 @@ function RecordResultsDetailPageContent() {
   const [irCnt, setIrCnt] = useState<string>('');
   const [pendingSaves, setPendingSaves] = useState<Map<string, { section: SectionType; name: string; categoryCode: 'P' | 'F' | 'SP' | 'IR' }>>(new Map());
   const [originalNames, setOriginalNames] = useState<Set<string>>(new Set());
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   
   // Use refs to access latest values in cleanup functions
   const pendingSavesRef = useRef(pendingSaves);
@@ -68,6 +69,7 @@ function RecordResultsDetailPageContent() {
   const hasTrackedSaveRef = useRef(false);
   // Keep user ID available in cleanup/async callbacks that run after unmount
   const userIdRef = useRef<string | null>(null);
+  const saveStatusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   // Keep refs in sync with state
   useEffect(() => {
@@ -101,84 +103,6 @@ function RecordResultsDetailPageContent() {
   useEffect(() => {
     userIdRef.current = contextUser?.id ?? null;
   }, [contextUser]);
-
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    if (isUserLoading) return;
-    if (!contextUser) {
-      router.push('/login');
-      return;
-    }
-
-    const generateId = () =>
-      typeof crypto !== 'undefined' && crypto.randomUUID
-        ? crypto.randomUUID()
-        : `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-
-    const emptyRow = (): InputRow => ({ id: generateId(), field1: '', field2: '', field3: '' });
-
-    const createRowsFromNames = (names: string[]): InputRow[] => {
-      const rows: InputRow[] = [];
-      for (let i = 0; i < names.length; i += 3) {
-        rows.push({ id: generateId(), field1: names[i] || '', field2: names[i + 1] || '', field3: names[i + 2] || '' });
-      }
-      if (rows.length === 0) rows.push(emptyRow());
-      return rows;
-    };
-
-    async function init() {
-      try {
-        const date = searchParams.get('date') || '';
-        const state = searchParams.get('state') || '';
-        const place = searchParams.get('place') || '';
-        const time = searchParams.get('time') || '';
-        const leader = searchParams.get('leader') || '';
-        const filter = searchParams.get('returnFilter') || 'future';
-
-        setCampaignData({ date, state, place, time, leader });
-        setReturnFilter(filter);
-
-        const cid = await findOrCreateCampaign(contextUser!.id, { date, state, place, time, leader });
-        setCampaignId(cid);
-
-        const [campaignResponse, resultsResponse] = await Promise.all([
-          supabase.from('campaigns').select('team_size, pp_cnt, fp_cnt, fpsp_cnt, ir_cnt').eq('id', cid).single(),
-          supabase.from('results').select('first_name, category_code, created_at').eq('campaign_id', cid).order('created_at', { ascending: true }),
-        ]);
-
-        if (!campaignResponse.error && campaignResponse.data) {
-          const d = campaignResponse.data;
-          setTeamSize(d.team_size?.toString() || '');
-          setPpCnt(d.pp_cnt?.toString() || '');
-          setFpCnt(d.fp_cnt?.toString() || '');
-          setFpspCnt(d.fpsp_cnt?.toString() || '');
-          setIrCnt(d.ir_cnt?.toString() || '');
-        }
-
-        if (!resultsResponse.error && resultsResponse.data) {
-          const existing = resultsResponse.data;
-          setOriginalNames(new Set(existing.map((r) => `${r.first_name}:${r.category_code}`)));
-          setPartialRows(createRowsFromNames(existing.filter((r) => r.category_code === 'P').map((r) => r.first_name)));
-          setFullRows(createRowsFromNames(existing.filter((r) => r.category_code === 'F').map((r) => r.first_name)));
-          setFullSinnersRows(createRowsFromNames(existing.filter((r) => r.category_code === 'SP').map((r) => r.first_name)));
-          setInformationRows(createRowsFromNames(existing.filter((r) => r.category_code === 'IR').map((r) => r.first_name)));
-        } else {
-          setPartialRows([emptyRow()]);
-          setFullRows([emptyRow()]);
-          setFullSinnersRows([emptyRow()]);
-          setInformationRows([emptyRow()]);
-        }
-      } catch (error) {
-        const msg = error instanceof Error ? error.message : String(error);
-        const isAuthError = msg.toLowerCase().includes('auth') || msg.toLowerCase().includes('session') || msg.toLowerCase().includes('jwt');
-        if (isAuthError) router.push('/login');
-        else console.error('Record results init error:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    }
-    init();
-  }, [isUserLoading, contextUser]);
 
   // Find an existing campaign or create one if the user is the owner.
   const findOrCreateCampaign = useCallback(async (
@@ -250,6 +174,95 @@ function RecordResultsDetailPageContent() {
     return created.id;
   }, [contextIsAdmin, contextAdminStatus, contextUserState, contextUserLeader, contextUserMobile]);
 
+  useEffect(() => {
+    if (isUserLoading) return;
+    if (!contextUser) {
+      router.push('/login');
+      return;
+    }
+
+    let cancelled = false;
+
+    const generateId = () =>
+      typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+    const emptyRow = (): InputRow => ({ id: generateId(), field1: '', field2: '', field3: '' });
+
+    const createRowsFromNames = (names: string[]): InputRow[] => {
+      const rows: InputRow[] = [];
+      for (let i = 0; i < names.length; i += 3) {
+        rows.push({ id: generateId(), field1: names[i] || '', field2: names[i + 1] || '', field3: names[i + 2] || '' });
+      }
+      if (rows.length === 0) rows.push(emptyRow());
+      return rows;
+    };
+
+    setIsLoading(true);
+    setCampaignId(null);
+
+    async function init() {
+      try {
+        const date = searchParams.get('date') || '';
+        const state = searchParams.get('state') || '';
+        const place = searchParams.get('place') || '';
+        const time = searchParams.get('time') || '';
+        const leader = searchParams.get('leader') || '';
+        const filter = searchParams.get('returnFilter') || 'future';
+
+        if (cancelled) return;
+        setCampaignData({ date, state, place, time, leader });
+        setReturnFilter(filter);
+
+        const cid = await findOrCreateCampaign(contextUser!.id, { date, state, place, time, leader });
+        if (cancelled) return;
+        setCampaignId(cid);
+
+        const [campaignResponse, resultsResponse] = await Promise.all([
+          supabase.from('campaigns').select('team_size, pp_cnt, fp_cnt, fpsp_cnt, ir_cnt').eq('id', cid).single(),
+          supabase.from('results').select('first_name, category_code, created_at').eq('campaign_id', cid).order('created_at', { ascending: true }),
+        ]);
+
+        if (cancelled) return;
+
+        if (!campaignResponse.error && campaignResponse.data) {
+          const d = campaignResponse.data;
+          setTeamSize(d.team_size?.toString() || '');
+          setPpCnt(d.pp_cnt?.toString() || '');
+          setFpCnt(d.fp_cnt?.toString() || '');
+          setFpspCnt(d.fpsp_cnt?.toString() || '');
+          setIrCnt(d.ir_cnt?.toString() || '');
+        }
+
+        if (!resultsResponse.error && resultsResponse.data) {
+          const existing = resultsResponse.data;
+          setOriginalNames(new Set(existing.map((r) => `${r.first_name}:${r.category_code}`)));
+          setPartialRows(createRowsFromNames(existing.filter((r) => r.category_code === 'P').map((r) => r.first_name)));
+          setFullRows(createRowsFromNames(existing.filter((r) => r.category_code === 'F').map((r) => r.first_name)));
+          setFullSinnersRows(createRowsFromNames(existing.filter((r) => r.category_code === 'SP').map((r) => r.first_name)));
+          setInformationRows(createRowsFromNames(existing.filter((r) => r.category_code === 'IR').map((r) => r.first_name)));
+        } else {
+          setPartialRows([emptyRow()]);
+          setFullRows([emptyRow()]);
+          setFullSinnersRows([emptyRow()]);
+          setInformationRows([emptyRow()]);
+        }
+      } catch (error) {
+        if (cancelled) return;
+        const msg = error instanceof Error ? error.message : String(error);
+        const isAuthError = msg.toLowerCase().includes('auth') || msg.toLowerCase().includes('session') || msg.toLowerCase().includes('jwt');
+        if (isAuthError) router.push('/login');
+        else console.error('Record results init error:', error);
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    }
+    init();
+
+    return () => { cancelled = true; };
+  }, [isUserLoading, contextUser, searchParams, findOrCreateCampaign, router]);
+
   // Function to get category code from section type
   const getCategoryCode = (section: SectionType): 'P' | 'F' | 'SP' | 'IR' => {
     switch (section) {
@@ -302,6 +315,7 @@ function RecordResultsDetailPageContent() {
       await updateCampaign(campaignId, { team_size: teamSize.trim() ? parseInt(teamSize, 10) : null }, oldData);
     } catch (error) {
       console.error('Error saving team size:', error);
+      setSaveStatus('error');
     }
   };
 
@@ -317,6 +331,7 @@ function RecordResultsDetailPageContent() {
       }, oldData);
     } catch (error) {
       console.error('Error saving count fields:', error);
+      setSaveStatus('error');
     }
   };
 
@@ -328,6 +343,7 @@ function RecordResultsDetailPageContent() {
     if (!currentCampaignId) return;
 
     savingNamesRef.current = true;
+    setSaveStatus('saving');
     try {
       const userId = userIdRef.current;
       if (!userId) throw new Error('User not authenticated');
@@ -390,6 +406,10 @@ function RecordResultsDetailPageContent() {
       setPendingSaves(new Map());
       pendingSavesRef.current = new Map();
 
+      setSaveStatus('saved');
+      if (saveStatusTimerRef.current) clearTimeout(saveStatusTimerRef.current);
+      saveStatusTimerRef.current = setTimeout(() => setSaveStatus('idle'), 3000);
+
       // Track first save per session so we know the page was actively used.
       if (!hasTrackedSaveRef.current) {
         hasTrackedSaveRef.current = true;
@@ -400,6 +420,7 @@ function RecordResultsDetailPageContent() {
       }
     } catch (error: unknown) {
       console.error('Error saving names:', error);
+      setSaveStatus('error');
     } finally {
       savingNamesRef.current = false;
     }
@@ -451,6 +472,10 @@ function RecordResultsDetailPageContent() {
       if (debounceNamesTimerRef.current) {
         clearTimeout(debounceNamesTimerRef.current);
         debounceNamesTimerRef.current = null;
+      }
+      if (saveStatusTimerRef.current) {
+        clearTimeout(saveStatusTimerRef.current);
+        saveStatusTimerRef.current = null;
       }
       const currentCampaignId = campaignIdRef.current;
       if (currentCampaignId) {
@@ -680,9 +705,26 @@ function RecordResultsDetailPageContent() {
               </svg>
             </div>
             <div className="flex-1">
-              <p className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-1">
-                Changes are automatically saved
-              </p>
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <p className="text-sm font-semibold text-blue-900 dark:text-blue-100">
+                  Changes are automatically saved
+                </p>
+                {saveStatus === 'saving' && (
+                  <span className="flex-shrink-0 text-xs font-medium text-blue-600 dark:text-blue-300 animate-pulse">
+                    Saving…
+                  </span>
+                )}
+                {saveStatus === 'saved' && (
+                  <span className="flex-shrink-0 text-xs font-medium text-green-600 dark:text-green-400">
+                    ✓ Saved
+                  </span>
+                )}
+                {saveStatus === 'error' && (
+                  <span className="flex-shrink-0 text-xs font-medium text-red-600 dark:text-red-400">
+                    Save failed — check connection
+                  </span>
+                )}
+              </div>
               <p className="text-xs text-blue-800 dark:text-blue-200">
                 All your entries are saved automatically every few seconds. There is no need to click a Save button.
               </p>

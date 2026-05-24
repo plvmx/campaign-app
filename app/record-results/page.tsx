@@ -72,8 +72,12 @@ export default function RecordResultsPage() {
 
     if (fetchError) throw fetchError;
 
+    const isSRInState =
+      adminStatus === 'SR' &&
+      (data.state || '').toUpperCase().trim() === (contextUserState || '').toUpperCase().trim();
+
     let existingCampaign = null;
-    if (isAdmin) {
+    if (isAdmin || isSRInState) {
       existingCampaign = campaigns && campaigns.length > 0 ? campaigns[0] : null;
     } else if (campaigns && campaigns.length > 0) {
       if (userMobile) {
