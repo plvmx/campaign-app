@@ -1,10 +1,8 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
-import { getCurrentUser } from '@/lib/auth';
-import { getUserProfile, upsertUserProfile, UserProfile } from '@/lib/userProfile';
-import { getUserAdminStatusAndMobile } from '@/lib/campaignFilter';
-import { hasPermission, Permission } from '@/lib/permissions';
+import { upsertUserProfile, UserProfile } from '@/lib/userProfile';
+import { getAuthenticatedUser } from '@/lib/services/authService';
 import { supabase } from '@/lib/supabaseClient';
 
 interface UserContextValue {
@@ -37,22 +35,18 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const load = useCallback(async () => {
     setIsLoading(true);
     try {
-      const currentUser = await getCurrentUser();
-      setUser(currentUser);
-      if (!currentUser) return;
-
-      const [profile, adminData, adminAccess] = await Promise.all([
-        getUserProfile(),
-        getUserAdminStatusAndMobile(),
-        hasPermission(Permission.ADMIN_ACCESS),
-      ]);
-
-      setUserProfile(profile);
-      setAdminStatus(adminData.admin);
-      setIsAdmin(adminAccess);
-      setUserState(adminData.state ?? null);
-      setUserLeader(adminData.leader ?? null);
-      setUserMobile(adminData.mobile ?? null);
+      const result = await getAuthenticatedUser();
+      if (!result) {
+        setUser(null);
+        return;
+      }
+      setUser(result.user);
+      setUserProfile(result.profile);
+      setAdminStatus(result.adminStatus);
+      setIsAdmin(result.isAdmin);
+      setUserState(result.userState);
+      setUserLeader(result.userLeader);
+      setUserMobile(result.userMobile);
     } finally {
       setIsLoading(false);
     }
