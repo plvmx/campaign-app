@@ -401,10 +401,12 @@ export async function generateAndDownloadSlides(options: GenerateSlidesOptions):
   }
 
   const zipBlob = await zip.generateAsync({ type: 'blob' });
+  const _now = new Date();
+  const _dateSuffix = `${_now.getDate()}${_now.toLocaleString('en-AU', { month: 'short' })}`;
   const url  = URL.createObjectURL(zipBlob);
   const link = document.createElement('a');
   link.href     = url;
-  link.download = 'campaign_slides.zip';
+  link.download = `campaign_slides_${_dateSuffix}.zip`;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
