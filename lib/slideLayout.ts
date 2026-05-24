@@ -50,18 +50,6 @@ export function formatSlideDateText(date: Date): string {
   return `${dayName} ${dayNum}${ordinal} ${monthName}`;
 }
 
-export function formatSlideTime(timeStr: string): string {
-  let clean = timeStr;
-  if (timeStr.includes('T')) {
-    clean = timeStr.split('T')[1]?.split('.')[0] ?? timeStr;
-  }
-  const [hours, minutes] = clean.split(':');
-  const hour = parseInt(hours, 10);
-  const ampm = hour >= 12 ? 'PM' : 'AM';
-  const displayHour = hour % 12 || 12;
-  return `${displayHour}:${minutes ?? '00'} ${ampm}`;
-}
-
 export function getSlideDateHeadings(customStartDate?: string): Date[] {
   const today = new Date();
   const currentWeekday = today.getDay();

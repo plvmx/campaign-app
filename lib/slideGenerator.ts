@@ -12,9 +12,9 @@ import JSZip from 'jszip';
 import {
   getSlideStateColor,
   formatSlideDateText,
-  formatSlideTime,
   STATE_CODES,
 } from '@/lib/slideLayout';
+import { formatCampaignTimeDisplay } from '@/lib/campaignUtils';
 
 // ---------------------------------------------------------------------------
 // Canvas constants  (match generate-slides/page.tsx exactly)
@@ -303,7 +303,7 @@ async function renderSlide(
       if (cat !== 'TWOL') place = `${place} ${cat}`;
       if (place.length > PLACE_COLS) place = place.substring(0, PLACE_COLS);
 
-      const time   = formatSlideTime(c.time);
+      const time   = formatCampaignTimeDisplay(c.time);
       const leader = c.leader.length > LEADER_COLS ? c.leader.substring(0, LEADER_COLS) : c.leader;
       const mobile = (c.mobile ?? '').replace(/\s/g, '');
 

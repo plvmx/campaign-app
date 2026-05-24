@@ -17,9 +17,9 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   getSlideStateColor,
   formatSlideDateText,
-  formatSlideTime,
   STATE_CODES,
 } from '@/lib/slideLayout';
+import { formatCampaignTimeDisplay } from '@/lib/campaignUtils';
 
 // ---------------------------------------------------------------------------
 // Canvas constants
@@ -259,7 +259,7 @@ function drawCampaignLine(
   if (cat !== 'TWOL') place = `${place} ${cat}`;
   if (place.length > PLACE_COLS) place = place.substring(0, PLACE_COLS);
 
-  const time   = formatSlideTime(campaign.time);
+  const time   = formatCampaignTimeDisplay(campaign.time);
   const leader = campaign.leader.length > LEADER_COLS
     ? campaign.leader.substring(0, LEADER_COLS)
     : campaign.leader;
