@@ -1765,6 +1765,7 @@ function AppPageContent() {
                                         onClick={() => {
                                           // Navigate to record results detail page with campaign data and current filter
                                           const params = new URLSearchParams({
+                                            id: campaign.id,
                                             date: campaign.date,
                                             state: campaign.state,
                                             place: campaign.place,

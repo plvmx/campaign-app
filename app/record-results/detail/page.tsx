@@ -3,12 +3,12 @@
 import { useEffect, useState, useRef, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import MobileLayout from '@/components/MobileLayout';
-import { supabase } from '@/lib/supabaseClient';
 import { fetchCampaignData } from '@/lib/campaignLog';
 import { normalizeMobile, normalizeName } from '@/lib/auth';
 import { getSharedWithMeOwners } from '@/lib/leaderShares';
 import { useUser } from '@/contexts/UserContext';
-import { updateCampaign, createCampaign } from '@/lib/services/campaignService';
+import { updateCampaign, createCampaign, getCampaignById, findCampaignsByKey } from '@/lib/services/campaignService';
+import { getResultsByCampaignId, upsertResults, deleteResult } from '@/lib/services/resultsService';
 import { trackEvent } from '@/lib/analytics';
 
 interface InputRow {
@@ -19,6 +19,16 @@ interface InputRow {
 }
 
 type SectionType = 'partial' | 'full' | 'fullSinners' | 'information';
+
+interface SavedCounts { pp: number; fp: number; fpsp: number; ir: number }
+
+const generateId = () =>
+  typeof crypto !== 'undefined' && crypto.randomUUID
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+const countNames = (rows: InputRow[]) =>
+  rows.flatMap((r) => [r.field1, r.field2, r.field3]).filter((v) => v.trim()).length;
 
 function RecordResultsDetailPageContent() {
   const router = useRouter();
@@ -32,6 +42,7 @@ function RecordResultsDetailPageContent() {
     userMobile: contextUserMobile,
     isLoading: isUserLoading,
   } = useUser();
+
   const [isLoading, setIsLoading] = useState(true);
   const [campaignData, setCampaignData] = useState({
     date: '',
@@ -51,103 +62,101 @@ function RecordResultsDetailPageContent() {
   const [fpCnt, setFpCnt] = useState<string>('');
   const [fpspCnt, setFpspCnt] = useState<string>('');
   const [irCnt, setIrCnt] = useState<string>('');
-  const [pendingSaves, setPendingSaves] = useState<Map<string, { section: SectionType; name: string; categoryCode: 'P' | 'F' | 'SP' | 'IR' }>>(new Map());
   const [originalNames, setOriginalNames] = useState<Set<string>>(new Set());
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
-  
-  // Use refs to access latest values in cleanup functions
-  const pendingSavesRef = useRef(pendingSaves);
+
+  // Refs for accessing latest values in interval/cleanup callbacks (avoids stale closures)
   const campaignIdRef = useRef(campaignId);
   const originalNamesRef = useRef(originalNames);
   const partialRowsRef = useRef(partialRows);
   const fullRowsRef = useRef(fullRows);
   const fullSinnersRowsRef = useRef(fullSinnersRows);
   const informationRowsRef = useRef(informationRows);
+  const teamSizeRef = useRef(teamSize);
+  const ppCntRef = useRef(ppCnt);
+  const fpCntRef = useRef(fpCnt);
+  const fpspCntRef = useRef(fpspCnt);
+  const irCntRef = useRef(irCnt);
+
+  // Last-saved values for change detection — undefined means not yet initialised
+  const lastSavedTeamSizeRef = useRef<number | null | undefined>(undefined);
+  const lastSavedCountsRef = useRef<SavedCounts | undefined>(undefined);
+
   const debounceNamesTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const savingNamesRef = useRef(false);
-  // Ensure we only fire the record_results_save event once per page session.
   const hasTrackedSaveRef = useRef(false);
-  // Keep user ID available in cleanup/async callbacks that run after unmount
   const userIdRef = useRef<string | null>(null);
   const saveStatusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  
-  // Keep refs in sync with state
-  useEffect(() => {
-    pendingSavesRef.current = pendingSaves;
-  }, [pendingSaves]);
-  
-  useEffect(() => {
-    campaignIdRef.current = campaignId;
-  }, [campaignId]);
-  
-  useEffect(() => {
-    originalNamesRef.current = originalNames;
-  }, [originalNames]);
-  
-  useEffect(() => {
-    partialRowsRef.current = partialRows;
-  }, [partialRows]);
-  
-  useEffect(() => {
-    fullRowsRef.current = fullRows;
-  }, [fullRows]);
-  
-  useEffect(() => {
-    fullSinnersRowsRef.current = fullSinnersRows;
-  }, [fullSinnersRows]);
-  
-  useEffect(() => {
-    informationRowsRef.current = informationRows;
-  }, [informationRows]);
 
-  useEffect(() => {
-    userIdRef.current = contextUser?.id ?? null;
-  }, [contextUser]);
+  // Keep refs in sync with state
+  useEffect(() => { campaignIdRef.current = campaignId; }, [campaignId]);
+  useEffect(() => { originalNamesRef.current = originalNames; }, [originalNames]);
+  useEffect(() => { partialRowsRef.current = partialRows; }, [partialRows]);
+  useEffect(() => { fullRowsRef.current = fullRows; }, [fullRows]);
+  useEffect(() => { fullSinnersRowsRef.current = fullSinnersRows; }, [fullSinnersRows]);
+  useEffect(() => { informationRowsRef.current = informationRows; }, [informationRows]);
+  useEffect(() => { teamSizeRef.current = teamSize; }, [teamSize]);
+  useEffect(() => { ppCntRef.current = ppCnt; }, [ppCnt]);
+  useEffect(() => { fpCntRef.current = fpCnt; }, [fpCnt]);
+  useEffect(() => { fpspCntRef.current = fpspCnt; }, [fpspCnt]);
+  useEffect(() => { irCntRef.current = irCnt; }, [irCnt]);
+  useEffect(() => { userIdRef.current = contextUser?.id ?? null; }, [contextUser]);
 
   // Find an existing campaign or create one if the user is the owner.
+  // When knownId is supplied (navigated from campaign list), skip the natural-key lookup
+  // and do a single fetch by ID instead.
   const findOrCreateCampaign = useCallback(async (
     userId: string,
-    campaignParams: { date: string; state: string; place: string; time: string; leader: string }
+    campaignParams: { date: string; state: string; place: string; time: string; leader: string },
+    knownId?: string,
   ): Promise<string> => {
     const userMobileAndLeader = contextUserMobile && contextUserLeader
       ? { mobile: contextUserMobile, leader: contextUserLeader }
       : null;
 
-    const { data: campaigns } = await supabase
-      .from('campaigns')
-      .select('id, mobile, state, leader')
-      .eq('date', campaignParams.date)
-      .eq('state', campaignParams.state)
-      .eq('place', campaignParams.place)
-      .eq('time', campaignParams.time)
-      .eq('leader', campaignParams.leader);
+    const isSRForState = (state: string) =>
+      contextAdminStatus === 'SR' &&
+      (state || '').toUpperCase().trim() === (contextUserState || '').toUpperCase().trim();
 
-    // SR users can access any campaign in their own state
-    const isSRInState = contextAdminStatus === 'SR' &&
-      (campaignParams.state || '').toUpperCase().trim() === (contextUserState || '').toUpperCase().trim();
+    const checkShared = async (state: string, leader: string) => {
+      if (!contextUserState || !userMobileAndLeader?.leader) return false;
+      const sharedOwners = await getSharedWithMeOwners(contextUserState, userMobileAndLeader.leader);
+      return sharedOwners.some(
+        (o) =>
+          (o.owner_state || '').toUpperCase().trim() === (state || '').toUpperCase().trim() &&
+          normalizeName(o.owner_leader) === normalizeName(leader || ''),
+      );
+    };
+
+    // Fast path: campaign ID already known — verify access and return directly.
+    if (knownId) {
+      const campaign = await getCampaignById(knownId);
+      if (!campaign) throw new Error('Campaign not found.');
+      if (contextIsAdmin || isSRForState(campaign.state)) return campaign.id;
+      if (userMobileAndLeader?.mobile && campaign.mobile &&
+          normalizeMobile(campaign.mobile) === normalizeMobile(userMobileAndLeader.mobile)) return campaign.id;
+      if (await checkShared(campaign.state, campaign.leader)) return campaign.id;
+      if (!userMobileAndLeader?.mobile) return campaign.id;
+      throw new Error('You can only record results for your own campaigns. This campaign is not in your state or shared with you.');
+    }
+
+    // Slow path: look up by natural key.
+    const campaigns = await findCampaignsByKey(campaignParams);
 
     let existingCampaign: { id: string } | null = null;
-    if (contextIsAdmin || isSRInState) {
-      existingCampaign = campaigns && campaigns.length > 0 ? campaigns[0] : null;
-    } else if (campaigns && campaigns.length > 0) {
-      // Own: mobile match
+    if (contextIsAdmin || isSRForState(campaignParams.state)) {
+      existingCampaign = campaigns.length > 0 ? campaigns[0] : null;
+    } else if (campaigns.length > 0) {
       if (userMobileAndLeader?.mobile) {
         const normalizedMobile = normalizeMobile(userMobileAndLeader.mobile);
         existingCampaign = campaigns.find((c: { mobile: string | null }) =>
-          c.mobile && normalizeMobile(c.mobile) === normalizedMobile
+          c.mobile && normalizeMobile(c.mobile) === normalizedMobile,
         ) || null;
       }
-      // Shared: campaign's (state, leader) is shared with me
-      if (!existingCampaign && contextUserState && userMobileAndLeader?.leader) {
-        const sharedOwners = await getSharedWithMeOwners(contextUserState, userMobileAndLeader.leader);
-        const isShared = sharedOwners.some(
-          (o) =>
-            (o.owner_state || '').toUpperCase().trim() === (campaignParams.state || '').toUpperCase().trim() &&
-            normalizeName(o.owner_leader) === normalizeName(campaignParams.leader || '')
-        );
-        if (isShared) existingCampaign = campaigns[0];
+      if (!existingCampaign && await checkShared(campaignParams.state, campaignParams.leader)) {
+        existingCampaign = campaigns[0];
       }
-      if (!existingCampaign && campaigns.length > 0 && !userMobileAndLeader?.mobile) {
+      if (!existingCampaign && !userMobileAndLeader?.mobile) {
         existingCampaign = campaigns[0];
       }
     }
@@ -156,7 +165,7 @@ function RecordResultsDetailPageContent() {
 
     const isOwner = userMobileAndLeader?.leader &&
       normalizeName(campaignParams.leader || '') === normalizeName(userMobileAndLeader.leader);
-    if (!contextIsAdmin && !isSRInState && !isOwner) {
+    if (!contextIsAdmin && !isSRForState(campaignParams.state) && !isOwner) {
       throw new Error('You can only record results for your own campaigns. This campaign is not in your state or shared with you.');
     }
 
@@ -183,11 +192,6 @@ function RecordResultsDetailPageContent() {
 
     let cancelled = false;
 
-    const generateId = () =>
-      typeof crypto !== 'undefined' && crypto.randomUUID
-        ? crypto.randomUUID()
-        : `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-
     const emptyRow = (): InputRow => ({ id: generateId(), field1: '', field2: '', field3: '' });
 
     const createRowsFromNames = (names: string[]): InputRow[] => {
@@ -204,6 +208,7 @@ function RecordResultsDetailPageContent() {
 
     async function init() {
       try {
+        const idParam = searchParams.get('id') || undefined;
         const date = searchParams.get('date') || '';
         const state = searchParams.get('state') || '';
         const place = searchParams.get('place') || '';
@@ -215,34 +220,45 @@ function RecordResultsDetailPageContent() {
         setCampaignData({ date, state, place, time, leader });
         setReturnFilter(filter);
 
-        const cid = await findOrCreateCampaign(contextUser!.id, { date, state, place, time, leader });
+        const cid = await findOrCreateCampaign(contextUser!.id, { date, state, place, time, leader }, idParam);
         if (cancelled) return;
         setCampaignId(cid);
 
-        const [campaignResponse, resultsResponse] = await Promise.all([
-          supabase.from('campaigns').select('team_size, pp_cnt, fp_cnt, fpsp_cnt, ir_cnt').eq('id', cid).single(),
-          supabase.from('results').select('first_name, category_code, created_at').eq('campaign_id', cid).order('created_at', { ascending: true }),
+        const [campaignResponse, existing] = await Promise.all([
+          getCampaignById(cid),
+          getResultsByCampaignId(cid),
         ]);
 
         if (cancelled) return;
 
-        if (!campaignResponse.error && campaignResponse.data) {
-          const d = campaignResponse.data;
-          setTeamSize(d.team_size?.toString() || '');
-          setPpCnt(d.pp_cnt?.toString() || '');
-          setFpCnt(d.fp_cnt?.toString() || '');
-          setFpspCnt(d.fpsp_cnt?.toString() || '');
-          setIrCnt(d.ir_cnt?.toString() || '');
+        if (campaignResponse) {
+          const d = campaignResponse;
+          const ts = d.team_size?.toString() || '';
+          const pp = d.pp_cnt?.toString() || '';
+          const fp = d.fp_cnt?.toString() || '';
+          const fpsp = d.fpsp_cnt?.toString() || '';
+          const ir = d.ir_cnt?.toString() || '';
+          setTeamSize(ts);
+          setPpCnt(pp);
+          setFpCnt(fp);
+          setFpspCnt(fpsp);
+          setIrCnt(ir);
+          // Initialise last-saved refs so the interval skips saves when unchanged
+          lastSavedTeamSizeRef.current = d.team_size ?? null;
+          lastSavedCountsRef.current = {
+            pp: d.pp_cnt ?? 0,
+            fp: d.fp_cnt ?? 0,
+            fpsp: d.fpsp_cnt ?? 0,
+            ir: d.ir_cnt ?? 0,
+          };
         }
 
-        if (!resultsResponse.error && resultsResponse.data) {
-          const existing = resultsResponse.data;
-          setOriginalNames(new Set(existing.map((r) => `${r.first_name}:${r.category_code}`)));
-          setPartialRows(createRowsFromNames(existing.filter((r) => r.category_code === 'P').map((r) => r.first_name)));
-          setFullRows(createRowsFromNames(existing.filter((r) => r.category_code === 'F').map((r) => r.first_name)));
-          setFullSinnersRows(createRowsFromNames(existing.filter((r) => r.category_code === 'SP').map((r) => r.first_name)));
-          setInformationRows(createRowsFromNames(existing.filter((r) => r.category_code === 'IR').map((r) => r.first_name)));
-        } else {
+        setOriginalNames(new Set(existing.map((r) => `${r.first_name}:${r.category_code}`)));
+        setPartialRows(createRowsFromNames(existing.filter((r) => r.category_code === 'P').map((r) => r.first_name)));
+        setFullRows(createRowsFromNames(existing.filter((r) => r.category_code === 'F').map((r) => r.first_name)));
+        setFullSinnersRows(createRowsFromNames(existing.filter((r) => r.category_code === 'SP').map((r) => r.first_name)));
+        setInformationRows(createRowsFromNames(existing.filter((r) => r.category_code === 'IR').map((r) => r.first_name)));
+        if (existing.length === 0) {
           setPartialRows([emptyRow()]);
           setFullRows([emptyRow()]);
           setFullSinnersRows([emptyRow()]);
@@ -263,80 +279,48 @@ function RecordResultsDetailPageContent() {
     return () => { cancelled = true; };
   }, [isUserLoading, contextUser, searchParams, findOrCreateCampaign, router]);
 
-  // Function to get category code from section type
-  const getCategoryCode = (section: SectionType): 'P' | 'F' | 'SP' | 'IR' => {
-    switch (section) {
-      case 'partial':
-        return 'P';
-      case 'full':
-        return 'F';
-      case 'fullSinners':
-        return 'SP';
-      case 'information':
-        return 'IR';
-    }
-  };
-
-  // Function to cache a name for later saving
-  const cacheNameForSave = (
-    section: SectionType,
-    rowId: string,
-    fieldName: 'field1' | 'field2' | 'field3',
-    name: string
-  ) => {
-    if (!campaignId) {
-      return; // Don't cache if campaign doesn't exist
-    }
-
-    const cacheKey = `${section}-${rowId}-${fieldName}`;
-    const categoryCode = getCategoryCode(section);
-
-    setPendingSaves((prev) => {
-      const newMap = new Map(prev);
-      if (name.trim()) {
-        // Add or update the cached name
-        newMap.set(cacheKey, {
-          section,
-          name: name.trim(),
-          categoryCode,
-        });
-      } else {
-        // Remove from cache if name is empty
-        newMap.delete(cacheKey);
-      }
-      return newMap;
-    });
-  };
-
+  // Save team size only when the value has changed since last save.
+  // Reads from refs so the 3-second interval always sees the current value.
   const saveTeamSize = async () => {
-    if (!campaignId) return;
+    const cid = campaignIdRef.current;
+    if (!cid) return;
+    const parsed = teamSizeRef.current.trim() ? parseInt(teamSizeRef.current, 10) : null;
+    if (lastSavedTeamSizeRef.current !== undefined && parsed === lastSavedTeamSizeRef.current) return;
     try {
-      const oldData = await fetchCampaignData(campaignId);
-      await updateCampaign(campaignId, { team_size: teamSize.trim() ? parseInt(teamSize, 10) : null }, oldData);
+      const oldData = await fetchCampaignData(cid);
+      await updateCampaign(cid, { team_size: parsed }, oldData);
+      lastSavedTeamSizeRef.current = parsed;
     } catch (error) {
       console.error('Error saving team size:', error);
       setSaveStatus('error');
     }
   };
 
+  // Save count fields only when any value has changed since last save.
   const saveCountFields = async () => {
-    if (!campaignId) return;
+    const cid = campaignIdRef.current;
+    if (!cid) return;
+    const current: SavedCounts = {
+      pp: ppCntRef.current.trim() ? parseInt(ppCntRef.current, 10) : 0,
+      fp: fpCntRef.current.trim() ? parseInt(fpCntRef.current, 10) : 0,
+      fpsp: fpspCntRef.current.trim() ? parseInt(fpspCntRef.current, 10) : 0,
+      ir: irCntRef.current.trim() ? parseInt(irCntRef.current, 10) : 0,
+    };
+    const last = lastSavedCountsRef.current;
+    if (last !== undefined &&
+        current.pp === last.pp && current.fp === last.fp &&
+        current.fpsp === last.fpsp && current.ir === last.ir) return;
     try {
-      const oldData = await fetchCampaignData(campaignId);
-      await updateCampaign(campaignId, {
-        pp_cnt: ppCnt.trim() ? parseInt(ppCnt, 10) : 0,
-        fp_cnt: fpCnt.trim() ? parseInt(fpCnt, 10) : 0,
-        fpsp_cnt: fpspCnt.trim() ? parseInt(fpspCnt, 10) : 0,
-        ir_cnt: irCnt.trim() ? parseInt(irCnt, 10) : 0,
-      }, oldData);
+      const oldData = await fetchCampaignData(cid);
+      await updateCampaign(cid, { pp_cnt: current.pp, fp_cnt: current.fp, fpsp_cnt: current.fpsp, ir_cnt: current.ir }, oldData);
+      lastSavedCountsRef.current = current;
     } catch (error) {
       console.error('Error saving count fields:', error);
       setSaveStatus('error');
     }
   };
 
-  // Function to save all pending names to the database.
-  // Guarded to prevent concurrent runs (which could persist intermediate typing states like "M", "Muh").
+  // Save all pending names. Guarded against concurrent runs (prevents saving "M", "Muh" mid-type).
   const savePendingNames = useCallback(async () => {
     if (savingNamesRef.current) return;
     const currentCampaignId = campaignIdRef.current;
@@ -350,7 +334,7 @@ function RecordResultsDetailPageContent() {
 
       const currentOriginalNames = originalNamesRef.current;
 
-      // Build the set of current names from the live row refs
+      // Build the full set of current names from live row refs
       const currentNames = new Set<string>();
       const addNamesFromRows = (rows: InputRow[], categoryCode: string) => {
         rows.forEach((row) => {
@@ -366,21 +350,17 @@ function RecordResultsDetailPageContent() {
       addNamesFromRows(informationRowsRef.current, 'IR');
 
       // Delete names that were removed
-      const namesToDelete: { name: string; categoryCode: string }[] = [];
-      currentOriginalNames.forEach((nameKey) => {
+      for (const nameKey of currentOriginalNames) {
         if (!currentNames.has(nameKey)) {
           const lastColon = nameKey.lastIndexOf(':');
-          namesToDelete.push({ name: nameKey.slice(0, lastColon), categoryCode: nameKey.slice(lastColon + 1) });
+          const name = nameKey.slice(0, lastColon);
+          const categoryCode = nameKey.slice(lastColon + 1);
+          try {
+            await deleteResult(currentCampaignId, name, categoryCode);
+          } catch (err) {
+            console.error('Error deleting name:', name, categoryCode, err);
+          }
         }
-      });
-      for (const { name, categoryCode } of namesToDelete) {
-        const { error: deleteError } = await supabase
-          .from('results')
-          .delete()
-          .eq('campaign_id', currentCampaignId)
-          .eq('first_name', name)
-          .eq('category_code', categoryCode);
-        if (deleteError) console.error('Error deleting name:', name, categoryCode, deleteError);
       }
 
       // Upsert current names
@@ -393,24 +373,15 @@ function RecordResultsDetailPageContent() {
           user_id: userId,
         };
       });
-
-      if (resultsToSave.length > 0) {
-        const { error } = await supabase.from('results').upsert(resultsToSave, {
-          onConflict: 'campaign_id,first_name,category_code',
-        });
-        if (error) console.error('Error saving names:', error);
-      }
+      await upsertResults(resultsToSave);
 
       setOriginalNames(currentNames);
       originalNamesRef.current = currentNames;
-      setPendingSaves(new Map());
-      pendingSavesRef.current = new Map();
 
       setSaveStatus('saved');
       if (saveStatusTimerRef.current) clearTimeout(saveStatusTimerRef.current);
       saveStatusTimerRef.current = setTimeout(() => setSaveStatus('idle'), 3000);
 
-      // Track first save per session so we know the page was actively used.
       if (!hasTrackedSaveRef.current) {
         hasTrackedSaveRef.current = true;
         trackEvent('record_results_save', {
@@ -426,7 +397,6 @@ function RecordResultsDetailPageContent() {
     }
   }, [campaignData.state, campaignData.leader]);
 
-  // Debounce name saves so we only persist after the user stops typing (prevents "M", "Muh", "Muhammad" as separate records).
   const DEBOUNCE_MS = 2000;
   const scheduleSaveNames = useCallback(() => {
     if (debounceNamesTimerRef.current) clearTimeout(debounceNamesTimerRef.current);
@@ -444,20 +414,17 @@ function RecordResultsDetailPageContent() {
     savePendingNames();
   }, [savePendingNames]);
 
-  // Auto-save periodically and on navigation
+  // Auto-save periodically and on navigation/unmount
   useEffect(() => {
-    // Save team size and counts every 3 seconds; names are saved only via debounce or flush (see scheduleSaveNames / flushSaveNames)
     const autoSaveInterval = setInterval(() => {
-      const currentCampaignId = campaignIdRef.current;
-      if (currentCampaignId) {
+      if (campaignIdRef.current) {
         saveTeamSize();
         saveCountFields();
       }
     }, 3000);
 
     const handleBeforeUnload = () => {
-      const currentCampaignId = campaignIdRef.current;
-      if (currentCampaignId) {
+      if (campaignIdRef.current) {
         flushSaveNames();
         saveTeamSize();
         saveCountFields();
@@ -477,8 +444,7 @@ function RecordResultsDetailPageContent() {
         clearTimeout(saveStatusTimerRef.current);
         saveStatusTimerRef.current = null;
       }
-      const currentCampaignId = campaignIdRef.current;
-      if (currentCampaignId) {
+      if (campaignIdRef.current) {
         saveTeamSize();
         saveCountFields();
         flushSaveNames();
@@ -487,35 +453,12 @@ function RecordResultsDetailPageContent() {
   }, [flushSaveNames]);
 
   const addNewRow = (section: SectionType) => {
-    // Generate a unique ID using crypto.randomUUID if available, otherwise use timestamp
-    const generateId = () => {
-      if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-        return crypto.randomUUID();
-      }
-      return `${section}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    };
-    
-    const newRow: InputRow = {
-      id: generateId(),
-      field1: '',
-      field2: '',
-      field3: '',
-    };
-    
-    // Use functional state updates to avoid stale closure issues
+    const newRow: InputRow = { id: generateId(), field1: '', field2: '', field3: '' };
     switch (section) {
-      case 'partial':
-        setPartialRows((prevRows) => [...prevRows, newRow]);
-        break;
-      case 'full':
-        setFullRows((prevRows) => [...prevRows, newRow]);
-        break;
-      case 'fullSinners':
-        setFullSinnersRows((prevRows) => [...prevRows, newRow]);
-        break;
-      case 'information':
-        setInformationRows((prevRows) => [...prevRows, newRow]);
-        break;
+      case 'partial':    setPartialRows((prev) => [...prev, newRow]); break;
+      case 'full':       setFullRows((prev) => [...prev, newRow]); break;
+      case 'fullSinners': setFullSinnersRows((prev) => [...prev, newRow]); break;
+      case 'information': setInformationRows((prev) => [...prev, newRow]); break;
     }
   };
 
@@ -523,38 +466,14 @@ function RecordResultsDetailPageContent() {
     section: SectionType,
     rowId: string,
     fieldName: 'field1' | 'field2' | 'field3',
-    value: string
+    value: string,
   ) => {
-    // Use functional state updates to avoid stale closure issues
+    const update = (prev: InputRow[]) => prev.map((row) => row.id === rowId ? { ...row, [fieldName]: value } : row);
     switch (section) {
-      case 'partial':
-        setPartialRows((prevRows) =>
-          prevRows.map((row) =>
-            row.id === rowId ? { ...row, [fieldName]: value } : row
-          )
-        );
-        break;
-      case 'full':
-        setFullRows((prevRows) =>
-          prevRows.map((row) =>
-            row.id === rowId ? { ...row, [fieldName]: value } : row
-          )
-        );
-        break;
-      case 'fullSinners':
-        setFullSinnersRows((prevRows) =>
-          prevRows.map((row) =>
-            row.id === rowId ? { ...row, [fieldName]: value } : row
-          )
-        );
-        break;
-      case 'information':
-        setInformationRows((prevRows) =>
-          prevRows.map((row) =>
-            row.id === rowId ? { ...row, [fieldName]: value } : row
-          )
-        );
-        break;
+      case 'partial':    setPartialRows(update); break;
+      case 'full':       setFullRows(update); break;
+      case 'fullSinners': setFullSinnersRows(update); break;
+      case 'information': setInformationRows(update); break;
     }
   };
 
@@ -562,59 +481,53 @@ function RecordResultsDetailPageContent() {
     section: SectionType,
     rowId: string,
     fieldName: 'field1' | 'field2' | 'field3',
-    value: string
+    value: string,
   ) => {
-    // Update the local state
     updateRowField(section, rowId, fieldName, value);
-    // Cache the name for later saving
-    cacheNameForSave(section, rowId, fieldName, value);
-    // Debounce save so we only persist after user stops typing (avoids saving "M", "Muh", "Muhammad" as separate records)
-    scheduleSaveNames();
+    if (campaignId) scheduleSaveNames();
   };
 
-  const renderInputGrid = (rows: InputRow[], section: SectionType) => {
-    return (
-      <div className="space-y-2">
-        {rows.map((row, index) => (
-          <div key={row.id} className="flex gap-2 w-full">
-            <input
-              type="text"
-              value={row.field1}
-              onChange={(e) => handleNameChange(section, row.id, 'field1', e.target.value)}
-              maxLength={255}
-              className="flex-1 min-w-0 rounded-md border-2 border-gray-400 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
-              placeholder="Name 1"
-            />
-            <input
-              type="text"
-              value={row.field2}
-              onChange={(e) => handleNameChange(section, row.id, 'field2', e.target.value)}
-              maxLength={255}
-              className="flex-1 min-w-0 rounded-md border-2 border-gray-400 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
-              placeholder="Name 2"
-            />
-            <input
-              type="text"
-              value={row.field3}
-              onChange={(e) => handleNameChange(section, row.id, 'field3', e.target.value)}
-              maxLength={255}
-              className="flex-1 min-w-0 rounded-md border-2 border-gray-400 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
-              placeholder="Name 3"
-            />
-            {index === rows.length - 1 && (
-              <button
-                onClick={() => addNewRow(section)}
-                className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-md border-2 border-gray-400 bg-white text-lg font-semibold text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
-                aria-label="Add new row"
-              >
-                +
-              </button>
-            )}
-          </div>
-        ))}
-      </div>
-    );
-  };
+  const renderInputGrid = (rows: InputRow[], section: SectionType) => (
+    <div className="space-y-2">
+      {rows.map((row, index) => (
+        <div key={row.id} className="flex gap-2 w-full">
+          <input
+            type="text"
+            value={row.field1}
+            onChange={(e) => handleNameChange(section, row.id, 'field1', e.target.value)}
+            maxLength={255}
+            className="flex-1 min-w-0 rounded-md border-2 border-gray-400 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
+            placeholder="Name 1"
+          />
+          <input
+            type="text"
+            value={row.field2}
+            onChange={(e) => handleNameChange(section, row.id, 'field2', e.target.value)}
+            maxLength={255}
+            className="flex-1 min-w-0 rounded-md border-2 border-gray-400 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
+            placeholder="Name 2"
+          />
+          <input
+            type="text"
+            value={row.field3}
+            onChange={(e) => handleNameChange(section, row.id, 'field3', e.target.value)}
+            maxLength={255}
+            className="flex-1 min-w-0 rounded-md border-2 border-gray-400 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
+            placeholder="Name 3"
+          />
+          {index === rows.length - 1 && (
+            <button
+              onClick={() => addNewRow(section)}
+              className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-md border-2 border-gray-400 bg-white text-lg font-semibold text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+              aria-label="Add new row"
+            >
+              +
+            </button>
+          )}
+        </div>
+      ))}
+    </div>
+  );
 
   if (isUserLoading || isLoading) {
     return (
@@ -646,7 +559,6 @@ function RecordResultsDetailPageContent() {
             {campaignData.date && campaignData.time && (
               <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
                 {(() => {
-                  // Format date
                   const dateObj = new Date(campaignData.date + 'T00:00:00');
                   const formattedDate = dateObj.toLocaleDateString('en-US', {
                     weekday: 'short',
@@ -654,8 +566,6 @@ function RecordResultsDetailPageContent() {
                     month: 'short',
                     day: 'numeric',
                   });
-                  
-                  // Format time
                   const timeStr = campaignData.time.includes('T')
                     ? campaignData.time.split('T')[1]?.split('.')[0]
                     : campaignData.time;
@@ -663,9 +573,7 @@ function RecordResultsDetailPageContent() {
                   const hour = parseInt(hours, 10);
                   const ampm = hour >= 12 ? 'PM' : 'AM';
                   const displayHour = hour % 12 || 12;
-                  const formattedTime = `${displayHour}:${minutes} ${ampm}`;
-                  
-                  return `${formattedDate} at ${formattedTime}`;
+                  return `${formattedDate} at ${displayHour}:${minutes} ${ampm}`;
                 })()}
               </p>
             )}
@@ -749,44 +657,48 @@ function RecordResultsDetailPageContent() {
           />
         </div>
 
-        {/* Partial Presentations Banner - count field hidden */}
-        <div className="mb-4 rounded-md bg-green-100 px-4 py-2 dark:bg-green-900/30">
+        {/* Partial Presentations */}
+        <div className="mb-4 rounded-md bg-green-100 px-4 py-2 dark:bg-green-900/30 flex items-center justify-between">
           <span className="text-sm font-medium text-green-800 dark:text-green-200">
             Partial Presentations
           </span>
+          <span className="text-sm font-semibold text-green-700 dark:text-green-300">
+            {countNames(partialRows)}
+          </span>
         </div>
-
-        {/* Partial Presentations Input Fields */}
         {renderInputGrid(partialRows, 'partial')}
 
-        {/* Full Presentations Banner - count field hidden */}
-        <div className="mb-4 mt-6 rounded-md bg-orange-100 px-4 py-2 dark:bg-orange-900/30">
+        {/* Full Presentations Only */}
+        <div className="mb-4 mt-6 rounded-md bg-orange-100 px-4 py-2 dark:bg-orange-900/30 flex items-center justify-between">
           <span className="text-sm font-medium text-orange-800 dark:text-orange-200">
             Full Presentations Only
           </span>
+          <span className="text-sm font-semibold text-orange-700 dark:text-orange-300">
+            {countNames(fullRows)}
+          </span>
         </div>
-
-        {/* Full Presentations Input Fields */}
         {renderInputGrid(fullRows, 'full')}
 
-        {/* Full Presentations and Sinners Prayers Banner - count field hidden */}
-        <div className="mb-4 mt-6 rounded-md bg-red-100 px-4 py-2 dark:bg-red-900/30">
+        {/* Full Presentations and Sinners Prayers */}
+        <div className="mb-4 mt-6 rounded-md bg-red-100 px-4 py-2 dark:bg-red-900/30 flex items-center justify-between">
           <span className="text-sm font-medium text-red-800 dark:text-red-200">
             Full Presentations and Sinners Prayers
           </span>
+          <span className="text-sm font-semibold text-red-700 dark:text-red-300">
+            {countNames(fullSinnersRows)}
+          </span>
         </div>
-
-        {/* Full Presentations and Sinners Prayers Input Fields */}
         {renderInputGrid(fullSinnersRows, 'fullSinners')}
 
-        {/* Information Requests Banner - count field hidden */}
-        <div className="mb-4 mt-6 rounded-md bg-yellow-100 px-4 py-2 dark:bg-yellow-900/30">
+        {/* Information Requests */}
+        <div className="mb-4 mt-6 rounded-md bg-yellow-100 px-4 py-2 dark:bg-yellow-900/30 flex items-center justify-between">
           <span className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
             Information Requests
           </span>
+          <span className="text-sm font-semibold text-yellow-700 dark:text-yellow-300">
+            {countNames(informationRows)}
+          </span>
         </div>
-
-        {/* Information Requests Input Fields */}
         {renderInputGrid(informationRows, 'information')}
       </div>
     </MobileLayout>
@@ -806,4 +718,3 @@ export default function RecordResultsDetailPage() {
     </Suspense>
   );
 }
-
