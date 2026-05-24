@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import MobileLayout from '@/components/MobileLayout';
 import { useUser } from '@/contexts/UserContext';
@@ -194,6 +194,17 @@ export default function StateLeadersPage() {
     );
   }
 
+  // Dropdown options derived from already-fetched data, scoped to the selected state.
+  const filterNameOptions = useMemo(() => {
+    const source = filterState ? stateLeaders.filter(sl => sl.state === filterState) : stateLeaders;
+    return [...new Set(source.map(sl => sl.leader))].sort();
+  }, [stateLeaders, filterState]);
+
+  const filterMobileOptions = useMemo(() => {
+    const source = filterState ? stateLeaders.filter(sl => sl.state === filterState) : stateLeaders;
+    return [...new Set(source.map(sl => sl.mobile).filter((m): m is string => !!m))].sort();
+  }, [stateLeaders, filterState]);
+
   const filteredLeaders = stateLeaders.filter((sl) => {
     if (filterState  && sl.state !== filterState) return false;
     if (filterName   && !sl.leader.toLowerCase().includes(filterName.toLowerCase())) return false;
@@ -330,7 +341,7 @@ export default function StateLeadersPage() {
             <select
               id="filter-state"
               value={filterState}
-              onChange={(e) => setFilterState(e.target.value)}
+              onChange={(e) => { setFilterState(e.target.value); setFilterName(''); setFilterMobile(''); }}
               className="mt-1 block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
             >
               <option value="">All States</option>
@@ -345,27 +356,33 @@ export default function StateLeadersPage() {
             <label htmlFor="filter-name" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
               Filter by Name
             </label>
-            <input
+            <select
               id="filter-name"
-              type="text"
               value={filterName}
               onChange={(e) => setFilterName(e.target.value)}
-              placeholder="e.g. Peter"
               className="mt-1 block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
-            />
+            >
+              <option value="">All Names</option>
+              {filterNameOptions.map((name) => (
+                <option key={name} value={name}>{name}</option>
+              ))}
+            </select>
           </div>
           <div>
             <label htmlFor="filter-mobile" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-              Filter by Phone No
+              Filter by Mobile
             </label>
-            <input
+            <select
               id="filter-mobile"
-              type="tel"
               value={filterMobile}
               onChange={(e) => setFilterMobile(e.target.value)}
-              placeholder="e.g. 0429"
               className="mt-1 block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
-            />
+            >
+              <option value="">All Mobiles</option>
+              {filterMobileOptions.map((mobile) => (
+                <option key={mobile} value={mobile}>{mobile}</option>
+              ))}
+            </select>
           </div>
         </div>
 
