@@ -24,7 +24,6 @@ interface NewCampaignRow {
   time: string;
   leader: string;
   mobile: string | null;
-  botj: string | null;
   category: string | null;
   user_id: string | null;
   team_size: null;
@@ -154,7 +153,6 @@ export async function runWeeklyRefresh(
           time:      campaign.time,
           leader:    campaign.leader,
           mobile:    campaign.mobile,
-          botj:      null,
           category:  campaign.category ?? 'TWOL',
           user_id:   userId,
           team_size: null as null,
