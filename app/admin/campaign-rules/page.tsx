@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import MobileLayout from '@/components/MobileLayout';
+import LoadingSpinner from '@/components/LoadingSpinner';
+import Modal from '@/components/Modal';
 import { useUser } from '@/contexts/UserContext';
 import { getStateColor } from '@/lib/stateColors';
 import { getPlacesForState, getLeadersForState, getLeaderMobile } from '@/lib/services/dropdownService';
@@ -572,7 +574,7 @@ function CampaignRulesPageContent() {
     return (
       <MobileLayout>
         <div className="flex min-h-screen items-center justify-center">
-          <div className="text-gray-600 dark:text-gray-400">Loading...</div>
+          <LoadingSpinner />
         </div>
       </MobileLayout>
     );
@@ -1209,10 +1211,7 @@ function CampaignRulesPageContent() {
 
       {/* ── Create-confirmation modal ──────────────────────────────────────── */}
       {showConfirmModal && pendingRuleData && (
-        <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center"
-          onClick={(e) => { if (e.target === e.currentTarget) handleCancelConfirm(); }}
-        >
+        <Modal position="bottom" onClose={handleCancelConfirm}>
           <div className="w-full max-w-lg rounded-t-2xl bg-white p-6 shadow-xl dark:bg-gray-900 sm:rounded-2xl">
 
             {/* Header */}
@@ -1319,7 +1318,7 @@ function CampaignRulesPageContent() {
               </button>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
     </MobileLayout>
   );

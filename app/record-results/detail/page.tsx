@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import MobileLayout from '@/components/MobileLayout';
+import LoadingSpinner from '@/components/LoadingSpinner';
 import { fetchCampaignData } from '@/lib/campaignLog';
 import { normalizeMobile, normalizeName } from '@/lib/auth';
 import { getSharedWithMeOwners } from '@/lib/leaderShares';
@@ -531,7 +532,7 @@ function RecordResultsDetailPageContent() {
     return (
       <MobileLayout>
         <div className="flex min-h-screen items-center justify-center">
-          <div className="text-gray-600 dark:text-gray-400">Loading campaign results…</div>
+          <LoadingSpinner text="Loading campaign results…" />
         </div>
       </MobileLayout>
     );
@@ -712,7 +713,7 @@ export default function RecordResultsDetailPage() {
     <Suspense fallback={
       <MobileLayout>
         <div className="flex min-h-screen items-center justify-center">
-          <div className="text-gray-600 dark:text-gray-400">Loading...</div>
+          <LoadingSpinner />
         </div>
       </MobileLayout>
     }>

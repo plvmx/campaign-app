@@ -4,6 +4,7 @@ import { ReactNode, Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { signOut } from '@/lib/auth';
+import Modal from '@/components/Modal';
 import { hasPermission, Permission } from '@/lib/permissions';
 import { getUserAdminStatusAndMobile } from '@/lib/campaignFilter';
 
@@ -135,7 +136,7 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
 
       {/* Sign-Out Confirmation Modal */}
       {showSignOutConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+        <Modal onClose={() => setShowSignOutConfirm(false)}>
           <div className="w-full max-w-sm rounded-xl border-2 border-gray-800 bg-white p-6 shadow-2xl dark:border-gray-600 dark:bg-gray-900">
             <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Sign Out?</h2>
             <p className="mt-2 text-base text-gray-600 dark:text-gray-400">
@@ -156,7 +157,7 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
               </button>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* Bottom Navigation (Suspense required for useSearchParams during prerender) */}

@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import MobileLayout from '@/components/MobileLayout';
+import LoadingSpinner from '@/components/LoadingSpinner';
 import { useUser } from '@/contexts/UserContext';
 import { useCampaignDates } from '@/contexts/CampaignDatesContext';
 import { formatDateReadable } from '@/lib/campaignDates';
@@ -33,7 +34,7 @@ export default function TLAdminPage() {
     return (
       <MobileLayout>
         <div className="flex min-h-screen items-center justify-center">
-          <div className="text-gray-600 dark:text-gray-400">Loading...</div>
+          <LoadingSpinner />
         </div>
       </MobileLayout>
     );

@@ -1,5 +1,6 @@
 'use client';
 import type { Campaign } from '@/lib/types';
+import Modal from '@/components/Modal';
 
 interface Props {
   campaign: Campaign;
@@ -9,7 +10,7 @@ interface Props {
 
 export default function DeleteConfirmModal({ campaign, onConfirm, onCancel }: Props) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+    <Modal onClose={onCancel}>
       <div className="w-full max-w-sm rounded-xl border-2 border-gray-800 bg-white p-6 shadow-2xl dark:border-gray-600 dark:bg-gray-900">
         <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Delete Campaign?</h2>
         <div className="mt-3 rounded-md bg-gray-50 px-4 py-3 text-sm text-gray-700 dark:bg-gray-800 dark:text-gray-300">
@@ -35,6 +36,6 @@ export default function DeleteConfirmModal({ campaign, onConfirm, onCancel }: Pr
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

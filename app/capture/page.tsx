@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import MobileLayout from '@/components/MobileLayout';
+import LoadingSpinner from '@/components/LoadingSpinner';
 import CampaignForm, { CampaignData } from '@/components/CampaignForm';
 import { useUser } from '@/contexts/UserContext';
 import { getUserStateCode, getCachedStateCode } from '@/lib/location';
@@ -76,7 +77,7 @@ export default function CapturePage() {
     return (
       <MobileLayout>
         <div className="flex min-h-screen items-center justify-center">
-          <div className="text-gray-600 dark:text-gray-400">Loading form…</div>
+          <LoadingSpinner text="Loading form…" />
         </div>
       </MobileLayout>
     );

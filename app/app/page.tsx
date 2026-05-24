@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import MobileLayout from '@/components/MobileLayout';
+import LoadingSpinner from '@/components/LoadingSpinner';
 import { supabase } from '@/lib/supabaseClient';
 import { normalizeName, normalizeMobile } from '@/lib/auth';
 import { useUser, upsertUserProfile } from '@/contexts/UserContext';
@@ -454,7 +455,7 @@ function AppPageContent() {
     return (
       <MobileLayout>
         <div className="flex min-h-screen items-center justify-center">
-          <div className="text-gray-600 dark:text-gray-400">Loading your campaigns…</div>
+          <LoadingSpinner text="Loading your campaigns…" />
         </div>
       </MobileLayout>
     );
@@ -671,7 +672,7 @@ export default function AppPage() {
       fallback={
         <MobileLayout>
           <div className="flex min-h-screen items-center justify-center">
-            <div className="text-gray-600 dark:text-gray-400">Loading...</div>
+            <LoadingSpinner />
           </div>
         </MobileLayout>
       }
