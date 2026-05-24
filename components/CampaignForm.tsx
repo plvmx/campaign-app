@@ -322,24 +322,27 @@ export default function CampaignForm({
         )}
       </div>
 
-      <div>
-        <label
-          htmlFor="mobile"
-          className="block text-sm font-medium text-gray-700 dark:text-gray-300"
-        >
-          Mobile (Optional)
-        </label>
-        <input
-          id="mobile"
-          name="mobile"
-          type="tel"
-          value={formData.mobile}
-          onChange={handleChange}
-          className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-          placeholder="Enter mobile number"
-          inputMode="tel"
-        />
-      </div>
+      {/* Mobile field — only shown to admins/state reporters; regular users have it auto-populated */}
+      {isAdminOrStateReporter && (
+        <div>
+          <label
+            htmlFor="mobile"
+            className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+          >
+            Mobile (Optional)
+          </label>
+          <input
+            id="mobile"
+            name="mobile"
+            type="tel"
+            value={formData.mobile}
+            onChange={handleChange}
+            className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+            placeholder="Enter mobile number"
+            inputMode="tel"
+          />
+        </div>
+      )}
 
       <div>
         <label

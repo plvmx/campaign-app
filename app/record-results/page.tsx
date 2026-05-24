@@ -97,7 +97,7 @@ export default function RecordResultsPage() {
     return (
       <MobileLayout>
         <div className="flex min-h-screen items-center justify-center">
-          <div className="text-gray-600 dark:text-gray-400">Loading...</div>
+          <div className="text-gray-600 dark:text-gray-400">Loading campaigns…</div>
         </div>
       </MobileLayout>
     );
