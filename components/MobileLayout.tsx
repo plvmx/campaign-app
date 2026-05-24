@@ -64,6 +64,7 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
   const pathname = usePathname();
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [adminStatus, setAdminStatus] = useState<string | null>(null);
+  const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
 
   useEffect(() => {
     async function checkAdminAndSr() {
@@ -86,8 +87,8 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
   const homeNavItem: NavItem    = { href: '/app',           label: 'Home',    icon: '🏠' };
   const metricsNavItem: NavItem = { href: '/admin/metrics', label: 'Metrics', icon: '📊' };
   const adminNavItem: NavItem   = { href: '/admin',         label: 'Admin',   icon: '⚙️' };
-  const srAdminNavItem: NavItem = { href: '/app/sr-admin',  label: 'SR Admin', icon: '⚙️', isSrAdmin: true };
-  const tlAdminNavItem: NavItem = { href: '/app/tl-admin',  label: 'TL Admin', icon: '⚙️', isTlAdmin: true };
+  const srAdminNavItem: NavItem = { href: '/app/sr-admin',  label: 'Admin',    icon: '⚙️', isSrAdmin: true };
+  const tlAdminNavItem: NavItem = { href: '/app/tl-admin',  label: 'My Admin', icon: '⚙️', isTlAdmin: true };
 
   // Full admins (AD): Home | Metrics | Admin
   // State reporters (SR): Home | SR Admin
@@ -101,6 +102,7 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
         : [homeNavItem, tlAdminNavItem];
 
   const handleSignOut = async () => {
+    setShowSignOutConfirm(false);
     try {
       await signOut();
       window.location.href = '/login';
@@ -118,7 +120,7 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
             AFJ Campaign Activity System
           </h1>
           <button
-            onClick={handleSignOut}
+            onClick={() => setShowSignOutConfirm(true)}
             className="rounded-md px-3 py-1.5 text-base font-bold text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800 whitespace-nowrap border-2 border-gray-800 dark:border-gray-600"
           >
             Sign Out
@@ -130,6 +132,32 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
       <main className="flex-1 overflow-y-auto overflow-x-hidden pb-20">
         {children}
       </main>
+
+      {/* Sign-Out Confirmation Modal */}
+      {showSignOutConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-sm rounded-xl border-2 border-gray-800 bg-white p-6 shadow-2xl dark:border-gray-600 dark:bg-gray-900">
+            <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Sign Out?</h2>
+            <p className="mt-2 text-base text-gray-600 dark:text-gray-400">
+              Are you sure you want to sign out?
+            </p>
+            <div className="mt-6 flex flex-col gap-3">
+              <button
+                onClick={handleSignOut}
+                className="w-full rounded-md bg-red-600 px-4 py-3 text-base font-bold text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
+              >
+                Yes, Sign Out
+              </button>
+              <button
+                onClick={() => setShowSignOutConfirm(false)}
+                className="w-full rounded-md bg-gray-200 px-4 py-3 text-base font-bold text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 border-2 border-gray-800 dark:border-gray-600"
+              >
+                Stay Signed In
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Bottom Navigation (Suspense required for useSearchParams during prerender) */}
       <nav className="fixed bottom-0 left-0 right-0 border-t-2 border-gray-800 dark:border-gray-600 bg-white dark:bg-gray-950">

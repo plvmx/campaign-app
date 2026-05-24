@@ -126,7 +126,7 @@ export default function LoginPage() {
   if (checkingSession) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-gray-900">
-        <div className="text-gray-600 dark:text-gray-400">Loading...</div>
+        <div className="text-gray-600 dark:text-gray-400">Checking sign-in status…</div>
       </div>
     );
   }
@@ -241,7 +241,7 @@ export default function LoginPage() {
                 value={mobile}
                 onChange={e => setMobile(e.target.value)}
                 className="mt-1 block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
-                placeholder="e.g., 0429028464 or +61 0429028464"
+                placeholder="e.g., 0429 028 464"
                 inputMode="tel"
               />
             </div>

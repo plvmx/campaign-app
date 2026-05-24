@@ -93,6 +93,13 @@ function AppPageContent() {
   const [quickActionError, setQuickActionError]       = useState<string | null>(null);
   const [quickActionProgress, setQuickActionProgress] = useState<string>('');
   
+  // Delete confirmation modal state
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [deleteConfirmCampaign, setDeleteConfirmCampaign] = useState<Campaign | null>(null);
+
+  // Checkbox save feedback (shows "Saved ✓" briefly after ticking)
+  const [savedCheckboxId, setSavedCheckboxId] = useState<string | null>(null);
+
   // State for "Other Place" functionality
   const [isOtherPlace, setIsOtherPlace] = useState<boolean>(false);
   const [customPlace, setCustomPlace] = useState<string>('');
@@ -368,7 +375,7 @@ function AppPageContent() {
         if (searchParams.get('created') === 'true') {
           setShowSuccess(true);
           router.replace('/app', { scroll: false });
-          setTimeout(() => setShowSuccess(false), 5000);
+          setTimeout(() => setShowSuccess(false), 10000);
         }
 
         // Generate time options
@@ -581,6 +588,13 @@ function AppPageContent() {
     loadLeaders();
   }, [formState.state]);
   
+  // Show More Info section by default for non-admin users (helpful orientation text)
+  useEffect(() => {
+    if (adminStatus !== null && adminStatus !== 'AD') {
+      setShowMoreInfo(true);
+    }
+  }, [adminStatus]);
+
   // Set default state from user profile when profile is loaded
   useEffect(() => {
     if (contextUserProfile?.state && !formState.state) {
@@ -905,9 +919,17 @@ function AppPageContent() {
     }));
   };
   
-  const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this campaign?')) return;
+  const handleDelete = (id: string) => {
+    const campaign = campaigns.find(c => c.id === id) ?? allCampaigns.find(c => c.id === id) ?? null;
+    setDeleteConfirmId(id);
+    setDeleteConfirmCampaign(campaign);
+  };
 
+  const handleConfirmDelete = async () => {
+    if (!deleteConfirmId) return;
+    const id = deleteConfirmId;
+    setDeleteConfirmId(null);
+    setDeleteConfirmCampaign(null);
     try {
       const oldData = await fetchCampaignData(id);
       await deleteCampaign(id, oldData);
@@ -931,6 +953,9 @@ function AppPageContent() {
     try {
       const oldData = await fetchCampaignData(campaignId);
       await updateCampaign(campaignId, { [field]: newValue }, oldData);
+      // Brief "Saved ✓" badge on the checkbox
+      setSavedCheckboxId(campaignId);
+      setTimeout(() => setSavedCheckboxId(prev => prev === campaignId ? null : prev), 2500);
     } catch (err: unknown) {
       // Rollback on error
       setCampaigns(prev => prev.map(applyToRow(currentValue)));
@@ -1013,7 +1038,7 @@ function AppPageContent() {
     return (
       <MobileLayout>
         <div className="flex min-h-screen items-center justify-center">
-          <div className="text-gray-600 dark:text-gray-400">Loading...</div>
+          <div className="text-gray-600 dark:text-gray-400">Loading your campaigns…</div>
         </div>
       </MobileLayout>
     );
@@ -1167,27 +1192,30 @@ function AppPageContent() {
                   : 'bg-gradient-to-b from-green-100 to-green-200 text-green-700 hover:from-green-200 hover:to-green-300 dark:from-green-700 dark:to-green-800 dark:text-green-300 dark:hover:from-green-600 dark:hover:to-green-700'
               }`}
             >
-              Create
+              Add Campaign
             </button>
           </div>
         </div>
 
         {showSuccess && (
-          <div className="mb-4 rounded-md bg-green-50 p-3 text-sm text-green-800 dark:bg-green-900/20 dark:text-green-200">
-            ✅ Campaign created successfully!
+          <div className="mb-4 flex items-start justify-between gap-2 rounded-md bg-green-50 p-3 text-sm text-green-800 dark:bg-green-900/20 dark:text-green-200">
+            <span>✅ Campaign created successfully!</span>
+            <button onClick={() => setShowSuccess(false)} className="shrink-0 text-green-600 hover:text-green-800 dark:text-green-400 font-bold text-base leading-none" aria-label="Dismiss">✕</button>
           </div>
         )}
 
         <div className="grid gap-4 w-full">
           {/* Success/Error Messages */}
           {success && (
-            <div className="rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-800 dark:bg-green-900/20 dark:border-green-800 dark:text-green-200 break-words">
-              {success}
+            <div className="flex items-start justify-between gap-2 rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-800 dark:bg-green-900/20 dark:border-green-800 dark:text-green-200 break-words">
+              <span>{success}</span>
+              <button onClick={() => setSuccess(null)} className="shrink-0 text-green-600 hover:text-green-800 dark:text-green-400 font-bold text-base leading-none" aria-label="Dismiss">✕</button>
             </div>
           )}
           {error && (
-            <div className="rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800 dark:bg-red-900/20 dark:border-red-800 dark:text-red-200 break-words">
-              {error}
+            <div className="flex items-start justify-between gap-2 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800 dark:bg-red-900/20 dark:border-red-800 dark:text-red-200 break-words">
+              <span>{error}</span>
+              <button onClick={() => setError(null)} className="shrink-0 text-red-600 hover:text-red-800 dark:text-red-400 font-bold text-base leading-none" aria-label="Dismiss">✕</button>
             </div>
           )}
 
@@ -1196,7 +1224,7 @@ function AppPageContent() {
             <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white shadow-sm dark:bg-gray-800 w-full overflow-hidden">
               <div className="flex items-center justify-between p-4">
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                  Create Campaign
+                  Add Campaign
                 </h2>
                 <button
                   type="button"
@@ -1275,15 +1303,20 @@ function AppPageContent() {
                   <option value="OTHER_PLACE">Other Place</option>
                 </select>
                 {isOtherPlace && (
-                  <input
-                    type="text"
-                    id="customPlace"
-                    required
-                    value={customPlace}
-                    onChange={(e) => setCustomPlace(e.target.value)}
-                    placeholder="Enter new place name"
-                    className="mt-2 block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
-                  />
+                  <>
+                    <input
+                      type="text"
+                      id="customPlace"
+                      required
+                      value={customPlace}
+                      onChange={(e) => setCustomPlace(e.target.value)}
+                      placeholder="e.g. Sunshine West"
+                      className="mt-2 block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
+                    />
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      Enter the suburb or location name. It will be saved for future use.
+                    </p>
+                  </>
                 )}
               </div>
               <div>
@@ -1371,7 +1404,7 @@ function AppPageContent() {
                   disabled={isSubmitting}
                   className="flex-1 rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed border-2 border-gray-800 dark:border-gray-600"
                 >
-                  {isSubmitting ? 'Creating...' : 'Create'}
+                  {isSubmitting ? 'Adding...' : 'Add Campaign'}
                 </button>
               </div>
             </form>
@@ -1538,107 +1571,113 @@ function AppPageContent() {
                             // Inline editing mode - show editable fields
                             result.push(
                               <div key={campaign.id} className="p-4 bg-blue-50 dark:bg-blue-900/20 border-b-2 border-gray-800 dark:border-gray-600">
-                                <div className="space-y-3">
-                                  <div className="grid grid-cols-2 gap-2">
-                                    <div>
-                                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                        Date
-                                      </label>
-                                      <input
-                                        type="date"
-                                        value={editData.date}
-                                        onChange={(e) => updateInlineEditField(campaign.id, 'date', e.target.value)}
-                                        className="w-full rounded-md border-2 border-gray-400 bg-white px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
-                                      />
-                                    </div>
-                                    <div>
-                                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                        State
-                                      </label>
-                                      <select
-                                        value={editData.state}
-                                        onChange={(e) => updateInlineEditField(campaign.id, 'state', e.target.value)}
-                                        disabled={!contextIsAdmin}
-                                        className="w-full rounded-md border-2 border-gray-400 bg-white px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                                      >
-                                        <option value="">Select state</option>
-                                        {AUSTRALIAN_STATES.map((state) => (
-                                          <option key={state} value={state}>{state}</option>
-                                        ))}
-                                      </select>
-                                    </div>
+                                <div className="space-y-4">
+                                  {/* Date */}
+                                  <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                      Date
+                                    </label>
+                                    <input
+                                      type="date"
+                                      value={editData.date}
+                                      onChange={(e) => updateInlineEditField(campaign.id, 'date', e.target.value)}
+                                      className="w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
+                                    />
                                   </div>
-                                  <div className="grid grid-cols-2 gap-2">
-                                    <div>
-                                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                        Place
-                                      </label>
-                                      <select
-                                        required={!inlineEditOtherPlace[campaign.id]}
-                                        value={inlineEditOtherPlace[campaign.id] ? 'OTHER_PLACE' : editData.place}
-                                        onChange={(e) => {
-                                          if (e.target.value === 'OTHER_PLACE') {
-                                            setInlineEditOtherPlace(prev => ({ ...prev, [campaign.id]: true }));
-                                            updateInlineEditField(campaign.id, 'place', '');
-                                          } else {
-                                            setInlineEditOtherPlace(prev => {
-                                              const newState = { ...prev };
-                                              delete newState[campaign.id];
-                                              return newState;
-                                            });
-                                            setInlineEditCustomPlace(prev => {
-                                              const newState = { ...prev };
-                                              delete newState[campaign.id];
-                                              return newState;
-                                            });
-                                            updateInlineEditField(campaign.id, 'place', e.target.value);
-                                          }
-                                        }}
-                                        className="w-full rounded-md border-2 border-gray-400 bg-white px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
-                                        disabled={!editData.state}
-                                      >
-                                        <option value="">Select place</option>
-                                        {(campaignPlaces[campaign.id] || []).map((place) => (
-                                          <option key={place} value={place}>{place}</option>
-                                        ))}
-                                        <option value="OTHER_PLACE">Other Place</option>
-                                      </select>
-                                      {inlineEditOtherPlace[campaign.id] && (
+                                  {/* State */}
+                                  <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                      State
+                                    </label>
+                                    <select
+                                      value={editData.state}
+                                      onChange={(e) => updateInlineEditField(campaign.id, 'state', e.target.value)}
+                                      disabled={!contextIsAdmin}
+                                      className="w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                      <option value="">Select state</option>
+                                      {AUSTRALIAN_STATES.map((state) => (
+                                        <option key={state} value={state}>{state}</option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                  {/* Place */}
+                                  <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                      Place
+                                    </label>
+                                    <select
+                                      required={!inlineEditOtherPlace[campaign.id]}
+                                      value={inlineEditOtherPlace[campaign.id] ? 'OTHER_PLACE' : editData.place}
+                                      onChange={(e) => {
+                                        if (e.target.value === 'OTHER_PLACE') {
+                                          setInlineEditOtherPlace(prev => ({ ...prev, [campaign.id]: true }));
+                                          updateInlineEditField(campaign.id, 'place', '');
+                                        } else {
+                                          setInlineEditOtherPlace(prev => {
+                                            const newState = { ...prev };
+                                            delete newState[campaign.id];
+                                            return newState;
+                                          });
+                                          setInlineEditCustomPlace(prev => {
+                                            const newState = { ...prev };
+                                            delete newState[campaign.id];
+                                            return newState;
+                                          });
+                                          updateInlineEditField(campaign.id, 'place', e.target.value);
+                                        }
+                                      }}
+                                      className="w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
+                                      disabled={!editData.state}
+                                    >
+                                      <option value="">Select place</option>
+                                      {(campaignPlaces[campaign.id] || []).map((place) => (
+                                        <option key={place} value={place}>{place}</option>
+                                      ))}
+                                      <option value="OTHER_PLACE">Other Place</option>
+                                    </select>
+                                    {inlineEditOtherPlace[campaign.id] && (
+                                      <>
                                         <input
                                           type="text"
                                           id={`customPlace_${campaign.id}`}
                                           required
                                           value={inlineEditCustomPlace[campaign.id] || ''}
                                           onChange={(e) => setInlineEditCustomPlace(prev => ({ ...prev, [campaign.id]: e.target.value }))}
-                                          placeholder="Enter new place name"
-                                          className="mt-2 w-full rounded-md border-2 border-gray-400 bg-white px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
+                                          placeholder="e.g. Sunshine West"
+                                          className="mt-2 w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
                                         />
-                                      )}
-                                    </div>
-                                    <div>
-                                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                        Time
-                                      </label>
-                                      <select
-                                        value={editData.time}
-                                        onChange={(e) => updateInlineEditField(campaign.id, 'time', e.target.value)}
-                                        className="w-full rounded-md border-2 border-gray-400 bg-white px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
-                                      >
-                                        <option value="">Select time</option>
-                                        {timeOptions.map((time) => (
-                                          <option key={time.value} value={time.value}>{time.label}</option>
-                                        ))}
-                                      </select>
-                                    </div>
+                                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                          Enter the suburb or location name. It will be saved for future use.
+                                        </p>
+                                      </>
+                                    )}
                                   </div>
+                                  {/* Time */}
                                   <div>
-                                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                      Time
+                                    </label>
+                                    <select
+                                      value={editData.time}
+                                      onChange={(e) => updateInlineEditField(campaign.id, 'time', e.target.value)}
+                                      className="w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
+                                    >
+                                      <option value="">Select time</option>
+                                      {timeOptions.map((time) => (
+                                        <option key={time.value} value={time.value}>{time.label}</option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                  {/* Leader */}
+                                  <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                                       Leader
                                     </label>
                                     <select
                                       value={editData.leader}
                                       onChange={(e) => updateInlineEditField(campaign.id, 'leader', e.target.value)}
-                                      className="w-full rounded-md border-2 border-gray-400 bg-white px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
+                                      className="w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
                                       disabled={!editData.state}
                                     >
                                       <option value="">Select leader</option>
@@ -1647,45 +1686,47 @@ function AppPageContent() {
                                       ))}
                                     </select>
                                   </div>
-                                  <div className="grid grid-cols-2 gap-2">
+                                  {/* Mobile — admin/SR only */}
+                                  {contextIsAdmin && (
                                     <div>
-                                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                        Mobile
+                                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                        Mobile (Optional)
                                       </label>
                                       <input
                                         type="tel"
                                         value={editData.mobile}
                                         onChange={(e) => updateInlineEditField(campaign.id, 'mobile', e.target.value)}
-                                        className="w-full rounded-md border-2 border-gray-400 bg-white px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
-                                        placeholder="Mobile (optional)"
+                                        className="w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
+                                        placeholder="Enter mobile number"
                                       />
                                     </div>
-                                    <div>
-                                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                        Category
-                                      </label>
-                                      <select
-                                        value={editData.category}
-                                        onChange={(e) => updateInlineEditField(campaign.id, 'category', e.target.value)}
-                                        className="w-full rounded-md border-2 border-gray-400 bg-white px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
-                                      >
-                                        {campaignCategories.map((cat) => (
-                                          <option key={cat.code} value={cat.code}>{cat.name}</option>
-                                        ))}
-                                      </select>
-                                    </div>
+                                  )}
+                                  {/* Category */}
+                                  <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                      Category
+                                    </label>
+                                    <select
+                                      value={editData.category}
+                                      onChange={(e) => updateInlineEditField(campaign.id, 'category', e.target.value)}
+                                      className="w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
+                                    >
+                                      {campaignCategories.map((cat) => (
+                                        <option key={cat.code} value={cat.code}>{cat.name}</option>
+                                      ))}
+                                    </select>
                                   </div>
 
-                                  <div className="flex gap-2 pt-2">
+                                  <div className="flex gap-3 pt-2">
                                     <button
                                       onClick={() => handleSaveInlineEdit(campaign.id)}
-                                      className="flex-1 rounded-md bg-green-600 px-3 py-2 text-base font-bold text-white hover:bg-green-700 border-2 border-gray-800 dark:border-gray-600"
+                                      className="flex-1 rounded-md bg-green-600 px-3 py-3 text-base font-bold text-white hover:bg-green-700 border-2 border-gray-800 dark:border-gray-600"
                                     >
-                                      Save
+                                      Save Changes
                                     </button>
                                     <button
                                       onClick={handleCancelInlineEdit}
-                                      className="flex-1 rounded-md bg-gray-200 px-3 py-2 text-base font-bold text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 border-2 border-gray-800 dark:border-gray-600"
+                                      className="flex-1 rounded-md bg-gray-200 px-3 py-3 text-base font-bold text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 border-2 border-gray-800 dark:border-gray-600"
                                     >
                                       Cancel
                                     </button>
@@ -1735,7 +1776,7 @@ function AppPageContent() {
                                     </div>
                                     {/* This Campaign is Correct checkbox: shown only for Future campaigns */}
                                     {dateFilter === 'future' && (
-                                      <div className="flex gap-6 justify-center text-sm sm:text-base mt-2 mb-2">
+                                      <div className="flex items-center gap-3 justify-center text-sm sm:text-base mt-2 mb-2">
                                         <div className={`flex items-center ${stateColor.text} font-semibold cursor-pointer`} onClick={() => handleToggleCheckbox(campaign.id, 'tl_ok', campaign.tl_ok)}>
                                           <input
                                             type="checkbox"
@@ -1745,6 +1786,11 @@ function AppPageContent() {
                                           />
                                           <span>This Campaign is Correct</span>
                                         </div>
+                                        {savedCheckboxId === campaign.id && (
+                                          <span className="text-sm font-semibold text-green-600 dark:text-green-400 animate-pulse">
+                                            Saved ✓
+                                          </span>
+                                        )}
                                       </div>
                                     )}
                                   </div>
@@ -1809,6 +1855,39 @@ function AppPageContent() {
           </div>
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirmId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-sm rounded-xl border-2 border-gray-800 bg-white p-6 shadow-2xl dark:border-gray-600 dark:bg-gray-900">
+            <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Delete Campaign?</h2>
+            {deleteConfirmCampaign && (
+              <div className="mt-3 rounded-md bg-gray-50 px-4 py-3 text-sm text-gray-700 dark:bg-gray-800 dark:text-gray-300">
+                <p><span className="font-semibold">Place:</span> {deleteConfirmCampaign.place}, {deleteConfirmCampaign.state}</p>
+                <p><span className="font-semibold">Date:</span> {new Date(deleteConfirmCampaign.date).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                <p><span className="font-semibold">Leader:</span> {deleteConfirmCampaign.leader}</p>
+              </div>
+            )}
+            <p className="mt-3 text-base text-gray-600 dark:text-gray-400">
+              This cannot be undone. Are you sure?
+            </p>
+            <div className="mt-6 flex flex-col gap-3">
+              <button
+                onClick={handleConfirmDelete}
+                className="w-full rounded-md bg-red-600 px-4 py-3 text-base font-bold text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
+              >
+                Yes, Delete Campaign
+              </button>
+              <button
+                onClick={() => { setDeleteConfirmId(null); setDeleteConfirmCampaign(null); }}
+                className="w-full rounded-md bg-gray-200 px-4 py-3 text-base font-bold text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 border-2 border-gray-800 dark:border-gray-600"
+              >
+                Cancel — Keep Campaign
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </MobileLayout>
   );
 }

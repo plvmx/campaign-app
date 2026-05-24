@@ -489,7 +489,7 @@ function RecordResultsDetailPageContent() {
 
   const renderInputGrid = (rows: InputRow[], section: SectionType) => (
     <div className="space-y-2">
-      {rows.map((row, index) => (
+      {rows.map((row) => (
         <div key={row.id} className="flex gap-2 w-full">
           <input
             type="text"
@@ -497,7 +497,7 @@ function RecordResultsDetailPageContent() {
             onChange={(e) => handleNameChange(section, row.id, 'field1', e.target.value)}
             maxLength={255}
             className="flex-1 min-w-0 rounded-md border-2 border-gray-400 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
-            placeholder="Name 1"
+            placeholder="Enter first name"
           />
           <input
             type="text"
@@ -505,7 +505,7 @@ function RecordResultsDetailPageContent() {
             onChange={(e) => handleNameChange(section, row.id, 'field2', e.target.value)}
             maxLength={255}
             className="flex-1 min-w-0 rounded-md border-2 border-gray-400 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
-            placeholder="Name 2"
+            placeholder="Enter first name"
           />
           <input
             type="text"
@@ -513,19 +513,17 @@ function RecordResultsDetailPageContent() {
             onChange={(e) => handleNameChange(section, row.id, 'field3', e.target.value)}
             maxLength={255}
             className="flex-1 min-w-0 rounded-md border-2 border-gray-400 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
-            placeholder="Name 3"
+            placeholder="Enter first name"
           />
-          {index === rows.length - 1 && (
-            <button
-              onClick={() => addNewRow(section)}
-              className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-md border-2 border-gray-400 bg-white text-lg font-semibold text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
-              aria-label="Add new row"
-            >
-              +
-            </button>
-          )}
         </div>
       ))}
+      <button
+        onClick={() => addNewRow(section)}
+        className="mt-1 flex items-center gap-2 rounded-md border-2 border-gray-400 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+      >
+        <span className="text-lg leading-none">+</span>
+        <span>Add more names</span>
+      </button>
     </div>
   );
 
@@ -533,7 +531,7 @@ function RecordResultsDetailPageContent() {
     return (
       <MobileLayout>
         <div className="flex min-h-screen items-center justify-center">
-          <div className="text-gray-600 dark:text-gray-400">Loading...</div>
+          <div className="text-gray-600 dark:text-gray-400">Loading campaign results…</div>
         </div>
       </MobileLayout>
     );
@@ -658,46 +656,50 @@ function RecordResultsDetailPageContent() {
         </div>
 
         {/* Partial Presentations */}
-        <div className="mb-4 rounded-md bg-green-100 px-4 py-2 dark:bg-green-900/30 flex items-center justify-between">
-          <span className="text-sm font-medium text-green-800 dark:text-green-200">
-            Partial Presentations
-          </span>
-          <span className="text-sm font-semibold text-green-700 dark:text-green-300">
-            {countNames(partialRows)}
-          </span>
+        <div className="mb-2 rounded-md bg-green-100 px-4 py-3 dark:bg-green-900/30">
+          <div className="flex items-center justify-between">
+            <p className="text-base font-bold text-green-800 dark:text-green-200">Partial Presentations</p>
+            <span className="text-sm font-semibold text-green-700 dark:text-green-300">{countNames(partialRows)}</span>
+          </div>
+          <p className="mt-1 text-sm text-green-700 dark:text-green-300">
+            Enter the first name of each person who received a partial presentation of the gospel.
+          </p>
         </div>
         {renderInputGrid(partialRows, 'partial')}
 
         {/* Full Presentations Only */}
-        <div className="mb-4 mt-6 rounded-md bg-orange-100 px-4 py-2 dark:bg-orange-900/30 flex items-center justify-between">
-          <span className="text-sm font-medium text-orange-800 dark:text-orange-200">
-            Full Presentations Only
-          </span>
-          <span className="text-sm font-semibold text-orange-700 dark:text-orange-300">
-            {countNames(fullRows)}
-          </span>
+        <div className="mb-2 mt-6 rounded-md bg-orange-100 px-4 py-3 dark:bg-orange-900/30">
+          <div className="flex items-center justify-between">
+            <p className="text-base font-bold text-orange-800 dark:text-orange-200">Full Presentations Only</p>
+            <span className="text-sm font-semibold text-orange-700 dark:text-orange-300">{countNames(fullRows)}</span>
+          </div>
+          <p className="mt-1 text-sm text-orange-700 dark:text-orange-300">
+            Enter the first name of each person who received a full presentation of the gospel.
+          </p>
         </div>
         {renderInputGrid(fullRows, 'full')}
 
         {/* Full Presentations and Sinners Prayers */}
-        <div className="mb-4 mt-6 rounded-md bg-red-100 px-4 py-2 dark:bg-red-900/30 flex items-center justify-between">
-          <span className="text-sm font-medium text-red-800 dark:text-red-200">
-            Full Presentations and Sinners Prayers
-          </span>
-          <span className="text-sm font-semibold text-red-700 dark:text-red-300">
-            {countNames(fullSinnersRows)}
-          </span>
+        <div className="mb-2 mt-6 rounded-md bg-red-100 px-4 py-3 dark:bg-red-900/30">
+          <div className="flex items-center justify-between">
+            <p className="text-base font-bold text-red-800 dark:text-red-200">Full Presentations and Sinners Prayers</p>
+            <span className="text-sm font-semibold text-red-700 dark:text-red-300">{countNames(fullSinnersRows)}</span>
+          </div>
+          <p className="mt-1 text-sm text-red-700 dark:text-red-300">
+            Enter the first name of each person who received a full presentation and prayed a sinner&apos;s prayer.
+          </p>
         </div>
         {renderInputGrid(fullSinnersRows, 'fullSinners')}
 
         {/* Information Requests */}
-        <div className="mb-4 mt-6 rounded-md bg-yellow-100 px-4 py-2 dark:bg-yellow-900/30 flex items-center justify-between">
-          <span className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
-            Information Requests
-          </span>
-          <span className="text-sm font-semibold text-yellow-700 dark:text-yellow-300">
-            {countNames(informationRows)}
-          </span>
+        <div className="mb-2 mt-6 rounded-md bg-yellow-100 px-4 py-3 dark:bg-yellow-900/30">
+          <div className="flex items-center justify-between">
+            <p className="text-base font-bold text-yellow-800 dark:text-yellow-200">Information Requests</p>
+            <span className="text-sm font-semibold text-yellow-700 dark:text-yellow-300">{countNames(informationRows)}</span>
+          </div>
+          <p className="mt-1 text-sm text-yellow-700 dark:text-yellow-300">
+            Enter the first name of each person who requested more information.
+          </p>
         </div>
         {renderInputGrid(informationRows, 'information')}
       </div>
