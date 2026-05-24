@@ -136,3 +136,28 @@ export async function findCampaign(criteria: {
   if (error) throw error;
   return data as Campaign | null;
 }
+
+/**
+ * Find all campaigns matching a natural key. Unlike findCampaign, this returns
+ * an array because multiple campaigns can share the same key when different
+ * leaders created entries with the same date/state/place/time/leader values.
+ */
+export async function findCampaignsByKey(criteria: {
+  date: string;
+  state: string;
+  place: string;
+  time: string;
+  leader: string;
+}): Promise<Pick<Campaign, 'id' | 'mobile' | 'state' | 'leader'>[]> {
+  const { data, error } = await supabase
+    .from('campaigns')
+    .select('id, mobile, state, leader')
+    .eq('date', criteria.date)
+    .eq('state', criteria.state)
+    .eq('place', criteria.place)
+    .eq('time', criteria.time)
+    .eq('leader', criteria.leader);
+
+  if (error) throw error;
+  return (data || []) as Pick<Campaign, 'id' | 'mobile' | 'state' | 'leader'>[];
+}
