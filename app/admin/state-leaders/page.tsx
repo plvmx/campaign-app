@@ -69,6 +69,18 @@ export default function StateLeadersPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterState, hasAccess]);
 
+  // Dropdown options derived from already-fetched data, scoped to the selected state.
+  // Must be declared before any early returns to satisfy Rules of Hooks.
+  const filterNameOptions = useMemo(() => {
+    const source = filterState ? stateLeaders.filter(sl => sl.state === filterState) : stateLeaders;
+    return [...new Set(source.map(sl => sl.leader))].sort();
+  }, [stateLeaders, filterState]);
+
+  const filterMobileOptions = useMemo(() => {
+    const source = filterState ? stateLeaders.filter(sl => sl.state === filterState) : stateLeaders;
+    return [...new Set(source.map(sl => sl.mobile).filter((m): m is string => !!m))].sort();
+  }, [stateLeaders, filterState]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -193,17 +205,6 @@ export default function StateLeadersPage() {
       </MobileLayout>
     );
   }
-
-  // Dropdown options derived from already-fetched data, scoped to the selected state.
-  const filterNameOptions = useMemo(() => {
-    const source = filterState ? stateLeaders.filter(sl => sl.state === filterState) : stateLeaders;
-    return [...new Set(source.map(sl => sl.leader))].sort();
-  }, [stateLeaders, filterState]);
-
-  const filterMobileOptions = useMemo(() => {
-    const source = filterState ? stateLeaders.filter(sl => sl.state === filterState) : stateLeaders;
-    return [...new Set(source.map(sl => sl.mobile).filter((m): m is string => !!m))].sort();
-  }, [stateLeaders, filterState]);
 
   const filteredLeaders = stateLeaders.filter((sl) => {
     if (filterState  && sl.state !== filterState) return false;
