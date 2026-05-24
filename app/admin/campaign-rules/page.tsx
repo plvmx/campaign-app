@@ -4,8 +4,9 @@ import { useCallback, useEffect, useMemo, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import MobileLayout from '@/components/MobileLayout';
 import { useUser } from '@/contexts/UserContext';
-import { supabase } from '@/lib/supabaseClient';
 import { getStateColor } from '@/lib/stateColors';
+import { getPlacesForState, getLeadersForState, getLeaderMobile } from '@/lib/services/dropdownService';
+import { getRules, createRule, updateRule, deleteRule, setRuleActive } from '@/lib/services/rulesService';
 import { CampaignRule, evaluateRule, previewRuleEvaluation } from '@/lib/campaignRules';
 import { formatDateReadable } from '@/lib/campaignDates';
 import { AUSTRALIAN_STATES } from '@/lib/constants';
@@ -173,36 +174,7 @@ function CampaignRulesPageContent() {
 
   const fetchRules = useCallback(async () => {
     try {
-      const isTeamLeaderFetch = adminStatus !== 'AD' && adminStatus !== 'SR' && !!userState;
-      const isStateReporter = adminStatus === 'SR';
-
-      // Team Leaders without a matched leader name see no rules
-      if (isTeamLeaderFetch && !userLeader) {
-        setRules([]);
-        return;
-      }
-
-      let query = supabase
-        .from('campaign_rules')
-        .select('*');
-
-      // State Reporters: only see rules for their state
-      if (isStateReporter && userState) {
-        query = query.eq('state', userState.toUpperCase().trim());
-      }
-      // Team Leaders: only see their own rules (state + leader = themselves)
-      if (isTeamLeaderFetch && userState && userLeader) {
-        query = query
-          .eq('state', userState.toUpperCase().trim())
-          .eq('leader', userLeader);
-      }
-
-      const { data, error } = await query
-        .order('priority', { ascending: false })
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      const fetched = data || [];
+      const fetched = await getRules({ adminStatus, userState, userLeader });
       setRules(fetched);
       // Auto-expand the form when the user has no rules yet so they can create their first one
       setIsFormExpanded(prev => prev || fetched.length === 0);
@@ -219,43 +191,21 @@ function CampaignRulesPageContent() {
 
   // Fetch places from state_places table when state changes
   useEffect(() => {
-    async function fetchPlaces() {
-      if (!formState.state) {
-        setPlaces([]);
-        setFormState(prev => ({ ...prev, place: '' }));
-        return;
-      }
-
-      setLoadingPlaces(true);
-      try {
-        const { data, error } = await supabase
-          .from('state_places')
-          .select('place')
-          .eq('state', formState.state)
-          .order('place', { ascending: true });
-
-        if (error) throw error;
-
-        const uniquePlaces = Array.from(
-          new Set((data || []).map((item) => item.place).filter(Boolean))
-        ).sort();
-
-        setPlaces(uniquePlaces);
-
-        // If current place is not in the list for the new state, clear it (functional update).
-        setFormState(prev => (
-          prev.place && !uniquePlaces.includes(prev.place)
-            ? { ...prev, place: '' }
-            : prev
-        ));
-      } catch {
-        setPlaces([]);
-      } finally {
-        setLoadingPlaces(false);
-      }
+    if (!formState.state) {
+      setPlaces([]);
+      setFormState(prev => ({ ...prev, place: '' }));
+      return;
     }
-
-    fetchPlaces();
+    setLoadingPlaces(true);
+    getPlacesForState(formState.state)
+      .then((uniquePlaces) => {
+        setPlaces(uniquePlaces);
+        setFormState(prev =>
+          prev.place && !uniquePlaces.includes(prev.place) ? { ...prev, place: '' } : prev,
+        );
+      })
+      .catch(() => setPlaces([]))
+      .finally(() => setLoadingPlaces(false));
   }, [formState.state]);
 
   // Derived access-level flags — computed once and used throughout.
@@ -280,32 +230,17 @@ function CampaignRulesPageContent() {
       }
 
       setLoadingLeaders(true);
-      try {
-        const { data, error } = await supabase
-          .from('state_leaders')
-          .select('leader')
-          .eq('state', formState.state)
-          .order('leader', { ascending: true });
-
-        if (error) throw error;
-
-        const uniqueLeaders = Array.from(
-          new Set((data || []).map((item) => item.leader).filter(Boolean))
-        ).sort();
-
-        setLeaders(uniqueLeaders);
-        
-        // If current leader is not in the list for the new state, clear it (functional update).
-        setFormState(prev => (
-          prev.leader && !uniqueLeaders.includes(prev.leader)
-            ? { ...prev, leader: '', mobile: '' }
-            : prev
-        ));
-      } catch {
-        setLeaders([]);
-      } finally {
-        setLoadingLeaders(false);
-      }
+      getLeadersForState(formState.state)
+        .then((uniqueLeaders) => {
+          setLeaders(uniqueLeaders);
+          setFormState(prev =>
+            prev.leader && !uniqueLeaders.includes(prev.leader)
+              ? { ...prev, leader: '', mobile: '' }
+              : prev,
+          );
+        })
+        .catch(() => setLeaders([]))
+        .finally(() => setLoadingLeaders(false));
     }
 
     fetchLeaders();
@@ -313,29 +248,13 @@ function CampaignRulesPageContent() {
 
   // Fetch mobile from state_leaders when leader/state changes
   useEffect(() => {
-    const fetchMobile = async () => {
-      if (formState.leader && formState.state) {
-        try {
-          const { data, error } = await supabase
-            .from('state_leaders')
-            .select('mobile')
-            .eq('state', formState.state)
-            .eq('leader', formState.leader)
-            .single();
-          
-          if (!error && data?.mobile) {
-            setFormState(prev => ({ ...prev, mobile: data.mobile || '' }));
-          } else {
-            setFormState(prev => ({ ...prev, mobile: '' }));
-          }
-        } catch {
-          setFormState(prev => ({ ...prev, mobile: '' }));
-        }
-      } else {
-        setFormState(prev => ({ ...prev, mobile: '' }));
-      }
-    };
-    fetchMobile();
+    if (!formState.leader || !formState.state) {
+      setFormState(prev => ({ ...prev, mobile: '' }));
+      return;
+    }
+    getLeaderMobile(formState.state, formState.leader).then((mobile) => {
+      setFormState(prev => ({ ...prev, mobile: mobile || '' }));
+    });
   }, [formState.leader, formState.state]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -408,12 +327,7 @@ function CampaignRulesPageContent() {
 
       if (editingId) {
         // Update existing rule — proceed directly, no confirmation needed.
-        const { error } = await supabase
-          .from('campaign_rules')
-          .update(ruleData)
-          .eq('id', editingId);
-
-        if (error) throw error;
+        await updateRule(editingId, ruleData);
         setSuccess('Campaign rule updated successfully');
         setIsFormExpanded(false);
         resetForm();
@@ -449,10 +363,7 @@ function CampaignRulesPageContent() {
     setIsSubmitting(true);
     setShowConfirmModal(false);
     try {
-      const { error } = await supabase
-        .from('campaign_rules')
-        .insert([{ ...pendingRuleData, created_by: user?.id }]);
-      if (error) throw error;
+      await createRule(pendingRuleData, user?.id ?? '');
       setSuccess('Campaign rule created successfully');
       setIsFormExpanded(false);
       resetForm();
@@ -550,8 +461,7 @@ function CampaignRulesPageContent() {
       }
     }
     try {
-      const { error } = await supabase.from('campaign_rules').delete().eq('id', id);
-      if (error) throw error;
+      await deleteRule(id);
       setSuccess('Campaign rule deleted successfully');
       await fetchRules();
     } catch (err: unknown) {
@@ -597,12 +507,7 @@ function CampaignRulesPageContent() {
       return;
     }
     try {
-      const { error } = await supabase
-        .from('campaign_rules')
-        .update({ is_active: !rule.is_active })
-        .eq('id', rule.id);
-      
-      if (error) throw error;
+      await setRuleActive(rule.id, !rule.is_active);
       await fetchRules();
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Failed to update rule status'));
