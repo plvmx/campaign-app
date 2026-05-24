@@ -1,6 +1,6 @@
 import { supabase } from '@/lib/supabaseClient';
 import { normalizeName } from '@/lib/auth';
-import type { UserProfile } from '@/lib/userProfile';
+import type { UserProfile } from '@/lib/types';
 
 export interface AuthenticatedUser {
   user: { id: string; email?: string };

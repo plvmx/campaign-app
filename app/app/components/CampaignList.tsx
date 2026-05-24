@@ -1,6 +1,6 @@
 'use client';
 import type { Campaign } from '@/lib/types';
-import type { LeaderShareOwner } from '@/lib/leaderShares';
+import type { LeaderShareOwner } from '@/lib/types';
 import type { EditUpdates } from './types';
 import CampaignCard from './CampaignCard';
 import InlineEditForm from './InlineEditForm';

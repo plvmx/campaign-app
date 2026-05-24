@@ -4,38 +4,7 @@
  * Evaluates campaign rules and generates campaign records based on scheduling patterns.
  */
 
-/** Typed shape for the JSONB rule_config column. */
-export interface RuleConfig {
-  reference_date?: string;
-  exceptions?: string[];
-  override_fields?: Record<string, Record<string, unknown>>;
-  [key: string]: unknown;
-}
-
-export interface CampaignRule {
-  id: string;
-  name: string;
-  leader: string;
-  state: string;
-  place: string;
-  time: string;
-  mobile: string | null;
-  /**
-   * 'custom' is deprecated — existing DB rows only; no longer creatable via the UI.
-   * Legacy custom rules generate no campaigns until migrated to a supported type.
-   */
-  frequency_type: 'weekly' | 'biweekly' | 'monthly' | 'custom';
-  frequency_value: number | null;
-  month_week_number: number | null; // 1–4 or –1 for last week
-  month_day_of_week: number | null; // 0=Sunday … 6=Saturday
-  day_of_week: number | null;       // 0=Sunday … 6=Saturday
-  start_date: string | null;
-  end_date: string | null;
-  is_active: boolean;
-  priority: number;
-  rule_config: RuleConfig;
-  notes: string | null;
-}
+import type { CampaignRule, RuleConfig } from '@/lib/types';
 
 export interface GeneratedCampaign {
   date: string;

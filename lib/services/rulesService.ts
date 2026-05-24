@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabaseClient';
-import type { CampaignRule } from '@/lib/campaignRules';
+import type { CampaignRule } from '@/lib/types';
 
 interface GetRulesOptions {
   adminStatus: string | null;

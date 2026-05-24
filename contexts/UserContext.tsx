@@ -1,7 +1,8 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
-import { upsertUserProfile, UserProfile } from '@/lib/userProfile';
+import type { UserProfile } from '@/lib/types';
+import { upsertUserProfile } from '@/lib/userProfile';
 import { getAuthenticatedUser } from '@/lib/services/authService';
 import { supabase } from '@/lib/supabaseClient';
 

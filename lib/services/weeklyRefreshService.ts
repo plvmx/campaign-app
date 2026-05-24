@@ -11,7 +11,8 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { calculateCampaignDates, formatDateForDb } from '@/lib/campaignDates';
-import { type CampaignRule, evaluateRules } from '@/lib/campaignRules';
+import type { CampaignRule } from '@/lib/types';
+import { evaluateRules } from '@/lib/campaignRules';
 
 // ---------------------------------------------------------------------------
 // Types

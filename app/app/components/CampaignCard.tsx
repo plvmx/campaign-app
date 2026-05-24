@@ -1,6 +1,6 @@
 'use client';
 import type { Campaign } from '@/lib/types';
-import type { LeaderShareOwner } from '@/lib/leaderShares';
+import type { LeaderShareOwner } from '@/lib/types';
 import { getStateColor } from '@/lib/stateColors';
 import { formatCampaignTimeDisplay, isCampaignPast } from '@/lib/campaignUtils';
 import { normalizeName, normalizeMobile } from '@/lib/auth';

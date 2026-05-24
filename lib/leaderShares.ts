@@ -1,10 +1,8 @@
 import { supabase } from './supabaseClient';
 import { normalizeName, normalizeMobile } from './auth';
+import type { LeaderShareOwner } from '@/lib/types';
 
-export interface LeaderShareOwner {
-  owner_state: string;
-  owner_leader: string;
-}
+export type { LeaderShareOwner };
 
 /**
  * Get the list of (owner_state, owner_leader) who have shared their campaigns with the given leader.

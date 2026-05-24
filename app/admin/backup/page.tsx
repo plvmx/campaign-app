@@ -8,7 +8,7 @@ import { useUser } from '@/contexts/UserContext';
 import { supabase } from '@/lib/supabaseClient';
 import { getErrorMessage } from '@/lib/errorUtils';
 import type { Campaign } from '@/lib/types';
-import type { CampaignRule } from '@/lib/campaignRules';
+import type { CampaignRule } from '@/lib/types';
 
 // ─── Local types ──────────────────────────────────────────────────────────────
 
