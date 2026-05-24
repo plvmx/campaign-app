@@ -18,7 +18,6 @@ interface Campaign {
   time: string;
   leader: string;
   mobile: string | null;
-  botj: string | null;
   category: string | null;
   tl_ok: boolean;
   sr_ok: boolean;

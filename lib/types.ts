@@ -10,7 +10,6 @@ export interface Campaign {
   time: string;
   leader: string;
   mobile: string | null;
-  botj: string | null;
   /** Campaign category code — references campaign_categories.code. Default 'TWOL'. */
   category: string | null;
   tl_ok: boolean;
