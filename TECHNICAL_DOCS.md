@@ -1329,4 +1329,51 @@ git branch -d feat/my-feature
 
 ---
 
+---
+
+## Regenerating this document as a PDF
+
+The PDF version (`TECHNICAL_DOCS.pdf`) is not committed to the repository. To regenerate it locally, run the following single command from the project root (requires macOS with Google Chrome installed):
+
+```bash
+"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+  --headless=new --disable-gpu --no-sandbox \
+  --print-to-pdf="$(pwd)/TECHNICAL_DOCS.pdf" \
+  <(node -e "
+    const {readFileSync,writeFileSync}=require('fs');
+    const {marked}=require('marked');
+    const md=readFileSync('TECHNICAL_DOCS.md','utf8');
+    const html='<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><style>body{font-family:Arial,sans-serif;font-size:10.5pt;line-height:1.65;color:#1a1a2e;max-width:900px;margin:0 auto}h1{font-size:22pt;border-bottom:3px solid #2563eb;padding-bottom:6pt}h2{font-size:14pt;color:#1e3a5f;border-bottom:1.5px solid #93c5fd;padding-bottom:4pt;margin-top:24pt}h3{font-size:11.5pt;color:#1e40af}pre{background:#0f172a;color:#e2e8f0;border-radius:5pt;padding:11pt;font-size:8pt;white-space:pre;page-break-inside:avoid}pre:not([class*=language]){background:#f8fafc;color:#0f172a;border:1px solid #cbd5e1;font-size:7.4pt}code{font-family:monospace;background:#f1f5f9;border:1px solid #e2e8f0;padding:1pt 4pt;font-size:8.8pt}pre code{background:transparent;border:none}table{border-collapse:collapse;width:100%;font-size:9.2pt}thead tr{background:#1e3a5f;color:#fff}thead th,tbody td{padding:5pt 9pt;border:1px solid #d1d5db}tbody tr:nth-child(even){background:#f0f7ff}blockquote{background:#eff6ff;border-left:4px solid #3b82f6;padding:8pt 14pt;font-style:italic}</style></head><body>'+marked.parse(md)+'</body></html>';
+    const tmp=require('os').tmpdir()+'/techdocs.html';
+    writeFileSync(tmp,html);
+    console.log(tmp);
+  ")
+```
+
+Or use the simpler two-step approach:
+
+```bash
+# Step 1 — convert markdown to HTML
+node -e "
+  const {readFileSync,writeFileSync}=require('fs');
+  const {marked}=require('marked');
+  const md=readFileSync('TECHNICAL_DOCS.md','utf8');
+  const html='<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"UTF-8\"><title>Campaign App Docs</title></head><body>'+marked.parse(md)+'</body></html>';
+  writeFileSync('/tmp/techdocs.html',html);
+  console.log('HTML written to /tmp/techdocs.html');
+"
+
+# Step 2 — print to PDF with Chrome
+"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+  --headless=new --disable-gpu --no-sandbox \
+  --print-to-pdf="$(pwd)/TECHNICAL_DOCS.pdf" \
+  "file:///tmp/techdocs.html"
+
+echo "PDF saved to $(pwd)/TECHNICAL_DOCS.pdf"
+```
+
+The generated PDF is listed in `.gitignore` and should not be committed to the repository.
+
+---
+
 *Last updated: May 2026*

@@ -53,3 +53,7 @@ next-env.d.ts
 *.jpeg
 *.jpg
 !public/slides/*.jpg
+
+# generated documentation PDF (regenerate locally with Chrome --print-to-pdf)
+TECHNICAL_DOCS.pdf
+TECHNICAL_DOCS.html
