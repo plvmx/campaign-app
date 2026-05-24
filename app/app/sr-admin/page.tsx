@@ -12,48 +12,45 @@ export default function SRAdminPage() {
   const router = useRouter();
   const { dates } = useCampaignDates();
   const { user, adminStatus, userState: contextUserState, userProfile, isLoading: isUserLoading } = useUser();
-  const [hasAccess, setHasAccess] = useState(false);
-  const [userState, setUserState] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [leadersNotSignedIn, setLeadersNotSignedIn] = useState<LeaderNotSignedIn[]>([]);
   const [lastRefreshAt, setLastRefreshAt] = useState<Date | null>(null);
   const [loadingLeaders, setLoadingLeaders] = useState(false);
 
-  useEffect(() => {
-    if (isUserLoading) return;
-    if (!user) { router.push('/login'); return; }
-    if (adminStatus !== 'SR') {
-      setError('You do not have permission to access SR Admin.');
-      return;
-    }
-    const stateToUse = contextUserState ?? userProfile?.state ?? null;
-    setUserState(stateToUse);
-    setHasAccess(true);
-  }, [isUserLoading, user, router, adminStatus, contextUserState, userProfile]);
+  // Derive access state during render — avoids synchronous setState inside effects.
+  const stateToUse = contextUserState ?? userProfile?.state ?? null;
+  const hasAccess = !isUserLoading && !!user && adminStatus === 'SR';
+  const accessError = !isUserLoading && !!user && adminStatus !== 'SR'
+    ? 'You do not have permission to access SR Admin.'
+    : null;
 
+  // Redirect to login — side-effect only, no setState.
   useEffect(() => {
-    if (!hasAccess || !userState) return;
+    if (!isUserLoading && !user) router.push('/login');
+  }, [isUserLoading, user, router]);
+
+  // Fetch leaders who haven't signed in since the last refresh.
+  useEffect(() => {
+    if (!hasAccess || !stateToUse) return;
     let cancelled = false;
-    setLoadingLeaders(true);
-    getLeadersNotSignedInSinceRefreshByState(userState)
-      .then(({ leaders, lastRefreshAt: at }) => {
+    void (async () => {
+      setLoadingLeaders(true);
+      try {
+        const { leaders, lastRefreshAt: at } = await getLeadersNotSignedInSinceRefreshByState(stateToUse);
         if (!cancelled) {
           setLeadersNotSignedIn(leaders);
           setLastRefreshAt(at);
         }
-      })
-      .catch(() => {
+      } catch {
         if (!cancelled) {
           setLeadersNotSignedIn([]);
           setLastRefreshAt(null);
         }
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) setLoadingLeaders(false);
-      });
+      }
+    })();
     return () => { cancelled = true; };
-  }, [hasAccess, userState]);
-
+  }, [hasAccess, stateToUse]);
 
   if (isUserLoading) {
     return (
@@ -71,7 +68,7 @@ export default function SRAdminPage() {
         <div className="p-4">
           <div className="rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20">
             <h2 className="text-lg font-semibold text-red-800 dark:text-red-200">Access Denied</h2>
-            <p className="mt-1 text-sm text-red-600 dark:text-red-300">{error}</p>
+            <p className="mt-1 text-sm text-red-600 dark:text-red-300">{accessError}</p>
             <button
               onClick={() => router.push('/app')}
               className="mt-4 rounded-md bg-red-600 px-4 py-2 text-base font-bold text-white hover:bg-red-700 border-2 border-gray-800 dark:border-gray-600"
@@ -84,7 +81,7 @@ export default function SRAdminPage() {
     );
   }
 
-  const stateToUse = userState ?? '';
+  const state = stateToUse ?? '';
 
   return (
     <MobileLayout>
@@ -97,12 +94,6 @@ export default function SRAdminPage() {
             State Reporter admin options for your state
           </p>
         </div>
-
-        {error && (
-          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20">
-            <p className="text-sm text-red-800 dark:text-red-200">{error}</p>
-          </div>
-        )}
 
         <div className="space-y-4">
           {/* Campaign Dates Info */}
@@ -140,7 +131,7 @@ export default function SRAdminPage() {
               Manage rules for automatic campaign generation. Create rules for recurring campaigns (weekly, biweekly, monthly) for your state.
             </p>
             <button
-              onClick={() => router.push(`/admin/campaign-rules?state=${encodeURIComponent(stateToUse)}`)}
+              onClick={() => router.push(`/admin/campaign-rules?state=${encodeURIComponent(state)}`)}
               className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
             >
               Manage Campaign Rules
