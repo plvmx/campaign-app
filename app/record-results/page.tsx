@@ -7,7 +7,7 @@ import CampaignForm, { CampaignData } from '@/components/CampaignForm';
 import { useUser } from '@/contexts/UserContext';
 import { getUserStateCode, getCachedStateCode } from '@/lib/location';
 import { normalizeMobile } from '@/lib/auth';
-import { supabase } from '@/lib/supabaseClient';
+import { findCampaignsByKey } from '@/lib/services/campaignService';
 
 export default function RecordResultsPage() {
   const router = useRouter();
@@ -61,21 +61,18 @@ export default function RecordResultsPage() {
     }
     if (!user) { router.push('/login'); return; }
 
-    const { data: campaigns, error: fetchError } = await supabase
-      .from('campaigns')
-      .select('id, mobile')
-      .eq('date', data.date)
-      .eq('state', data.state)
-      .eq('place', data.place)
-      .eq('time', data.time)
-      .eq('leader', data.leader);
+    const campaigns = await findCampaignsByKey({
+      date: data.date, state: data.state, place: data.place, time: data.time, leader: data.leader,
+    });
 
-    if (fetchError) throw fetchError;
+    const isSRInState =
+      adminStatus === 'SR' &&
+      (data.state || '').toUpperCase().trim() === (contextUserState || '').toUpperCase().trim();
 
-    let existingCampaign = null;
-    if (isAdmin) {
-      existingCampaign = campaigns && campaigns.length > 0 ? campaigns[0] : null;
-    } else if (campaigns && campaigns.length > 0) {
+    let existingCampaign: { id: string } | null = null;
+    if (isAdmin || isSRInState) {
+      existingCampaign = campaigns.length > 0 ? campaigns[0] : null;
+    } else if (campaigns.length > 0) {
       if (userMobile) {
         const normalizedMobile = normalizeMobile(userMobile);
         existingCampaign = campaigns.find((c) => c.mobile && normalizeMobile(c.mobile) === normalizedMobile) ?? campaigns[0];
@@ -89,6 +86,7 @@ export default function RecordResultsPage() {
     }
 
     router.push(`/record-results/detail?${new URLSearchParams({
+      id: existingCampaign.id,
       date: data.date, state: data.state, place: data.place, time: data.time, leader: data.leader,
     }).toString()}`);
   };
