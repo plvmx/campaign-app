@@ -21,6 +21,7 @@ import AdminQuickActions from './components/AdminQuickActions';
 import CampaignFilters from './components/CampaignFilters';
 import CampaignCreateForm from './components/CampaignCreateForm';
 import CampaignList from './components/CampaignList';
+import CampaignSlideView from './components/CampaignSlideView';
 import DeleteConfirmModal from './components/DeleteConfirmModal';
 import type { EditUpdates } from './components/types';
 
@@ -50,6 +51,7 @@ function AppPageContent() {
   const [sharedWithMeOwners, setSharedWithMeOwners] = useState<LeaderShareOwner[]>([]);
 
   const [showMoreInfo, setShowMoreInfo] = useState(false);
+  const [viewMode, setViewMode] = useState<'view' | 'edit'>('view');
   const [allCampaigns, setAllCampaigns] = useState<Campaign[]>([]);
   const [campaignCategories, setCampaignCategories] = useState<{ code: string; name: string }[]>([
     { code: 'TWOL', name: 'Two Weekly' },
@@ -626,30 +628,62 @@ function AppPageContent() {
 
           {/* Campaign list */}
           <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white shadow-sm dark:bg-gray-800 w-full overflow-hidden">
-            <div className="p-4">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+            <div className="px-4 py-3 flex items-center justify-between gap-2">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 shrink-0">
                 {dateFilter === 'past' && `Past Campaigns (${filteredCampaigns.length})`}
                 {dateFilter === 'future' && `Future Campaigns (${filteredCampaigns.length})`}
               </h2>
+              {/* View / Edit toggle */}
+              <div className="inline-flex rounded-lg border-2 border-gray-800 dark:border-gray-600 overflow-hidden shadow-sm shrink-0">
+                <button
+                  onClick={() => {
+                    setViewMode('view');
+                    setEditingId(null);
+                    setIsFormExpanded(false);
+                  }}
+                  className={`px-4 py-1.5 text-sm font-bold transition-colors ${
+                    viewMode === 'view'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gradient-to-b from-gray-100 to-gray-200 text-gray-700 hover:from-gray-200 hover:to-gray-300 dark:from-gray-700 dark:to-gray-800 dark:text-gray-300 dark:hover:from-gray-600 dark:hover:to-gray-700'
+                  }`}
+                >
+                  View
+                </button>
+                <div className="w-px bg-gray-800 dark:bg-gray-600" />
+                <button
+                  onClick={() => setViewMode('edit')}
+                  className={`px-4 py-1.5 text-sm font-bold transition-colors ${
+                    viewMode === 'edit'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gradient-to-b from-gray-100 to-gray-200 text-gray-700 hover:from-gray-200 hover:to-gray-300 dark:from-gray-700 dark:to-gray-800 dark:text-gray-300 dark:hover:from-gray-600 dark:hover:to-gray-700'
+                  }`}
+                >
+                  Edit
+                </button>
+              </div>
             </div>
-            <CampaignList
-              campaigns={filteredCampaigns}
-              editingId={editingId}
-              dateFilter={dateFilter}
-              isAdmin={contextIsAdmin}
-              adminStatus={adminStatus}
-              userState={userState}
-              userMobileAndLeader={userMobileAndLeader}
-              sharedWithMeOwners={sharedWithMeOwners}
-              savedCheckboxId={savedCheckboxId}
-              categories={campaignCategories}
-              onEditStart={(id) => setEditingId(id)}
-              onCancelEdit={() => setEditingId(null)}
-              onSaveEdit={handleSaveEdit}
-              onDelete={(campaign) => setDeleteConfirmCampaign(campaign)}
-              onToggleCheckbox={handleToggleCheckbox}
-              onRecordResults={handleRecordResults}
-            />
+            {viewMode === 'view' ? (
+              <CampaignSlideView campaigns={filteredCampaigns} />
+            ) : (
+              <CampaignList
+                campaigns={filteredCampaigns}
+                editingId={editingId}
+                dateFilter={dateFilter}
+                isAdmin={contextIsAdmin}
+                adminStatus={adminStatus}
+                userState={userState}
+                userMobileAndLeader={userMobileAndLeader}
+                sharedWithMeOwners={sharedWithMeOwners}
+                savedCheckboxId={savedCheckboxId}
+                categories={campaignCategories}
+                onEditStart={(id) => setEditingId(id)}
+                onCancelEdit={() => setEditingId(null)}
+                onSaveEdit={handleSaveEdit}
+                onDelete={(campaign) => setDeleteConfirmCampaign(campaign)}
+                onToggleCheckbox={handleToggleCheckbox}
+                onRecordResults={handleRecordResults}
+              />
+            )}
           </div>
         </div>
       </div>
