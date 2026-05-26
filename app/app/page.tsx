@@ -663,7 +663,7 @@ function AppPageContent() {
               </div>
             </div>
             {viewMode === 'view' ? (
-              <CampaignSlideView campaigns={filteredCampaigns} />
+              <CampaignSlideView campaigns={filteredCampaigns} adminStatus={adminStatus} />
             ) : (
               <CampaignList
                 campaigns={filteredCampaigns}
