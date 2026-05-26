@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { getSession, validateStateLeader, completeSignIn, type StateLeaderMatch } from '@/lib/auth';
 import { getErrorMessage } from '@/lib/errorUtils';
 import { trackEvent } from '@/lib/analytics';
+import { useUser } from '@/contexts/UserContext';
 
 const STORAGE_KEYS = { mobile: 'login_mobile', firstName: 'login_firstName' };
 
@@ -22,6 +23,7 @@ const STATE_NAMES: Record<string, string> = {
 
 export default function LoginPage() {
   const router = useRouter();
+  const { refresh: refreshUser } = useUser();
   const [mobile, setMobile]           = useState('');
   const [firstName, setFirstName]     = useState('');
   const [error, setError]             = useState<string | null>(null);
@@ -91,6 +93,9 @@ export default function LoginPage() {
       if (matches.length === 1) {
         // Single state — sign in immediately, no extra step
         await completeSignIn(matches[0]);
+        // Reload the UserContext so it reads the profile that was just written
+        // (avoids a race where onAuthStateChange fires before the profile upsert completes)
+        await refreshUser();
         trackEvent('sign_in', { state: matches[0].state });
         router.push('/app');
       } else {
@@ -111,6 +116,7 @@ export default function LoginPage() {
     setSelectedStateId(match.id);
     try {
       await completeSignIn(match);
+      await refreshUser();
       trackEvent('sign_in', { state: match.state });
       router.push('/app');
     } catch (err: unknown) {

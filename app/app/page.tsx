@@ -361,7 +361,7 @@ function AppPageContent() {
   }, [isUserLoading, contextUser]);
 
   useEffect(() => {
-    if (adminStatus !== null && adminStatus !== 'AD') {
+    if (adminStatus !== null && adminStatus !== 'AD' && adminStatus !== 'SR') {
       setShowMoreInfo(true);
     }
   }, [adminStatus]);
