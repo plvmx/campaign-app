@@ -8,7 +8,10 @@ import { useUser } from '@/contexts/UserContext';
 import { useCampaignDates } from '@/contexts/CampaignDatesContext';
 import { formatDateReadable } from '@/lib/campaignDates';
 import { supabase } from '@/lib/supabaseClient';
-import { isCampaignLoggingEnabled, setCampaignLoggingEnabled } from '@/lib/appSettings';
+import {
+  isCampaignLoggingEnabled, setCampaignLoggingEnabled,
+  getSlideViewEnabled, setSlideViewEnabled, type SlideViewRole,
+} from '@/lib/appSettings';
 import { runWeeklyRefresh } from '@/lib/services/weeklyRefreshService';
 import { getErrorMessage } from '@/lib/errorUtils';
 import { trackEvent } from '@/lib/analytics';
@@ -34,6 +37,11 @@ export default function AdminPage() {
   const [loggingEnabled, setLoggingEnabled] = useState<boolean>(true);
   const [isLoadingLoggingSetting, setIsLoadingLoggingSetting] = useState(true);
   const [isTogglingLogging, setIsTogglingLogging] = useState(false);
+
+  // Slide-view feature flags (one per role)
+  const [slideViewValues, setSlideViewValues] = useState({ leaders: false, sr: false, admin: false });
+  const [isLoadingSlideView, setIsLoadingSlideView] = useState(true);
+  const [isTogglingSlideView, setIsTogglingSlideView] = useState<Partial<Record<SlideViewRole, boolean>>>({});
   const [lastRefresh, setLastRefresh] = useState<LastRefreshInfo | null>(null);
   const [isLoadingLastRefresh, setIsLoadingLastRefresh] = useState(true);
 
@@ -59,6 +67,15 @@ export default function AdminPage() {
     isCampaignLoggingEnabled()
       .then(setLoggingEnabled)
       .finally(() => setIsLoadingLoggingSetting(false));
+
+    Promise.all([
+      getSlideViewEnabled('leaders'),
+      getSlideViewEnabled('sr'),
+      getSlideViewEnabled('admin'),
+    ]).then(([leaders, sr, admin]) => {
+      setSlideViewValues({ leaders, sr, admin });
+    }).finally(() => setIsLoadingSlideView(false));
+
     fetchLastRefresh();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isUserLoading, user, isAdmin, router]);
@@ -103,6 +120,20 @@ export default function AdminPage() {
       setError(getErrorMessage(err, 'Failed to update logging setting'));
     } finally {
       setIsTogglingLogging(false);
+    }
+  };
+
+  const handleToggleSlideView = async (role: SlideViewRole) => {
+    setIsTogglingSlideView(prev => ({ ...prev, [role]: true }));
+    setError(null);
+    try {
+      const newValue = !slideViewValues[role];
+      await setSlideViewEnabled(role, newValue);
+      setSlideViewValues(prev => ({ ...prev, [role]: newValue }));
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to update slide view setting'));
+    } finally {
+      setIsTogglingSlideView(prev => ({ ...prev, [role]: false }));
     }
   };
 
@@ -417,8 +448,60 @@ export default function AdminPage() {
               Configure system-wide settings
             </p>
             
+            {/* Slide View Feature Flags */}
+            <div className="mt-4 space-y-3">
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                Slide-Style View Mode
+              </h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                When enabled for a role, the campaign list shows a View/Edit toggle so users
+                can switch to the slide-style read-only layout. Disabled roles always see the
+                standard edit list.
+              </p>
+              {(
+                [
+                  { role: 'leaders', label: 'Team Leaders' },
+                  { role: 'sr',      label: 'State Reporters' },
+                  { role: 'admin',   label: 'Administrators' },
+                ] as { role: SlideViewRole; label: string }[]
+              ).map(({ role, label }) => (
+                <div
+                  key={role}
+                  className="flex items-center justify-between rounded-md border border-gray-200 bg-gray-50 px-4 py-3 dark:border-gray-600 dark:bg-gray-700/50"
+                >
+                  <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                    {label}
+                  </span>
+                  <div className="ml-4 shrink-0">
+                    {isLoadingSlideView ? (
+                      <div className="text-sm text-gray-400 dark:text-gray-500">Loading…</div>
+                    ) : (
+                      <button
+                        onClick={() => handleToggleSlideView(role)}
+                        disabled={!!isTogglingSlideView[role]}
+                        className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                          slideViewValues[role] ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-600'
+                        } ${isTogglingSlideView[role] ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        role="switch"
+                        aria-checked={slideViewValues[role]}
+                        aria-label={`Toggle slide view for ${label}`}
+                      >
+                        <span
+                          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                            slideViewValues[role] ? 'translate-x-5' : 'translate-x-0'
+                          }`}
+                        />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="my-4 border-t border-gray-200 dark:border-gray-600" />
+
             {/* Campaign Logging Toggle */}
-            <div className="mt-4 flex items-center justify-between rounded-md border border-gray-200 bg-gray-50 p-4 dark:border-gray-600 dark:bg-gray-700/50">
+            <div className="flex items-center justify-between rounded-md border border-gray-200 bg-gray-50 p-4 dark:border-gray-600 dark:bg-gray-700/50">
               <div className="flex-1">
                 <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">
                   Campaign Change Logging

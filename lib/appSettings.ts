@@ -93,3 +93,36 @@ export async function setCampaignLoggingEnabled(enabled: boolean): Promise<void>
     'Enable or disable logging of campaign changes (excluding admin screen changes)'
   );
 }
+
+// ---------------------------------------------------------------------------
+// Slide-view feature flags (one per leader role)
+// ---------------------------------------------------------------------------
+
+const SLIDE_VIEW_KEYS = {
+  leaders: 'slide_view_leaders',
+  sr:      'slide_view_sr',
+  admin:   'slide_view_admin',
+} as const;
+
+export type SlideViewRole = keyof typeof SLIDE_VIEW_KEYS;
+
+const SLIDE_VIEW_DESCRIPTIONS: Record<SlideViewRole, string> = {
+  leaders: 'Enable slide-style View mode for basic team leaders on the main campaign list',
+  sr:      'Enable slide-style View mode for state reporters on the main campaign list',
+  admin:   'Enable slide-style View mode for administrators on the main campaign list',
+};
+
+/**
+ * Returns whether the slide-style view mode toggle is enabled for the given role.
+ * Defaults to false (off) if the setting has never been written.
+ */
+export async function getSlideViewEnabled(role: SlideViewRole): Promise<boolean> {
+  return getBooleanSetting(SLIDE_VIEW_KEYS[role], false);
+}
+
+/**
+ * Enable or disable the slide-style view mode toggle for the given role.
+ */
+export async function setSlideViewEnabled(role: SlideViewRole, enabled: boolean): Promise<void> {
+  await setBooleanSetting(SLIDE_VIEW_KEYS[role], enabled, SLIDE_VIEW_DESCRIPTIONS[role]);
+}

@@ -16,6 +16,7 @@ import { trackEvent } from '@/lib/analytics';
 import { getCampaignCategories } from '@/lib/services/dropdownService';
 import { getUserStateCode } from '@/lib/location';
 import { getUserAdminStatusAndMobile } from '@/lib/campaignFilter';
+import { getSlideViewEnabled, type SlideViewRole } from '@/lib/appSettings';
 
 import AdminQuickActions from './components/AdminQuickActions';
 import CampaignFilters from './components/CampaignFilters';
@@ -52,6 +53,7 @@ function AppPageContent() {
 
   const [showMoreInfo, setShowMoreInfo] = useState(false);
   const [viewMode, setViewMode] = useState<'view' | 'edit'>('view');
+  const [slideViewEnabled, setSlideViewEnabled] = useState(false);
   const [allCampaigns, setAllCampaigns] = useState<Campaign[]>([]);
   const [campaignCategories, setCampaignCategories] = useState<{ code: string; name: string }[]>([
     { code: 'TWOL', name: 'Two Weekly' },
@@ -243,6 +245,14 @@ function AppPageContent() {
         if (contextUserMobile && contextUserLeader) {
           setUserMobileAndLeader({ mobile: contextUserMobile, leader: contextUserLeader });
         }
+
+        // Load slide-view feature flag for this user's role
+        const slideRole: SlideViewRole =
+          contextAdminStatus === 'AD' ? 'admin'
+          : contextAdminStatus === 'SR' ? 'sr'
+          : 'leaders';
+        const svEnabled = await getSlideViewEnabled(slideRole);
+        setSlideViewEnabled(svEnabled);
 
         // First-login onboarding
         if (!contextUserProfile) {
@@ -633,36 +643,38 @@ function AppPageContent() {
                 {dateFilter === 'past' && `Past Campaigns (${filteredCampaigns.length})`}
                 {dateFilter === 'future' && `Future Campaigns (${filteredCampaigns.length})`}
               </h2>
-              {/* View / Edit toggle */}
-              <div className="inline-flex rounded-lg border-2 border-gray-800 dark:border-gray-600 overflow-hidden shadow-sm shrink-0">
-                <button
-                  onClick={() => {
-                    setViewMode('view');
-                    setEditingId(null);
-                    setIsFormExpanded(false);
-                  }}
-                  className={`px-4 py-1.5 text-sm font-bold transition-colors ${
-                    viewMode === 'view'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gradient-to-b from-gray-100 to-gray-200 text-gray-700 hover:from-gray-200 hover:to-gray-300 dark:from-gray-700 dark:to-gray-800 dark:text-gray-300 dark:hover:from-gray-600 dark:hover:to-gray-700'
-                  }`}
-                >
-                  View
-                </button>
-                <div className="w-px bg-gray-800 dark:bg-gray-600" />
-                <button
-                  onClick={() => setViewMode('edit')}
-                  className={`px-4 py-1.5 text-sm font-bold transition-colors ${
-                    viewMode === 'edit'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gradient-to-b from-gray-100 to-gray-200 text-gray-700 hover:from-gray-200 hover:to-gray-300 dark:from-gray-700 dark:to-gray-800 dark:text-gray-300 dark:hover:from-gray-600 dark:hover:to-gray-700'
-                  }`}
-                >
-                  Edit
-                </button>
-              </div>
+              {/* View / Edit toggle — only rendered when the feature is enabled for this role */}
+              {slideViewEnabled && (
+                <div className="inline-flex rounded-lg border-2 border-gray-800 dark:border-gray-600 overflow-hidden shadow-sm shrink-0">
+                  <button
+                    onClick={() => {
+                      setViewMode('view');
+                      setEditingId(null);
+                      setIsFormExpanded(false);
+                    }}
+                    className={`px-4 py-1.5 text-sm font-bold transition-colors ${
+                      viewMode === 'view'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gradient-to-b from-gray-100 to-gray-200 text-gray-700 hover:from-gray-200 hover:to-gray-300 dark:from-gray-700 dark:to-gray-800 dark:text-gray-300 dark:hover:from-gray-600 dark:hover:to-gray-700'
+                    }`}
+                  >
+                    View
+                  </button>
+                  <div className="w-px bg-gray-800 dark:bg-gray-600" />
+                  <button
+                    onClick={() => setViewMode('edit')}
+                    className={`px-4 py-1.5 text-sm font-bold transition-colors ${
+                      viewMode === 'edit'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gradient-to-b from-gray-100 to-gray-200 text-gray-700 hover:from-gray-200 hover:to-gray-300 dark:from-gray-700 dark:to-gray-800 dark:text-gray-300 dark:hover:from-gray-600 dark:hover:to-gray-700'
+                    }`}
+                  >
+                    Edit
+                  </button>
+                </div>
+              )}
             </div>
-            {viewMode === 'view' ? (
+            {viewMode === 'view' && slideViewEnabled ? (
               <CampaignSlideView campaigns={filteredCampaigns} adminStatus={adminStatus} />
             ) : (
               <CampaignList
