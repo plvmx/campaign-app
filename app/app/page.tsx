@@ -652,7 +652,7 @@ function AppPageContent() {
                       setEditingId(null);
                       setIsFormExpanded(false);
                     }}
-                    className={`px-4 py-1.5 text-sm font-bold transition-colors ${
+                    className={`px-4 py-1.5 text-base font-bold uppercase tracking-wide transition-colors ${
                       viewMode === 'view'
                         ? 'bg-blue-600 text-white'
                         : 'bg-gradient-to-b from-gray-100 to-gray-200 text-gray-700 hover:from-gray-200 hover:to-gray-300 dark:from-gray-700 dark:to-gray-800 dark:text-gray-300 dark:hover:from-gray-600 dark:hover:to-gray-700'
@@ -663,7 +663,7 @@ function AppPageContent() {
                   <div className="w-px bg-gray-800 dark:bg-gray-600" />
                   <button
                     onClick={() => setViewMode('edit')}
-                    className={`px-4 py-1.5 text-sm font-bold transition-colors ${
+                    className={`px-4 py-1.5 text-base font-bold uppercase tracking-wide transition-colors ${
                       viewMode === 'edit'
                         ? 'bg-blue-600 text-white'
                         : 'bg-gradient-to-b from-gray-100 to-gray-200 text-gray-700 hover:from-gray-200 hover:to-gray-300 dark:from-gray-700 dark:to-gray-800 dark:text-gray-300 dark:hover:from-gray-600 dark:hover:to-gray-700'
