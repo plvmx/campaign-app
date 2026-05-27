@@ -33,12 +33,22 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const [userMobile, setUserMobile] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  const clearUserState = useCallback(() => {
+    setUser(null);
+    setUserProfile(null);
+    setAdminStatus(null);
+    setIsAdmin(false);
+    setUserState(null);
+    setUserLeader(null);
+    setUserMobile(null);
+  }, []);
+
   const load = useCallback(async () => {
     setIsLoading(true);
     try {
       const result = await getAuthenticatedUser();
       if (!result) {
-        setUser(null);
+        clearUserState();
         return;
       }
       setUser(result.user);
@@ -48,27 +58,32 @@ export function UserProvider({ children }: { children: ReactNode }) {
       setUserState(result.userState);
       setUserLeader(result.userLeader);
       setUserMobile(result.userMobile);
+    } catch {
+      // On any auth error, clear stale state so pages redirect to login
+      clearUserState();
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [clearUserState]);
 
   useEffect(() => {
     // Initial load on mount.
     load();
 
-    // Re-load whenever the Supabase session changes (login / logout / token
-    // refresh).  Without this, navigating to a protected page immediately
-    // after signInWithMobileAndName() would still see user === null because
-    // the context only loaded once — before the session existed.
+    // Re-load whenever the Supabase session changes (login / token refresh).
+    // On SIGNED_OUT we clear state synchronously rather than calling load() —
+    // this avoids briefly flashing the "Loading your campaigns…" spinner while
+    // an async getUser() call completes during the sign-out navigation.
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED') {
+      if (event === 'SIGNED_OUT') {
+        clearUserState();
+      } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
         load();
       }
     });
 
     return () => subscription.unsubscribe();
-  }, [load]);
+  }, [load, clearUserState]);
 
   return (
     <UserContext.Provider value={{
