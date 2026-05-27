@@ -80,7 +80,7 @@ export default function CampaignSlideView({ campaigns, adminStatus }: Props) {
                   <div
                     key={c.id}
                     className="flex items-baseline px-3 py-px font-mono font-bold text-sm leading-snug"
-                    style={{ color, ...(cat !== 'TWOL' ? { backgroundColor: '#fef3c7' } : {}) }}
+                    style={{ color, ...(cat !== 'TWOL' ? { backgroundColor: '#fcd34d' } : {}) }}
                   >
                     {/* Place — left-aligned, grows to fill spare space */}
                     <span style={{ flex: 18, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
