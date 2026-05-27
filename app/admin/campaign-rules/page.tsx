@@ -823,15 +823,17 @@ function CampaignRulesPageContent() {
                       <label htmlFor="frequency_value" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                         Every N Weeks *
                       </label>
-                      <input
+                      <select
                         id="frequency_value"
-                        type="number"
-                        min="2"
                         required
                         value={formState.frequency_value}
-                        onChange={(e) => setFormState({ ...formState, frequency_value: parseInt(e.target.value) || 2 })}
+                        onChange={(e) => setFormState({ ...formState, frequency_value: parseInt(e.target.value) })}
                         className="mt-1 block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
-                      />
+                      >
+                        {[2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(n => (
+                          <option key={n} value={n}>Every {n} weeks</option>
+                        ))}
+                      </select>
                     </div>
                     <div>
                       <label htmlFor="reference_date" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
