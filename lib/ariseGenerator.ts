@@ -17,6 +17,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   getSlideStateColor,
   formatSlideDateText,
+  formatDownloadDate,
   STATE_CODES,
 } from '@/lib/slideLayout';
 import { formatCampaignTimeDisplay } from '@/lib/campaignUtils';
@@ -436,12 +437,10 @@ export async function generateAndDownloadAriseList(options: GenerateAriseOptions
     );
   });
 
-  const _now = new Date();
-  const _dateSuffix = `${_now.getDate()}${_now.toLocaleString('en-AU', { month: 'short' })}`;
   const url  = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href     = url;
-  link.download = `week1_campaign_list_${_dateSuffix}.jpg`;
+  link.download = `${formatDownloadDate(new Date())}_Week1_Campaigns.jpg`;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);

@@ -12,6 +12,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import JSZip from 'jszip';
 import { drawReportPage, canvasToJpegBlob } from '@/lib/reportCanvas';
+import { formatDownloadDate } from '@/lib/slideLayout';
 
 const LINES_PER_JPEG = 12;
 
@@ -125,13 +126,10 @@ async function fetchReportRows(options: GenerateReportOptions): Promise<ReportRo
  * Renders an array of already-built ReportRows to JPEG pages and downloads as ZIP.
  * Used by the generate-report page where rows may have been manually edited.
  */
-export async function downloadReportRows(
-  rows: ReportRow[],
-  startDate: string,
-  endDate: string,
-): Promise<void> {
+export async function downloadReportRows(rows: ReportRow[]): Promise<void> {
   const chunkCount = Math.ceil(rows.length / LINES_PER_JPEG);
   const zip = new JSZip();
+  const datePrefix = formatDownloadDate(new Date());
 
   for (let part = 0; part < chunkCount; part++) {
     const chunk  = rows.slice(part * LINES_PER_JPEG, (part + 1) * LINES_PER_JPEG);
@@ -139,7 +137,7 @@ export async function downloadReportRows(
     const blob   = await canvasToJpegBlob(canvas);
     const suffix = chunkCount > 1 ? `_part${part + 1}` : '';
     zip.file(
-      `Campaign_Results_Report_${startDate}_to_${endDate}${suffix}.jpeg`,
+      `${datePrefix}_Campaign_Results${suffix}.jpeg`,
       await blob.arrayBuffer(),
     );
   }
@@ -148,7 +146,7 @@ export async function downloadReportRows(
   const url  = URL.createObjectURL(zipBlob);
   const link = document.createElement('a');
   link.href     = url;
-  link.download = `Campaign_Results_Report_${startDate}_to_${endDate}.zip`;
+  link.download = `${datePrefix}_Campaign_Results.zip`;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
@@ -161,5 +159,5 @@ export async function downloadReportRows(
  */
 export async function generateAndDownloadReport(options: GenerateReportOptions): Promise<void> {
   const rows = await fetchReportRows(options);
-  await downloadReportRows(rows, options.startDate, options.endDate);
+  await downloadReportRows(rows);
 }

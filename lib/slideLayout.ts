@@ -50,6 +50,18 @@ export function formatSlideDateText(date: Date): string {
   return `${dayName} ${dayNum}${ordinal} ${monthName}`;
 }
 
+/**
+ * Format a date as the standard download-filename prefix: e.g. "Wed27May26".
+ * Used by all three generators so filenames are consistent.
+ */
+export function formatDownloadDate(date: Date): string {
+  const dayName = date.toLocaleDateString('en-AU', { weekday: 'short' }); // "Wed"
+  const day     = date.getDate();                                          // 27
+  const month   = date.toLocaleString('en-AU', { month: 'short' });       // "May"
+  const year    = String(date.getFullYear()).slice(2);                     // "26"
+  return `${dayName}${day}${month}${year}`;
+}
+
 export function getSlideDateHeadings(customStartDate?: string): Date[] {
   const today = new Date();
   const currentWeekday = today.getDay();

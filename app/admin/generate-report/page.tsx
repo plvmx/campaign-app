@@ -10,6 +10,7 @@ import { useCampaignDates } from '@/contexts/CampaignDatesContext';
 import { formatDateForDb } from '@/lib/campaignDates';
 import { downloadReportRows } from '@/lib/reportGenerator';
 import { getErrorMessage } from '@/lib/errorUtils';
+import { formatDownloadDate } from '@/lib/slideLayout';
 
 interface Campaign {
   id: string;
@@ -185,7 +186,7 @@ export default function GenerateReportPage() {
     if (reportData.length === 0) return;
     setIsDownloading(true);
     try {
-      await downloadReportRows(reportData, startDate, endDate);
+      await downloadReportRows(reportData);
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Error downloading report'));
     } finally {
@@ -281,7 +282,7 @@ export default function GenerateReportPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `Campaign_Results_Report_${startDate}_to_${endDate}.doc`;
+    link.download = `${formatDownloadDate(new Date())}_Campaign_Results.doc`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

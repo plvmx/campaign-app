@@ -12,6 +12,7 @@ import JSZip from 'jszip';
 import {
   getSlideStateColor,
   formatSlideDateText,
+  formatDownloadDate,
   STATE_CODES,
 } from '@/lib/slideLayout';
 import { formatCampaignTimeDisplay } from '@/lib/campaignUtils';
@@ -401,12 +402,10 @@ export async function generateAndDownloadSlides(options: GenerateSlidesOptions):
   }
 
   const zipBlob = await zip.generateAsync({ type: 'blob' });
-  const _now = new Date();
-  const _dateSuffix = `${_now.getDate()}${_now.toLocaleString('en-AU', { month: 'short' })}`;
   const url  = URL.createObjectURL(zipBlob);
   const link = document.createElement('a');
   link.href     = url;
-  link.download = `campaign_slides_${_dateSuffix}.zip`;
+  link.download = `${formatDownloadDate(new Date())}_All_Campaigns.zip`;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
