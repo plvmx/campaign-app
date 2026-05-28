@@ -3,15 +3,10 @@ import { getCurrentUser } from './auth';
 import { getUserProfile } from './userProfile';
 import { isCampaignLoggingEnabled } from './appSettings';
 
-/**
- * Check if the current route is an admin route
- * Admin routes are those under /app/admin/*
- */
 function isAdminRoute(): boolean {
-  if (typeof window === 'undefined') {
-    return false;
-  }
-  return window.location.pathname.startsWith('/app/admin');
+  if (typeof window === 'undefined') return false;
+  // Admin pages live at /admin/*, not /app/admin/*.
+  return window.location.pathname.startsWith('/admin');
 }
 
 /**

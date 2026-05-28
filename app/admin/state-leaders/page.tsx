@@ -10,6 +10,17 @@ import { getStateColor } from '@/lib/stateColors';
 import { AUSTRALIAN_STATES } from '@/lib/constants';
 import { getErrorMessage } from '@/lib/errorUtils';
 
+async function revokeSessionsForLeader(state: string, leader: string): Promise<void> {
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token;
+  if (!token) return;
+  await fetch('/api/admin/invalidate-user-session', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+    body: JSON.stringify({ state, leader }),
+  });
+}
+
 interface StateLeader {
   id: string;
   state: string;
@@ -94,7 +105,7 @@ export default function StateLeadersPage() {
       const adminValue = formState.admin.trim() || null;
 
       if (editingId) {
-        // Update existing record
+        const originalItem = stateLeaders.find(sl => sl.id === editingId);
         const { error } = await supabase
           .from('state_leaders')
           .update({
@@ -107,6 +118,14 @@ export default function StateLeadersPage() {
 
         if (error) throw error;
         setSuccess('State leader updated successfully');
+
+        // If admin status changed (granted or revoked), force-sign-out the
+        // affected user immediately so the change takes effect without waiting
+        // for their next JWT refresh cycle (~1 hour).
+        const adminChanged = originalItem && (originalItem.admin ?? null) !== adminValue;
+        if (adminChanged) {
+          void revokeSessionsForLeader(formState.state, leaderValue);
+        }
       } else {
         // Create new record
         const { error } = await supabase
@@ -140,15 +159,14 @@ export default function StateLeadersPage() {
 
   const handleEdit = (item: StateLeader) => {
     setEditingId(item.id);
-    setFormState({ 
-      state: item.state, 
+    setFormState({
+      state: item.state,
       leader: item.leader,
       mobile: item.mobile || '',
       admin: item.admin || ''
     });
     setError(null);
     setSuccess(null);
-    // Scroll to form
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
