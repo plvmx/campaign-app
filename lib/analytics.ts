@@ -20,7 +20,9 @@ export type AppEventType =
   | 'generate_slides'
   | 'generate_report'
   | 'generate_week1'
-  | 'weekly_refresh_manual';
+  | 'weekly_refresh_manual'
+  | 'backup_export'
+  | 'backup_restore';
 
 /**
  * Track an application event. Fire-and-forget — never throws, never awaited.

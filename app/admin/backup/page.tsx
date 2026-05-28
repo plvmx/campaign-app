@@ -8,6 +8,7 @@ import LoadingSpinner from '@/components/LoadingSpinner';
 import { useUser } from '@/contexts/UserContext';
 import { supabase } from '@/lib/supabaseClient';
 import { getErrorMessage } from '@/lib/errorUtils';
+import { trackEvent } from '@/lib/analytics';
 import type { Campaign } from '@/lib/types';
 import type { CampaignRule } from '@/lib/types';
 
@@ -180,6 +181,14 @@ export default function BackupPage() {
 
       addLog('✅ Backup downloaded successfully.');
       setSuccess('Backup downloaded.');
+      trackEvent('backup_export', {
+        tables: [
+          exportCampaigns     && 'campaigns',
+          exportStateLeaders  && 'state_leaders',
+          exportStatePlaces   && 'state_places',
+          exportCampaignRules && 'campaign_rules',
+        ].filter(Boolean),
+      });
     } catch (err) {
       setError(getErrorMessage(err, 'Export failed'));
     } finally {
@@ -274,6 +283,15 @@ export default function BackupPage() {
 
       addLog('✅ Restore completed successfully.');
       setSuccess('Restore completed successfully.');
+      trackEvent('backup_restore', {
+        mode: restoreMode,
+        tables: [
+          restoreCampaigns     && 'campaigns',
+          restoreStateLeaders  && 'state_leaders',
+          restoreStatePlaces   && 'state_places',
+          restoreCampaignRules && 'campaign_rules',
+        ].filter(Boolean),
+      });
     } catch (err) {
       setError(getErrorMessage(err, 'Restore failed'));
     } finally {

@@ -92,6 +92,13 @@ export async function validateStateLeader(mobile: string, firstName: string): Pr
 export async function completeSignIn(
   stateLeader: StateLeaderMatch,
 ): Promise<{ user: User; stateLeader: StateLeaderMatch }> {
+  // Sign out any existing stale session first. Without this, every login on the
+  // same device creates a fresh anonymous auth user that is never cleaned up.
+  const { data: { session: existingSession } } = await supabase.auth.getSession();
+  if (existingSession) {
+    await supabase.auth.signOut();
+  }
+
   const { data: authData, error: authError } = await supabase.auth.signInAnonymously();
 
   if (authError) {

@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { normalizeMobile, normalizeName } from '@/lib/auth';
+import { enforceOrigin } from '@/lib/corsUtils';
 
 // ---------------------------------------------------------------------------
 // Rate limiting — in-memory, per IP, 10 attempts per 15 minutes.
@@ -38,6 +39,9 @@ function checkRateLimit(ip: string): boolean {
 // Handler
 // ---------------------------------------------------------------------------
 export async function POST(request: NextRequest) {
+  const corsBlock = enforceOrigin(request);
+  if (corsBlock) return corsBlock;
+
   // Rate limit by IP
   const ip =
     request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??

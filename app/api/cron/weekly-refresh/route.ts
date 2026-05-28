@@ -11,9 +11,46 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { runWeeklyRefresh } from '@/lib/services/weeklyRefreshService';
 import { getErrorMessage } from '@/lib/errorUtils';
+
+// ---------------------------------------------------------------------------
+// Anonymous user cleanup
+// Every login creates a fresh anonymous Supabase auth user. This function
+// removes any that haven't been active for > 90 days, keeping the auth table
+// from growing unboundedly.
+// ---------------------------------------------------------------------------
+async function pruneStaleAnonymousUsers(client: SupabaseClient): Promise<number> {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 90);
+
+  let pruned = 0;
+  let page = 1;
+
+  for (;;) {
+    const { data: { users }, error } = await client.auth.admin.listUsers({ page, perPage: 100 });
+    if (error) throw error;
+    if (!users.length) break;
+
+    for (const u of users) {
+      if (!u.is_anonymous) continue;
+      const lastActive = u.last_sign_in_at
+        ? new Date(u.last_sign_in_at)
+        : new Date(u.created_at ?? 0);
+      if (lastActive < cutoff) {
+        const { error: delErr } = await client.auth.admin.deleteUser(u.id);
+        if (!delErr) pruned++;
+      }
+    }
+
+    if (users.length < 100) break;
+    page++;
+  }
+
+  return pruned;
+}
 
 export async function GET(request: NextRequest) {
   // ------------------------------------------------------------------
@@ -39,7 +76,17 @@ export async function GET(request: NextRequest) {
     console.log(
       `[cron/weekly-refresh] OK — created=${result.created} skipped=${result.skipped} deleted=${result.deleted} logsPruned=${result.logsPruned}`
     );
-    return NextResponse.json({ success: true, ...result });
+
+    // Best-effort: prune anonymous auth users inactive for > 90 days.
+    let usersPruned = 0;
+    try {
+      usersPruned = await pruneStaleAnonymousUsers(supabaseAdmin);
+      if (usersPruned > 0) console.log(`[cron/weekly-refresh] pruned ${usersPruned} stale anonymous users`);
+    } catch (pruneErr) {
+      console.error('[cron/weekly-refresh] anonymous user prune failed:', pruneErr);
+    }
+
+    return NextResponse.json({ success: true, ...result, usersPruned });
   } catch (err) {
     const message = getErrorMessage(err, 'Weekly refresh failed');
     console.error('[cron/weekly-refresh] FAILED —', message);

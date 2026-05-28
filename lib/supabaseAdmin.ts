@@ -9,9 +9,21 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
+// When env vars are absent (e.g. local dev without .env.local), return a Proxy
+// that throws a clear diagnostic the first time any property is accessed, instead
+// of a confusing "Cannot read properties of null" crash deep in call stacks.
+const missingKeyProxy: SupabaseClient = new Proxy({} as SupabaseClient, {
+  get(_target, prop) {
+    throw new Error(
+      `supabaseAdmin.${String(prop)} was called but SUPABASE_SERVICE_ROLE_KEY is not set. ` +
+      'Add it to Vercel environment variables or .env.local.',
+    );
+  },
+});
+
 export const supabaseAdmin: SupabaseClient =
   url && key
     ? createClient(url, key, {
         auth: { autoRefreshToken: false, persistSession: false },
       })
-    : (null as unknown as SupabaseClient); // Build succeeds; runtime will fail if used without key
+    : missingKeyProxy;

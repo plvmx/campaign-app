@@ -11,6 +11,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { normalizeName } from '@/lib/auth';
+import { enforceOrigin } from '@/lib/corsUtils';
 
 const ALLOWED_SETTING_KEYS = new Set([
   'campaign_logging_enabled',
@@ -20,6 +21,9 @@ const ALLOWED_SETTING_KEYS = new Set([
 ]);
 
 export async function POST(request: NextRequest) {
+  const corsBlock = enforceOrigin(request);
+  if (corsBlock) return corsBlock;
+
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
     console.error('[admin/settings] SUPABASE_SERVICE_ROLE_KEY is not set');
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
