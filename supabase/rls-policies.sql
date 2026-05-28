@@ -8,14 +8,16 @@
 
 
 -- =============================================================================
--- Helper: is_admin()
+-- Helper: public.is_admin()
 -- Returns true if the current JWT user has admin = 'AD' in state_leaders.
--- Used as the "admin" predicate in write-restricted tables.
+-- Placed in the public schema — Supabase does not allow user-defined functions
+-- in the auth schema (which is platform-managed).
 -- =============================================================================
-CREATE OR REPLACE FUNCTION auth.is_admin()
+CREATE OR REPLACE FUNCTION public.is_admin()
 RETURNS boolean
 LANGUAGE sql
 STABLE SECURITY DEFINER
+SET search_path = public
 AS $$
   SELECT EXISTS (
     SELECT 1
@@ -41,7 +43,7 @@ CREATE POLICY "campaigns: authenticated users can read own or shared"
   ON campaigns FOR SELECT
   TO authenticated
   USING (
-    auth.is_admin()
+    public.is_admin()
     OR (
       -- Own campaign
       EXISTS (
@@ -69,7 +71,7 @@ CREATE POLICY "campaigns: authenticated users can insert own"
   ON campaigns FOR INSERT
   TO authenticated
   WITH CHECK (
-    auth.is_admin()
+    public.is_admin()
     OR EXISTS (
       SELECT 1 FROM user_profiles up
       WHERE up.user_id = auth.uid()
@@ -83,7 +85,7 @@ CREATE POLICY "campaigns: authenticated users can update own or shared"
   ON campaigns FOR UPDATE
   TO authenticated
   USING (
-    auth.is_admin()
+    public.is_admin()
     OR EXISTS (
       SELECT 1 FROM user_profiles up
       WHERE up.user_id = auth.uid()
@@ -105,7 +107,7 @@ CREATE POLICY "campaigns: only owner or admin can delete"
   ON campaigns FOR DELETE
   TO authenticated
   USING (
-    auth.is_admin()
+    public.is_admin()
     OR EXISTS (
       SELECT 1 FROM user_profiles up
       WHERE up.user_id = auth.uid()
@@ -132,19 +134,19 @@ DROP POLICY IF EXISTS "state_leaders: only admin can insert" ON state_leaders;
 CREATE POLICY "state_leaders: only admin can insert"
   ON state_leaders FOR INSERT
   TO authenticated
-  WITH CHECK (auth.is_admin());
+  WITH CHECK (public.is_admin());
 
 DROP POLICY IF EXISTS "state_leaders: only admin can update" ON state_leaders;
 CREATE POLICY "state_leaders: only admin can update"
   ON state_leaders FOR UPDATE
   TO authenticated
-  USING (auth.is_admin());
+  USING (public.is_admin());
 
 DROP POLICY IF EXISTS "state_leaders: only admin can delete" ON state_leaders;
 CREATE POLICY "state_leaders: only admin can delete"
   ON state_leaders FOR DELETE
   TO authenticated
-  USING (auth.is_admin());
+  USING (public.is_admin());
 
 
 -- =============================================================================
@@ -159,7 +161,7 @@ CREATE POLICY "state_places: authenticated can read"
 DROP POLICY IF EXISTS "state_places: only admin can write" ON state_places;
 CREATE POLICY "state_places: only admin can write"
   ON state_places FOR ALL TO authenticated
-  USING (auth.is_admin()) WITH CHECK (auth.is_admin());
+  USING (public.is_admin()) WITH CHECK (public.is_admin());
 
 
 -- =============================================================================
@@ -174,7 +176,7 @@ CREATE POLICY "campaign_rules: authenticated can read"
 DROP POLICY IF EXISTS "campaign_rules: only admin can write" ON campaign_rules;
 CREATE POLICY "campaign_rules: only admin can write"
   ON campaign_rules FOR ALL TO authenticated
-  USING (auth.is_admin()) WITH CHECK (auth.is_admin());
+  USING (public.is_admin()) WITH CHECK (public.is_admin());
 
 
 -- =============================================================================
@@ -189,7 +191,7 @@ CREATE POLICY "campaign_categories: authenticated can read"
 DROP POLICY IF EXISTS "campaign_categories: only admin can write" ON campaign_categories;
 CREATE POLICY "campaign_categories: only admin can write"
   ON campaign_categories FOR ALL TO authenticated
-  USING (auth.is_admin()) WITH CHECK (auth.is_admin());
+  USING (public.is_admin()) WITH CHECK (public.is_admin());
 
 
 -- =============================================================================
@@ -204,7 +206,7 @@ CREATE POLICY "campaign_messages: authenticated can read"
 DROP POLICY IF EXISTS "campaign_messages: only admin can write" ON campaign_messages;
 CREATE POLICY "campaign_messages: only admin can write"
   ON campaign_messages FOR ALL TO authenticated
-  USING (auth.is_admin()) WITH CHECK (auth.is_admin());
+  USING (public.is_admin()) WITH CHECK (public.is_admin());
 
 
 -- =============================================================================
@@ -260,7 +262,7 @@ ALTER TABLE campaign_changes_log ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "campaign_changes_log: admin can read" ON campaign_changes_log;
 CREATE POLICY "campaign_changes_log: admin can read"
   ON campaign_changes_log FOR SELECT TO authenticated
-  USING (auth.is_admin());
+  USING (public.is_admin());
 
 DROP POLICY IF EXISTS "campaign_changes_log: authenticated can insert" ON campaign_changes_log;
 CREATE POLICY "campaign_changes_log: authenticated can insert"
@@ -278,7 +280,7 @@ ALTER TABLE app_events ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "app_events: admin can read" ON app_events;
 CREATE POLICY "app_events: admin can read"
   ON app_events FOR SELECT TO authenticated
-  USING (auth.is_admin());
+  USING (public.is_admin());
 
 DROP POLICY IF EXISTS "app_events: authenticated can insert own" ON app_events;
 CREATE POLICY "app_events: authenticated can insert own"
@@ -295,7 +297,7 @@ DROP POLICY IF EXISTS "leader_shares: authenticated can read relevant rows" ON l
 CREATE POLICY "leader_shares: authenticated can read relevant rows"
   ON leader_shares FOR SELECT TO authenticated
   USING (
-    auth.is_admin()
+    public.is_admin()
     OR EXISTS (
       SELECT 1 FROM user_profiles up
       WHERE up.user_id = auth.uid()
@@ -314,7 +316,7 @@ CREATE POLICY "leader_shares: authenticated can read relevant rows"
 DROP POLICY IF EXISTS "leader_shares: only admin can write" ON leader_shares;
 CREATE POLICY "leader_shares: only admin can write"
   ON leader_shares FOR ALL TO authenticated
-  USING (auth.is_admin()) WITH CHECK (auth.is_admin());
+  USING (public.is_admin()) WITH CHECK (public.is_admin());
 
 
 -- =============================================================================
@@ -326,6 +328,6 @@ ALTER TABLE weekly_refresh_log ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "weekly_refresh_log: admin can read" ON weekly_refresh_log;
 CREATE POLICY "weekly_refresh_log: admin can read"
   ON weekly_refresh_log FOR SELECT TO authenticated
-  USING (auth.is_admin());
+  USING (public.is_admin());
 
 -- No authenticated write policy — managed by service role only.
