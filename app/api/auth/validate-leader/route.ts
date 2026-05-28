@@ -1,53 +1,93 @@
 /**
  * Server-side login validation. Uses service role to bypass RLS.
  * POST body: { mobile: string, firstName: string }
- * Returns: { match: { id, state, leader, admin } | null }
+ * Returns: { matches: Array<{ id, state, leader, admin }> }
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { normalizeMobile, normalizeName } from '@/lib/auth';
 
+// ---------------------------------------------------------------------------
+// Rate limiting — in-memory, per IP, 10 attempts per 15 minutes.
+// Resets across serverless cold starts, which is acceptable for this use case.
+// ---------------------------------------------------------------------------
+const RATE_LIMIT_MAP = new Map<string, { count: number; resetAt: number }>();
+const WINDOW_MS = 15 * 60 * 1000;
+const MAX_ATTEMPTS = 10;
+
+function checkRateLimit(ip: string): boolean {
+  const now = Date.now();
+
+  // Prevent unbounded growth: evict expired entries when the map gets large.
+  if (RATE_LIMIT_MAP.size > 5000) {
+    for (const [k, v] of RATE_LIMIT_MAP) {
+      if (now > v.resetAt) RATE_LIMIT_MAP.delete(k);
+    }
+  }
+
+  const entry = RATE_LIMIT_MAP.get(ip);
+  if (!entry || now > entry.resetAt) {
+    RATE_LIMIT_MAP.set(ip, { count: 1, resetAt: now + WINDOW_MS });
+    return false; // not limited
+  }
+  entry.count++;
+  return entry.count > MAX_ATTEMPTS;
+}
+
+// ---------------------------------------------------------------------------
+// Handler
+// ---------------------------------------------------------------------------
 export async function POST(request: NextRequest) {
+  // Rate limit by IP
+  const ip =
+    request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
+    request.headers.get('x-real-ip') ??
+    'unknown';
+
+  if (checkRateLimit(ip)) {
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+  }
+
   try {
     if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
       console.error('SUPABASE_SERVICE_ROLE_KEY is not set');
-      return NextResponse.json(
-        { error: 'Server configuration error: missing SUPABASE_SERVICE_ROLE_KEY' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
 
     const body = await request.json();
-    const mobile = typeof body.mobile === 'string' ? body.mobile : '';
+    const mobile    = typeof body.mobile    === 'string' ? body.mobile    : '';
     const firstName = typeof body.firstName === 'string' ? body.firstName : '';
 
-    const mobileNormalized = normalizeMobile(mobile);
+    // Input length guards — prevent excessively large payloads reaching the DB.
+    if (mobile.length > 20 || firstName.length > 100) {
+      return NextResponse.json({ matches: [] });
+    }
+
+    const mobileNormalized    = normalizeMobile(mobile);
     const firstNameNormalized = normalizeName(firstName);
 
     if (!mobileNormalized || !firstNameNormalized) {
-      return NextResponse.json({ match: null });
+      return NextResponse.json({ matches: [] });
     }
 
-    // Use a wildcard ilike to cast a wide net at the DB level — this tolerates leading/
-    // trailing whitespace in stored names (e.g. "Rosheen " stored with a trailing space).
-    // The JS layer below then verifies the normalised first-name matches exactly, so a
-    // stored full name like "Rosheen Thompson" will NOT match a login attempt of "Rosheen".
+    // Prefix-match on leader name to limit the result set while still tolerating
+    // trailing whitespace in stored values (e.g. "Rosheen "). The JS filter below
+    // enforces an exact normalised-name match, so "Rosh" will never match "Rosheen".
     const { data, error } = await supabaseAdmin
       .from('state_leaders')
       .select('id, state, leader, mobile, admin')
-      .ilike('leader', `%${firstNameNormalized}%`);
+      .ilike('leader', `${firstNameNormalized}%`);
 
     if (error) {
       console.error('validate-leader API error:', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
 
     if (!data || data.length === 0) {
-      return NextResponse.json({ match: null });
+      return NextResponse.json({ matches: [] });
     }
 
-    // Collect ALL records that pass the name + mobile check so the client can
-    // present a state-picker when a leader has records in multiple states.
+    // Exact name + mobile verification in JS — filters out prefix-only matches.
     const matches = data.filter((rec: { mobile?: string; leader?: string }) => {
       const storedNameNormalized = normalizeName(rec.leader ?? '');
       if (storedNameNormalized !== firstNameNormalized) return false;
@@ -66,6 +106,6 @@ export async function POST(request: NextRequest) {
     });
   } catch (err) {
     console.error('validate-leader API exception:', err);
-    return NextResponse.json({ error: 'Validation failed' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

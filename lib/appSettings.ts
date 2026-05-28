@@ -1,5 +1,34 @@
 import { supabase } from './supabaseClient';
 
+// ---------------------------------------------------------------------------
+// Secure server-gated mutation (admin writes only)
+// ---------------------------------------------------------------------------
+
+/**
+ * Calls the /api/admin/settings route, which verifies admin status server-side
+ * before writing. The caller's Supabase access token is forwarded so the server
+ * can authenticate the request without relying on the client's trust level.
+ */
+async function setSettingSecure(key: string, value: string, description?: string): Promise<void> {
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token;
+  if (!token) throw new Error('Not authenticated');
+
+  const res = await fetch('/api/admin/settings', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify({ key, value, description }),
+  });
+
+  if (!res.ok) {
+    const json = await res.json().catch(() => ({}));
+    throw new Error(json.error ?? `Failed to update setting (${res.status})`);
+  }
+}
+
 /**
  * Get a setting value by key
  * Returns the setting value as a string, or null if not found
@@ -84,12 +113,13 @@ export async function isCampaignLoggingEnabled(): Promise<boolean> {
 }
 
 /**
- * Set campaign logging enabled/disabled
+ * Set campaign logging enabled/disabled.
+ * Writes through the server-verified API route — admin status is confirmed server-side.
  */
 export async function setCampaignLoggingEnabled(enabled: boolean): Promise<void> {
-  await setBooleanSetting(
+  await setSettingSecure(
     'campaign_logging_enabled',
-    enabled,
+    enabled ? 'true' : 'false',
     'Enable or disable logging of campaign changes (excluding admin screen changes)'
   );
 }
@@ -122,7 +152,8 @@ export async function getSlideViewEnabled(role: SlideViewRole): Promise<boolean>
 
 /**
  * Enable or disable the slide-style view mode toggle for the given role.
+ * Writes through the server-verified API route — admin status is confirmed server-side.
  */
 export async function setSlideViewEnabled(role: SlideViewRole, enabled: boolean): Promise<void> {
-  await setBooleanSetting(SLIDE_VIEW_KEYS[role], enabled, SLIDE_VIEW_DESCRIPTIONS[role]);
+  await setSettingSecure(SLIDE_VIEW_KEYS[role], enabled ? 'true' : 'false', SLIDE_VIEW_DESCRIPTIONS[role]);
 }
