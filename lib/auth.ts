@@ -131,6 +131,14 @@ export async function completeSignIn(
     .eq('id', stateLeader.id);
   if (signInUpdateError) console.warn('Failed to update last_sign_in_at:', signInUpdateError);
 
+  // Set a session-indicator cookie so Next.js middleware can redirect
+  // unauthenticated requests before they reach protected pages. This cookie is
+  // not cryptographically verified — RLS remains the true security boundary.
+  if (typeof document !== 'undefined') {
+    const secure = location.protocol === 'https:' ? '; Secure' : '';
+    document.cookie = `app_session=1; path=/; SameSite=Lax${secure}`;
+  }
+
   return { user: { id: authData.user.id, email: authData.user.email }, stateLeader };
 }
 
@@ -169,6 +177,10 @@ export async function sendMagicLink(email: string) {
 export async function signOut() {
   const { error } = await supabase.auth.signOut();
   if (error) throw error;
+  // Clear the session-indicator cookie set on login.
+  if (typeof document !== 'undefined') {
+    document.cookie = 'app_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+  }
 }
 
 export async function getCurrentUser(): Promise<User | null> {
