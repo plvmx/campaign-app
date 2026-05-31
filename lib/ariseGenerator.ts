@@ -43,7 +43,8 @@ function apx(inches: number): number {
   return Math.floor(inches * DPI);
 }
 
-const SIDE_MARGIN    = apx(0.5);           // 150 px — equal on each side (centres the block)
+// SIDE_MARGIN is computed dynamically as oneCharW so total outer margin = 2 chars
+// (SIDE_MARGIN + oneCharW each side) matching the 2-char inter-column gap.
 const CONTENT_TOP    = apx(1.0);           // 300 px
 const BOTTOM_MARGIN  = apx(0.5);           // 150 px
 const CONTENT_BOTTOM = HEIGHT - BOTTOM_MARGIN; // 2850 px
@@ -179,9 +180,9 @@ function simulateColumnCount(allCampaigns: AriseCampaign[][]): number {
  * COL_GAP is 0 so the only visual space between columns is the 1-char inner
  * margin on each column edge — giving a ~2-char gap between the text regions.
  */
-function computeColLayout(nCols: number): { colWidth: number; colXs: number[] } {
-  const colWidth = Math.floor((WIDTH - 2 * SIDE_MARGIN) / nCols);
-  const colXs    = Array.from({ length: nCols }, (_, i) => SIDE_MARGIN + i * colWidth);
+function computeColLayout(nCols: number, sideMargin: number): { colWidth: number; colXs: number[] } {
+  const colWidth = Math.floor((WIDTH - 2 * sideMargin) / nCols);
+  const colXs    = Array.from({ length: nCols }, (_, i) => sideMargin + i * colWidth);
   return { colWidth, colXs };
 }
 
@@ -327,9 +328,16 @@ async function renderAriseCanvas(
     allCampaigns.push(await fetchCampaigns(client, dates[i], adminStatus, userState));
   }
 
-  // ── Pass 2: simulate layout to find required column count ──────────────────
+  // ── Pass 2: measure font and simulate layout to find required column count ──
+  // Measure oneCharW now so sideMargin = oneCharW → total outer margin = 2 chars
+  const _tmpCanvas = document.createElement('canvas');
+  const _tmpCtx = _tmpCanvas.getContext('2d')!;
+  _tmpCtx.font = `bold ${FONT_CAMP}px "Courier New", monospace`;
+  const oneCharWForLayout = Math.round(_tmpCtx.measureText('M').width);
+  const sideMargin = oneCharWForLayout;
+
   const nCols = Math.max(2, simulateColumnCount(allCampaigns));
-  const { colWidth, colXs } = computeColLayout(nCols);
+  const { colWidth, colXs } = computeColLayout(nCols, sideMargin);
 
   onProgress?.(`Rendering Week 1 Campaigns list (${nCols} columns)…`);
 
