@@ -138,6 +138,31 @@ export async function findCampaign(criteria: {
 }
 
 /**
+ * Fetch TWOL campaigns led by the given leader in the past 24 hours.
+ * Returns them ordered earliest first (by date ASC, time ASC).
+ * Matches both explicit 'TWOL' category and legacy null-category rows.
+ */
+export async function getRecentTWOLCampaignsForLeader(
+  leaderName: string,
+): Promise<Pick<Campaign, 'id' | 'date' | 'state' | 'place' | 'time' | 'leader'>[]> {
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayDate = yesterday.toISOString().slice(0, 10);
+
+  const { data, error } = await supabase
+    .from('campaigns')
+    .select('id, date, state, place, time, leader')
+    .ilike('leader', leaderName.trim())
+    .gte('date', yesterdayDate)
+    .or('category.eq.TWOL,category.is.null')
+    .order('date', { ascending: true })
+    .order('time', { ascending: true });
+
+  if (error) throw error;
+  return (data || []) as Pick<Campaign, 'id' | 'date' | 'state' | 'place' | 'time' | 'leader'>[];
+}
+
+/**
  * Find all campaigns matching a natural key. Unlike findCampaign, this returns
  * an array because multiple campaigns can share the same key when different
  * leaders created entries with the same date/state/place/time/leader values.

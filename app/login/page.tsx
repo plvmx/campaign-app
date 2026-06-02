@@ -7,6 +7,8 @@ import { getSession, validateStateLeader, completeSignIn, type StateLeaderMatch 
 import { getErrorMessage } from '@/lib/errorUtils';
 import { trackEvent } from '@/lib/analytics';
 import { useUser } from '@/contexts/UserContext';
+import { getRecentTWOLCampaignsForLeader } from '@/lib/services/campaignService';
+import type { Campaign } from '@/lib/types';
 
 const STORAGE_KEYS = { mobile: 'login_mobile', firstName: 'login_firstName' };
 
@@ -33,6 +35,8 @@ export default function LoginPage() {
   const [pendingMatches, setPendingMatches] = useState<StateLeaderMatch[] | null>(null);
   // Tracks which state button was clicked while sign-in is in progress
   const [selectedStateId, setSelectedStateId] = useState<string | null>(null);
+  // Recent TWOL campaign that the leader may want to record results for
+  const [recentCampaign, setRecentCampaign] = useState<Pick<Campaign, 'id' | 'date' | 'state' | 'place' | 'time' | 'leader'> | null>(null);
 
   // Check if user is already signed in
   useEffect(() => {
@@ -97,7 +101,7 @@ export default function LoginPage() {
         // (avoids a race where onAuthStateChange fires before the profile upsert completes)
         await refreshUser();
         trackEvent('sign_in', { state: matches[0].state });
-        router.push('/app');
+        await checkRecentCampaign(matches[0]);
       } else {
         // Multiple states — show state picker
         setPendingMatches(matches);
@@ -109,6 +113,20 @@ export default function LoginPage() {
     }
   };
 
+  // ── Post-sign-in: check for a recent TWOL campaign ────────────────────────
+  const checkRecentCampaign = async (match: StateLeaderMatch) => {
+    try {
+      const recent = await getRecentTWOLCampaignsForLeader(match.leader);
+      if (recent.length > 0) {
+        setRecentCampaign(recent[0]);
+        return;
+      }
+    } catch {
+      // Non-fatal — fall through to normal navigation
+    }
+    router.push('/app');
+  };
+
   // ── Step 2 (multi-state only): complete sign-in with chosen state ─────────
   const handleStateSelect = async (match: StateLeaderMatch) => {
     setError(null);
@@ -118,7 +136,7 @@ export default function LoginPage() {
       await completeSignIn(match);
       await refreshUser();
       trackEvent('sign_in', { state: match.state });
-      router.push('/app');
+      await checkRecentCampaign(match);
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Failed to sign in. Please try again.'));
       setPendingMatches(null);
@@ -139,6 +157,47 @@ export default function LoginPage() {
 
   const cardClass =
     'w-full max-w-md space-y-6 rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-blue-50 p-6 shadow-lg dark:bg-blue-900/20 sm:p-8';
+
+  // ── Recent-campaign modal ─────────────────────────────────────────────────
+  if (recentCampaign) {
+    const detailParams = new URLSearchParams({
+      id:     recentCampaign.id,
+      date:   recentCampaign.date,
+      state:  recentCampaign.state,
+      place:  recentCampaign.place,
+      time:   recentCampaign.time,
+      leader: recentCampaign.leader,
+    });
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8 dark:bg-gray-900">
+        <div className={cardClass}>
+          <div className="space-y-6">
+            <h2 className="text-center text-xl font-bold text-gray-900 dark:text-gray-100">
+              Record Results?
+            </h2>
+            <p className="text-center text-base text-gray-700 dark:text-gray-300">
+              Do you want to Record Results for your recent{' '}
+              <span className="font-semibold">{recentCampaign.place}</span> campaign?
+            </p>
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={() => router.push(`/record-results/detail?${detailParams.toString()}`)}
+                className="w-full rounded-md bg-blue-600 px-4 py-3 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
+              >
+                Yes
+              </button>
+              <button
+                onClick={() => router.push('/app')}
+                className="w-full rounded-md bg-gray-200 px-4 py-3 text-base font-bold text-gray-800 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 border-2 border-gray-400 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600 dark:border-gray-500"
+              >
+                No
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8 dark:bg-gray-900">
