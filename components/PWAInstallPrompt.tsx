@@ -25,8 +25,8 @@ function isStandalone(): boolean {
 }
 
 export default function PWAInstallPrompt() {
+  // null = hidden; non-null = visible with the detected platform
   const [platform, setPlatform] = useState<Platform>(null);
-  const [visible, setVisible] = useState(false);
   const [showIOSSteps, setShowIOSSteps] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
 
@@ -34,9 +34,8 @@ export default function PWAInstallPrompt() {
     if (isStandalone()) return;
     if (localStorage.getItem(DISMISSED_KEY)) return;
 
-    const p = detectPlatform();
-    setPlatform(p);
-    setVisible(true);
+    // Single setState call avoids the "cascading setState in effect" lint rule
+    setPlatform(detectPlatform());
 
     const handler = (e: Event) => {
       e.preventDefault();
@@ -48,7 +47,7 @@ export default function PWAInstallPrompt() {
 
   const dismiss = () => {
     localStorage.setItem(DISMISSED_KEY, '1');
-    setVisible(false);
+    setPlatform(null);
     setShowIOSSteps(false);
   };
 
@@ -62,7 +61,7 @@ export default function PWAInstallPrompt() {
     }
   };
 
-  if (!visible) return null;
+  if (!platform) return null;
 
   return (
     <div className="bg-[#1e3a5f] text-white px-4 py-3 text-sm">
