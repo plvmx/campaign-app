@@ -8,7 +8,8 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
 }
 
-const DISMISSED_KEY = 'pwa-install-dismissed';
+// Bump this key to reset the dismissed state for all users (e.g. after a bug fix).
+const DISMISSED_KEY = 'pwa-install-dismissed-v2';
 
 function detectPlatform(): Platform {
   const ua = navigator.userAgent;
@@ -33,7 +34,9 @@ export default function PWAInstallPrompt() {
     if (localStorage.getItem(DISMISSED_KEY)) return null;
     return detectPlatform();
   });
-  const [showIOSSteps, setShowIOSSteps] = useState(false);
+
+  // showInstructions: true once the user asks how to install (iOS always; Android fallback)
+  const [showInstructions, setShowInstructions] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
 
   // Effect is purely for the beforeinstallprompt event listener — no setState here.
@@ -50,48 +53,56 @@ export default function PWAInstallPrompt() {
   const dismiss = () => {
     localStorage.setItem(DISMISSED_KEY, '1');
     setPlatform(null);
-    setShowIOSSteps(false);
+    setShowInstructions(false);
   };
 
   const handleInstallClick = async () => {
     if (deferredPrompt) {
+      // Android/desktop Chrome: trigger the native install dialog
       await deferredPrompt.prompt();
       const { outcome } = await deferredPrompt.userChoice;
       if (outcome === 'accepted') dismiss();
     } else {
-      setShowIOSSteps(true);
+      // Either iOS (Apple never fires beforeinstallprompt) or the Chrome event
+      // hasn't fired yet — show manual instructions appropriate to the platform.
+      setShowInstructions(true);
     }
   };
 
   if (!platform) return null;
 
+  const isIOS = platform === 'ios';
+  const isAndroid = platform === 'android';
+
   return (
     <div className="bg-[#1e3a5f] text-white px-4 py-3 text-sm">
       <div className="flex items-start justify-between gap-3 max-w-lg mx-auto">
         <div className="flex-1 min-w-0">
-          {!showIOSSteps ? (
+          {!showInstructions ? (
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
               <p className="font-semibold leading-snug">
-                Install this app on your {platform === 'ios' ? 'iPhone/iPad' : platform === 'android' ? 'Android' : 'device'} for the best experience
+                Install this app on your{' '}
+                {isIOS ? 'iPhone/iPad' : isAndroid ? 'Android' : 'device'} for
+                the best experience — opens full-screen like a native app
               </p>
               <button
                 onClick={handleInstallClick}
                 className="shrink-0 self-start rounded-md bg-white px-3 py-1.5 text-sm font-bold text-[#1e3a5f] hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-white"
               >
-                {platform === 'ios' ? 'How to install' : 'Install'}
+                {isIOS ? 'How to install' : 'Install'}
               </button>
             </div>
-          ) : (
+          ) : isIOS ? (
+            /* ── iOS instructions ── */
             <div>
-              <p className="font-semibold mb-2">Install on iPhone / iPad:</p>
+              <p className="font-semibold mb-2">Install on iPhone / iPad (Safari):</p>
               <ol className="space-y-1 list-none">
                 <li className="flex items-start gap-2">
-                  <span className="text-base leading-snug">1.</span>
+                  <span className="shrink-0">1.</span>
                   <span>
                     Tap the{' '}
                     <span className="inline-flex items-center gap-0.5 font-bold">
                       Share{' '}
-                      {/* iOS share icon — box with up-arrow */}
                       <svg
                         className="inline-block w-4 h-4 mb-0.5"
                         viewBox="0 0 24 24"
@@ -111,12 +122,46 @@ export default function PWAInstallPrompt() {
                   </span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="text-base leading-snug">2.</span>
-                  <span>Scroll down and tap <span className="font-bold">Add to Home Screen</span></span>
+                  <span className="shrink-0">2.</span>
+                  <span>
+                    Scroll down and tap{' '}
+                    <span className="font-bold">Add to Home Screen</span>
+                  </span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="text-base leading-snug">3.</span>
-                  <span>Tap <span className="font-bold">Add</span> — done!</span>
+                  <span className="shrink-0">3.</span>
+                  <span>
+                    Tap <span className="font-bold">Add</span> — done!
+                  </span>
+                </li>
+              </ol>
+            </div>
+          ) : (
+            /* ── Android / desktop fallback instructions ── */
+            <div>
+              <p className="font-semibold mb-2">
+                Install on {isAndroid ? 'Android (Chrome)' : 'your browser'}:
+              </p>
+              <ol className="space-y-1 list-none">
+                <li className="flex items-start gap-2">
+                  <span className="shrink-0">1.</span>
+                  <span>
+                    Tap the <span className="font-bold">⋮</span> menu in the
+                    top-right corner of Chrome
+                  </span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="shrink-0">2.</span>
+                  <span>
+                    Tap{' '}
+                    <span className="font-bold">Add to Home screen</span>
+                  </span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="shrink-0">3.</span>
+                  <span>
+                    Tap <span className="font-bold">Add</span> — done!
+                  </span>
                 </li>
               </ol>
             </div>
