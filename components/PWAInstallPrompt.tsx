@@ -25,25 +25,27 @@ function isStandalone(): boolean {
 }
 
 export default function PWAInstallPrompt() {
-  // null = hidden; non-null = visible with the detected platform
-  const [platform, setPlatform] = useState<Platform>(null);
+  // Lazy initializer runs once on the client — avoids any setState call inside an effect.
+  // null = hidden; non-null = visible with the detected platform.
+  const [platform, setPlatform] = useState<Platform>(() => {
+    if (typeof window === 'undefined') return null;
+    if (isStandalone()) return null;
+    if (localStorage.getItem(DISMISSED_KEY)) return null;
+    return detectPlatform();
+  });
   const [showIOSSteps, setShowIOSSteps] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
 
+  // Effect is purely for the beforeinstallprompt event listener — no setState here.
   useEffect(() => {
-    if (isStandalone()) return;
-    if (localStorage.getItem(DISMISSED_KEY)) return;
-
-    // Single setState call avoids the "cascading setState in effect" lint rule
-    setPlatform(detectPlatform());
-
+    if (!platform) return;
     const handler = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e as BeforeInstallPromptEvent);
     };
     window.addEventListener('beforeinstallprompt', handler);
     return () => window.removeEventListener('beforeinstallprompt', handler);
-  }, []);
+  }, [platform]);
 
   const dismiss = () => {
     localStorage.setItem(DISMISSED_KEY, '1');
