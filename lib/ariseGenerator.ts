@@ -3,7 +3,7 @@
  *
  * Renders a single landscape JPEG showing the upcoming campaign schedule:
  *   - Week 1: all 7 days (Mon → Sun)
- *   - Week 2: Mon and Tue only
+ *   - Week 2: Mon only
  *
  * Layout: equal columns (2 by default; a 3rd is added automatically if needed),
  * no phone-number column, same red banner and colour key legend as the portrait
@@ -116,7 +116,7 @@ async function fetchCampaigns(
 // ---------------------------------------------------------------------------
 
 /**
- * Simulates placing 9 days of campaigns into columns and returns how many
+ * Simulates placing 8 days of campaigns into columns and returns how many
  * columns are required. The simulation mirrors the drawing algorithm exactly
  * but performs no canvas operations. Column heights are fixed and independent
  * of column width, so the count is valid regardless of the final column widths.
@@ -314,8 +314,8 @@ async function renderAriseCanvas(
   userState: string | null | undefined,
   onProgress?: (msg: string) => void,
 ): Promise<HTMLCanvasElement> {
-  // Build the 9 date targets: week-1 days 0–6, week-2 Mon+Tue = days 7–8
-  const dates = Array.from({ length: 9 }, (_, i) => {
+  // Build the 8 date targets: week-1 days 0–6, week-2 Mon = day 7
+  const dates = Array.from({ length: 8 }, (_, i) => {
     const d = new Date(startDate);
     d.setDate(d.getDate() + i);
     return d;
