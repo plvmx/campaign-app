@@ -4,14 +4,11 @@ import { useEffect, useState, useMemo, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import MobileLayout from '@/components/MobileLayout';
 import LoadingSpinner from '@/components/LoadingSpinner';
-import { supabase } from '@/lib/supabaseClient';
-import { normalizeName, normalizeMobile } from '@/lib/auth';
 import { useUser, upsertUserProfile } from '@/contexts/UserContext';
 import { fetchCampaignData } from '@/lib/campaignLog';
-import { getSharedWithMeOwners } from '@/lib/leaderShares';
 import { getErrorMessage } from '@/lib/errorUtils';
 import type { Campaign, LeaderShareOwner } from '@/lib/types';
-import { deleteCampaign, updateCampaign } from '@/lib/services/campaignService';
+import { deleteCampaign, updateCampaign, getCampaignsForUser } from '@/lib/services/campaignService';
 import { trackEvent } from '@/lib/analytics';
 import { getCampaignCategories } from '@/lib/services/dropdownService';
 import { getUserStateCode } from '@/lib/location';
@@ -146,78 +143,16 @@ function AppPageContent() {
     setAdminStatus(adminStatusValue);
     setUserState(userStateValue);
 
-    let sharedOwnersList: LeaderShareOwner[] = [];
-    if (adminStatusValue !== 'AD' && adminStatusValue !== 'SR' && leader && userStateValue) {
-      sharedOwnersList = await getSharedWithMeOwners(userStateValue, leader);
-      setSharedWithMeOwners(sharedOwnersList);
-    }
+    const { campaigns, sharedOwners } = await getCampaignsForUser({
+      adminStatus: adminStatusValue,
+      userState: userStateValue,
+      userLeader: leader,
+      userMobile: mobile,
+      userId: contextUser.id,
+    });
 
-    let query = supabase.from('campaigns').select('*');
-    if (adminStatusValue === 'AD') {
-      // no filter — see all
-    } else if (adminStatusValue === 'SR') {
-      query = userStateValue
-        ? query.eq('state', userStateValue.toUpperCase().trim())
-        : query.eq('user_id', contextUser.id);
-    } else {
-      query = leader
-        ? query.eq('leader', leader.trim())
-        : query.eq('user_id', contextUser.id);
-    }
-
-    const { data, error: fetchError } = await query
-      .order('date', { ascending: true })
-      .order('state', { ascending: true })
-      .order('place', { ascending: true })
-      .order('time', { ascending: true });
-
-    if (fetchError) throw fetchError;
-
-    let dataMerged: Campaign[] = (data || []) as Campaign[];
-
-    if (adminStatusValue !== 'AD' && adminStatusValue !== 'SR' && sharedOwnersList.length > 0) {
-      const sharedResults = await Promise.all(
-        sharedOwnersList.map((o) =>
-          supabase
-            .from('campaigns')
-            .select('*')
-            .eq('state', o.owner_state || '')
-            .eq('leader', (o.owner_leader || '').trim())
-            .order('date', { ascending: true })
-            .order('state', { ascending: true })
-            .order('place', { ascending: true })
-            .order('time', { ascending: true }),
-        ),
-      );
-      const ownIds = new Set(dataMerged.map((c) => c.id));
-      for (const { data: sharedData, error: sharedError } of sharedResults) {
-        if (!sharedError && sharedData?.length) {
-          const extra = (sharedData as Campaign[]).filter((c) => !ownIds.has(c.id));
-          extra.forEach((c) => ownIds.add(c.id));
-          dataMerged = [...dataMerged, ...extra];
-        }
-      }
-    }
-
-    let filteredData = dataMerged;
-    if (adminStatusValue !== 'AD' && adminStatusValue !== 'SR') {
-      if (mobile && userStateValue) {
-        const normalizedMobile = normalizeMobile(mobile);
-        const isSharedCampaign = (c: Campaign) =>
-          sharedOwnersList.some(
-            (o) =>
-              (o.owner_state || '').toUpperCase().trim() === (c.state || '').toUpperCase().trim() &&
-              normalizeName(o.owner_leader) === normalizeName(c.leader || ''),
-          );
-        filteredData = dataMerged.filter(
-          (c) =>
-            isSharedCampaign(c) ||
-            (!!c.mobile && normalizeMobile(c.mobile) === normalizedMobile),
-        );
-      }
-    }
-
-    setAllCampaigns(filteredData);
+    setSharedWithMeOwners(sharedOwners);
+    setAllCampaigns(campaigns);
   }, [contextUser]);
 
   // -------------------------------------------------------------------------
@@ -283,78 +218,15 @@ function AppPageContent() {
         }
 
         // Fetch campaigns
-        let sharedOwnersList: LeaderShareOwner[] = [];
-        let query = supabase.from('campaigns').select('*');
-
-        if (contextAdminStatus === 'AD') {
-          // no filter
-        } else if (contextAdminStatus === 'SR') {
-          query = contextUserState
-            ? query.eq('state', contextUserState.toUpperCase().trim())
-            : query.eq('user_id', contextUser!.id);
-        } else {
-          if (contextUserMobile && contextUserLeader) {
-            sharedOwnersList = await getSharedWithMeOwners(contextUserState || '', contextUserLeader);
-            setSharedWithMeOwners(sharedOwnersList);
-            query = query.eq('leader', contextUserLeader);
-          } else {
-            query = query.eq('user_id', contextUser!.id);
-          }
-        }
-
-        const { data, error } = await query
-          .order('date', { ascending: true })
-          .order('state', { ascending: true })
-          .order('place', { ascending: true })
-          .order('time', { ascending: true });
-
-        if (error) throw error;
-
-        let dataMerged: Campaign[] = (data || []) as Campaign[];
-
-        if (contextAdminStatus !== 'AD' && contextAdminStatus !== 'SR' && sharedOwnersList.length > 0) {
-          const sharedResults = await Promise.all(
-            sharedOwnersList.map((o) =>
-              supabase
-                .from('campaigns')
-                .select('*')
-                .eq('state', o.owner_state || '')
-                .eq('leader', (o.owner_leader || '').trim())
-                .order('date', { ascending: true })
-                .order('state', { ascending: true })
-                .order('place', { ascending: true })
-                .order('time', { ascending: true }),
-            ),
-          );
-          const ownIds = new Set(dataMerged.map((c) => c.id));
-          for (const { data: sharedData, error: sharedError } of sharedResults) {
-            if (!sharedError && sharedData?.length) {
-              const extra = (sharedData as Campaign[]).filter((c) => !ownIds.has(c.id));
-              extra.forEach((c) => ownIds.add(c.id));
-              dataMerged = [...dataMerged, ...extra];
-            }
-          }
-        }
-
-        let filteredData = dataMerged;
-        if (contextAdminStatus !== 'AD' && contextAdminStatus !== 'SR') {
-          if (contextUserMobile && contextUserState) {
-            const normalizedMobile = normalizeMobile(contextUserMobile);
-            const isSharedCampaign = (c: Campaign) =>
-              sharedOwnersList.some(
-                (o) =>
-                  (o.owner_state || '').toUpperCase().trim() === (c.state || '').toUpperCase().trim() &&
-                  normalizeName(o.owner_leader) === normalizeName(c.leader || ''),
-              );
-            filteredData = dataMerged.filter(
-              (c) =>
-                isSharedCampaign(c) ||
-                (!!c.mobile && normalizeMobile(c.mobile) === normalizedMobile),
-            );
-          }
-        }
-
-        setAllCampaigns(filteredData);
+        const { campaigns, sharedOwners } = await getCampaignsForUser({
+          adminStatus: contextAdminStatus,
+          userState: contextUserState,
+          userLeader: contextUserLeader,
+          userMobile: contextUserMobile,
+          userId: contextUser!.id,
+        });
+        setSharedWithMeOwners(sharedOwners);
+        setAllCampaigns(campaigns);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         const isAuthError =

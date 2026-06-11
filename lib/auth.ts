@@ -202,13 +202,4 @@ export async function getSession() {
   return session;
 }
 
-/**
- * Sign in anonymously (for development when email is not working)
- */
-export async function signInAnonymously() {
-  const { data, error } = await supabase.auth.signInAnonymously();
-  if (error) throw error;
-  return data;
-}
-
 

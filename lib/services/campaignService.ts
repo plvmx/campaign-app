@@ -1,6 +1,8 @@
 import { supabase } from '@/lib/supabaseClient';
 import { logCampaignChange } from '@/lib/campaignLog';
-import type { Campaign } from '@/lib/types';
+import { normalizeMobile, normalizeName } from '@/lib/auth';
+import { getSharedWithMeOwners } from '@/lib/leaderShares';
+import type { Campaign, LeaderShareOwner } from '@/lib/types';
 
 export interface NewCampaignData {
   date: string;
@@ -160,6 +162,98 @@ export async function getRecentTWOLCampaignsForLeader(
 
   if (error) throw error;
   return (data || []) as Pick<Campaign, 'id' | 'date' | 'state' | 'place' | 'time' | 'leader'>[];
+}
+
+export interface CampaignsForUserParams {
+  adminStatus: string | null;
+  userState: string | null;
+  userLeader: string | null;
+  userMobile: string | null;
+  userId: string;
+}
+
+export interface CampaignsForUserResult {
+  campaigns: Campaign[];
+  sharedOwners: LeaderShareOwner[];
+}
+
+/**
+ * Fetch campaigns visible to the current user based on their role.
+ * Handles admin/SR/TL filtering, shared-leader merging, and mobile-based filtering.
+ */
+export async function getCampaignsForUser(
+  params: CampaignsForUserParams,
+): Promise<CampaignsForUserResult> {
+  const { adminStatus, userState, userLeader, userMobile, userId } = params;
+
+  let sharedOwners: LeaderShareOwner[] = [];
+
+  let query = supabase.from('campaigns').select('*');
+  if (adminStatus === 'AD') {
+    // no filter — see all
+  } else if (adminStatus === 'SR') {
+    query = userState
+      ? query.eq('state', userState.toUpperCase().trim())
+      : query.eq('user_id', userId);
+  } else {
+    if (userLeader && userState) {
+      sharedOwners = await getSharedWithMeOwners(userState, userLeader);
+      query = query.eq('leader', userLeader.trim());
+    } else {
+      query = query.eq('user_id', userId);
+    }
+  }
+
+  const { data, error } = await query
+    .order('date', { ascending: true })
+    .order('state', { ascending: true })
+    .order('place', { ascending: true })
+    .order('time', { ascending: true });
+
+  if (error) throw error;
+
+  let merged: Campaign[] = (data || []) as Campaign[];
+
+  if (adminStatus !== 'AD' && adminStatus !== 'SR' && sharedOwners.length > 0) {
+    const sharedResults = await Promise.all(
+      sharedOwners.map((o) =>
+        supabase
+          .from('campaigns')
+          .select('*')
+          .eq('state', o.owner_state || '')
+          .eq('leader', (o.owner_leader || '').trim())
+          .order('date', { ascending: true })
+          .order('state', { ascending: true })
+          .order('place', { ascending: true })
+          .order('time', { ascending: true }),
+      ),
+    );
+    const ownIds = new Set(merged.map((c) => c.id));
+    for (const { data: sharedData, error: sharedError } of sharedResults) {
+      if (!sharedError && sharedData?.length) {
+        const extra = (sharedData as Campaign[]).filter((c) => !ownIds.has(c.id));
+        extra.forEach((c) => ownIds.add(c.id));
+        merged = [...merged, ...extra];
+      }
+    }
+  }
+
+  if (adminStatus !== 'AD' && adminStatus !== 'SR' && userMobile && userState) {
+    const normalizedMobile = normalizeMobile(userMobile);
+    const isSharedCampaign = (c: Campaign) =>
+      sharedOwners.some(
+        (o) =>
+          (o.owner_state || '').toUpperCase().trim() === (c.state || '').toUpperCase().trim() &&
+          normalizeName(o.owner_leader) === normalizeName(c.leader || ''),
+      );
+    merged = merged.filter(
+      (c) =>
+        isSharedCampaign(c) ||
+        (!!c.mobile && normalizeMobile(c.mobile) === normalizedMobile),
+    );
+  }
+
+  return { campaigns: merged, sharedOwners };
 }
 
 /**

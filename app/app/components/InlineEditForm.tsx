@@ -1,11 +1,12 @@
 'use client';
-import { useState, useEffect, useRef } from 'react';
-import { supabase } from '@/lib/supabaseClient';
-import { getPlacesForState, getLeadersForState, getLeaderMobile } from '@/lib/services/dropdownService';
+import { useState } from 'react';
+import { getLeaderMobile } from '@/lib/services/dropdownService';
+import { addNewPlaceForState } from '@/lib/services/placeService';
 import { getErrorMessage } from '@/lib/errorUtils';
 import { AUSTRALIAN_STATES } from '@/lib/constants';
 import type { Campaign } from '@/lib/types';
 import type { EditUpdates } from './types';
+import { useStateDropdowns } from './useStateDropdowns';
 import { TIME_OPTIONS, normalizeTimeValue } from './timeOptions';
 
 interface Props {
@@ -33,26 +34,10 @@ export default function InlineEditForm({ campaign, isAdmin, categories, onSave, 
   });
   const [isOtherPlace, setIsOtherPlace] = useState(false);
   const [customPlace, setCustomPlace] = useState('');
-  const [places, setPlaces] = useState<string[]>([]);
-  const [leaders, setLeaders] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const placesCache = useRef<Record<string, string[]>>({});
-  const leadersCache = useRef<Record<string, string[]>>({});
 
-  useEffect(() => {
-    if (!editData.state) { setPlaces([]); return; }
-    const s = editData.state.toUpperCase().trim();
-    if (placesCache.current[s]) { setPlaces(placesCache.current[s]); return; }
-    getPlacesForState(s).then((p) => { placesCache.current[s] = p; setPlaces(p); });
-  }, [editData.state]);
-
-  useEffect(() => {
-    if (!editData.state) { setLeaders([]); return; }
-    const s = editData.state.toUpperCase().trim();
-    if (leadersCache.current[s]) { setLeaders(leadersCache.current[s]); return; }
-    getLeadersForState(s).then((l) => { leadersCache.current[s] = l; setLeaders(l); });
-  }, [editData.state]);
+  const { places, leaders, updatePlacesCache } = useStateDropdowns(editData.state);
 
   const handleStateChange = (value: string) => {
     setIsOtherPlace(false);
@@ -76,17 +61,13 @@ export default function InlineEditForm({ campaign, isAdmin, categories, onSave, 
       let placeValue = editData.place;
       if (isOtherPlace && customPlace.trim()) {
         if (!editData.state?.trim()) throw new Error('Please select a state before entering a new place');
-        const newPlace = customPlace.trim();
         const stateValue = editData.state.toUpperCase().trim();
-        const { error: placeError } = await supabase
-          .from('state_places')
-          .insert([{ state: stateValue, place: newPlace }]);
-        if (placeError && placeError.code !== '23505')
-          throw new Error(`Failed to add new place: ${placeError.message}`);
+        const newPlace = customPlace.trim();
+        await addNewPlaceForState(stateValue, newPlace);
         placeValue = newPlace;
+        const { getPlacesForState } = await import('@/lib/services/dropdownService');
         const updated = await getPlacesForState(stateValue);
-        placesCache.current[stateValue] = updated;
-        setPlaces(updated);
+        updatePlacesCache(stateValue, updated);
       }
       if (!placeValue?.trim()) throw new Error('Please select or enter a place');
       await onSave(campaign.id, {

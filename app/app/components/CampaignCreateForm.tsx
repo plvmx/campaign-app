@@ -1,12 +1,13 @@
 'use client';
-import { useState, useEffect, useRef } from 'react';
-import { supabase } from '@/lib/supabaseClient';
-import { getPlacesForState, getLeadersForState, getLeaderMobile } from '@/lib/services/dropdownService';
+import { useState, useEffect } from 'react';
+import { getLeaderMobile } from '@/lib/services/dropdownService';
 import { createCampaign } from '@/lib/services/campaignService';
+import { addNewPlaceForState } from '@/lib/services/placeService';
 import { trackEvent } from '@/lib/analytics';
 import { getErrorMessage } from '@/lib/errorUtils';
 import { getTodayDateString } from '@/lib/campaignDates';
 import { AUSTRALIAN_STATES } from '@/lib/constants';
+import { useStateDropdowns } from './useStateDropdowns';
 import { TIME_OPTIONS } from './timeOptions';
 
 interface Props {
@@ -38,34 +39,11 @@ export default function CampaignCreateForm({
   });
   const [isOtherPlace, setIsOtherPlace] = useState(false);
   const [customPlace, setCustomPlace] = useState('');
-  const [places, setPlaces] = useState<string[]>([]);
-  const [leaders, setLeaders] = useState<string[]>([]);
-  const [loadingPlaces, setLoadingPlaces] = useState(false);
-  const [loadingLeaders, setLoadingLeaders] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const placesCache = useRef<Record<string, string[]>>({});
-  const leadersCache = useRef<Record<string, string[]>>({});
 
-  useEffect(() => {
-    if (!formState.state) { setPlaces([]); return; }
-    const s = formState.state.toUpperCase().trim();
-    if (placesCache.current[s]) { setPlaces(placesCache.current[s]); return; }
-    setLoadingPlaces(true);
-    getPlacesForState(s)
-      .then((p) => { placesCache.current[s] = p; setPlaces(p); })
-      .finally(() => setLoadingPlaces(false));
-  }, [formState.state]);
-
-  useEffect(() => {
-    if (!formState.state) { setLeaders([]); return; }
-    const s = formState.state.toUpperCase().trim();
-    if (leadersCache.current[s]) { setLeaders(leadersCache.current[s]); return; }
-    setLoadingLeaders(true);
-    getLeadersForState(s)
-      .then((l) => { leadersCache.current[s] = l; setLeaders(l); })
-      .finally(() => setLoadingLeaders(false));
-  }, [formState.state]);
+  const { places, leaders, loadingPlaces, loadingLeaders, updatePlacesCache } =
+    useStateDropdowns(formState.state);
 
   // Auto-fill leader/mobile for non-admin users once leaders are loaded
   useEffect(() => {
@@ -75,7 +53,7 @@ export default function CampaignCreateForm({
     if (!stateMatches || !leaders.includes(userMobileAndLeader.leader)) return;
     setFormState((prev) => ({
       ...prev,
-      leader: userMobileAndLeader.leader as string,
+      leader: userMobileAndLeader.leader ?? prev.leader,
       mobile: userMobileAndLeader.mobile || prev.mobile,
     }));
   }, [isAdmin, userMobileAndLeader, userState, formState.state, formState.leader, leaders, loadingLeaders]);
@@ -88,17 +66,13 @@ export default function CampaignCreateForm({
       let placeValue = formState.place;
       if (isOtherPlace && customPlace.trim()) {
         if (!formState.state?.trim()) throw new Error('Please select a state before entering a new place');
-        const newPlace = customPlace.trim();
         const stateValue = formState.state.toUpperCase().trim();
-        const { error: placeError } = await supabase
-          .from('state_places')
-          .insert([{ state: stateValue, place: newPlace }]);
-        if (placeError && placeError.code !== '23505')
-          throw new Error(`Failed to add new place: ${placeError.message}`);
+        const newPlace = customPlace.trim();
+        await addNewPlaceForState(stateValue, newPlace);
         placeValue = newPlace;
+        const { getPlacesForState } = await import('@/lib/services/dropdownService');
         const updated = await getPlacesForState(stateValue);
-        placesCache.current[stateValue] = updated;
-        setPlaces(updated);
+        updatePlacesCache(stateValue, updated);
       }
       if (!placeValue?.trim()) throw new Error('Please select or enter a place');
       await createCampaign({

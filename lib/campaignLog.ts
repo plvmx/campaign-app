@@ -159,7 +159,7 @@ export async function logCampaignChange(
  * Helper function to fetch current campaign data before updating
  * This is useful when you need to log the old state before an update
  */
-export async function fetchCampaignData(campaignId: string): Promise<Record<string, unknown> | null> {
+export async function fetchCampaignData(campaignId: string): Promise<import('./types').Campaign | null> {
   try {
     const { data, error } = await supabase
       .from('campaigns')

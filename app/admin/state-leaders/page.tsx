@@ -5,10 +5,18 @@ import { useRouter } from 'next/navigation';
 import MobileLayout from '@/components/MobileLayout';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import { useUser } from '@/contexts/UserContext';
-import { supabase } from '@/lib/supabaseClient';
 import { getStateColor } from '@/lib/stateColors';
 import { AUSTRALIAN_STATES } from '@/lib/constants';
 import { getErrorMessage } from '@/lib/errorUtils';
+import {
+  type StateLeader,
+  getStateLeaders,
+  createStateLeader,
+  updateStateLeader,
+  deleteStateLeader,
+} from '@/lib/services/stateLeadersService';
+
+import { supabase } from '@/lib/supabaseClient';
 
 async function revokeSessionsForLeader(state: string, leader: string): Promise<void> {
   const { data: { session } } = await supabase.auth.getSession();
@@ -19,15 +27,6 @@ async function revokeSessionsForLeader(state: string, leader: string): Promise<v
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
     body: JSON.stringify({ state, leader }),
   });
-}
-
-interface StateLeader {
-  id: string;
-  state: string;
-  leader: string;
-  mobile: string | null;
-  admin: string | null;
-  created_at: string;
 }
 
 export default function StateLeadersPage() {
@@ -59,16 +58,8 @@ export default function StateLeadersPage() {
 
   const fetchStateLeaders = async () => {
     try {
-      let query = supabase.from('state_leaders').select('*').order('state', { ascending: true }).order('leader', { ascending: true });
-      
-      if (filterState) {
-        query = query.eq('state', filterState);
-      }
-      
-      const { data, error } = await query;
-      
-      if (error) throw error;
-      setStateLeaders(data || []);
+      const data = await getStateLeaders(filterState || undefined);
+      setStateLeaders(data);
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Failed to fetch state leaders'));
     }
@@ -106,17 +97,12 @@ export default function StateLeadersPage() {
 
       if (editingId) {
         const originalItem = stateLeaders.find(sl => sl.id === editingId);
-        const { error } = await supabase
-          .from('state_leaders')
-          .update({
-            state: formState.state,
-            leader: leaderValue,
-            mobile: mobileValue,
-            admin: adminValue
-          })
-          .eq('id', editingId);
-
-        if (error) throw error;
+        await updateStateLeader(editingId, {
+          state: formState.state,
+          leader: leaderValue,
+          mobile: mobileValue,
+          admin: adminValue,
+        });
         setSuccess('State leader updated successfully');
 
         // If admin status changed (granted or revoked), force-sign-out the
@@ -127,22 +113,12 @@ export default function StateLeadersPage() {
           void revokeSessionsForLeader(formState.state, leaderValue);
         }
       } else {
-        // Create new record
-        const { error } = await supabase
-          .from('state_leaders')
-          .insert([{
-            state: formState.state,
-            leader: leaderValue,
-            mobile: mobileValue,
-            admin: adminValue
-          }]);
-
-        if (error) {
-          if (error.code === '23505') {
-            throw new Error('This state-leader combination already exists');
-          }
-          throw error;
-        }
+        await createStateLeader({
+          state: formState.state,
+          leader: leaderValue,
+          mobile: mobileValue,
+          admin: adminValue,
+        });
         setSuccess('State leader created successfully');
       }
 
@@ -176,8 +152,7 @@ export default function StateLeadersPage() {
     }
 
     try {
-      const { error } = await supabase.from('state_leaders').delete().eq('id', id);
-      if (error) throw error;
+      await deleteStateLeader(id);
       setSuccess('State leader deleted successfully');
       await fetchStateLeaders();
     } catch (err: unknown) {
