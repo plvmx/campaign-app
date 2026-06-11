@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { signOut } from '@/lib/auth';
 import Modal from '@/components/Modal';
-import { hasPermission, Permission } from '@/lib/permissions';
 import { getUserAdminStatusAndMobile } from '@/lib/campaignFilter';
 
 interface MobileLayoutProps {
@@ -70,11 +69,8 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
   useEffect(() => {
     async function checkAdminAndSr() {
       try {
-        const [adminAccess, { admin: srOrAd }] = await Promise.all([
-          hasPermission(Permission.ADMIN_ACCESS),
-          getUserAdminStatusAndMobile(),
-        ]);
-        setIsAdmin(adminAccess);
+        const { admin: srOrAd } = await getUserAdminStatusAndMobile();
+        setIsAdmin(srOrAd === 'AD');
         setAdminStatus(srOrAd ?? null);
       } catch (error) {
         console.error('Error checking admin status:', error);

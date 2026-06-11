@@ -5,17 +5,16 @@ import { useRouter } from 'next/navigation';
 import MobileLayout from '@/components/MobileLayout';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import { useUser } from '@/contexts/UserContext';
-import { supabase } from '@/lib/supabaseClient';
 import { getStateColor } from '@/lib/stateColors';
 import { AUSTRALIAN_STATES } from '@/lib/constants';
 import { getErrorMessage } from '@/lib/errorUtils';
-
-interface StatePlace {
-  id: string;
-  state: string;
-  place: string;
-  created_at: string;
-}
+import {
+  type StatePlace,
+  getStatePlaces,
+  createStatePlace,
+  updateStatePlace,
+  deleteStatePlace,
+} from '@/lib/services/statePlacesService';
 
 export default function StatePlacesPage() {
   const router = useRouter();
@@ -44,16 +43,8 @@ export default function StatePlacesPage() {
 
   const fetchStatePlaces = async () => {
     try {
-      let query = supabase.from('state_places').select('*').order('state', { ascending: true }).order('place', { ascending: true });
-      
-      if (filterState) {
-        query = query.eq('state', filterState);
-      }
-      
-      const { data, error } = await query;
-      
-      if (error) throw error;
-      setStatePlaces(data || []);
+      const data = await getStatePlaces(filterState || undefined);
+      setStatePlaces(data);
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Failed to fetch state places'));
     }
@@ -74,26 +65,10 @@ export default function StatePlacesPage() {
 
     try {
       if (editingId) {
-        // Update existing record
-        const { error } = await supabase
-          .from('state_places')
-          .update({ state: formState.state, place: formState.place })
-          .eq('id', editingId);
-
-        if (error) throw error;
+        await updateStatePlace(editingId, { state: formState.state, place: formState.place });
         setSuccess('State place updated successfully');
       } else {
-        // Create new record
-        const { error } = await supabase
-          .from('state_places')
-          .insert([{ state: formState.state, place: formState.place }]);
-
-        if (error) {
-          if (error.code === '23505') {
-            throw new Error('This state-place combination already exists');
-          }
-          throw error;
-        }
+        await createStatePlace({ state: formState.state, place: formState.place });
         setSuccess('State place created successfully');
       }
 
@@ -123,8 +98,7 @@ export default function StatePlacesPage() {
     }
 
     try {
-      const { error } = await supabase.from('state_places').delete().eq('id', id);
-      if (error) throw error;
+      await deleteStatePlace(id);
       setSuccess('State place deleted successfully');
       await fetchStatePlaces();
     } catch (err: unknown) {
