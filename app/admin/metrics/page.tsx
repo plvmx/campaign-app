@@ -7,6 +7,7 @@ import LoadingSpinner from '@/components/LoadingSpinner';
 import { useUser } from '@/contexts/UserContext';
 import { supabase } from '@/lib/supabaseClient';
 import { getErrorMessage } from '@/lib/errorUtils';
+import { DATABASE_TABLES } from '@/lib/constants';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -382,10 +383,8 @@ export default function MetricsPage() {
         .map((r) => ({ user_name: r.user_name, user_state: r.user_state, created_at: r.created_at }));
 
       // Table row counts
-      const tables = ['campaigns', 'state_leaders', 'results',
-        'campaign_changes_log', 'app_events', 'campaign_rules', 'campaign_categories'];
       const tableCounts = await Promise.all(
-        tables.map(async (t) => {
+        DATABASE_TABLES.map(async (t) => {
           const { count } = await supabase.from(t).select('*', { count: 'exact', head: true });
           return { table: t, count: count ?? 0 };
         })
