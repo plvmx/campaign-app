@@ -67,29 +67,38 @@ npx vitest run lib/__tests__/auth.test.ts   # Run a single test file
   - `admin = 'SR'` → state reporter (can only see/edit their own state)
   - Otherwise → regular user
 - `contexts/UserContext.tsx` (`useUser()`) is the single source of truth for the current user, profile, role (`isAdmin`, `adminStatus`), state, and leader. Pages read from this context rather than querying auth themselves.
-- `lib/permissions.ts` defines the `Permission` enum and `hasPermission()` helper (used for coarse-grained checks).
+- Role checking is done inline: compare `adminStatus === 'AD'` (full admin) or `adminStatus === 'SR'` (state reporter). No permissions module — role logic lives in `UserContext` and `campaignFilter.ts`.
 
 ### Data layer
-- **`lib/services/campaignService.ts`** — all CRUD for the `campaigns` table: `getCampaignById`, `createCampaign`, `updateCampaign`, `deleteCampaign`, `getCampaignsByDateRange`, `findCampaign`.
+All database access goes through service modules in `lib/services/`. Pages and components must not import `supabase` directly for CRUD operations.
+
+- **`lib/services/campaignService.ts`** — all CRUD for the `campaigns` table: `getCampaignById`, `createCampaign`, `updateCampaign`, `deleteCampaign`, `getCampaignsByDateRange`, `findCampaign`, `getCampaignsForUser` (role-aware fetch + shared-leader merge for the main feed).
 - **`lib/services/dropdownService.ts`** — `getPlacesForState`, `getLeadersForState`, `getLeaderMobile`. Single source of truth for dropdowns that appear on multiple pages.
-- **`lib/campaignLog.ts`** — fire-and-forget audit logging to `campaign_changes_log`. Skips automatically on admin routes and when logging is toggled off via `lib/appSettings.ts`.
-- Pages that still query Supabase directly (without going through a service) should be refactored to use the service layer.
+- **`lib/services/placeService.ts`** — `addNewPlaceForState` — inserts into `state_places`; silently ignores duplicate (23505). Used when a user types a new place in a campaign form.
+- **`lib/services/stateLeadersService.ts`** — CRUD for the `state_leaders` table: `getStateLeaders`, `createStateLeader`, `updateStateLeader`, `deleteStateLeader`. Exports the `StateLeader` interface.
+- **`lib/services/statePlacesService.ts`** — CRUD for the `state_places` table: `getStatePlaces`, `createStatePlace`, `updateStatePlace`, `deleteStatePlace`. Exports the `StatePlace` interface.
+- **`lib/campaignLog.ts`** — fire-and-forget audit logging to `campaign_changes_log`. Skips automatically on admin routes and when logging is toggled off via `lib/appSettings.ts`. `fetchCampaignData` returns `Campaign | null`.
 
 ### Key shared libraries
 | File | Purpose |
 |------|---------|
 | `lib/types.ts` | Shared TypeScript interfaces (`Campaign` and others) |
-| `lib/constants.ts` | `AUSTRALIAN_STATES` array + `AustralianState` type |
+| `lib/constants.ts` | `AUSTRALIAN_STATES` array + `AustralianState` type; `DATABASE_TABLES` array used by the metrics dashboard |
 | `lib/slideLayout.ts` | Slide/list formatting: state colors, date/time formatters, `getSlideDateHeadings()` |
 | `lib/campaignRules.ts` | Rules engine — evaluates recurring campaign scheduling rules |
 | `lib/campaignFilter.ts` | `getUserAdminStatusAndMobile()` — resolves the current user's admin level and state from `state_leaders` |
 | `lib/errorUtils.ts` | `getErrorMessage()` — safe error-to-string coercion |
+| `lib/ariseLayout.ts` | Canvas dimension constants (WIDTH=4200 px, HEIGHT=3000 px), font sizes, spacing constants, `AriseCampaign` interface, `apx()` helper, `simulateColumnCount()`, `computeColLayout()` |
+| `lib/ariseCanvas.ts` | Canvas draw helpers (`drawBannerAndKey`, `drawDateHeader`, `drawCampaignLine`, `drawWeekSeparator`) and `renderAriseCanvas()` — the main rendering function |
+| `lib/ariseGenerator.ts` | Public API only: `fetchCampaignsForDate()` (data fetching) + `generateAndDownloadAriseList()` (orchestrates render + JPEG download). Delegates drawing to `ariseCanvas.ts` |
 
 ### Component structure
-- `components/MobileLayout.tsx` — shared shell (header, bottom nav) wrapping every page.
-- `components/CampaignForm.tsx` — reusable add/edit form; `CampaignData` interface includes `botj` field.
+- `components/MobileLayout.tsx` — shared shell (header, bottom nav) wrapping every page. Resolves admin status via `getUserAdminStatusAndMobile()`.
+- `components/CampaignForm.tsx` — reusable add/edit form used by the admin panel; `CampaignData` interface includes `botj` field.
 - `components/ErrorBoundary.tsx` — global React error boundary.
 - `contexts/CampaignDatesContext.tsx` — shared date-range state for campaign views.
+- `app/app/components/useCampaignForm.ts` — unified form hook shared by `CampaignCreateForm` and `InlineEditForm`. Owns all form state (date, state, place, time, leader, mobile, category, tl_ok, sr_ok), place creation, leader mobile auto-fill, and submit orchestration. `handleSubmit` accepts both `FormEvent` and `MouseEvent`.
+- `app/app/components/useStateDropdowns.ts` — fetches and caches state-scoped place and leader lists. All `setState` calls are routed through Promise chains to satisfy the `react-hooks/set-state-in-effect` rule.
 
 ### Page map
 | Route | Description |
@@ -119,4 +128,11 @@ npx vitest run lib/__tests__/auth.test.ts   # Run a single test file
 - `campaign_changes_log` — audit trail
 
 ### Slide generation
-`app/admin/generate-slides/page.tsx` renders JPEG slides entirely on an HTML Canvas (2250×3000 px, 300 DPI). Column layout constants (`PLACE_COLS`, `TIME_COLS`, `LEADER_COLS`, `MOBILE_MAX_COLS`) control field widths; a dynamic `campaignScaleX` compresses text horizontally to fill the available width with exactly one character of margin on each side.
+The arise (Week 1 Campaigns) list generator is split across three modules:
+- `lib/ariseLayout.ts` — constants, types, and column simulation (no canvas ops)
+- `lib/ariseCanvas.ts` — all drawing primitives and `renderAriseCanvas()`
+- `lib/ariseGenerator.ts` — data fetching and the public `generateAndDownloadAriseList()` entry point
+
+Canvas is 4200×3000 px (14"×10" at 300 DPI). Column layout constants (`PLACE_COLS`, `TIME_COLS`, `LEADER_COLS`) control field widths; a dynamic `campaignScaleX` compresses text horizontally to fill the available width.
+
+`app/admin/generate-slides/page.tsx` renders a separate JPEG slide (2250×3000 px, 300 DPI) using a different Canvas pipeline. `PLACE_COLS`, `TIME_COLS`, `LEADER_COLS`, `MOBILE_MAX_COLS` constants control field widths there.

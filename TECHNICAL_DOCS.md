@@ -109,8 +109,9 @@ It is a **mobile-first** web application (designed for phones, works on desktop)
 │                    │ calls                                          │
 │  ┌─────────────────▼─────────────────────────────────────────┐    │
 │  │                    Service Layer (lib/services/)            │    │
-│  │  campaignService  authService  dropdownService  rulesService│   │
-│  │  resultsService  weeklyRefreshService                       │    │
+│  │  campaignService  dropdownService  placeService              │    │
+│  │  stateLeadersService  statePlacesService  rulesService      │    │
+│  │  authService  resultsService  weeklyRefreshService          │    │
 │  └─────────────────┬─────────────────────────────────────────┘    │
 │                    │ queries via                                    │
 │  ┌─────────────────▼─────────────────────────────────────────┐    │
@@ -184,6 +185,8 @@ campaign-app/
 │   │       ├── CampaignList.tsx
 │   │       ├── DeleteConfirmModal.tsx
 │   │       ├── InlineEditForm.tsx
+│   │       ├── useCampaignForm.ts  # Unified form logic hook (shared by Create + InlineEdit)
+│   │       ├── useStateDropdowns.ts # State-scoped place/leader dropdowns with caching
 │   │       ├── timeOptions.ts
 │   │       └── types.ts
 │   │
@@ -225,21 +228,22 @@ campaign-app/
 │
 ├── lib/                        # Pure business logic & utilities
 │   ├── types.ts                # ALL shared TypeScript interfaces
-│   ├── constants.ts            # AUSTRALIAN_STATES array
+│   ├── constants.ts            # AUSTRALIAN_STATES + DATABASE_TABLES
 │   ├── supabaseClient.ts       # Browser Supabase client
 │   ├── supabaseAdmin.ts        # Server-only Supabase admin client
 │   ├── auth.ts                 # Login, sign-out, session helpers
-│   ├── permissions.ts          # Permission enum + role checks
 │   ├── userProfile.ts          # user_profiles table CRUD
 │   ├── campaignFilter.ts       # getUserAdminStatusAndMobile()
 │   ├── campaignRules.ts        # Rules evaluation engine
 │   ├── campaignDates.ts        # Date window calculations
-│   ├── campaignLog.ts          # Audit logging helpers
+│   ├── campaignLog.ts          # Audit logging (fetchCampaignData → Campaign | null)
 │   ├── campaignUtils.ts        # Time formatting, date helpers
 │   ├── stateColors.ts          # State → Tailwind CSS colour mapping
 │   ├── slideLayout.ts          # Slide generation layout helpers
 │   ├── slideGenerator.ts       # Canvas-based JPEG slide generation
-│   ├── ariseGenerator.ts       # Canvas-based landscape list generation
+│   ├── ariseLayout.ts          # Arise canvas constants, types, column simulation
+│   ├── ariseCanvas.ts          # Arise canvas draw helpers + renderAriseCanvas()
+│   ├── ariseGenerator.ts       # Arise public API: fetchCampaignsForDate() + generateAndDownloadAriseList()
 │   ├── reportGenerator.ts      # Canvas-based PDF report generation
 │   ├── reportCanvas.ts         # Canvas drawing helpers for reports
 │   ├── leaderShares.ts         # Campaign sharing logic
@@ -250,8 +254,11 @@ campaign-app/
 │   ├── weeklyRefresh.ts        # (legacy — logic moved to services/)
 │   └── services/               # Database service layer
 │       ├── authService.ts      # getAuthenticatedUser() (all auth in one query)
-│       ├── campaignService.ts  # campaigns table CRUD
+│       ├── campaignService.ts  # campaigns table CRUD + getCampaignsForUser()
 │       ├── dropdownService.ts  # Form dropdown data
+│       ├── placeService.ts     # addNewPlaceForState() (ignores duplicate)
+│       ├── stateLeadersService.ts  # state_leaders CRUD + StateLeader interface
+│       ├── statePlacesService.ts   # state_places CRUD + StatePlace interface
 │       ├── resultsService.ts   # results table CRUD
 │       ├── rulesService.ts     # campaign_rules table CRUD
 │       └── weeklyRefreshService.ts # Weekly campaign generation logic
@@ -259,8 +266,7 @@ campaign-app/
 └── lib/__tests__/              # Vitest unit tests
     ├── auth.test.ts
     ├── campaignDates.test.ts
-    ├── campaignRules.test.ts
-    └── permissions.test.ts
+    └── campaignRules.test.ts
 ```
 
 ---
@@ -468,18 +474,14 @@ useEffect(() => {
 }, [isUserLoading, user, isAdmin, router]);
 ```
 
-### 7.4 Permission Enum
+### 7.4 Role Checking in Practice
 
-Defined in `lib/permissions.ts`. Only used for the `ADMIN_ACCESS` check.
+There is no separate permissions module. Role logic is kept inline wherever it is needed:
 
-| Permission | Who has it |
-|-----------|-----------|
-| `VIEW_CAMPAIGNS` | Everyone |
-| `CREATE_CAMPAIGN` | Everyone |
-| `EDIT_CAMPAIGN` | Everyone |
-| `DELETE_CAMPAIGN` | Campaign owners only (enforced in UI) |
-| `VIEW_RESULTS` | Everyone |
-| `ADMIN_ACCESS` | Full Admins only (`AD`) |
+- `adminStatus === 'AD'` — full admin check (all states, all admin pages)
+- `adminStatus === 'SR'` — state reporter check (own state only)
+- `!isAdmin && adminStatus !== 'SR'` — deny both admin-only pages to team leaders
+- Role resolution lives in `UserContext` and `lib/campaignFilter.ts` (`getUserAdminStatusAndMobile()`)
 
 ---
 
@@ -680,6 +682,7 @@ Supabase Postgres
 | `deleteCampaign(id, oldData?)` | Delete campaign + auto-log |
 | `getCampaignById(id)` | Fetch single campaign by ID |
 | `getCampaignsByDateRange(options)` | Fetch campaigns in a date window |
+| `getCampaignsForUser(params)` | Role-aware fetch + shared-leader merge for the main feed |
 | `findCampaign(criteria)` | Find by natural key (date + state + place + time + leader) |
 | `findCampaignsByKey(criteria)` | Find all matching natural key (returns minimal fields) |
 
@@ -701,6 +704,30 @@ Supabase Postgres
 | `updateRule(id, ruleData)` | Update rule fields |
 | `deleteRule(id)` | Delete rule |
 | `setRuleActive(id, isActive)` | Toggle rule's is_active flag |
+
+#### `lib/services/placeService.ts`
+
+| Function | Description |
+|----------|-------------|
+| `addNewPlaceForState(state, place)` | Insert a new place for a state; silently ignores duplicate (23505) |
+
+#### `lib/services/stateLeadersService.ts`
+
+| Function | Description |
+|----------|-------------|
+| `getStateLeaders(filterState?)` | All leaders, optionally filtered by state |
+| `createStateLeader(input)` | Insert new leader; throws on duplicate |
+| `updateStateLeader(id, input)` | Update leader record |
+| `deleteStateLeader(id)` | Delete leader record |
+
+#### `lib/services/statePlacesService.ts`
+
+| Function | Description |
+|----------|-------------|
+| `getStatePlaces(filterState?)` | All places, optionally filtered by state |
+| `createStatePlace(input)` | Insert new place; throws on duplicate |
+| `updateStatePlace(id, input)` | Update place record |
+| `deleteStatePlace(id)` | Delete place record |
 
 #### `lib/services/resultsService.ts`
 
@@ -884,16 +911,19 @@ export default function NotificationsPage() {
 - File: `lib/services/dropdownService.ts`
 - Add a new async function, e.g., `getNewCategoryOptions()`
 
-**Step 2**: Add state to the form component
-- File: `app/app/components/CampaignCreateForm.tsx`
-- Add `const [newOptions, setNewOptions] = useState<string[]>([]);`
-- Fetch inside a `useEffect`
+**Step 2**: Add state to the form hook
+- File: `app/app/components/useCampaignForm.ts`
+- Add a new state field and a `useEffect` to fetch the options
 
-**Step 3**: Add the dropdown JSX
-- In the same file, add a `<select>` with `newOptions.map(...)` inside the form
+**Step 3**: Expose the value from the hook's return object
+- In `useCampaignForm.ts`, add the new options array to the return value
 
-**Step 4**: Include in the submit call
-- Pass the selected value into the `createCampaign()` call
+**Step 4**: Add the dropdown JSX to the form components
+- File: `app/app/components/CampaignCreateForm.tsx` and/or `InlineEditForm.tsx`
+- Destructure the new options from `useCampaignForm(...)` and render a `<select>`
+
+**Step 5**: Include in the submit call
+- In `useCampaignForm.ts`, include the selected value in the data passed to `createCampaign()` / `updateCampaign()`
 
 ---
 
@@ -995,10 +1025,10 @@ The slides and reports are generated client-side using the HTML Canvas API.
 | Output | File | Key Constants |
 |--------|------|---------------|
 | Campaign slides (JPEG, portrait) | `lib/slideGenerator.ts` | `SLIDE_WIDTH`, `SLIDE_HEIGHT`, `FONT_SIZES`, `PLACE_COLS`, `TIME_COLS`, `LEADER_COLS` |
-| Arise list (JPEG, landscape) | `lib/ariseGenerator.ts` | `WIDTH`, `HEIGHT` |
+| Arise list (JPEG, landscape) | `lib/ariseLayout.ts` (constants), `lib/ariseCanvas.ts` (drawing), `lib/ariseGenerator.ts` (entry point) | `WIDTH`, `HEIGHT`, `PLACE_COLS`, `TIME_COLS`, `LEADER_COLS` |
 | Campaign report (JPEG pages) | `lib/reportGenerator.ts` | — |
 
-To change font size, column widths, or colors: edit the constants at the top of the relevant generator file.
+To change font size, column widths, or colors for the Arise list: edit the constants in `lib/ariseLayout.ts`. For slides, edit `lib/slideGenerator.ts`.
 
 ---
 
@@ -1376,4 +1406,4 @@ The generated PDF is listed in `.gitignore` and should not be committed to the r
 
 ---
 
-*Last updated: May 2026*
+*Last updated: June 2026*
