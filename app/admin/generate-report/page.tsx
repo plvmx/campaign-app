@@ -11,6 +11,7 @@ import { formatDateForDb } from '@/lib/campaignDates';
 import { downloadReportRows } from '@/lib/reportGenerator';
 import { getErrorMessage } from '@/lib/errorUtils';
 import { formatDownloadDate } from '@/lib/slideLayout';
+import { getStateColor } from '@/lib/stateColors';
 
 interface Campaign {
   id: string;
@@ -36,6 +37,7 @@ interface Result {
 
 interface ReportRow {
   dateLocation: string;
+  state: string;
   fpAndSp: string[];
   fpOnly: string[];
   pp: string[];
@@ -163,7 +165,7 @@ export default function GenerateReportPage() {
           }
         });
         
-        return { dateLocation, fpAndSp, fpOnly, pp };
+        return { dateLocation, state: campaign.state, fpAndSp, fpOnly, pp };
       }).filter(
         (row) =>
           row.fpAndSp.length > 0 ||
@@ -210,11 +212,11 @@ export default function GenerateReportPage() {
   };
 
   const addEmptyRow = () => {
-    setReportData(prev => [...prev, { dateLocation: '', fpAndSp: [], fpOnly: [], pp: [] }]);
+    setReportData(prev => [...prev, { dateLocation: '', state: '', fpAndSp: [], fpOnly: [], pp: [] }]);
   };
 
   const insertRowBelow = (index: number) => {
-    const newRow: ReportRow = { dateLocation: '', fpAndSp: [], fpOnly: [], pp: [] };
+    const newRow: ReportRow = { dateLocation: '', state: '', fpAndSp: [], fpOnly: [], pp: [] };
     setReportData(prev => [...prev.slice(0, index + 1), newRow, ...prev.slice(index + 1)]);
   };
 
@@ -479,9 +481,10 @@ export default function GenerateReportPage() {
                   </thead>
                   <tbody>
                     {reportData.map((row, index) => {
-                      const fields: (keyof ReportRow)[] = ['dateLocation', 'fpAndSp', 'fpOnly', 'pp'];
+                      const fields = ['dateLocation', 'fpAndSp', 'fpOnly', 'pp'] as const;
+                      const stateColor = getStateColor(row.state);
                       return (
-                        <tr key={index}>
+                        <tr key={index} className={stateColor.bg}>
                           {fields.map(field => {
                             const isEditing = editingCell?.rowIndex === index && editingCell?.field === field;
                             const display = getCellDisplay(row, field);
