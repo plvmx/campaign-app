@@ -6,10 +6,23 @@
 
 export interface ReportRowForCanvas {
   dateLocation: string;
+  state: string;
   fpAndSp: string[];
   fpOnly: string[];
   pp: string[];
 }
+
+// Muted background fills matching the Tailwind state color classes used in the UI
+const STATE_BG_COLORS: Record<string, string> = {
+  NSW: 'rgb(229,231,235)',  // gray-200
+  QLD: 'rgb(254,226,226)',  // red-100
+  SA:  'rgb(220,252,231)',  // green-100
+  VIC: 'rgb(255,237,213)',  // orange-100
+  WA:  'rgb(243,232,255)',  // purple-100
+  ACT: 'rgb(224,242,254)',  // sky-100
+  TAS: 'rgb(219,234,254)',  // blue-100
+  NT:  'rgb(224,231,255)',  // indigo-100
+};
 
 const WIDTH = 1200;
 const SCALE = 2;
@@ -143,8 +156,12 @@ export function drawReportPage(
     const row = rows[r];
     const rowH = rowHeights[r];
     x = tableX;
+    const rowBg = STATE_BG_COLORS[row.state.toUpperCase()] ?? '#ffffff';
     for (let c = 0; c < fields.length; c++) {
       const cw = COL_WIDTHS[c];
+      ctx.fillStyle = rowBg;
+      ctx.fillRect(x, y, cw, rowH);
+      ctx.fillStyle = '#000';
       ctx.strokeRect(x, y, cw, rowH);
       const text = getCellContent(row, fields[c]);
       const lines = wrapText(ctx, text, cellInnerWidths[c]);

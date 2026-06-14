@@ -36,6 +36,7 @@ interface ReportResult {
 
 export interface ReportRow {
   dateLocation: string;
+  state: string;
   fpAndSp: string[];
   fpOnly: string[];
   pp: string[];
@@ -107,7 +108,7 @@ async function fetchReportRows(options: GenerateReportOptions): Promise<ReportRo
         }
       });
 
-      return { dateLocation, fpAndSp, fpOnly, pp };
+      return { dateLocation, state: c.state, fpAndSp, fpOnly, pp };
     })
     .filter(row => row.fpAndSp.length > 0 || row.fpOnly.length > 0 || row.pp.length > 0);
 
