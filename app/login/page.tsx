@@ -164,7 +164,12 @@ export default function LoginPage() {
     const day = d.getDate();
     const suffix = day >= 11 && day <= 13 ? 'th' : ['th','st','nd','rd'][day % 10] ?? 'th';
     const month = ['January','February','March','April','May','June','July','August','September','October','November','December'][d.getMonth()];
-    return `${place} ${day}${suffix} ${month} ${time} ... Yes?`;
+    const [hStr, mStr] = time.split(':');
+    const h = parseInt(hStr, 10);
+    const ampm = h >= 12 ? 'pm' : 'am';
+    const h12 = h % 12 || 12;
+    const formattedTime = `${h12}:${mStr} ${ampm}`;
+    return `${place} ${day}${suffix} ${month} ${formattedTime} ... Yes?`;
   }
 
   if (recentCampaigns) {
