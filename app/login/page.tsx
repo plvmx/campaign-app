@@ -159,6 +159,14 @@ export default function LoginPage() {
     'w-full max-w-md space-y-6 rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-blue-50 p-6 shadow-lg dark:bg-blue-900/20 sm:p-8';
 
   // ── Recent-campaigns modal ────────────────────────────────────────────────
+  function formatCampaignLabel(date: string, time: string, place: string): string {
+    const d = new Date(`${date}T00:00:00`);
+    const day = d.getDate();
+    const suffix = day >= 11 && day <= 13 ? 'th' : ['th','st','nd','rd'][day % 10] ?? 'th';
+    const month = ['January','February','March','April','May','June','July','August','September','October','November','December'][d.getMonth()];
+    return `${place} ${day}${suffix} ${month} ${time} ... Yes?`;
+  }
+
   if (recentCampaigns) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8 dark:bg-gray-900">
@@ -183,7 +191,7 @@ export default function LoginPage() {
                     onClick={() => router.push(`/record-results/detail?${detailParams.toString()}`)}
                     className="w-full rounded-md bg-green-600 px-4 py-3 text-base font-bold text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
                   >
-                    {campaign.place} .. Yes?
+                    {formatCampaignLabel(campaign.date, campaign.time, campaign.place)}
                   </button>
                 );
               })}
