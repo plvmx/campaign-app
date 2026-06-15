@@ -147,9 +147,9 @@ export async function findCampaign(criteria: {
 export async function getRecentTWOLCampaignsForLeader(
   leaderName: string,
 ): Promise<Pick<Campaign, 'id' | 'date' | 'state' | 'place' | 'time' | 'leader'>[]> {
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  const yesterdayDate = yesterday.toISOString().slice(0, 10);
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  const yesterdayDate = sevenDaysAgo.toISOString().slice(0, 10);
 
   const { data, error } = await supabase
     .from('campaigns')

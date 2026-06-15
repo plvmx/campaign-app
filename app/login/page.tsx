@@ -35,8 +35,8 @@ export default function LoginPage() {
   const [pendingMatches, setPendingMatches] = useState<StateLeaderMatch[] | null>(null);
   // Tracks which state button was clicked while sign-in is in progress
   const [selectedStateId, setSelectedStateId] = useState<string | null>(null);
-  // Recent TWOL campaign that the leader may want to record results for
-  const [recentCampaign, setRecentCampaign] = useState<Pick<Campaign, 'id' | 'date' | 'state' | 'place' | 'time' | 'leader'> | null>(null);
+  // Recent TWOL campaigns that the leader may want to record results for
+  const [recentCampaigns, setRecentCampaigns] = useState<Pick<Campaign, 'id' | 'date' | 'state' | 'place' | 'time' | 'leader'>[] | null>(null);
 
   // Check if user is already signed in
   useEffect(() => {
@@ -113,12 +113,12 @@ export default function LoginPage() {
     }
   };
 
-  // ── Post-sign-in: check for a recent TWOL campaign ────────────────────────
+  // ── Post-sign-in: check for recent TWOL campaigns ────────────────────────
   const checkRecentCampaign = async (match: StateLeaderMatch) => {
     try {
       const recent = await getRecentTWOLCampaignsForLeader(match.leader);
       if (recent.length > 0) {
-        setRecentCampaign(recent[0]);
+        setRecentCampaigns(recent);
         return;
       }
     } catch {
@@ -158,37 +158,52 @@ export default function LoginPage() {
   const cardClass =
     'w-full max-w-md space-y-6 rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-blue-50 p-6 shadow-lg dark:bg-blue-900/20 sm:p-8';
 
-  // ── Recent-campaign modal ─────────────────────────────────────────────────
-  if (recentCampaign) {
-    const detailParams = new URLSearchParams({
-      id:     recentCampaign.id,
-      date:   recentCampaign.date,
-      state:  recentCampaign.state,
-      place:  recentCampaign.place,
-      time:   recentCampaign.time,
-      leader: recentCampaign.leader,
-    });
+  // ── Recent-campaigns modal ────────────────────────────────────────────────
+  function formatCampaignLabel(date: string, time: string, place: string): string {
+    const d = new Date(`${date}T00:00:00`);
+    const day = d.getDate();
+    const suffix = day >= 11 && day <= 13 ? 'th' : ['th','st','nd','rd'][day % 10] ?? 'th';
+    const month = ['January','February','March','April','May','June','July','August','September','October','November','December'][d.getMonth()];
+    const [hStr, mStr] = time.split(':');
+    const h = parseInt(hStr, 10);
+    const ampm = h >= 12 ? 'pm' : 'am';
+    const h12 = h % 12 || 12;
+    const formattedTime = `${h12}:${mStr} ${ampm}`;
+    return `${place} ${day}${suffix} ${month} ${formattedTime} ... Yes?`;
+  }
+
+  if (recentCampaigns) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8 dark:bg-gray-900">
         <div className={cardClass}>
           <div className="space-y-6">
             <h2 className="text-center text-xl font-bold text-gray-900 dark:text-gray-100">
-              Record Results?
+              Do you want to Record Results for
             </h2>
-            <p className="text-center text-base text-gray-700 dark:text-gray-300">
-              Do you want to Record Results for your recent{' '}
-              <span className="font-semibold">{recentCampaign.place}</span> campaign?
-            </p>
             <div className="flex flex-col gap-3">
+              {recentCampaigns.map(campaign => {
+                const detailParams = new URLSearchParams({
+                  id:     campaign.id,
+                  date:   campaign.date,
+                  state:  campaign.state,
+                  place:  campaign.place,
+                  time:   campaign.time,
+                  leader: campaign.leader,
+                });
+                return (
+                  <button
+                    key={campaign.id}
+                    onClick={() => router.push(`/record-results/detail?${detailParams.toString()}`)}
+                    className="w-full rounded-md bg-green-600 px-4 py-3 text-base font-bold text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
+                  >
+                    {formatCampaignLabel(campaign.date, campaign.time, campaign.place)}
+                  </button>
+                );
+              })}
               <button
-                onClick={() => router.push(`/record-results/detail?${detailParams.toString()}`)}
-                className="w-full rounded-md bg-blue-600 px-4 py-3 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
-              >
-                Yes
-              </button>
-              <button
+                autoFocus
                 onClick={() => router.push('/app')}
-                className="w-full rounded-md bg-gray-200 px-4 py-3 text-base font-bold text-gray-800 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 border-2 border-gray-400 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600 dark:border-gray-500"
+                className="w-full rounded-md bg-red-600 px-4 py-3 text-base font-bold text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
               >
                 No
               </button>
