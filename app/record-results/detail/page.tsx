@@ -706,9 +706,8 @@ function RecordResultsDetailPageContent() {
         </div>
         {renderInputGrid(membersRows, 'members')}
 
-
         {/* Partial Presentations */}
-        <div className="mb-2 rounded-md bg-green-100 px-4 py-3 dark:bg-green-900/30">
+        <div className="mb-2 mt-6 rounded-md bg-green-100 px-4 py-3 dark:bg-green-900/30">
           <div className="flex items-center justify-between">
             <p className="text-base font-bold text-green-800 dark:text-green-200">Partial Presentations</p>
             <span className="text-sm font-semibold text-green-700 dark:text-green-300">{countNames(partialRows)}</span>
