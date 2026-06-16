@@ -706,22 +706,6 @@ function RecordResultsDetailPageContent() {
         </div>
         {renderInputGrid(membersRows, 'members')}
 
-        {/* Team Size Input */}
-        <div className="mb-6 mt-6">
-          <label htmlFor="teamSize" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            Number of people in my team
-          </label>
-          <input
-            id="teamSize"
-            type="number"
-            min="0"
-            value={teamSize}
-            onChange={(e) => setTeamSize(e.target.value)}
-            onBlur={saveTeamSize}
-            className="block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
-            placeholder="Enter number of team members"
-          />
-        </div>
 
         {/* Partial Presentations */}
         <div className="mb-2 rounded-md bg-green-100 px-4 py-3 dark:bg-green-900/30">
