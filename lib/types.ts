@@ -27,6 +27,8 @@ export interface Campaign {
   fp_cnt?: number | null;
   fpsp_cnt?: number | null;
   ir_cnt?: number | null;
+  /** Actual leader on the day — may differ from the registered leader */
+  actual_leader?: string | null;
 }
 
 // ---------------------------------------------------------------------------

@@ -19,7 +19,7 @@ interface InputRow {
   field3: string;
 }
 
-type SectionType = 'partial' | 'full' | 'fullSinners' | 'information';
+type SectionType = 'members' | 'partial' | 'full' | 'fullSinners' | 'information';
 
 interface SavedCounts { pp: number; fp: number; fpsp: number; ir: number }
 
@@ -53,12 +53,14 @@ function RecordResultsDetailPageContent() {
     leader: '',
   });
   const [returnFilter, setReturnFilter] = useState<string>('future');
+  const [membersRows, setMembersRows] = useState<InputRow[]>([]);
   const [partialRows, setPartialRows] = useState<InputRow[]>([]);
   const [fullRows, setFullRows] = useState<InputRow[]>([]);
   const [fullSinnersRows, setFullSinnersRows] = useState<InputRow[]>([]);
   const [informationRows, setInformationRows] = useState<InputRow[]>([]);
   const [campaignId, setCampaignId] = useState<string | null>(null);
   const [teamSize, setTeamSize] = useState<string>('');
+  const [actualLeader, setActualLeader] = useState<string>('');
   const [ppCnt, setPpCnt] = useState<string>('');
   const [fpCnt, setFpCnt] = useState<string>('');
   const [fpspCnt, setFpspCnt] = useState<string>('');
@@ -69,11 +71,13 @@ function RecordResultsDetailPageContent() {
   // Refs for accessing latest values in interval/cleanup callbacks (avoids stale closures)
   const campaignIdRef = useRef(campaignId);
   const originalNamesRef = useRef(originalNames);
+  const membersRowsRef = useRef(membersRows);
   const partialRowsRef = useRef(partialRows);
   const fullRowsRef = useRef(fullRows);
   const fullSinnersRowsRef = useRef(fullSinnersRows);
   const informationRowsRef = useRef(informationRows);
   const teamSizeRef = useRef(teamSize);
+  const actualLeaderRef = useRef(actualLeader);
   const ppCntRef = useRef(ppCnt);
   const fpCntRef = useRef(fpCnt);
   const fpspCntRef = useRef(fpspCnt);
@@ -81,6 +85,7 @@ function RecordResultsDetailPageContent() {
 
   // Last-saved values for change detection — undefined means not yet initialised
   const lastSavedTeamSizeRef = useRef<number | null | undefined>(undefined);
+  const lastSavedActualLeaderRef = useRef<string | null | undefined>(undefined);
   const lastSavedCountsRef = useRef<SavedCounts | undefined>(undefined);
 
   const debounceNamesTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -92,11 +97,13 @@ function RecordResultsDetailPageContent() {
   // Keep refs in sync with state
   useEffect(() => { campaignIdRef.current = campaignId; }, [campaignId]);
   useEffect(() => { originalNamesRef.current = originalNames; }, [originalNames]);
+  useEffect(() => { membersRowsRef.current = membersRows; }, [membersRows]);
   useEffect(() => { partialRowsRef.current = partialRows; }, [partialRows]);
   useEffect(() => { fullRowsRef.current = fullRows; }, [fullRows]);
   useEffect(() => { fullSinnersRowsRef.current = fullSinnersRows; }, [fullSinnersRows]);
   useEffect(() => { informationRowsRef.current = informationRows; }, [informationRows]);
   useEffect(() => { teamSizeRef.current = teamSize; }, [teamSize]);
+  useEffect(() => { actualLeaderRef.current = actualLeader; }, [actualLeader]);
   useEffect(() => { ppCntRef.current = ppCnt; }, [ppCnt]);
   useEffect(() => { fpCntRef.current = fpCnt; }, [fpCnt]);
   useEffect(() => { fpspCntRef.current = fpspCnt; }, [fpspCnt]);
@@ -240,26 +247,33 @@ function RecordResultsDetailPageContent() {
           const fpsp = d.fpsp_cnt?.toString() || '';
           const ir = d.ir_cnt?.toString() || '';
           setTeamSize(ts);
+          setActualLeader(d.actual_leader ?? leader);
           setPpCnt(pp);
           setFpCnt(fp);
           setFpspCnt(fpsp);
           setIrCnt(ir);
           // Initialise last-saved refs so the interval skips saves when unchanged
           lastSavedTeamSizeRef.current = d.team_size ?? null;
+          lastSavedActualLeaderRef.current = d.actual_leader ?? null;
           lastSavedCountsRef.current = {
             pp: d.pp_cnt ?? 0,
             fp: d.fp_cnt ?? 0,
             fpsp: d.fpsp_cnt ?? 0,
             ir: d.ir_cnt ?? 0,
           };
+        } else {
+          setActualLeader(leader);
+          lastSavedActualLeaderRef.current = null;
         }
 
         setOriginalNames(new Set(existing.map((r) => `${r.first_name}:${r.category_code}`)));
+        setMembersRows(createRowsFromNames(existing.filter((r) => r.category_code === 'TM').map((r) => r.first_name)));
         setPartialRows(createRowsFromNames(existing.filter((r) => r.category_code === 'P').map((r) => r.first_name)));
         setFullRows(createRowsFromNames(existing.filter((r) => r.category_code === 'F').map((r) => r.first_name)));
         setFullSinnersRows(createRowsFromNames(existing.filter((r) => r.category_code === 'SP').map((r) => r.first_name)));
         setInformationRows(createRowsFromNames(existing.filter((r) => r.category_code === 'IR').map((r) => r.first_name)));
         if (existing.length === 0) {
+          setMembersRows([emptyRow()]);
           setPartialRows([emptyRow()]);
           setFullRows([emptyRow()]);
           setFullSinnersRows([emptyRow()]);
@@ -293,6 +307,21 @@ function RecordResultsDetailPageContent() {
       lastSavedTeamSizeRef.current = parsed;
     } catch (error) {
       console.error('Error saving team size:', error);
+      setSaveStatus('error');
+    }
+  };
+
+  const saveActualLeader = async () => {
+    const cid = campaignIdRef.current;
+    if (!cid) return;
+    const value = actualLeaderRef.current.trim() || null;
+    if (lastSavedActualLeaderRef.current !== undefined && value === lastSavedActualLeaderRef.current) return;
+    try {
+      const oldData = await fetchCampaignData(cid);
+      await updateCampaign(cid, { actual_leader: value }, oldData);
+      lastSavedActualLeaderRef.current = value;
+    } catch (error) {
+      console.error('Error saving actual leader:', error);
       setSaveStatus('error');
     }
   };
@@ -345,6 +374,7 @@ function RecordResultsDetailPageContent() {
           });
         });
       };
+      addNamesFromRows(membersRowsRef.current, 'TM');
       addNamesFromRows(partialRowsRef.current, 'P');
       addNamesFromRows(fullRowsRef.current, 'F');
       addNamesFromRows(fullSinnersRowsRef.current, 'SP');
@@ -420,6 +450,7 @@ function RecordResultsDetailPageContent() {
     const autoSaveInterval = setInterval(() => {
       if (campaignIdRef.current) {
         saveTeamSize();
+        saveActualLeader();
         saveCountFields();
       }
     }, 3000);
@@ -428,6 +459,7 @@ function RecordResultsDetailPageContent() {
       if (campaignIdRef.current) {
         flushSaveNames();
         saveTeamSize();
+        saveActualLeader();
         saveCountFields();
       }
     };
@@ -447,6 +479,7 @@ function RecordResultsDetailPageContent() {
       }
       if (campaignIdRef.current) {
         saveTeamSize();
+        saveActualLeader();
         saveCountFields();
         flushSaveNames();
       }
@@ -456,6 +489,7 @@ function RecordResultsDetailPageContent() {
   const addNewRow = (section: SectionType) => {
     const newRow: InputRow = { id: generateId(), field1: '', field2: '', field3: '' };
     switch (section) {
+      case 'members':    setMembersRows((prev) => [...prev, newRow]); break;
       case 'partial':    setPartialRows((prev) => [...prev, newRow]); break;
       case 'full':       setFullRows((prev) => [...prev, newRow]); break;
       case 'fullSinners': setFullSinnersRows((prev) => [...prev, newRow]); break;
@@ -471,6 +505,7 @@ function RecordResultsDetailPageContent() {
   ) => {
     const update = (prev: InputRow[]) => prev.map((row) => row.id === rowId ? { ...row, [fieldName]: value } : row);
     switch (section) {
+      case 'members':    setMembersRows(update); break;
       case 'partial':    setPartialRows(update); break;
       case 'full':       setFullRows(update); break;
       case 'fullSinners': setFullSinnersRows(update); break;
@@ -639,8 +674,40 @@ function RecordResultsDetailPageContent() {
           </div>
         </div>
 
+        {/* Actual Leader */}
+        <div className="mb-4">
+          <label htmlFor="actualLeader" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Leader name (actual)
+          </label>
+          <input
+            id="actualLeader"
+            type="text"
+            maxLength={255}
+            value={actualLeader}
+            onChange={(e) => setActualLeader(e.target.value)}
+            onBlur={saveActualLeader}
+            className="block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
+            placeholder="Enter actual leader name"
+          />
+          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            Pre-filled from the campaign. Update if a different person led on the day.
+          </p>
+        </div>
+
+        {/* Team Members */}
+        <div className="mb-2 rounded-md bg-purple-100 px-4 py-3 dark:bg-purple-900/30">
+          <div className="flex items-center justify-between">
+            <p className="text-base font-bold text-purple-800 dark:text-purple-200">Team Members</p>
+            <span className="text-sm font-semibold text-purple-700 dark:text-purple-300">{countNames(membersRows)}</span>
+          </div>
+          <p className="mt-1 text-sm text-purple-700 dark:text-purple-300">
+            Enter the first name of each person on your campaign team.
+          </p>
+        </div>
+        {renderInputGrid(membersRows, 'members')}
+
         {/* Team Size Input */}
-        <div className="mb-6">
+        <div className="mb-6 mt-6">
           <label htmlFor="teamSize" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             Number of people in my team
           </label>

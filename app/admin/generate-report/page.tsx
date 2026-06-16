@@ -25,19 +25,22 @@ interface Campaign {
   tl_ok: boolean;
   sr_ok: boolean;
   team_size: number | null;
+  actual_leader: string | null;
 }
 
 interface Result {
   id: string;
   campaign_id: string;
   first_name: string;
-  category_code: 'P' | 'F' | 'SP' | 'IR';
+  category_code: 'P' | 'F' | 'SP' | 'IR' | 'TM';
   created_at: string;
 }
 
 interface ReportRow {
   dateLocation: string;
   state: string;
+  actualLeader: string;
+  members: string[];
   fpAndSp: string[];
   fpOnly: string[];
   pp: string[];
@@ -146,12 +149,16 @@ export default function GenerateReportPage() {
         const dateLocation = `${dateStr} ${campaign.place} ${campaign.state}`;
         
         // Categorize results
+        const members: string[] = [];
         const fpAndSp: string[] = [];
         const fpOnly: string[] = [];
         const pp: string[] = [];
-        
+
         campaignResults.forEach(result => {
           switch (result.category_code) {
+            case 'TM':
+              members.push(result.first_name);
+              break;
             case 'SP':
               fpAndSp.push(result.first_name);
               break;
@@ -164,10 +171,13 @@ export default function GenerateReportPage() {
             // IR not shown in report based on reference image
           }
         });
-        
-        return { dateLocation, state: campaign.state, fpAndSp, fpOnly, pp };
+
+        const actualLeader = campaign.actual_leader || campaign.leader;
+
+        return { dateLocation, state: campaign.state, actualLeader, members, fpAndSp, fpOnly, pp };
       }).filter(
         (row) =>
+          row.members.length > 0 ||
           row.fpAndSp.length > 0 ||
           row.fpOnly.length > 0 ||
           row.pp.length > 0
@@ -200,8 +210,8 @@ export default function GenerateReportPage() {
     setReportData(prev => {
       const next = prev.map((row, i) => {
         if (i !== rowIndex) return row;
-        if (field === 'dateLocation') {
-          return { ...row, dateLocation: value };
+        if (field === 'dateLocation' || field === 'actualLeader') {
+          return { ...row, [field]: value };
         }
         const arr = value.split(',').map(s => s.trim()).filter(Boolean);
         return { ...row, [field]: arr };
@@ -212,16 +222,16 @@ export default function GenerateReportPage() {
   };
 
   const addEmptyRow = () => {
-    setReportData(prev => [...prev, { dateLocation: '', state: '', fpAndSp: [], fpOnly: [], pp: [] }]);
+    setReportData(prev => [...prev, { dateLocation: '', state: '', actualLeader: '', members: [], fpAndSp: [], fpOnly: [], pp: [] }]);
   };
 
   const insertRowBelow = (index: number) => {
-    const newRow: ReportRow = { dateLocation: '', state: '', fpAndSp: [], fpOnly: [], pp: [] };
+    const newRow: ReportRow = { dateLocation: '', state: '', actualLeader: '', members: [], fpAndSp: [], fpOnly: [], pp: [] };
     setReportData(prev => [...prev.slice(0, index + 1), newRow, ...prev.slice(index + 1)]);
   };
 
   const getCellDisplay = (row: ReportRow, field: keyof ReportRow): string => {
-    if (field === 'dateLocation') return row.dateLocation;
+    if (field === 'dateLocation' || field === 'state' || field === 'actualLeader') return row[field] as string;
     const arr = row[field] as string[];
     return Array.isArray(arr) ? arr.join(', ') : '';
   };
@@ -238,6 +248,8 @@ export default function GenerateReportPage() {
         row =>
           `<tr>
             <td style="border:2px solid black;padding:8px;vertical-align:top;">${escapeHtml(getCellDisplay(row, 'dateLocation'))}</td>
+            <td style="border:2px solid black;padding:8px;vertical-align:top;">${escapeHtml(getCellDisplay(row, 'actualLeader'))}</td>
+            <td style="border:2px solid black;padding:8px;vertical-align:top;">${escapeHtml(getCellDisplay(row, 'members'))}</td>
             <td style="border:2px solid black;padding:8px;vertical-align:top;">${escapeHtml(getCellDisplay(row, 'fpAndSp'))}</td>
             <td style="border:2px solid black;padding:8px;vertical-align:top;">${escapeHtml(getCellDisplay(row, 'fpOnly'))}</td>
             <td style="border:2px solid black;padding:8px;vertical-align:top;">${escapeHtml(getCellDisplay(row, 'pp'))}</td>
@@ -270,10 +282,12 @@ export default function GenerateReportPage() {
   <table>
     <thead>
       <tr>
-        <th style="width:20%">Date &amp; Location</th>
-        <th style="width:27%">FP &amp; SP</th>
-        <th style="width:27%">FP only</th>
-        <th style="width:26%">PP</th>
+        <th style="width:16%">Date &amp; Location</th>
+        <th style="width:16%">Leader</th>
+        <th style="width:20%">Team Members</th>
+        <th style="width:16%">FP &amp; SP</th>
+        <th style="width:16%">FP only</th>
+        <th style="width:16%">PP</th>
       </tr>
     </thead>
     <tbody>${rowsHtml}</tbody>
@@ -437,51 +451,53 @@ export default function GenerateReportPage() {
                 <table className="w-full border-collapse" style={{ border: '2px solid black' }}>
                   <thead>
                     <tr>
-                      <th 
+                      <th
                         className="border-2 border-black bg-white px-2 py-1 text-center"
-                        style={{ width: '20%', borderColor: 'black', color: 'black', fontWeight: 'bold', paddingTop: '0.25rem', paddingBottom: '0.25rem', verticalAlign: 'top', lineHeight: 1.25, boxSizing: 'border-box' }}
+                        style={{ width: '16%', borderColor: 'black', color: 'black', fontWeight: 'bold', paddingTop: '0.25rem', paddingBottom: '0.25rem', verticalAlign: 'top', lineHeight: 1.25, boxSizing: 'border-box' }}
                       >
                         Date & Location
                       </th>
-                      <th 
+                      <th
                         className="border-2 border-black bg-white px-2 py-1 text-center"
-                        style={{ width: '27%', borderColor: 'black', color: 'black', fontWeight: 'bold', paddingTop: '0.25rem', paddingBottom: '0.25rem', verticalAlign: 'top', lineHeight: 1.25, boxSizing: 'border-box' }}
+                        style={{ width: '16%', borderColor: 'black', color: 'black', fontWeight: 'bold', paddingTop: '0.25rem', paddingBottom: '0.25rem', verticalAlign: 'top', lineHeight: 1.25, boxSizing: 'border-box' }}
+                      >
+                        Leader
+                      </th>
+                      <th
+                        className="border-2 border-black bg-white px-2 py-1 text-center"
+                        style={{ width: '20%', borderColor: 'black', color: 'black', fontWeight: 'bold', paddingTop: '0.25rem', paddingBottom: '0.25rem', verticalAlign: 'top', lineHeight: 1.25, boxSizing: 'border-box' }}
+                      >
+                        Team Members
+                      </th>
+                      <th
+                        className="border-2 border-black bg-white px-2 py-1 text-center"
+                        style={{ width: '16%', borderColor: 'black', color: 'black', fontWeight: 'bold', paddingTop: '0.25rem', paddingBottom: '0.25rem', verticalAlign: 'top', lineHeight: 1.25, boxSizing: 'border-box' }}
                       >
                         FP & SP
                       </th>
-                      <th 
+                      <th
                         className="border-2 border-black bg-white px-2 py-1 text-center"
-                        style={{ width: '27%', borderColor: 'black', color: 'black', fontWeight: 'bold', paddingTop: '0.25rem', paddingBottom: '0.25rem', verticalAlign: 'top', lineHeight: 1.25, boxSizing: 'border-box' }}
+                        style={{ width: '16%', borderColor: 'black', color: 'black', fontWeight: 'bold', paddingTop: '0.25rem', paddingBottom: '0.25rem', verticalAlign: 'top', lineHeight: 1.25, boxSizing: 'border-box' }}
                       >
                         FP only
                       </th>
-                      <th 
+                      <th
                         className="border-2 border-black bg-white px-2 py-1 text-center"
-                        style={{ 
-                          width: '26%', 
-                          borderColor: 'black',
-                          color: 'black',
-                          fontWeight: 'bold',
-                          paddingTop: '0.25rem',
-                          paddingBottom: '0.25rem',
-                          verticalAlign: 'top',
-                          lineHeight: 1.25,
-                          boxSizing: 'border-box'
-                        }}
+                        style={{ width: '16%', borderColor: 'black', color: 'black', fontWeight: 'bold', paddingTop: '0.25rem', paddingBottom: '0.25rem', verticalAlign: 'top', lineHeight: 1.25, boxSizing: 'border-box' }}
                       >
                         PP
                       </th>
-                      <th 
+                      <th
                         className="report-actions-header border-2 border-black bg-gray-100 px-2 py-1 text-center"
                         style={{ width: '80px', borderColor: 'black', color: 'black', fontWeight: 'bold', paddingTop: '0.25rem', paddingBottom: '0.25rem', verticalAlign: 'top', lineHeight: 1.25, boxSizing: 'border-box' }}
                       >
-                       
+
                       </th>
                     </tr>
                   </thead>
                   <tbody>
                     {reportData.map((row, index) => {
-                      const fields = ['dateLocation', 'fpAndSp', 'fpOnly', 'pp'] as const;
+                      const fields = ['dateLocation', 'actualLeader', 'members', 'fpAndSp', 'fpOnly', 'pp'] as const;
                       const stateColor = getStateColor(row.state);
                       return (
                         <tr key={index} className={stateColor.bg}>
@@ -507,10 +523,10 @@ export default function GenerateReportPage() {
                                       const v = e.target.value;
                                       setReportData(prev => {
                                         const next = [...prev];
-                                        if (field === 'dateLocation') {
-                                          next[index] = { ...next[index], dateLocation: v };
+                                        if (field === 'dateLocation' || field === 'actualLeader') {
+                                          next[index] = { ...next[index], [field]: v };
                                         } else {
-                                          (next[index] as ReportRow)[field] = v.split(',').map(s => s.trim()).filter(Boolean);
+                                          (next[index] as ReportRow)[field] = v.split(',').map(s => s.trim()).filter(Boolean) as string[];
                                         }
                                         return next;
                                       });
