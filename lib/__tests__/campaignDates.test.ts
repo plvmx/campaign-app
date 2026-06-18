@@ -68,12 +68,12 @@ describe('Campaign Dates Calculations', () => {
       expect(formatDateForDb(dates.upcomingCampaignStart)).toBe(formatDateForDb(expected));
     });
 
-    it('should return Monday of next week when today is Thursday', () => {
+    it('should return Monday of current week when today is Thursday', () => {
       // January 8, 2026 is a Thursday
       const thursday = createDate(2026, 1, 8);
       const dates = calculateCampaignDates(thursday);
-      const expected = createDate(2026, 1, 12); // Next Monday
-      
+      const expected = createDate(2026, 1, 5); // Monday of same week
+
       expect(formatDateForDb(dates.upcomingCampaignStart)).toBe(formatDateForDb(expected));
     });
 
@@ -101,9 +101,9 @@ describe('Campaign Dates Calculations', () => {
       // January 8, 2026 is a Thursday
       const thursday = createDate(2026, 1, 8);
       const dates = calculateCampaignDates(thursday);
-      const expectedUpcoming = createDate(2026, 1, 12); // Next Monday
-      const expectedSecond = createDate(2026, 1, 19); // Monday after that
-      
+      const expectedUpcoming = createDate(2026, 1, 5); // Monday of same week
+      const expectedSecond = createDate(2026, 1, 12); // Monday after that
+
       expect(formatDateForDb(dates.upcomingCampaignStart)).toBe(formatDateForDb(expectedUpcoming));
       expect(formatDateForDb(dates.secondWeekStart)).toBe(formatDateForDb(expectedSecond));
     });
