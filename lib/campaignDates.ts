@@ -38,8 +38,8 @@ function getMondayOfWeek(date: Date, weeksOffset: number = 0): Date {
  *    - Monday to Wednesday (1-3): Monday of previous week
  * 
  * 2. Upcoming Campaign Start:
- *    - Monday to Wednesday (1-3): Monday of current week
- *    - Thursday to Sunday (4-0): Monday of next week
+ *    - Monday to Saturday (1-6): Monday of current week
+ *    - Sunday (0): Monday of next week
  * 
  * 3. Second Week Start:
  *    - Monday after Upcoming Campaign Start
@@ -60,11 +60,11 @@ export function calculateCampaignDates(referenceDate: Date = new Date()): Campai
   }
   
   // Determine Upcoming Campaign Start
-  if (dayOfWeek >= 1 && dayOfWeek <= 3) {
-    // Monday to Wednesday: Monday of current week
+  if (dayOfWeek >= 1 && dayOfWeek <= 6) {
+    // Monday to Saturday: Monday of current week
     upcomingCampaignStart = getMondayOfWeek(referenceDate, 0);
   } else {
-    // Thursday to Sunday: Monday of next week
+    // Sunday: Monday of next week
     upcomingCampaignStart = getMondayOfWeek(referenceDate, 1);
   }
   
