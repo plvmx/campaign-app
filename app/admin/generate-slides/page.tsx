@@ -13,9 +13,9 @@ import { getErrorMessage } from '@/lib/errorUtils';
 function calculateDefaultStartDate(): Date {
   const today = new Date();
   const dow   = today.getDay(); // 0=Sun … 6=Sat
-  // Mon–Wed (1–3): this week's Monday.  Thu–Sun (4–6, 0): next Monday.
+  // Mon–Sat (1–6): this week's Monday.  Sun (0): next Monday.
   const pythonDow = dow === 0 ? 6 : dow - 1;
-  const offset    = pythonDow <= 2 ? -pythonDow : 7 - pythonDow;
+  const offset    = pythonDow <= 5 ? -pythonDow : 7 - pythonDow;
   const d = new Date(today);
   d.setDate(d.getDate() + offset);
   d.setHours(0, 0, 0, 0);
