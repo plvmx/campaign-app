@@ -211,6 +211,10 @@ function AppPageContent() {
           setDateFilter(filterParam as 'past' | 'future');
           router.replace('/app', { scroll: false });
         }
+        if (searchParams.get('openForm') === 'true') {
+          setIsFormExpanded(true);
+          router.replace('/app', { scroll: false });
+        }
         if (searchParams.get('created') === 'true') {
           setShowSuccess(true);
           router.replace('/app', { scroll: false });

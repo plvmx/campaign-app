@@ -10,6 +10,8 @@ import { useUser } from '@/contexts/UserContext';
 import { getRecentTWOLCampaignsForLeader } from '@/lib/services/campaignService';
 import type { Campaign } from '@/lib/types';
 
+type ActionChoice = 'record-past' | 'review-upcoming' | 'create-new' | 'campaign-rules';
+
 const STORAGE_KEYS = { mobile: 'login_mobile', firstName: 'login_firstName' };
 
 const STATE_NAMES: Record<string, string> = {
@@ -37,6 +39,8 @@ export default function LoginPage() {
   const [selectedStateId, setSelectedStateId] = useState<string | null>(null);
   // Recent TWOL campaigns that the leader may want to record results for
   const [recentCampaigns, setRecentCampaigns] = useState<Pick<Campaign, 'id' | 'date' | 'state' | 'place' | 'time' | 'leader'>[] | null>(null);
+  // Whether to show the post-sign-in action chooser (regular leaders only)
+  const [showActionChooser, setShowActionChooser] = useState(false);
 
   // Check if user is already signed in
   useEffect(() => {
@@ -113,8 +117,13 @@ export default function LoginPage() {
     }
   };
 
-  // ── Post-sign-in: check for recent TWOL campaigns ────────────────────────
+  // ── Post-sign-in: show action chooser for regular leaders, or check recent TWOL for admins ─
   const checkRecentCampaign = async (match: StateLeaderMatch) => {
+    if (!match.admin) {
+      // Regular leader — show the action chooser instead of navigating
+      setShowActionChooser(true);
+      return;
+    }
     try {
       const recent = await getRecentTWOLCampaignsForLeader(match.leader);
       if (recent.length > 0) {
@@ -125,6 +134,23 @@ export default function LoginPage() {
       // Non-fatal — fall through to normal navigation
     }
     router.push('/app');
+  };
+
+  const handleActionChoice = (choice: ActionChoice) => {
+    switch (choice) {
+      case 'record-past':
+        router.push('/app?filter=past');
+        break;
+      case 'review-upcoming':
+        router.push('/app');
+        break;
+      case 'create-new':
+        router.push('/app?openForm=true');
+        break;
+      case 'campaign-rules':
+        router.push('/admin/campaign-rules');
+        break;
+    }
   };
 
   // ── Step 2 (multi-state only): complete sign-in with chosen state ─────────
@@ -170,6 +196,49 @@ export default function LoginPage() {
     const h12 = h % 12 || 12;
     const formattedTime = `${h12}:${mStr} ${ampm}`;
     return `${place} ${day}${suffix} ${month} ${formattedTime} ... Yes?`;
+  }
+
+  if (showActionChooser) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8 dark:bg-gray-900">
+        <div className={cardClass}>
+          <div className="space-y-6">
+            <h2 className="text-center text-xl font-bold text-gray-900 dark:text-gray-100">
+              What do you want to do today?
+            </h2>
+            <p className="text-center text-base text-gray-600 dark:text-gray-400">
+              Please select an option.
+            </p>
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={() => handleActionChoice('record-past')}
+                className="w-full rounded-md bg-orange-600 px-4 py-3 text-base font-bold text-white hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
+              >
+                Record Results for Past Campaigns
+              </button>
+              <button
+                onClick={() => handleActionChoice('review-upcoming')}
+                className="w-full rounded-md bg-blue-600 px-4 py-3 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
+              >
+                Review or Update Upcoming Campaigns
+              </button>
+              <button
+                onClick={() => handleActionChoice('create-new')}
+                className="w-full rounded-md bg-green-600 px-4 py-3 text-base font-bold text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
+              >
+                Create a New Campaign
+              </button>
+              <button
+                onClick={() => handleActionChoice('campaign-rules')}
+                className="w-full rounded-md bg-purple-600 px-4 py-3 text-base font-bold text-white hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
+              >
+                Create or Update a Campaign Rule
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (recentCampaigns) {
