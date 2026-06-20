@@ -95,17 +95,19 @@ export function drawCampaignLine(
   ctx.font = `bold ${FONT_CAMP}px Arial`;
 
   // Arial is proportional, so columns can't rely on character counts like a
-  // monospace font would. Each field gets its own fixed-width slot, sized
-  // from the widest possible content for that field ('M' repeated to the
-  // field's max character count), so place/time/leader still line up
-  // vertically across rows.
-  const placeColW  = ctx.measureText('M'.repeat(PLACE_COLS)).width;
-  const timeColW   = ctx.measureText('M'.repeat(TIME_COLS)).width;
-  const leaderColW = ctx.measureText('M'.repeat(LEADER_COLS)).width;
-  const gapW       = ctx.measureText('M').width;
-  const naturalW   = placeColW + gapW + timeColW + gapW + leaderColW;
+  // monospace font would. Each field gets its own fixed-width slot so
+  // place/time/leader still line up vertically across rows. Sizing the slots
+  // off 'M' (one of the widest glyphs) over-compresses ordinary text, so use
+  // the average glyph width across a representative character set instead.
+  const AVG_SAMPLE = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  const avgCharW    = ctx.measureText(AVG_SAMPLE).width / AVG_SAMPLE.length;
+  const placeColW   = avgCharW * PLACE_COLS;
+  const timeColW    = avgCharW * TIME_COLS;
+  const leaderColW  = avgCharW * LEADER_COLS;
+  const gapW        = avgCharW;
+  const naturalW    = placeColW + gapW + timeColW + gapW + leaderColW;
 
-  const oneCharW = Math.round(ctx.measureText('M').width);
+  const oneCharW = Math.round(avgCharW);
   const scaleX   = (colWidth - 2 * oneCharW) / naturalW;
 
   const color = getSlideStateColor(campaign.state);
