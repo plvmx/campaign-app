@@ -92,26 +92,47 @@ export function drawCampaignLine(
     ? campaign.leader.substring(0, LEADER_COLS)
     : campaign.leader;
 
-  const text = `${place.padEnd(PLACE_COLS)} ${time.padStart(TIME_COLS)} ${leader.padEnd(LEADER_COLS)}`;
+  ctx.font = `bold ${FONT_CAMP}px Arial`;
 
-  ctx.font = `bold ${FONT_CAMP}px "Courier New", monospace`;
-  const oneCharW  = Math.round(ctx.measureText('M').width);
-  const totalCols = PLACE_COLS + 1 + TIME_COLS + 1 + LEADER_COLS;
-  const naturalW  = ctx.measureText('M'.repeat(totalCols)).width;
-  const scaleX    = (colWidth - 2 * oneCharW) / naturalW;
+  // Arial is proportional, so columns can't rely on character counts like a
+  // monospace font would. Each field gets its own fixed-width slot, sized
+  // from the widest possible content for that field ('M' repeated to the
+  // field's max character count), so place/time/leader still line up
+  // vertically across rows.
+  const placeColW  = ctx.measureText('M'.repeat(PLACE_COLS)).width;
+  const timeColW   = ctx.measureText('M'.repeat(TIME_COLS)).width;
+  const leaderColW = ctx.measureText('M'.repeat(LEADER_COLS)).width;
+  const gapW       = ctx.measureText('M').width;
+  const naturalW   = placeColW + gapW + timeColW + gapW + leaderColW;
+
+  const oneCharW = Math.round(ctx.measureText('M').width);
+  const scaleX   = (colWidth - 2 * oneCharW) / naturalW;
 
   const color = getSlideStateColor(campaign.state);
   ctx.save();
   ctx.translate(colX + oneCharW, y);
   ctx.scale(scaleX, 1);
-  ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
   ctx.strokeStyle = color;
   ctx.lineWidth = 3;
   ctx.lineJoin = 'round';
-  ctx.strokeText(text, 0, 0);
   ctx.fillStyle = color;
-  ctx.fillText(text, 0, 0);
+
+  let x = 0;
+  ctx.textAlign = 'left';
+  ctx.strokeText(place, x, 0);
+  ctx.fillText(place, x, 0);
+  x += placeColW + gapW;
+
+  const timeW = ctx.measureText(time).width;
+  ctx.textAlign = 'left';
+  ctx.strokeText(time, x + (timeColW - timeW), 0);
+  ctx.fillText(time, x + (timeColW - timeW), 0);
+  x += timeColW + gapW;
+
+  ctx.strokeText(leader, x, 0);
+  ctx.fillText(leader, x, 0);
+
   ctx.restore();
 }
 
@@ -141,7 +162,7 @@ export async function renderAriseCanvas(
   // Measure font to compute dynamic side margin (= 1 char width)
   const tmp    = document.createElement('canvas');
   const tmpCtx = tmp.getContext('2d')!;
-  tmpCtx.font  = `bold ${FONT_CAMP}px "Courier New", monospace`;
+  tmpCtx.font  = `bold ${FONT_CAMP}px Arial`;
   const sideMargin = Math.round(tmpCtx.measureText('M').width);
 
   const nCols = Math.max(2, simulateColumnCount(allCampaigns));
