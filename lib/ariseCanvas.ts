@@ -15,6 +15,12 @@ import {
 import { getSlideStateColor, formatSlideDateText, STATE_CODES } from '@/lib/slideLayout';
 import { formatCampaignTimeDisplay } from '@/lib/campaignUtils';
 
+// Fraction of an average character width used for the gap between fields and
+// the side margins of a campaign line. Kept below 1 char so more of the
+// column's width goes to the actual letters instead of whitespace.
+const FIELD_GAP_CHARS = 0.4;
+const MARGIN_CHARS    = 0.5;
+
 // ---------------------------------------------------------------------------
 // Draw helpers
 // ---------------------------------------------------------------------------
@@ -104,10 +110,10 @@ export function drawCampaignLine(
   const placeColW   = avgCharW * PLACE_COLS;
   const timeColW    = avgCharW * TIME_COLS;
   const leaderColW  = avgCharW * LEADER_COLS;
-  const gapW        = avgCharW;
+  const gapW        = avgCharW * FIELD_GAP_CHARS;
   const naturalW    = placeColW + gapW + timeColW + gapW + leaderColW;
 
-  const oneCharW = Math.round(avgCharW);
+  const oneCharW = Math.round(avgCharW * MARGIN_CHARS);
   const scaleX   = (colWidth - 2 * oneCharW) / naturalW;
 
   const color = getSlideStateColor(campaign.state);
@@ -161,11 +167,14 @@ export async function renderAriseCanvas(
   dates: Date[],
   onProgress?: (msg: string) => void,
 ): Promise<HTMLCanvasElement> {
-  // Measure font to compute dynamic side margin (= 1 char width)
+  // Measure font to compute dynamic side margin, matching the margin used
+  // inside drawCampaignLine so columns and content line up.
   const tmp    = document.createElement('canvas');
   const tmpCtx = tmp.getContext('2d')!;
   tmpCtx.font  = `bold ${FONT_CAMP}px Arial`;
-  const sideMargin = Math.round(tmpCtx.measureText('M').width);
+  const AVG_SAMPLE = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  const avgCharW   = tmpCtx.measureText(AVG_SAMPLE).width / AVG_SAMPLE.length;
+  const sideMargin = Math.round(avgCharW * MARGIN_CHARS);
 
   const nCols = Math.max(2, simulateColumnCount(allCampaigns));
   const { colWidth, colXs } = computeColLayout(nCols, sideMargin);
