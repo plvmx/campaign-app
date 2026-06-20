@@ -89,6 +89,7 @@ function RecordResultsDetailPageContent() {
   const lastSavedCountsRef = useRef<SavedCounts | undefined>(undefined);
 
   const debounceNamesTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const debounceActualLeaderTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const savingNamesRef = useRef(false);
   const hasTrackedSaveRef = useRef(false);
   const userIdRef = useRef<string | null>(null);
@@ -445,6 +446,18 @@ function RecordResultsDetailPageContent() {
     savePendingNames();
   }, [savePendingNames]);
 
+  // Debounced save for the actual-leader field, mirroring scheduleSaveNames.
+  // Needed because onBlur alone is not reliable on iOS Safari (e.g. tapping a
+  // button directly can skip the blur event), so the field is also saved a
+  // couple of seconds after the user stops typing.
+  const scheduleSaveActualLeader = useCallback(() => {
+    if (debounceActualLeaderTimerRef.current) clearTimeout(debounceActualLeaderTimerRef.current);
+    debounceActualLeaderTimerRef.current = setTimeout(() => {
+      debounceActualLeaderTimerRef.current = null;
+      saveActualLeader();
+    }, DEBOUNCE_MS);
+  }, [saveActualLeader]);
+
   // Auto-save periodically and on navigation/unmount
   useEffect(() => {
     const autoSaveInterval = setInterval(() => {
@@ -455,7 +468,7 @@ function RecordResultsDetailPageContent() {
       }
     }, 3000);
 
-    const handleBeforeUnload = () => {
+    const flushAll = () => {
       if (campaignIdRef.current) {
         flushSaveNames();
         saveTeamSize();
@@ -464,14 +477,29 @@ function RecordResultsDetailPageContent() {
       }
     };
 
-    window.addEventListener('beforeunload', handleBeforeUnload);
+    // beforeunload is unreliable on iOS/Safari (especially in standalone PWA
+    // mode), so pagehide and visibilitychange are used as the primary signals
+    // for flushing pending saves when the page is backgrounded or closed.
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') flushAll();
+    };
+
+    window.addEventListener('beforeunload', flushAll);
+    window.addEventListener('pagehide', flushAll);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       clearInterval(autoSaveInterval);
-      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('beforeunload', flushAll);
+      window.removeEventListener('pagehide', flushAll);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       if (debounceNamesTimerRef.current) {
         clearTimeout(debounceNamesTimerRef.current);
         debounceNamesTimerRef.current = null;
+      }
+      if (debounceActualLeaderTimerRef.current) {
+        clearTimeout(debounceActualLeaderTimerRef.current);
+        debounceActualLeaderTimerRef.current = null;
       }
       if (saveStatusTimerRef.current) {
         clearTimeout(saveStatusTimerRef.current);
@@ -684,7 +712,7 @@ function RecordResultsDetailPageContent() {
             type="text"
             maxLength={255}
             value={actualLeader}
-            onChange={(e) => setActualLeader(e.target.value)}
+            onChange={(e) => { setActualLeader(e.target.value); scheduleSaveActualLeader(); }}
             onBlur={saveActualLeader}
             className="block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
             placeholder="Enter actual leader name"
