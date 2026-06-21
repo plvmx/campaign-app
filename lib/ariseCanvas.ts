@@ -98,7 +98,7 @@ export function drawCampaignLine(
     ? campaign.leader.substring(0, LEADER_COLS)
     : campaign.leader;
 
-  ctx.font = `bold ${FONT_CAMP}px Arial`;
+  ctx.font = `${FONT_CAMP}px Arial`;
 
   // Arial is proportional, so columns can't rely on character counts like a
   // monospace font would. Each field gets its own fixed-width slot so
@@ -171,7 +171,7 @@ export async function renderAriseCanvas(
   // inside drawCampaignLine so columns and content line up.
   const tmp    = document.createElement('canvas');
   const tmpCtx = tmp.getContext('2d')!;
-  tmpCtx.font  = `bold ${FONT_CAMP}px Arial`;
+  tmpCtx.font  = `${FONT_CAMP}px Arial`;
   const AVG_SAMPLE = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
   const avgCharW   = tmpCtx.measureText(AVG_SAMPLE).width / AVG_SAMPLE.length;
   const sideMargin = Math.round(avgCharW * MARGIN_CHARS);
