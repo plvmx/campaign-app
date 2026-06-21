@@ -31,6 +31,24 @@ const generateId = () =>
 const countNames = (rows: InputRow[]) =>
   rows.flatMap((r) => [r.field1, r.field2, r.field3]).filter((v) => v.trim()).length;
 
+// Transient network errors (dropped connection, timeout, brief Supabase
+// blips) are common on mobile and shouldn't surface as a save failure on the
+// first attempt — retry a couple of times with backoff before giving up.
+async function withRetry<T>(fn: () => Promise<T>, attempts = 3, baseDelayMs = 800): Promise<T> {
+  let lastError: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      if (i < attempts - 1) {
+        await new Promise((resolve) => setTimeout(resolve, baseDelayMs * 2 ** i));
+      }
+    }
+  }
+  throw lastError;
+}
+
 function RecordResultsDetailPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -90,6 +108,7 @@ function RecordResultsDetailPageContent() {
 
   const debounceNamesTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const debounceActualLeaderTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const rerunNamesRef = useRef(false);
   const savingNamesRef = useRef(false);
   const hasTrackedSaveRef = useRef(false);
   const userIdRef = useRef<string | null>(null);
@@ -303,8 +322,10 @@ function RecordResultsDetailPageContent() {
     const parsed = teamSizeRef.current.trim() ? parseInt(teamSizeRef.current, 10) : null;
     if (lastSavedTeamSizeRef.current !== undefined && parsed === lastSavedTeamSizeRef.current) return;
     try {
-      const oldData = await fetchCampaignData(cid);
-      await updateCampaign(cid, { team_size: parsed }, oldData);
+      await withRetry(async () => {
+        const oldData = await fetchCampaignData(cid);
+        await updateCampaign(cid, { team_size: parsed }, oldData);
+      });
       lastSavedTeamSizeRef.current = parsed;
     } catch (error) {
       console.error('Error saving team size:', error);
@@ -318,8 +339,10 @@ function RecordResultsDetailPageContent() {
     const value = actualLeaderRef.current.trim() || null;
     if (lastSavedActualLeaderRef.current !== undefined && value === lastSavedActualLeaderRef.current) return;
     try {
-      const oldData = await fetchCampaignData(cid);
-      await updateCampaign(cid, { actual_leader: value }, oldData);
+      await withRetry(async () => {
+        const oldData = await fetchCampaignData(cid);
+        await updateCampaign(cid, { actual_leader: value }, oldData);
+      });
       lastSavedActualLeaderRef.current = value;
     } catch (error) {
       console.error('Error saving actual leader:', error);
@@ -342,8 +365,10 @@ function RecordResultsDetailPageContent() {
         current.pp === last.pp && current.fp === last.fp &&
         current.fpsp === last.fpsp && current.ir === last.ir) return;
     try {
-      const oldData = await fetchCampaignData(cid);
-      await updateCampaign(cid, { pp_cnt: current.pp, fp_cnt: current.fp, fpsp_cnt: current.fpsp, ir_cnt: current.ir }, oldData);
+      await withRetry(async () => {
+        const oldData = await fetchCampaignData(cid);
+        await updateCampaign(cid, { pp_cnt: current.pp, fp_cnt: current.fp, fpsp_cnt: current.fpsp, ir_cnt: current.ir }, oldData);
+      });
       lastSavedCountsRef.current = current;
     } catch (error) {
       console.error('Error saving count fields:', error);
@@ -352,8 +377,14 @@ function RecordResultsDetailPageContent() {
   };
 
   // Save all pending names. Guarded against concurrent runs (prevents saving "M", "Muh" mid-type).
+  // If an edit comes in while a save is already in flight, rerunNamesRef marks
+  // that another pass is needed once the current one finishes, so the edit
+  // isn't silently dropped.
   const savePendingNames = useCallback(async () => {
-    if (savingNamesRef.current) return;
+    if (savingNamesRef.current) {
+      rerunNamesRef.current = true;
+      return;
+    }
     const currentCampaignId = campaignIdRef.current;
     if (!currentCampaignId) return;
 
@@ -388,7 +419,7 @@ function RecordResultsDetailPageContent() {
           const name = nameKey.slice(0, lastColon);
           const categoryCode = nameKey.slice(lastColon + 1);
           try {
-            await deleteResult(currentCampaignId, name, categoryCode);
+            await withRetry(() => deleteResult(currentCampaignId, name, categoryCode));
           } catch (err) {
             console.error('Error deleting name:', name, categoryCode, err);
           }
@@ -405,7 +436,7 @@ function RecordResultsDetailPageContent() {
           user_id: userId,
         };
       });
-      await upsertResults(resultsToSave);
+      await withRetry(() => upsertResults(resultsToSave));
 
       setOriginalNames(currentNames);
       originalNamesRef.current = currentNames;
@@ -426,6 +457,10 @@ function RecordResultsDetailPageContent() {
       setSaveStatus('error');
     } finally {
       savingNamesRef.current = false;
+      if (rerunNamesRef.current) {
+        rerunNamesRef.current = false;
+        savePendingNames();
+      }
     }
   }, [campaignData.state, campaignData.leader]);
 
@@ -465,6 +500,10 @@ function RecordResultsDetailPageContent() {
         saveTeamSize();
         saveActualLeader();
         saveCountFields();
+        // Names that failed to save earlier (network blip, RLS hiccup, etc.)
+        // are retried here too — savePendingNames is a no-op if there's
+        // nothing pending, so this is safe to call unconditionally.
+        savePendingNames();
       }
     }, 3000);
 
@@ -476,6 +515,10 @@ function RecordResultsDetailPageContent() {
         saveCountFields();
       }
     };
+
+    // Retry immediately when connectivity is restored, instead of waiting
+    // for the next 3-second tick or the next edit.
+    window.addEventListener('online', flushAll);
 
     // beforeunload is unreliable on iOS/Safari (especially in standalone PWA
     // mode), so pagehide and visibilitychange are used as the primary signals
@@ -490,6 +533,7 @@ function RecordResultsDetailPageContent() {
 
     return () => {
       clearInterval(autoSaveInterval);
+      window.removeEventListener('online', flushAll);
       window.removeEventListener('beforeunload', flushAll);
       window.removeEventListener('pagehide', flushAll);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
@@ -512,7 +556,7 @@ function RecordResultsDetailPageContent() {
         flushSaveNames();
       }
     };
-  }, [flushSaveNames]);
+  }, [flushSaveNames, savePendingNames]);
 
   const addNewRow = (section: SectionType) => {
     const newRow: InputRow = { id: generateId(), field1: '', field2: '', field3: '' };
