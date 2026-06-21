@@ -17,6 +17,7 @@ export type AppEventType =
   | 'campaign_update'
   | 'campaign_delete'
   | 'record_results_save'
+  | 'record_results_save_error'
   | 'generate_slides'
   | 'generate_report'
   | 'generate_week1'
