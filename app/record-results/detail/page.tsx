@@ -11,6 +11,13 @@ import { useUser } from '@/contexts/UserContext';
 import { updateCampaign, createCampaign, getCampaignById, findCampaignsByKey } from '@/lib/services/campaignService';
 import { getResultsByCampaignId, upsertResults, deleteResult } from '@/lib/services/resultsService';
 import { logResultsSave, type ResultsLogRow } from '@/lib/resultsLog';
+import {
+  saveDraft as saveResultsDraft,
+  loadDraft as loadResultsDraft,
+  clearDraft as clearResultsDraft,
+  draftHasContent,
+  type RecordResultsDraft,
+} from '@/lib/recordResultsDraft';
 import { trackEvent } from '@/lib/analytics';
 import { getErrorMessage } from '@/lib/errorUtils';
 
@@ -87,6 +94,8 @@ function RecordResultsDetailPageContent() {
   const [irCnt, setIrCnt] = useState<string>('');
   const [originalNames, setOriginalNames] = useState<Set<string>>(new Set());
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [draftRestoredAt, setDraftRestoredAt] = useState<string | null>(null);
+  const [hasUnsavedDraft, setHasUnsavedDraft] = useState(false);
 
   // Refs for accessing latest values in interval/cleanup callbacks (avoids stale closures)
   const campaignIdRef = useRef(campaignId);
@@ -131,6 +140,39 @@ function RecordResultsDetailPageContent() {
   useEffect(() => { fpspCntRef.current = fpspCnt; }, [fpspCnt]);
   useEffect(() => { irCntRef.current = irCnt; }, [irCnt]);
   useEffect(() => { userIdRef.current = contextUser?.id ?? null; }, [contextUser]);
+
+  // Mirror the visible form state to localStorage on every change, so a tab
+  // close, network drop, or RLS rejection mid-save can't silently lose the
+  // user's typing. Skips during initial load (before campaignId is set).
+  // The draft is cleared after a confirmed-successful save in savePendingNames.
+  useEffect(() => {
+    if (!campaignId || isLoading) return;
+    const collect = (rows: InputRow[]): string[] =>
+      rows.flatMap((r) => [r.field1, r.field2, r.field3]).map((v) => v.trim()).filter(Boolean);
+    const draft: RecordResultsDraft = {
+      campaignId,
+      names: {
+        TM: collect(membersRows),
+        P:  collect(partialRows),
+        F:  collect(fullRows),
+        SP: collect(fullSinnersRows),
+        IR: collect(informationRows),
+      },
+      actualLeader,
+      teamSize,
+      ppCnt,
+      fpCnt,
+      fpspCnt,
+      irCnt,
+      updatedAt: new Date().toISOString(),
+    };
+    saveResultsDraft(draft);
+    setHasUnsavedDraft(draftHasContent(draft));
+  }, [
+    campaignId, isLoading,
+    membersRows, partialRows, fullRows, fullSinnersRows, informationRows,
+    actualLeader, teamSize, ppCnt, fpCnt, fpspCnt, irCnt,
+  ]);
 
   // Find an existing campaign or create one if the user is the owner.
   // When knownId is supplied (navigated from campaign list), skip the natural-key lookup
@@ -288,18 +330,43 @@ function RecordResultsDetailPageContent() {
           lastSavedActualLeaderRef.current = null;
         }
 
+        // `originalNames` always reflects ground truth from the server — the
+        // autosave diff logic depends on this to compute correct upserts/deletes.
         setOriginalNames(new Set(existing.map((r) => `${r.first_name}:${r.category_code}`)));
-        setMembersRows(createRowsFromNames(existing.filter((r) => r.category_code === 'TM').map((r) => r.first_name)));
-        setPartialRows(createRowsFromNames(existing.filter((r) => r.category_code === 'P').map((r) => r.first_name)));
-        setFullRows(createRowsFromNames(existing.filter((r) => r.category_code === 'F').map((r) => r.first_name)));
-        setFullSinnersRows(createRowsFromNames(existing.filter((r) => r.category_code === 'SP').map((r) => r.first_name)));
-        setInformationRows(createRowsFromNames(existing.filter((r) => r.category_code === 'IR').map((r) => r.first_name)));
-        if (existing.length === 0) {
-          setMembersRows([emptyRow()]);
-          setPartialRows([emptyRow()]);
-          setFullRows([emptyRow()]);
-          setFullSinnersRows([emptyRow()]);
-          setInformationRows([emptyRow()]);
+
+        // If a locally-buffered draft exists for this campaign, restore the
+        // visible form state from it — that's the user's last known intent and
+        // covers cases where the server-side save failed silently last time.
+        // We still load `originalNames` from the server, so the next autosave
+        // will correctly upsert any names that aren't yet on the server.
+        const draft = loadResultsDraft(cid);
+        if (draft && draftHasContent(draft)) {
+          setMembersRows(createRowsFromNames(draft.names.TM));
+          setPartialRows(createRowsFromNames(draft.names.P));
+          setFullRows(createRowsFromNames(draft.names.F));
+          setFullSinnersRows(createRowsFromNames(draft.names.SP));
+          setInformationRows(createRowsFromNames(draft.names.IR));
+          if (draft.actualLeader) setActualLeader(draft.actualLeader);
+          if (draft.teamSize)     setTeamSize(draft.teamSize);
+          if (draft.ppCnt)        setPpCnt(draft.ppCnt);
+          if (draft.fpCnt)        setFpCnt(draft.fpCnt);
+          if (draft.fpspCnt)      setFpspCnt(draft.fpspCnt);
+          if (draft.irCnt)        setIrCnt(draft.irCnt);
+          setDraftRestoredAt(draft.updatedAt);
+          setHasUnsavedDraft(true);
+        } else {
+          setMembersRows(createRowsFromNames(existing.filter((r) => r.category_code === 'TM').map((r) => r.first_name)));
+          setPartialRows(createRowsFromNames(existing.filter((r) => r.category_code === 'P').map((r) => r.first_name)));
+          setFullRows(createRowsFromNames(existing.filter((r) => r.category_code === 'F').map((r) => r.first_name)));
+          setFullSinnersRows(createRowsFromNames(existing.filter((r) => r.category_code === 'SP').map((r) => r.first_name)));
+          setInformationRows(createRowsFromNames(existing.filter((r) => r.category_code === 'IR').map((r) => r.first_name)));
+          if (existing.length === 0) {
+            setMembersRows([emptyRow()]);
+            setPartialRows([emptyRow()]);
+            setFullRows([emptyRow()]);
+            setFullSinnersRows([emptyRow()]);
+            setInformationRows([emptyRow()]);
+          }
         }
       } catch (error) {
         if (cancelled) return;
@@ -464,6 +531,13 @@ function RecordResultsDetailPageContent() {
         attemptedDeletes,
       });
 
+      // Names have reached the server — the localStorage backup is no longer
+      // needed and would otherwise trigger a "restored unsaved names" banner
+      // on the next page load.
+      clearResultsDraft(currentCampaignId);
+      setHasUnsavedDraft(false);
+      setDraftRestoredAt(null);
+
       if (!hasTrackedSaveRef.current) {
         hasTrackedSaveRef.current = true;
         trackEvent('record_results_save', {
@@ -489,6 +563,19 @@ function RecordResultsDetailPageContent() {
         deletes:  attemptedDeletes.length,
         error:    errorMessage,
       });
+
+      // Re-pull the actual server state and rebuild the local "what's saved"
+      // baseline from truth. Otherwise the originalNamesRef can drift after
+      // a partial failure (e.g. deletes succeeded but upsert failed), and
+      // the next save would compute the wrong diff.
+      try {
+        const fresh = await getResultsByCampaignId(currentCampaignId);
+        const freshSet = new Set(fresh.map((r) => `${r.first_name}:${r.category_code}`));
+        setOriginalNames(freshSet);
+        originalNamesRef.current = freshSet;
+      } catch (refetchError) {
+        console.error('Error refetching results after save failure:', refetchError);
+      }
     } finally {
       savingNamesRef.current = false;
       if (rerunNamesRef.current) {
@@ -565,10 +652,28 @@ function RecordResultsDetailPageContent() {
     window.addEventListener('pagehide', flushAll);
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
+    // Separate guard: if there's a localStorage draft (= unsaved edits) at the
+    // moment the page is being closed, prompt the user before leaving. This is
+    // the browser's standard "Leave site?" dialog — it can't be styled, and
+    // some browsers ignore it for fast/instant tab closes, but it catches the
+    // most common "I clicked Back and lost my work" path.
+    const handleBeforeUnloadGuard = (e: BeforeUnloadEvent) => {
+      const cid = campaignIdRef.current;
+      if (!cid) return;
+      const draft = loadResultsDraft(cid);
+      if (draft && draftHasContent(draft)) {
+        e.preventDefault();
+        // Required for older browsers to actually show the dialog.
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnloadGuard);
+
     return () => {
       clearInterval(autoSaveInterval);
       window.removeEventListener('online', flushAll);
       window.removeEventListener('beforeunload', flushAll);
+      window.removeEventListener('beforeunload', handleBeforeUnloadGuard);
       window.removeEventListener('pagehide', flushAll);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       if (debounceNamesTimerRef.current) {
@@ -744,41 +849,87 @@ function RecordResultsDetailPageContent() {
           </div>
         </div>
 
-        {/* Auto-save notification */}
-        <div className="mb-6 rounded-lg border-2 border-blue-400 bg-blue-100 px-4 py-3 shadow-sm dark:border-blue-500 dark:bg-blue-900/40">
-          <div className="flex items-start gap-3">
-            <div className="flex-shrink-0 mt-0.5">
-              <svg className="h-5 w-5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-            <div className="flex-1">
-              <div className="flex items-center justify-between gap-2 mb-1">
-                <p className="text-sm font-semibold text-blue-900 dark:text-blue-100">
-                  Changes are automatically saved
-                </p>
-                {saveStatus === 'saving' && (
-                  <span className="flex-shrink-0 text-xs font-medium text-blue-600 dark:text-blue-300 animate-pulse">
-                    Saving…
-                  </span>
-                )}
-                {saveStatus === 'saved' && (
-                  <span className="flex-shrink-0 text-xs font-medium text-green-600 dark:text-green-400">
-                    ✓ Saved
-                  </span>
-                )}
-                {saveStatus === 'error' && (
-                  <span className="flex-shrink-0 text-xs font-medium text-red-600 dark:text-red-400">
-                    Save failed — check connection
-                  </span>
-                )}
+        {/* Restored-from-draft banner: shows once when the page reloads with
+            unsaved edits from a previous visit. */}
+        {draftRestoredAt && (
+          <div className="mb-4 rounded-lg border-2 border-amber-500 bg-amber-100 px-4 py-3 shadow-sm dark:border-amber-400 dark:bg-amber-900/40">
+            <div className="flex items-start gap-3">
+              <div className="flex-shrink-0 mt-0.5">
+                <svg className="h-5 w-5 text-amber-700 dark:text-amber-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
               </div>
-              <p className="text-xs text-blue-800 dark:text-blue-200">
-                All your entries are saved automatically every few seconds. There is no need to click a Save button.
-              </p>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-amber-900 dark:text-amber-100">
+                  Restored your unsaved entries from{' '}
+                  {(() => {
+                    const d = new Date(draftRestoredAt);
+                    return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) +
+                           ' on ' +
+                           d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                  })()}
+                </p>
+                <p className="mt-1 text-xs text-amber-800 dark:text-amber-200">
+                  The previous save didn&apos;t complete, so we&apos;ve put your typing back on screen. It will save again automatically.
+                </p>
+              </div>
             </div>
           </div>
-        </div>
+        )}
+
+        {/* Auto-save status banner. Stays sticky-red while there are unsaved
+            edits or a save has failed, so the user can't walk away thinking
+            the data is safe when it isn't. */}
+        {(() => {
+          const isFailing = saveStatus === 'error';
+          const isSaving  = saveStatus === 'saving';
+          const isUnsaved = hasUnsavedDraft && !isSaving && !isFailing;
+          const isClean   = !hasUnsavedDraft && !isFailing && !isSaving;
+
+          const tone = isFailing
+            ? 'border-red-500 bg-red-100 dark:border-red-400 dark:bg-red-900/40'
+            : isUnsaved
+              ? 'border-amber-500 bg-amber-100 dark:border-amber-400 dark:bg-amber-900/40'
+              : 'border-blue-400 bg-blue-100 dark:border-blue-500 dark:bg-blue-900/40';
+
+          const heading = isFailing
+            ? 'Save failed — check your connection'
+            : isUnsaved
+              ? 'Unsaved entries — saving in the background'
+              : isSaving
+                ? 'Saving your entries…'
+                : 'All entries saved';
+
+          const body = isFailing
+            ? 'Your typing is safe on this device — we will keep retrying. Please stay on this page until the banner turns green.'
+            : isUnsaved
+              ? 'Your entries are kept on this device and will save shortly. Please stay on the page until you see the green confirmation.'
+              : isSaving
+                ? 'Sending your entries to the server.'
+                : 'All your entries are saved automatically every few seconds. There is no need to click a Save button.';
+
+          return (
+            <div className={`mb-6 rounded-lg border-2 px-4 py-3 shadow-sm ${tone}`}>
+              <div className="flex items-start gap-3">
+                <div className="flex-shrink-0 mt-0.5">
+                  <svg className="h-5 w-5 text-current opacity-80" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{heading}</p>
+                    {isSaving  && <span className="flex-shrink-0 text-xs font-medium text-blue-700 dark:text-blue-300 animate-pulse">Saving…</span>}
+                    {isClean   && <span className="flex-shrink-0 text-xs font-medium text-green-700 dark:text-green-400">✓ Saved</span>}
+                    {isFailing && <span className="flex-shrink-0 text-xs font-bold text-red-700 dark:text-red-300">! Not saved</span>}
+                    {isUnsaved && <span className="flex-shrink-0 text-xs font-medium text-amber-800 dark:text-amber-200">● Pending</span>}
+                  </div>
+                  <p className="text-xs text-gray-800 dark:text-gray-200">{body}</p>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Actual Leader */}
         <div className="mb-4">
