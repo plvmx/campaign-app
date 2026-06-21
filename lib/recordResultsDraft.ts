@@ -15,9 +15,21 @@
 
 export type ResultsCategory = 'TM' | 'P' | 'F' | 'SP' | 'IR';
 
+/**
+ * One name slot as it appears in the visible form. `dbId` is the
+ * primary key of the corresponding row in the `results` table once it
+ * has been saved at least once; null means this slot has never reached
+ * the server. Empty `value` with a non-null `dbId` represents "user
+ * cleared a previously-saved entry — delete it on next save".
+ */
+export interface NameSlotDraft {
+  value: string;
+  dbId: string | null;
+}
+
 export interface RecordResultsDraft {
   campaignId: string;
-  names: Record<ResultsCategory, string[]>;
+  names: Record<ResultsCategory, NameSlotDraft[]>;
   actualLeader: string;
   teamSize: string;
   ppCnt: string;
@@ -82,8 +94,8 @@ export function clearDraft(campaignId: string): void {
  * "restored unsaved names" banner.
  */
 export function draftHasContent(draft: RecordResultsDraft): boolean {
-  const anyName = (Object.values(draft.names) as string[][])
-    .some((arr) => arr.some((n) => n.trim().length > 0));
+  const anyName = (Object.values(draft.names) as NameSlotDraft[][])
+    .some((arr) => arr.some((s) => s.value.trim().length > 0));
   if (anyName) return true;
   if (draft.actualLeader.trim()) return true;
   if (draft.teamSize.trim()) return true;

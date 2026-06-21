@@ -9,7 +9,13 @@ import { normalizeMobile, normalizeName } from '@/lib/auth';
 import { getSharedWithMeOwners } from '@/lib/leaderShares';
 import { useUser } from '@/contexts/UserContext';
 import { updateCampaign, createCampaign, getCampaignById, findCampaignsByKey } from '@/lib/services/campaignService';
-import { getResultsByCampaignId, upsertResults, deleteResult } from '@/lib/services/resultsService';
+import {
+  getResultsByCampaignId,
+  insertResults,
+  updateResult,
+  deleteResult,
+  type ResultRow,
+} from '@/lib/services/resultsService';
 import { logResultsSave, type ResultsLogRow } from '@/lib/resultsLog';
 import {
   saveDraft as saveResultsDraft,
@@ -17,18 +23,25 @@ import {
   clearDraft as clearResultsDraft,
   draftHasContent,
   type RecordResultsDraft,
+  type NameSlotDraft,
+  type ResultsCategory,
 } from '@/lib/recordResultsDraft';
 import { trackEvent } from '@/lib/analytics';
 import { getErrorMessage } from '@/lib/errorUtils';
 
+interface NameSlot {
+  value: string;
+  dbId: string | null;  // null = not yet inserted; set after first successful save
+}
+
 interface InputRow {
-  id: string;
-  field1: string;
-  field2: string;
-  field3: string;
+  id: string;                                 // stable React key for the row
+  slots: [NameSlot, NameSlot, NameSlot];      // exactly 3 name slots per row (visual grouping)
 }
 
 type SectionType = 'members' | 'partial' | 'full' | 'fullSinners' | 'information';
+
+const emptySlot = (): NameSlot => ({ value: '', dbId: null });
 
 interface SavedCounts { pp: number; fp: number; fpsp: number; ir: number }
 
@@ -38,7 +51,7 @@ const generateId = () =>
     : `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
 const countNames = (rows: InputRow[]) =>
-  rows.flatMap((r) => [r.field1, r.field2, r.field3]).filter((v) => v.trim()).length;
+  rows.flatMap((r) => r.slots).filter((s) => s.value.trim()).length;
 
 // Transient network errors (dropped connection, timeout, brief Supabase
 // blips) are common on mobile and shouldn't surface as a save failure on the
@@ -92,14 +105,15 @@ function RecordResultsDetailPageContent() {
   const [fpCnt, setFpCnt] = useState<string>('');
   const [fpspCnt, setFpspCnt] = useState<string>('');
   const [irCnt, setIrCnt] = useState<string>('');
-  const [originalNames, setOriginalNames] = useState<Set<string>>(new Set());
+  // What's currently on the server, keyed by row id. Drives the save diff.
+  const [originalEntries, setOriginalEntries] = useState<Map<string, { first_name: string; category_code: ResultsCategory }>>(new Map());
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [draftRestoredAt, setDraftRestoredAt] = useState<string | null>(null);
   const [hasUnsavedDraft, setHasUnsavedDraft] = useState(false);
 
   // Refs for accessing latest values in interval/cleanup callbacks (avoids stale closures)
   const campaignIdRef = useRef(campaignId);
-  const originalNamesRef = useRef(originalNames);
+  const originalEntriesRef = useRef(originalEntries);
   const membersRowsRef = useRef(membersRows);
   const partialRowsRef = useRef(partialRows);
   const fullRowsRef = useRef(fullRows);
@@ -127,7 +141,7 @@ function RecordResultsDetailPageContent() {
 
   // Keep refs in sync with state
   useEffect(() => { campaignIdRef.current = campaignId; }, [campaignId]);
-  useEffect(() => { originalNamesRef.current = originalNames; }, [originalNames]);
+  useEffect(() => { originalEntriesRef.current = originalEntries; }, [originalEntries]);
   useEffect(() => { membersRowsRef.current = membersRows; }, [membersRows]);
   useEffect(() => { partialRowsRef.current = partialRows; }, [partialRows]);
   useEffect(() => { fullRowsRef.current = fullRows; }, [fullRows]);
@@ -147,8 +161,19 @@ function RecordResultsDetailPageContent() {
   // The draft is cleared after a confirmed-successful save in savePendingNames.
   useEffect(() => {
     if (!campaignId || isLoading) return;
-    const collect = (rows: InputRow[]): string[] =>
-      rows.flatMap((r) => [r.field1, r.field2, r.field3]).map((v) => v.trim()).filter(Boolean);
+    // Persist every slot that either has content or carries a dbId. Trailing
+    // empty-and-unsaved slots are dropped — they're meaningless on restore.
+    const collect = (rows: InputRow[]): NameSlotDraft[] => {
+      const all: NameSlotDraft[] = rows.flatMap((r) => r.slots).map((s) => ({
+        value: s.value,
+        dbId:  s.dbId,
+      }));
+      let lastKeep = -1;
+      for (let i = 0; i < all.length; i++) {
+        if (all[i].value.trim().length > 0 || all[i].dbId) lastKeep = i;
+      }
+      return all.slice(0, lastKeep + 1);
+    };
     const draft: RecordResultsDraft = {
       campaignId,
       names: {
@@ -264,16 +289,35 @@ function RecordResultsDetailPageContent() {
 
     let cancelled = false;
 
-    const emptyRow = (): InputRow => ({ id: generateId(), field1: '', field2: '', field3: '' });
+    const emptyRow = (): InputRow => ({
+      id: generateId(),
+      slots: [emptySlot(), emptySlot(), emptySlot()],
+    });
 
-    const createRowsFromNames = (names: string[]): InputRow[] => {
+    // Build rows from a flat list of slots, grouped 3-per-row. Slots are
+    // already in the correct {value, dbId} shape so existing dbIds are
+    // preserved through restore.
+    const createRowsFromSlots = (slots: NameSlot[]): InputRow[] => {
       const rows: InputRow[] = [];
-      for (let i = 0; i < names.length; i += 3) {
-        rows.push({ id: generateId(), field1: names[i] || '', field2: names[i + 1] || '', field3: names[i + 2] || '' });
+      for (let i = 0; i < slots.length; i += 3) {
+        rows.push({
+          id: generateId(),
+          slots: [
+            slots[i]     ?? emptySlot(),
+            slots[i + 1] ?? emptySlot(),
+            slots[i + 2] ?? emptySlot(),
+          ],
+        });
       }
       if (rows.length === 0) rows.push(emptyRow());
       return rows;
     };
+
+    const slotsFromDbRows = (rows: ResultRow[], category: ResultsCategory): NameSlot[] =>
+      rows.filter((r) => r.category_code === category).map((r) => ({ value: r.first_name, dbId: r.id }));
+
+    const slotsFromDraft = (drafts: NameSlotDraft[]): NameSlot[] =>
+      drafts.map((d) => ({ value: d.value, dbId: d.dbId }));
 
     setIsLoading(true);
     setCampaignId(null);
@@ -330,22 +374,26 @@ function RecordResultsDetailPageContent() {
           lastSavedActualLeaderRef.current = null;
         }
 
-        // `originalNames` always reflects ground truth from the server — the
-        // autosave diff logic depends on this to compute correct upserts/deletes.
-        setOriginalNames(new Set(existing.map((r) => `${r.first_name}:${r.category_code}`)));
+        // `originalEntries` always reflects ground truth from the server — the
+        // autosave diff logic depends on this to compute correct insert/update/deletes.
+        const origMap = new Map<string, { first_name: string; category_code: ResultsCategory }>();
+        for (const r of existing) {
+          origMap.set(r.id, { first_name: r.first_name, category_code: r.category_code as ResultsCategory });
+        }
+        setOriginalEntries(origMap);
 
         // If a locally-buffered draft exists for this campaign, restore the
-        // visible form state from it — that's the user's last known intent and
-        // covers cases where the server-side save failed silently last time.
-        // We still load `originalNames` from the server, so the next autosave
-        // will correctly upsert any names that aren't yet on the server.
+        // visible form state (including each slot's dbId) from it — that's the
+        // user's last known intent and covers cases where the server-side save
+        // failed silently last time. `originalEntries` still reflects what the
+        // server actually has, so the next autosave computes the right diff.
         const draft = loadResultsDraft(cid);
         if (draft && draftHasContent(draft)) {
-          setMembersRows(createRowsFromNames(draft.names.TM));
-          setPartialRows(createRowsFromNames(draft.names.P));
-          setFullRows(createRowsFromNames(draft.names.F));
-          setFullSinnersRows(createRowsFromNames(draft.names.SP));
-          setInformationRows(createRowsFromNames(draft.names.IR));
+          setMembersRows(createRowsFromSlots(slotsFromDraft(draft.names.TM)));
+          setPartialRows(createRowsFromSlots(slotsFromDraft(draft.names.P)));
+          setFullRows(createRowsFromSlots(slotsFromDraft(draft.names.F)));
+          setFullSinnersRows(createRowsFromSlots(slotsFromDraft(draft.names.SP)));
+          setInformationRows(createRowsFromSlots(slotsFromDraft(draft.names.IR)));
           if (draft.actualLeader) setActualLeader(draft.actualLeader);
           if (draft.teamSize)     setTeamSize(draft.teamSize);
           if (draft.ppCnt)        setPpCnt(draft.ppCnt);
@@ -355,11 +403,11 @@ function RecordResultsDetailPageContent() {
           setDraftRestoredAt(draft.updatedAt);
           setHasUnsavedDraft(true);
         } else {
-          setMembersRows(createRowsFromNames(existing.filter((r) => r.category_code === 'TM').map((r) => r.first_name)));
-          setPartialRows(createRowsFromNames(existing.filter((r) => r.category_code === 'P').map((r) => r.first_name)));
-          setFullRows(createRowsFromNames(existing.filter((r) => r.category_code === 'F').map((r) => r.first_name)));
-          setFullSinnersRows(createRowsFromNames(existing.filter((r) => r.category_code === 'SP').map((r) => r.first_name)));
-          setInformationRows(createRowsFromNames(existing.filter((r) => r.category_code === 'IR').map((r) => r.first_name)));
+          setMembersRows(createRowsFromSlots(slotsFromDbRows(existing, 'TM')));
+          setPartialRows(createRowsFromSlots(slotsFromDbRows(existing, 'P')));
+          setFullRows(createRowsFromSlots(slotsFromDbRows(existing, 'F')));
+          setFullSinnersRows(createRowsFromSlots(slotsFromDbRows(existing, 'SP')));
+          setInformationRows(createRowsFromSlots(slotsFromDbRows(existing, 'IR')));
           if (existing.length === 0) {
             setMembersRows([emptyRow()]);
             setPartialRows([emptyRow()]);
@@ -449,6 +497,11 @@ function RecordResultsDetailPageContent() {
   // If an edit comes in while a save is already in flight, rerunNamesRef marks
   // that another pass is needed once the current one finishes, so the edit
   // isn't silently dropped.
+  //
+  // Each name slot carries its own server-side primary key (`dbId`). The save
+  // diff is therefore by id, not by name: two attendees named "John" in the
+  // same category get two distinct rows because they're two distinct slots
+  // with two distinct dbIds.
   const savePendingNames = useCallback(async () => {
     if (savingNamesRef.current) {
       rerunNamesRef.current = true;
@@ -460,8 +513,7 @@ function RecordResultsDetailPageContent() {
     savingNamesRef.current = true;
     setSaveStatus('saving');
 
-    // Captured outside the try block so the catch handler can log what we
-    // attempted, not just the error.
+    // Captured outside the try block so the catch handler can log what we attempted.
     const attemptedUpserts: ResultsLogRow[] = [];
     const attemptedDeletes: ResultsLogRow[] = [];
 
@@ -469,56 +521,126 @@ function RecordResultsDetailPageContent() {
       const userId = userIdRef.current;
       if (!userId) throw new Error('User not authenticated');
 
-      const currentOriginalNames = originalNamesRef.current;
+      const original = originalEntriesRef.current;
 
-      // Build the full set of current names from live row refs
-      const currentNames = new Set<string>();
-      const addNamesFromRows = (rows: InputRow[], categoryCode: string) => {
+      // ----------------------------------------------------------------------
+      // Walk every slot in every section, classify into insert / update / delete.
+      // `slotKey` is `${category}:${rowId}:${slotIndex}` — a stable handle so we
+      // can apply the server-returned ids back onto form state in one update.
+      // ----------------------------------------------------------------------
+      type Action =
+        | { kind: 'insert'; key: string; category: ResultsCategory; value: string }
+        | { kind: 'update'; key: string; id: string; category: ResultsCategory; value: string }
+        | { kind: 'delete'; key: string | null; id: string; category: ResultsCategory; value: string };
+
+      const actions: Action[] = [];
+      const seenDbIds = new Set<string>();
+
+      const walk = (rows: InputRow[], category: ResultsCategory) => {
         rows.forEach((row) => {
-          [row.field1, row.field2, row.field3].forEach((v) => {
-            const name = v.trim();
-            if (name) currentNames.add(`${name}:${categoryCode}`);
+          row.slots.forEach((slot, idx) => {
+            const key = `${category}:${row.id}:${idx}`;
+            const value = slot.value.trim();
+            if (slot.dbId) {
+              seenDbIds.add(slot.dbId);
+              if (!value) {
+                actions.push({ kind: 'delete', key, id: slot.dbId, category, value: original.get(slot.dbId)?.first_name ?? '' });
+              } else {
+                const orig = original.get(slot.dbId);
+                if (!orig || orig.first_name !== value || orig.category_code !== category) {
+                  actions.push({ kind: 'update', key, id: slot.dbId, category, value });
+                }
+              }
+            } else if (value) {
+              actions.push({ kind: 'insert', key, category, value });
+            }
           });
         });
       };
-      addNamesFromRows(membersRowsRef.current, 'TM');
-      addNamesFromRows(partialRowsRef.current, 'P');
-      addNamesFromRows(fullRowsRef.current, 'F');
-      addNamesFromRows(fullSinnersRowsRef.current, 'SP');
-      addNamesFromRows(informationRowsRef.current, 'IR');
+      walk(membersRowsRef.current,      'TM');
+      walk(partialRowsRef.current,      'P');
+      walk(fullRowsRef.current,         'F');
+      walk(fullSinnersRowsRef.current,  'SP');
+      walk(informationRowsRef.current,  'IR');
 
-      // Delete names that were removed
-      for (const nameKey of currentOriginalNames) {
-        if (!currentNames.has(nameKey)) {
-          const lastColon = nameKey.lastIndexOf(':');
-          const name = nameKey.slice(0, lastColon);
-          const categoryCode = nameKey.slice(lastColon + 1);
-          attemptedDeletes.push({ first_name: name, category_code: categoryCode });
-          try {
-            await withRetry(() => deleteResult(currentCampaignId, name, categoryCode));
-          } catch (err) {
-            console.error('Error deleting name:', name, categoryCode, err);
-          }
+      // dbIds that exist on the server but no longer appear in any slot
+      // (e.g. the user removed the whole row containing them).
+      for (const [dbId, entry] of original) {
+        if (!seenDbIds.has(dbId)) {
+          actions.push({ kind: 'delete', key: null, id: dbId, category: entry.category_code, value: entry.first_name });
         }
       }
 
-      // Upsert current names
-      const resultsToSave = Array.from(currentNames).map((nameKey) => {
-        const lastColon = nameKey.lastIndexOf(':');
-        const first_name = nameKey.slice(0, lastColon);
-        const category_code = nameKey.slice(lastColon + 1);
-        attemptedUpserts.push({ first_name, category_code });
-        return {
-          campaign_id: currentCampaignId,
-          first_name,
-          category_code,
-          user_id: userId,
-        };
-      });
-      await withRetry(() => upsertResults(resultsToSave));
+      const inserts = actions.filter((a): a is Extract<Action, { kind: 'insert' }> => a.kind === 'insert');
+      const updates = actions.filter((a): a is Extract<Action, { kind: 'update' }> => a.kind === 'update');
+      const deletes = actions.filter((a): a is Extract<Action, { kind: 'delete' }> => a.kind === 'delete');
 
-      setOriginalNames(currentNames);
-      originalNamesRef.current = currentNames;
+      inserts.forEach((a) => attemptedUpserts.push({ first_name: a.value, category_code: a.category }));
+      updates.forEach((a) => attemptedUpserts.push({ first_name: a.value, category_code: a.category }));
+      deletes.forEach((a) => attemptedDeletes.push({ first_name: a.value, category_code: a.category }));
+
+      // ----------------------------------------------------------------------
+      // Apply inserts first so we can attach returned dbIds back to slots and
+      // include the new ids in the updated originalEntries map.
+      // ----------------------------------------------------------------------
+      const newIdsByKey = new Map<string, string>();
+      if (inserts.length) {
+        const rows = inserts.map((a) => ({
+          campaign_id:   currentCampaignId,
+          first_name:    a.value,
+          category_code: a.category,
+          user_id:       userId,
+        }));
+        const inserted = await withRetry(() => insertResults(rows));
+        inserted.forEach((row, i) => {
+          newIdsByKey.set(inserts[i].key, row.id);
+        });
+      }
+
+      // Updates can run concurrently. Failures throw out — caught below.
+      if (updates.length) {
+        await withRetry(() => Promise.all(updates.map((a) => updateResult(a.id, { first_name: a.value, category_code: a.category }))));
+      }
+
+      // Deletes likewise.
+      const clearedDbIdsByKey = new Set<string>();
+      if (deletes.length) {
+        await withRetry(() => Promise.all(deletes.map((a) => deleteResult(a.id))));
+        deletes.forEach((a) => { if (a.key) clearedDbIdsByKey.add(a.key); });
+      }
+
+      // ----------------------------------------------------------------------
+      // Apply the dbId updates back onto form state and recompute originalEntries.
+      // ----------------------------------------------------------------------
+      const applyIds = (rows: InputRow[], category: ResultsCategory): InputRow[] =>
+        rows.map((row) => ({
+          ...row,
+          slots: row.slots.map((slot, idx) => {
+            const key = `${category}:${row.id}:${idx}`;
+            if (newIdsByKey.has(key))     return { ...slot, dbId: newIdsByKey.get(key)! };
+            if (clearedDbIdsByKey.has(key)) return { ...slot, dbId: null };
+            return slot;
+          }) as [NameSlot, NameSlot, NameSlot],
+        }));
+
+      if (newIdsByKey.size > 0 || clearedDbIdsByKey.size > 0) {
+        setMembersRows(     (prev) => applyIds(prev, 'TM'));
+        setPartialRows(     (prev) => applyIds(prev, 'P'));
+        setFullRows(        (prev) => applyIds(prev, 'F'));
+        setFullSinnersRows( (prev) => applyIds(prev, 'SP'));
+        setInformationRows( (prev) => applyIds(prev, 'IR'));
+      }
+
+      const nextOriginal = new Map(original);
+      for (const id of deletes.map((d) => d.id)) nextOriginal.delete(id);
+      for (const u of updates) nextOriginal.set(u.id, { first_name: u.value, category_code: u.category });
+      inserts.forEach((a, i) => {
+        const id = newIdsByKey.get(a.key);
+        if (id) nextOriginal.set(id, { first_name: a.value, category_code: a.category });
+        void i; // index used implicitly via the matching newIdsByKey lookup
+      });
+      setOriginalEntries(nextOriginal);
+      originalEntriesRef.current = nextOriginal;
 
       setSaveStatus('saved');
       if (saveStatusTimerRef.current) clearTimeout(saveStatusTimerRef.current);
@@ -565,14 +687,15 @@ function RecordResultsDetailPageContent() {
       });
 
       // Re-pull the actual server state and rebuild the local "what's saved"
-      // baseline from truth. Otherwise the originalNamesRef can drift after
-      // a partial failure (e.g. deletes succeeded but upsert failed), and
-      // the next save would compute the wrong diff.
+      // baseline from truth. Otherwise originalEntriesRef can drift after a
+      // partial failure (e.g. some updates succeeded but a delete failed),
+      // and the next save would compute the wrong diff.
       try {
         const fresh = await getResultsByCampaignId(currentCampaignId);
-        const freshSet = new Set(fresh.map((r) => `${r.first_name}:${r.category_code}`));
-        setOriginalNames(freshSet);
-        originalNamesRef.current = freshSet;
+        const freshMap = new Map<string, { first_name: string; category_code: ResultsCategory }>();
+        for (const r of fresh) freshMap.set(r.id, { first_name: r.first_name, category_code: r.category_code as ResultsCategory });
+        setOriginalEntries(freshMap);
+        originalEntriesRef.current = freshMap;
       } catch (refetchError) {
         console.error('Error refetching results after save failure:', refetchError);
       }
@@ -698,7 +821,7 @@ function RecordResultsDetailPageContent() {
   }, [flushSaveNames, savePendingNames]);
 
   const addNewRow = (section: SectionType) => {
-    const newRow: InputRow = { id: generateId(), field1: '', field2: '', field3: '' };
+    const newRow: InputRow = { id: generateId(), slots: [emptySlot(), emptySlot(), emptySlot()] };
     switch (section) {
       case 'members':    setMembersRows((prev) => [...prev, newRow]); break;
       case 'partial':    setPartialRows((prev) => [...prev, newRow]); break;
@@ -711,10 +834,15 @@ function RecordResultsDetailPageContent() {
   const updateRowField = (
     section: SectionType,
     rowId: string,
-    fieldName: 'field1' | 'field2' | 'field3',
+    slotIndex: 0 | 1 | 2,
     value: string,
   ) => {
-    const update = (prev: InputRow[]) => prev.map((row) => row.id === rowId ? { ...row, [fieldName]: value } : row);
+    const update = (prev: InputRow[]) =>
+      prev.map((row) => {
+        if (row.id !== rowId) return row;
+        const slots = row.slots.map((s, i) => (i === slotIndex ? { ...s, value } : s)) as [NameSlot, NameSlot, NameSlot];
+        return { ...row, slots };
+      });
     switch (section) {
       case 'members':    setMembersRows(update); break;
       case 'partial':    setPartialRows(update); break;
@@ -727,10 +855,10 @@ function RecordResultsDetailPageContent() {
   const handleNameChange = (
     section: SectionType,
     rowId: string,
-    fieldName: 'field1' | 'field2' | 'field3',
+    slotIndex: 0 | 1 | 2,
     value: string,
   ) => {
-    updateRowField(section, rowId, fieldName, value);
+    updateRowField(section, rowId, slotIndex, value);
     if (campaignId) scheduleSaveNames();
   };
 
@@ -738,30 +866,17 @@ function RecordResultsDetailPageContent() {
     <div className="space-y-2">
       {rows.map((row) => (
         <div key={row.id} className="flex gap-2 w-full">
-          <input
-            type="text"
-            value={row.field1}
-            onChange={(e) => handleNameChange(section, row.id, 'field1', e.target.value)}
-            maxLength={255}
-            className="flex-1 min-w-0 rounded-md border-2 border-gray-400 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
-            placeholder="Enter first name"
-          />
-          <input
-            type="text"
-            value={row.field2}
-            onChange={(e) => handleNameChange(section, row.id, 'field2', e.target.value)}
-            maxLength={255}
-            className="flex-1 min-w-0 rounded-md border-2 border-gray-400 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
-            placeholder="Enter first name"
-          />
-          <input
-            type="text"
-            value={row.field3}
-            onChange={(e) => handleNameChange(section, row.id, 'field3', e.target.value)}
-            maxLength={255}
-            className="flex-1 min-w-0 rounded-md border-2 border-gray-400 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
-            placeholder="Enter first name"
-          />
+          {([0, 1, 2] as const).map((idx) => (
+            <input
+              key={idx}
+              type="text"
+              value={row.slots[idx].value}
+              onChange={(e) => handleNameChange(section, row.id, idx, e.target.value)}
+              maxLength={255}
+              className="flex-1 min-w-0 rounded-md border-2 border-gray-400 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
+              placeholder="Enter first name"
+            />
+          ))}
         </div>
       ))}
       <button
