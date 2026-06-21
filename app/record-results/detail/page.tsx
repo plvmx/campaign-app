@@ -10,7 +10,9 @@ import { getSharedWithMeOwners } from '@/lib/leaderShares';
 import { useUser } from '@/contexts/UserContext';
 import { updateCampaign, createCampaign, getCampaignById, findCampaignsByKey } from '@/lib/services/campaignService';
 import { getResultsByCampaignId, upsertResults, deleteResult } from '@/lib/services/resultsService';
+import { logResultsSave, type ResultsLogRow } from '@/lib/resultsLog';
 import { trackEvent } from '@/lib/analytics';
+import { getErrorMessage } from '@/lib/errorUtils';
 
 interface InputRow {
   id: string;
@@ -390,6 +392,12 @@ function RecordResultsDetailPageContent() {
 
     savingNamesRef.current = true;
     setSaveStatus('saving');
+
+    // Captured outside the try block so the catch handler can log what we
+    // attempted, not just the error.
+    const attemptedUpserts: ResultsLogRow[] = [];
+    const attemptedDeletes: ResultsLogRow[] = [];
+
     try {
       const userId = userIdRef.current;
       if (!userId) throw new Error('User not authenticated');
@@ -418,6 +426,7 @@ function RecordResultsDetailPageContent() {
           const lastColon = nameKey.lastIndexOf(':');
           const name = nameKey.slice(0, lastColon);
           const categoryCode = nameKey.slice(lastColon + 1);
+          attemptedDeletes.push({ first_name: name, category_code: categoryCode });
           try {
             await withRetry(() => deleteResult(currentCampaignId, name, categoryCode));
           } catch (err) {
@@ -429,10 +438,13 @@ function RecordResultsDetailPageContent() {
       // Upsert current names
       const resultsToSave = Array.from(currentNames).map((nameKey) => {
         const lastColon = nameKey.lastIndexOf(':');
+        const first_name = nameKey.slice(0, lastColon);
+        const category_code = nameKey.slice(lastColon + 1);
+        attemptedUpserts.push({ first_name, category_code });
         return {
           campaign_id: currentCampaignId,
-          first_name: nameKey.slice(0, lastColon),
-          category_code: nameKey.slice(lastColon + 1),
+          first_name,
+          category_code,
           user_id: userId,
         };
       });
@@ -445,6 +457,13 @@ function RecordResultsDetailPageContent() {
       if (saveStatusTimerRef.current) clearTimeout(saveStatusTimerRef.current);
       saveStatusTimerRef.current = setTimeout(() => setSaveStatus('idle'), 3000);
 
+      logResultsSave({
+        campaignId: currentCampaignId,
+        status: 'SUCCESS',
+        attemptedUpserts,
+        attemptedDeletes,
+      });
+
       if (!hasTrackedSaveRef.current) {
         hasTrackedSaveRef.current = true;
         trackEvent('record_results_save', {
@@ -455,6 +474,21 @@ function RecordResultsDetailPageContent() {
     } catch (error: unknown) {
       console.error('Error saving names:', error);
       setSaveStatus('error');
+      const errorMessage = getErrorMessage(error);
+      logResultsSave({
+        campaignId: currentCampaignId,
+        status: 'ERROR',
+        attemptedUpserts,
+        attemptedDeletes,
+        errorMessage,
+      });
+      trackEvent('record_results_save_error', {
+        state:    campaignData.state  || undefined,
+        leader:   campaignData.leader || undefined,
+        upserts:  attemptedUpserts.length,
+        deletes:  attemptedDeletes.length,
+        error:    errorMessage,
+      });
     } finally {
       savingNamesRef.current = false;
       if (rerunNamesRef.current) {
