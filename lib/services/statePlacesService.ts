@@ -5,6 +5,8 @@ export interface StatePlace {
   state: string;
   place: string;
   created_at: string;
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 export async function getStatePlaces(filterState?: string): Promise<StatePlace[]> {
@@ -37,5 +39,14 @@ export async function updateStatePlace(
 
 export async function deleteStatePlace(id: string): Promise<void> {
   const { error } = await supabase.from('state_places').delete().eq('id', id);
+  if (error) throw error;
+}
+
+/** Persist geocoded coordinates for a place once resolved, so future lookups skip geocoding. */
+export async function setStatePlaceCoordinates(
+  id: string,
+  coords: { latitude: number; longitude: number },
+): Promise<void> {
+  const { error } = await supabase.from('state_places').update(coords).eq('id', id);
   if (error) throw error;
 }
