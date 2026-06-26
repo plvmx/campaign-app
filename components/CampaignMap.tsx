@@ -7,11 +7,12 @@ import L from 'leaflet';
 import type { MapMarker } from '@/lib/services/campaignMapService';
 
 // Leaflet's default marker icon assets don't resolve correctly through Next.js's
-// bundler, so point them at a CDN instead of bundling the package's image files.
+// bundler, so they're served from /public/leaflet instead (also keeps them same-origin
+// for the CSP img-src policy).
 const markerIcon = L.icon({
-  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+  iconUrl: '/leaflet/marker-icon.png',
+  iconRetinaUrl: '/leaflet/marker-icon-2x.png',
+  shadowUrl: '/leaflet/marker-shadow.png',
   iconSize: [25, 41],
   iconAnchor: [12, 41],
   popupAnchor: [1, -34],
