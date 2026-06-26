@@ -71,12 +71,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Missing state or place' }, { status: 400 });
   }
 
-  const { data: existing } = await supabaseAdmin
+  // Matched loosely (trim + collapsed whitespace + case-insensitive) because campaigns.place
+  // and state_places.place are independently free-typed and can differ by incidental whitespace
+  // (e.g. "Preston" vs "Preston "), which would otherwise silently break the coordinate cache.
+  const { data: statePlaces } = await supabaseAdmin
     .from('state_places')
-    .select('id, latitude, longitude')
-    .eq('state', state)
-    .eq('place', place)
-    .maybeSingle();
+    .select('id, place, latitude, longitude')
+    .eq('state', state);
+
+  const normalize = (s: string) => s.trim().replace(/\s+/g, ' ').toLowerCase();
+  const existing = statePlaces?.find(p => normalize(p.place) === normalize(place)) ?? null;
 
   if (existing?.latitude != null && existing?.longitude != null) {
     return NextResponse.json({ latitude: existing.latitude, longitude: existing.longitude, cached: true });

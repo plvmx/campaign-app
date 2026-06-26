@@ -22,6 +22,13 @@ export interface MapDataResult {
   unresolvedPlaces: { state: string; place: string }[];
 }
 
+// campaigns.place and state_places.place are independently free-typed and can differ by
+// incidental whitespace/case (e.g. "Preston" vs "Preston "), so cache keys are normalized
+// to avoid silently missing an already-geocoded place.
+function placeKey(state: string, place: string): string {
+  return `${state.trim().toUpperCase()}::${place.trim().replace(/\s+/g, ' ').toLowerCase()}`;
+}
+
 async function fetchCoordinates(state: string, place: string): Promise<{ latitude: number; longitude: number } | null> {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) return null;
@@ -51,7 +58,7 @@ export async function getMapData(options: {
 
   const grouped = new Map<string, { state: string; place: string; campaigns: Campaign[] }>();
   for (const campaign of campaigns) {
-    const key = `${campaign.state}::${campaign.place}`;
+    const key = placeKey(campaign.state, campaign.place);
     const group = grouped.get(key);
     if (group) {
       group.campaigns.push(campaign);
@@ -64,15 +71,20 @@ export async function getMapData(options: {
   const coordsByKey = new Map(
     knownPlaces
       .filter(p => p.latitude != null && p.longitude != null)
-      .map(p => [`${p.state}::${p.place}`, { latitude: p.latitude as number, longitude: p.longitude as number }]),
+      .map(p => [placeKey(p.state, p.place), { latitude: p.latitude as number, longitude: p.longitude as number }]),
   );
 
   const markers: MapMarker[] = [];
   const unresolvedPlaces: { state: string; place: string }[] = [];
 
+  let isFirstUncachedLookup = true;
   for (const [key, group] of grouped) {
     let coords = coordsByKey.get(key);
     if (!coords) {
+      // Nominatim's usage policy caps requests at 1/sec — space out uncached lookups
+      // so a burst of new places doesn't get throttled into spurious "not found" results.
+      if (!isFirstUncachedLookup) await new Promise(resolve => setTimeout(resolve, 1100));
+      isFirstUncachedLookup = false;
       coords = await fetchCoordinates(group.state, group.place) ?? undefined;
     }
     if (coords) {
