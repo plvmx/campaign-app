@@ -1,8 +1,17 @@
 // AFJ CAS Service Worker
-const CACHE_NAME = 'afj-cas-v1';
+// Bump this version string whenever this file changes, so the cache-cleanup in
+// 'activate' actually purges entries cached under the old worker.
+const CACHE_NAME = 'afj-cas-v2';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
+});
+
+// Lets the page force this worker to activate immediately instead of waiting
+// for the next navigation — paired with the controllerchange reload in
+// ServiceWorkerRegistration.tsx so installed PWAs pick up new deploys promptly.
+self.addEventListener('message', (messageEvent) => {
+  if (messageEvent.data === 'SKIP_WAITING') self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
