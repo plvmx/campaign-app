@@ -1,8 +1,8 @@
 'use client';
 
 import 'leaflet/dist/leaflet.css';
-import { useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import { useEffect, useState } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import type { MapMarker } from '@/lib/services/campaignMapService';
 
@@ -32,6 +32,22 @@ function FlyTo({ center, zoom }: FlyToProps) {
   return null;
 }
 
+/** Surfaces tile load failures directly instead of leaving the admin staring at a blank grey map. */
+function TileErrorBanner() {
+  const [hasError, setHasError] = useState(false);
+  useMapEvents({
+    tileerror: () => setHasError(true),
+    tileload: () => setHasError(false),
+  });
+
+  if (!hasError) return null;
+  return (
+    <div className="absolute top-2 left-1/2 z-[1000] -translate-x-1/2 rounded-md border border-red-300 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-800 shadow">
+      Map tiles failed to load — check your network connection.
+    </div>
+  );
+}
+
 interface CampaignMapProps {
   center: [number, number];
   zoom: number;
@@ -48,8 +64,9 @@ export default function CampaignMap({ center, zoom, markers }: CampaignMapProps)
     >
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        url="/api/tiles/{z}/{x}/{y}"
       />
+      <TileErrorBanner />
       <FlyTo center={center} zoom={zoom} />
       {markers.map(marker => (
         <Marker key={`${marker.state}::${marker.place}`} position={[marker.latitude, marker.longitude]} icon={markerIcon}>

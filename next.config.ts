@@ -20,9 +20,10 @@ const securityHeaders = [
       "default-src 'self'",
       "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
       "style-src 'self' 'unsafe-inline'",
-      // blob: needed for canvas→JPEG slide/report downloads; data: for inline images
-      // *.tile.openstreetmap.org for the admin campaign map's base tiles
-      "img-src 'self' data: blob: https://*.tile.openstreetmap.org",
+      // blob: needed for canvas→JPEG slide/report downloads; data: for inline images.
+      // Map tiles are proxied through /api/tiles (see app/api/tiles), so no
+      // third-party image origin needs to be allow-listed here.
+      "img-src 'self' data: blob:",
       // Supabase API + realtime WebSocket connections
       "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
       "frame-ancestors 'none'",
