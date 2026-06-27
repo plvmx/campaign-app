@@ -125,11 +125,19 @@ export default function CampaignMapPage() {
   return (
     <MobileLayout>
       <div className="flex h-[calc(100vh-4rem)] flex-col p-4">
-        <div className="mb-3">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Campaign Map</h1>
-          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-            Upcoming campaigns plotted by location across Australia
-          </p>
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Campaign Map</h1>
+            <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+              Upcoming campaigns plotted by location across Australia
+            </p>
+          </div>
+          <button
+            onClick={() => router.push('/admin')}
+            className="shrink-0 rounded-md bg-gray-200 px-3 py-2 text-base font-bold text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 border-2 border-gray-800 dark:border-gray-600"
+          >
+            Back
+          </button>
         </div>
 
         <div className="mb-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
