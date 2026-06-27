@@ -188,8 +188,14 @@ export default function CampaignMapPage() {
 
         <div className="relative flex-1 overflow-hidden rounded-lg border-2 border-gray-800 dark:border-gray-600">
           {isLoadingMap && (
-            <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/60 dark:bg-gray-900/60">
-              <LoadingSpinner />
+            // z-[1100] keeps the overlay above Leaflet's stacked panes (tile=200,
+            // overlay=400, marker=600, popup=700, controls=~1000) — otherwise the
+            // loading message disappears the moment Leaflet paints its first tile.
+            <div className="absolute inset-0 z-[1100] flex flex-col items-center justify-center gap-3 bg-white/80 px-6 text-center dark:bg-gray-900/80">
+              <LoadingSpinner text="Please wait — locating campaigns on the map" />
+              <p className="max-w-sm text-xs text-gray-600 dark:text-gray-400">
+                This can take up to 15 seconds the first time, while new place locations are looked up. Subsequent loads are instant.
+              </p>
             </div>
           )}
           <CampaignMap center={center} zoom={zoom} markers={markers} />
