@@ -119,7 +119,11 @@ export default function LoginPage() {
 
   // ── Post-sign-in: show action chooser for regular leaders, or check recent TWOL for admins ─
   const checkRecentCampaign = async (match: StateLeaderMatch) => {
-    if (!match.admin) {
+    // Only 'AD' (full admin) and 'SR' (state reporter) are real admin statuses;
+    // any other value (including stray legacy data like a recruiter's name) is
+    // treated as a regular leader and shown the action chooser.
+    const isRealAdmin = match.admin === 'AD' || match.admin === 'SR';
+    if (!isRealAdmin) {
       // Regular leader — show the action chooser instead of navigating
       setShowActionChooser(true);
       return;
