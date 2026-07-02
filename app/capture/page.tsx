@@ -9,6 +9,7 @@ import { useUser } from '@/contexts/UserContext';
 import { getUserStateCode, getCachedStateCode } from '@/lib/location';
 import { getErrorMessage } from '@/lib/errorUtils';
 import { createCampaign } from '@/lib/services/campaignService';
+import { isRecognizedAdminStatus } from '@/lib/campaignFilter';
 
 export default function CapturePage() {
   const router = useRouter();
@@ -21,7 +22,7 @@ export default function CapturePage() {
     isLoading: isUserLoading,
   } = useUser();
 
-  const isAdminOrStateReporter = adminStatus === 'AD' || adminStatus === 'SR';
+  const isAdminOrStateReporter = isRecognizedAdminStatus(adminStatus);
 
   const [defaultState, setDefaultState] = useState<string>('');
   const [locationNote, setLocationNote] = useState<string | null>(null);

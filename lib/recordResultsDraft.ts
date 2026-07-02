@@ -13,6 +13,10 @@
  * Record Results page owns).
  */
 
+// Must stay in sync with the `results_category_code_check` CHECK constraint
+// in the database (see scripts/fix_results_category_code_check.sql) — a
+// mismatch here silently drops entire save batches (#69: 'TM' was added
+// here without updating the constraint, and Postgres INSERT is atomic).
 export type ResultsCategory = 'TM' | 'P' | 'F' | 'SP' | 'IR';
 
 /**

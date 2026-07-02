@@ -3,6 +3,21 @@ import { getUserProfile } from './userProfile';
 import { normalizeName } from './auth';
 
 /**
+ * Whether an `admin` column value represents a recognized elevated role
+ * ('AD' full admin or 'SR' state reporter) as opposed to a regular leader
+ * or stray legacy data (e.g. a recruiter's name typed into the column).
+ *
+ * Always use this instead of re-checking `=== 'AD' || === 'SR'` inline —
+ * a truthy check (`if (!match.admin)`) was used in one call site instead
+ * of this exact comparison, which silently misrouted leaders whose
+ * `admin` column held junk data. Centralizing the check here means it
+ * can't drift out of sync at a new call site.
+ */
+export function isRecognizedAdminStatus(admin: string | null | undefined): admin is 'AD' | 'SR' {
+  return admin === 'AD' || admin === 'SR';
+}
+
+/**
  * Get the user's admin status, state, mobile, and leader from state_leaders table in a single query
  * This is optimized to fetch all needed data in one database call instead of multiple separate calls
  * Returns { admin: string | null, state: string | null, mobile: string | null, leader: string | null }
