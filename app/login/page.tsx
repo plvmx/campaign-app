@@ -8,6 +8,7 @@ import { getErrorMessage } from '@/lib/errorUtils';
 import { trackEvent } from '@/lib/analytics';
 import { useUser } from '@/contexts/UserContext';
 import { getRecentTWOLCampaignsForLeader } from '@/lib/services/campaignService';
+import { isRecognizedAdminStatus } from '@/lib/campaignFilter';
 import type { Campaign } from '@/lib/types';
 
 type ActionChoice = 'record-past' | 'review-upcoming' | 'create-new' | 'campaign-rules';
@@ -119,11 +120,9 @@ export default function LoginPage() {
 
   // ── Post-sign-in: show action chooser for regular leaders, or check recent TWOL for admins ─
   const checkRecentCampaign = async (match: StateLeaderMatch) => {
-    // Only 'AD' (full admin) and 'SR' (state reporter) are real admin statuses;
-    // any other value (including stray legacy data like a recruiter's name) is
+    // Any other value (including stray legacy data like a recruiter's name) is
     // treated as a regular leader and shown the action chooser.
-    const isRealAdmin = match.admin === 'AD' || match.admin === 'SR';
-    if (!isRealAdmin) {
+    if (!isRecognizedAdminStatus(match.admin)) {
       // Regular leader — show the action chooser instead of navigating
       setShowActionChooser(true);
       return;

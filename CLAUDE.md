@@ -30,6 +30,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Every change must pass all four CI jobs: **Lint · Type-check · Unit tests · Build**.  
 Never suppress lint errors with disable comments unless there is no correct refactor — always prefer fixing the root cause.
 
+## Testing policy
+- Every bug-fix PR includes a regression test that fails on the pre-fix code and passes on the post-fix code, in the same PR. If the bug is purely visual/CSS/copy and genuinely can't be captured in a test, say so explicitly in the PR description rather than silently skipping it.
+- Every new function added to `lib/` or `lib/services/` ships with a test in the same PR.
+- Before calling a fix "done," verify red→green: run the new/updated test against the pre-fix code (e.g. `git stash`, or check out the parent commit for a specific file) to confirm it actually fails, then against the fix to confirm it passes. A test that currently passes is not sufficient on its own — it must be shown to have caught the original bug.
+- Mock the Supabase client with the shared builder in `lib/services/__tests__/supabaseMock.ts` rather than hand-rolling `vi.mock` chains per test file.
+- If a production incident is investigated with a one-off script in `scripts/`, the investigation isn't closed until the root cause is captured as a permanent test in `lib/__tests__/` (or `lib/services/__tests__/`) — the script is evidence, not the fix's safety net.
+- Role/status checks against `state_leaders.admin` must go through `isRecognizedAdminStatus()` in `lib/campaignFilter.ts` — never re-implement `=== 'AD' || === 'SR'` inline. See #78 (login role bug) for why: a truthy check in one call site silently misrouted leaders with junk data in that column.
+
 ## Deployment
 - `main` branch → auto-deploys to production via Vercel/hosting
 - Do not merge until CI is green and Peter has approved the PR

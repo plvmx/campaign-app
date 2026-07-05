@@ -9,6 +9,7 @@ import { useUser } from '@/contexts/UserContext';
 import { getUserStateCode, getCachedStateCode } from '@/lib/location';
 import { normalizeMobile } from '@/lib/auth';
 import { findCampaignsByKey } from '@/lib/services/campaignService';
+import { isRecognizedAdminStatus } from '@/lib/campaignFilter';
 
 export default function RecordResultsPage() {
   const router = useRouter();
@@ -22,7 +23,7 @@ export default function RecordResultsPage() {
     isLoading: isUserLoading,
   } = useUser();
 
-  const isAdminOrStateReporter = adminStatus === 'AD' || adminStatus === 'SR';
+  const isAdminOrStateReporter = isRecognizedAdminStatus(adminStatus);
   const [isLoading, setIsLoading] = useState(true);
   const [defaultState, setDefaultState] = useState<string>('');
   const [defaultDate] = useState<string>(() => {

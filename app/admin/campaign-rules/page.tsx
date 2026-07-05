@@ -14,6 +14,7 @@ import { evaluateRule, previewRuleEvaluation } from '@/lib/campaignRules';
 import { formatDateReadable } from '@/lib/campaignDates';
 import { AUSTRALIAN_STATES } from '@/lib/constants';
 import { getErrorMessage } from '@/lib/errorUtils';
+import { isRecognizedAdminStatus } from '@/lib/campaignFilter';
 const DAYS_OF_WEEK = [
   { value: 0, label: 'Sunday' },
   { value: 1, label: 'Monday' },
@@ -145,7 +146,7 @@ function CampaignRulesPageContent() {
     if (isUserLoading) return;
     if (!user) { router.push('/login'); return; }
 
-    const canAccess = adminStatus === 'AD' || adminStatus === 'SR' || (userState != null && userState.trim() !== '');
+    const canAccess = isRecognizedAdminStatus(adminStatus) || (userState != null && userState.trim() !== '');
     if (!canAccess) {
       setError('You do not have permission to access this page');
       return;

@@ -7,6 +7,7 @@ import LoadingSpinner from '@/components/LoadingSpinner';
 import { useUser } from '@/contexts/UserContext';
 import { useCampaignDates } from '@/contexts/CampaignDatesContext';
 import { formatDateReadable } from '@/lib/campaignDates';
+import { isRecognizedAdminStatus } from '@/lib/campaignFilter';
 
 export default function TLAdminPage() {
   const router = useRouter();
@@ -16,7 +17,7 @@ export default function TLAdminPage() {
   // Derive access state from context — avoids setState-in-effect anti-pattern
   const derivedUserState = contextUserState ?? userProfile?.state ?? null;
   const accessError = !isUserLoading && user
-    ? (adminStatus === 'AD' || adminStatus === 'SR')
+    ? isRecognizedAdminStatus(adminStatus)
       ? 'Use the main Admin or SR Admin panel instead.'
       : !derivedUserState?.trim()
       ? 'No state found for your account.'
