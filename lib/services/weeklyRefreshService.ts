@@ -13,6 +13,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { calculateCampaignDates, formatDateForDb } from '@/lib/campaignDates';
 import type { CampaignRule } from '@/lib/types';
 import { evaluateRules } from '@/lib/campaignRules';
+import { getErrorMessage } from '@/lib/errorUtils';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -248,8 +249,10 @@ export async function runWeeklyRefresh(
     return { created: createdCount, skipped: skippedCount, deleted: deletedCount, logsPruned: logsPrunedCount, secondWeekStart };
 
   } catch (err) {
-    // Log the failure (best-effort — don't let a log failure mask the original error)
-    const message = err instanceof Error ? err.message : String(err);
+    // Log the failure (best-effort — don't let a log failure mask the original error).
+    // Supabase errors are plain objects, not Error instances (see #69) — getErrorMessage
+    // extracts message/code/details/hint instead of falling back to a useless string.
+    const message = getErrorMessage(err);
     await client
       .from('weekly_refresh_log')
       .insert({
