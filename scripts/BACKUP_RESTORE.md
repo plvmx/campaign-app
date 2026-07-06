@@ -1,6 +1,12 @@
 # Database backup and restore
 
-Weekly backups run automatically **every Sunday at 06:00 UTC** via GitHub Actions. You can also run a backup manually or restore from a backup file.
+Weekly backups run automatically **every Sunday at 06:00 UTC** via GitHub Actions. Backups are pushed
+straight to the private [plvmx/campaign-app-backups](https://github.com/plvmx/campaign-app-backups)
+repo — **not** uploaded as a GitHub Actions artifact on this repo. Public-repo Actions artifacts are
+downloadable by anyone with no repo access required, so keeping backups in a dedicated private repo
+means they stay protected even if `campaign-app` itself is ever made public.
+
+You can also run a backup manually or restore from a backup file.
 
 ## One-time setup
 
@@ -14,9 +20,23 @@ Weekly backups run automatically **every Sunday at 06:00 UTC** via GitHub Action
 3. In **GitHub**: repo → **Settings** → **Secrets and variables** → **Actions**.
 4. **New repository secret**: name `SUPABASE_DB_URL`, value = the full URI (including your password).
 
-After this, the scheduled workflow will run every Sunday and produce a backup artifact.
+### 2. Add a token so the workflow can push to campaign-app-backups
 
-### 2. (Optional) Change backup time
+The backup job needs permission to push to the separate private `campaign-app-backups` repo — the
+default `GITHUB_TOKEN` only has access to the repo the workflow runs in, so a personal access token
+is required for this cross-repo push.
+
+1. On GitHub: **Settings** (your account, not the repo) → **Developer settings** → **Personal access tokens** → **Fine-grained tokens** → **Generate new token**.
+2. **Resource owner**: your account. **Repository access**: "Only select repositories" → `campaign-app-backups` only (do not grant access to `campaign-app` itself — this token only needs to write backups).
+3. **Permissions** → **Repository permissions** → **Contents**: **Read and write**. Leave everything else as "No access".
+4. Generate the token and copy it.
+5. In `campaign-app`'s repo settings → **Secrets and variables** → **Actions** → **New repository secret**: name `BACKUP_REPO_TOKEN`, value = the token.
+   - Prefer running `gh secret set BACKUP_REPO_TOKEN --repo plvmx/campaign-app` in your own terminal (it reads the token from stdin/prompt, so it never appears in shell history or anywhere else) rather than pasting the token value into any chat or document.
+
+After both secrets are set, the scheduled workflow will run every Sunday and push the backup straight
+to `campaign-app-backups`.
+
+### 3. (Optional) Change backup time
 
 Edit `.github/workflows/backup-database.yml` and change the cron expression:
 
@@ -41,7 +61,7 @@ export SUPABASE_DB_URL='postgresql://postgres.xxxx:PASSWORD@aws-0-REGION.pooler.
 ## Restoring from a backup
 
 1. Get the backup file:
-   - From GitHub: **Actions** → open a completed backup run → **Artifacts** → download the backup.
+   - From the private [campaign-app-backups](https://github.com/plvmx/campaign-app-backups) repo: `backups/backup-YYYY-MM-DD.sql.gz`.
    - Or use a backup file you created locally.
 2. Decompress and restore (replace the connection string with your Supabase Direct URI):
 
@@ -55,4 +75,4 @@ To restore into a **new** Supabase project (e.g. after a disaster), create the p
 
 ## Retention
 
-- GitHub keeps workflow artifacts for **90 days** on the free tier. For longer retention, download backups periodically or add a step to upload to your own storage (e.g. S3, Backblaze B2).
+- Backups accumulate indefinitely as commits in `campaign-app-backups` (no automatic pruning yet). At roughly one ~1MB file per week, that's ~50MB/year — not a practical concern for a long time, but worth revisiting if that repo grows large.

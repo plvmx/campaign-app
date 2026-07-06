@@ -1,7 +1,17 @@
 # Weekly Supabase database backup (Sunday morning).
-# Add repository secret: SUPABASE_DB_URL = Session (pooler) connection URI from Supabase Connect panel.
-# Use Session, not Direct: GitHub runners have no IPv6; Direct is IPv6-only and fails with "Network unreachable".
-# Backups are kept as workflow artifacts (default 90 days on GitHub free tier).
+#
+# Backups are pushed directly to the private plvmx/campaign-app-backups repo —
+# never uploaded as a GitHub Actions artifact on *this* repo. Public-repo Actions
+# artifacts are downloadable by anyone with no repo access required, so an
+# artifact here would leak the full database (real names, mobile numbers,
+# campaign data) the moment this repo's visibility is ever made public.
+#
+# Required repository secrets:
+#   SUPABASE_DB_URL    — Session (pooler) connection URI from Supabase's Connect
+#                         panel. Use Session, not Direct: GitHub runners have no
+#                         IPv6, and Direct is IPv6-only.
+#   BACKUP_REPO_TOKEN  — a fine-grained PAT scoped only to campaign-app-backups,
+#                         with Contents: read and write. See scripts/BACKUP_RESTORE.md.
 
 name: Weekly database backup
 
@@ -20,6 +30,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Install git
+        run: apk add --no-cache git
+
       - name: Run backup
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
@@ -27,9 +40,16 @@ jobs:
           chmod +x scripts/backup-database.sh
           ./scripts/backup-database.sh backup.sql.gz
 
-      - name: Upload backup artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: db-backup-${{ github.run_id }}
-          path: backup.sql.gz
-          retention-days: 90
+      - name: Push backup to the private backups repo
+        env:
+          BACKUP_REPO_TOKEN: ${{ secrets.BACKUP_REPO_TOKEN }}
+        run: |
+          git clone --depth 1 "https://x-access-token:${BACKUP_REPO_TOKEN}@github.com/plvmx/campaign-app-backups.git" /tmp/backups-repo
+          mkdir -p /tmp/backups-repo/backups
+          mv backup.sql.gz "/tmp/backups-repo/backups/backup-$(date +%Y-%m-%d).sql.gz"
+          cd /tmp/backups-repo
+          git config user.name "campaign-app-backup-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add backups/
+          git commit -m "Backup $(date +%Y-%m-%d)"
+          git push origin main
