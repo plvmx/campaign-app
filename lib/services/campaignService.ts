@@ -51,9 +51,12 @@ function trimCampaignStrings<T extends { leader?: string | null; place?: string 
 
 /** Create a new campaign and log the insertion. Returns the created campaign. */
 export async function createCampaign(input: NewCampaignData): Promise<Campaign> {
+  const normalized = trimCampaignStrings(input);
+  if (!normalized.leader) throw new Error('Leader is required');
+
   const { data, error } = await supabase
     .from('campaigns')
-    .insert([{ ...trimCampaignStrings(input), created_at: new Date().toISOString() }])
+    .insert([{ ...normalized, created_at: new Date().toISOString() }])
     .select()
     .single();
 
@@ -69,9 +72,14 @@ export async function updateCampaign(
   updates: Partial<Omit<Campaign, 'id' | 'created_at'>>,
   oldData?: Partial<Campaign> | null
 ): Promise<Campaign> {
+  const normalized = trimCampaignStrings(updates);
+  // Only enforce when this update actually touches `leader` — partial updates
+  // to unrelated fields (tl_ok, actual_leader, team_size, etc.) don't include it.
+  if ('leader' in normalized && !normalized.leader) throw new Error('Leader is required');
+
   const { data, error } = await supabase
     .from('campaigns')
-    .update(trimCampaignStrings(updates))
+    .update(normalized)
     .eq('id', id)
     .select()
     .single();

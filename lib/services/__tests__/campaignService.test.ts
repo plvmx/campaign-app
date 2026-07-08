@@ -105,6 +105,19 @@ describe('createCampaign', () => {
     ).rejects.toEqual(error);
     expect(logCampaignChange).not.toHaveBeenCalled();
   });
+
+  it('rejects a blank leader without hitting the database — the service layer is the single choke point for every caller (form UI, /capture, /record-results)', async () => {
+    const builder = makeQueryBuilder({ data: null, error: null });
+    mockFrom.mockReturnValue(builder);
+    await expect(
+      createCampaign({
+        date: '2026-01-05', state: 'VIC', place: 'Melbourne', time: '10:00',
+        leader: '   ', mobile: null, category: 'TWOL', user_id: 'user-1',
+      }),
+    ).rejects.toThrow('Leader is required');
+    expect(builder.insert).not.toHaveBeenCalled();
+    expect(logCampaignChange).not.toHaveBeenCalled();
+  });
 });
 
 describe('updateCampaign', () => {
@@ -121,6 +134,20 @@ describe('updateCampaign', () => {
     const error = { code: '500', message: 'boom' };
     mockFrom.mockReturnValue(makeQueryBuilder({ data: null, error }));
     await expect(updateCampaign('c1', { time: '11:00' })).rejects.toEqual(error);
+  });
+
+  it('rejects an update that blanks out the leader field', async () => {
+    const builder = makeQueryBuilder({ data: null, error: null });
+    mockFrom.mockReturnValue(builder);
+    await expect(updateCampaign('c1', { leader: '' })).rejects.toThrow('Leader is required');
+    expect(builder.update).not.toHaveBeenCalled();
+  });
+
+  it('allows partial updates that never touch leader (e.g. tl_ok, actual_leader) even when leader is not supplied', async () => {
+    const updated = makeCampaign({ tl_ok: true });
+    mockFrom.mockReturnValue(makeQueryBuilder({ data: updated, error: null }));
+    const result = await updateCampaign('c1', { tl_ok: true });
+    expect(result).toEqual(updated);
   });
 });
 
