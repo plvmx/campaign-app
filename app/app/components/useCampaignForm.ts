@@ -101,6 +101,7 @@ export function useCampaignForm({ initialValues, onSubmit, autoFill }: UseCampai
         updatePlacesCache(stateValue, await getPlacesForState(stateValue));
       }
       if (!resolvedPlace?.trim()) throw new Error('Please select or enter a place');
+      if (!values.leader?.trim()) throw new Error('Please select a leader');
       await onSubmit({ ...values, place: resolvedPlace });
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Failed to save campaign'));

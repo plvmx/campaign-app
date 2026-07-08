@@ -29,7 +29,7 @@ function baseValues(overrides: Partial<CampaignFormValues> = {}): CampaignFormVa
     state: 'VIC',
     place: 'Melbourne',
     time: '10:00',
-    leader: '',
+    leader: 'Sam',
     mobile: '',
     category: 'TWOL',
     tl_ok: false,
@@ -170,6 +170,7 @@ describe('useCampaignForm — handleSubmit', () => {
     );
     act(() => result.current.handlePlaceChange('OTHER_PLACE'));
     act(() => result.current.setCustomPlace('  New Place  '));
+    act(() => result.current.setValue('leader', 'Sam'));
 
     await act(async () => {
       await result.current.handleSubmit(makeSubmitEvent());
@@ -177,6 +178,18 @@ describe('useCampaignForm — handleSubmit', () => {
 
     expect(mockAddNewPlace).toHaveBeenCalledWith('VIC', 'New Place');
     expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ place: 'New Place' }));
+  });
+
+  it('errors when no leader is selected, even when submitted via a MouseEvent (InlineEditForm has no <form>)', async () => {
+    const onSubmit = vi.fn();
+    const { result } = renderHook(() =>
+      useCampaignForm({ initialValues: baseValues({ leader: '' }), onSubmit }),
+    );
+    await act(async () => {
+      await result.current.handleSubmit({ preventDefault: vi.fn() } as unknown as React.MouseEvent);
+    });
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(result.current.error).toBe('Please select a leader');
   });
 
   it('surfaces the real error message and resets isSubmitting when onSubmit throws', async () => {
