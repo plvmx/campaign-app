@@ -8,6 +8,7 @@ export interface NewCampaignData {
   date: string;
   state: string;
   place: string;
+  site: string;
   time: string;
   leader: string;
   mobile: string | null;
@@ -40,11 +41,12 @@ export async function getCampaignById(id: string): Promise<Campaign | null> {
 }
 
 /** Trim string fields that must never carry leading/trailing whitespace. */
-function trimCampaignStrings<T extends { leader?: string | null; place?: string | null; state?: string | null }>(input: T): T {
+function trimCampaignStrings<T extends { leader?: string | null; place?: string | null; site?: string | null; state?: string | null }>(input: T): T {
   return {
     ...input,
     ...(typeof input.leader === 'string' && { leader: input.leader.trim() }),
     ...(typeof input.place  === 'string' && { place:  input.place.trim()  }),
+    ...(typeof input.site   === 'string' && { site:   input.site.trim()   }),
     ...(typeof input.state  === 'string' && { state:  input.state.trim()  }),
   };
 }
@@ -123,13 +125,14 @@ export async function getCampaignsByDateRange(
 }
 
 /**
- * Find an existing campaign by its natural key (date + state + place + time + leader).
+ * Find an existing campaign by its natural key (date + state + place + site + time + leader).
  * Returns null if not found.
  */
 export async function findCampaign(criteria: {
   date: string;
   state: string;
   place: string;
+  site: string;
   time: string;
   leader: string;
 }): Promise<Campaign | null> {
@@ -139,6 +142,7 @@ export async function findCampaign(criteria: {
     .eq('date', criteria.date)
     .eq('state', criteria.state)
     .eq('place', criteria.place)
+    .eq('site', criteria.site)
     .eq('time', criteria.time)
     .eq('leader', criteria.leader)
     .maybeSingle();
@@ -154,14 +158,14 @@ export async function findCampaign(criteria: {
  */
 export async function getRecentTWOLCampaignsForLeader(
   leaderName: string,
-): Promise<Pick<Campaign, 'id' | 'date' | 'state' | 'place' | 'time' | 'leader'>[]> {
+): Promise<Pick<Campaign, 'id' | 'date' | 'state' | 'place' | 'site' | 'time' | 'leader'>[]> {
   const sevenDaysAgo = new Date();
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
   const yesterdayDate = sevenDaysAgo.toISOString().slice(0, 10);
 
   const { data, error } = await supabase
     .from('campaigns')
-    .select('id, date, state, place, time, leader')
+    .select('id, date, state, place, site, time, leader')
     .ilike('leader', leaderName.trim())
     .gte('date', yesterdayDate)
     .or('category.eq.TWOL,category.is.null')
@@ -169,7 +173,7 @@ export async function getRecentTWOLCampaignsForLeader(
     .order('time', { ascending: true });
 
   if (error) throw error;
-  return (data || []) as Pick<Campaign, 'id' | 'date' | 'state' | 'place' | 'time' | 'leader'>[];
+  return (data || []) as Pick<Campaign, 'id' | 'date' | 'state' | 'place' | 'site' | 'time' | 'leader'>[];
 }
 
 export interface CampaignsForUserParams {
@@ -273,6 +277,7 @@ export async function findCampaignsByKey(criteria: {
   date: string;
   state: string;
   place: string;
+  site: string;
   time: string;
   leader: string;
 }): Promise<Pick<Campaign, 'id' | 'mobile' | 'state' | 'leader'>[]> {
@@ -282,6 +287,7 @@ export async function findCampaignsByKey(criteria: {
     .eq('date', criteria.date)
     .eq('state', criteria.state)
     .eq('place', criteria.place)
+    .eq('site', criteria.site)
     .eq('time', criteria.time)
     .eq('leader', criteria.leader);
 

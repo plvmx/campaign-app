@@ -52,7 +52,7 @@ describe('getRules', () => {
 
 describe('createRule / updateRule / deleteRule / setRuleActive', () => {
   const rule: Omit<CampaignRule, 'id'> = {
-    name: 'Weekly Melbourne', leader: 'Alice', state: 'VIC', place: 'Melbourne', time: '10:00',
+    name: 'Weekly Melbourne', leader: 'Alice', state: 'VIC', place: 'Melbourne', site: '', time: '10:00',
     mobile: null, frequency_type: 'weekly', frequency_value: null, month_week_number: null,
     month_day_of_week: null, day_of_week: 6, start_date: null, end_date: null,
     is_active: true, priority: 0, rule_config: {}, notes: null,

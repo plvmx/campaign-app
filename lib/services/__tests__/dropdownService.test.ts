@@ -20,15 +20,41 @@ describe('getPlacesForState', () => {
     expect(mockFrom).not.toHaveBeenCalled();
   });
 
-  it('normalizes state, dedupes, and sorts place names', async () => {
+  it('normalizes state, dedupes, and sorts place options', async () => {
     const builder = makeQueryBuilder({
-      data: [{ place: 'Geelong' }, { place: 'Melbourne' }, { place: 'Melbourne' }, { place: null }],
+      data: [
+        { place: 'Geelong', site: '' },
+        { place: 'Melbourne', site: '' },
+        { place: 'Melbourne', site: '' },
+        { place: null, site: '' },
+      ],
       error: null,
     });
     mockFrom.mockReturnValue(builder);
     const result = await getPlacesForState(' vic ');
     expect(builder.eq).toHaveBeenCalledWith('state', 'VIC');
-    expect(result).toEqual(['Geelong', 'Melbourne']);
+    expect(result).toEqual([
+      { place: 'Geelong', site: '', label: 'Geelong' },
+      { place: 'Melbourne', site: '', label: 'Melbourne' },
+    ]);
+  });
+
+  it('keeps distinct sites for the same place as separate options, ordered numerically', async () => {
+    const builder = makeQueryBuilder({
+      data: [
+        { place: 'Orange', site: '2' },
+        { place: 'Orange', site: '' },
+        { place: 'Orange', site: '1' },
+      ],
+      error: null,
+    });
+    mockFrom.mockReturnValue(builder);
+    const result = await getPlacesForState('NSW');
+    expect(result).toEqual([
+      { place: 'Orange', site: '', label: 'Orange' },
+      { place: 'Orange', site: '1', label: 'Orange 1' },
+      { place: 'Orange', site: '2', label: 'Orange 2' },
+    ]);
   });
 
   it('falls back to [] on error rather than throwing', async () => {

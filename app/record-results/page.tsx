@@ -64,7 +64,7 @@ export default function RecordResultsPage() {
     if (!user) { router.push('/login'); return; }
 
     const campaigns = await findCampaignsByKey({
-      date: data.date, state: data.state, place: data.place, time: data.time, leader: data.leader,
+      date: data.date, state: data.state, place: data.place, site: data.site, time: data.time, leader: data.leader,
     });
 
     const isSRInState =
@@ -89,7 +89,7 @@ export default function RecordResultsPage() {
 
     router.push(`/record-results/detail?${new URLSearchParams({
       id: existingCampaign.id,
-      date: data.date, state: data.state, place: data.place, time: data.time, leader: data.leader,
+      date: data.date, state: data.state, place: data.place, site: data.site, time: data.time, leader: data.leader,
     }).toString()}`);
   };
 

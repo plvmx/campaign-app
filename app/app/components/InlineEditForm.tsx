@@ -1,5 +1,6 @@
 'use client';
 import { AUSTRALIAN_STATES } from '@/lib/constants';
+import { combinePlaceAndSite } from '@/lib/placeSite';
 import type { Campaign } from '@/lib/types';
 import type { EditUpdates } from './types';
 import { useCampaignForm } from './useCampaignForm';
@@ -28,6 +29,7 @@ export default function InlineEditForm({ campaign, isAdmin, categories, onSave, 
       date: campaign.date || '',
       state: (campaign.state || '').toUpperCase().trim(),
       place: campaign.place || '',
+      site: campaign.site || '',
       time: normalizeTimeValue(campaign.time || ''),
       leader: campaign.leader || '',
       mobile: campaign.mobile || '',
@@ -37,7 +39,7 @@ export default function InlineEditForm({ campaign, isAdmin, categories, onSave, 
     },
     onSubmit: async (v) => {
       await onSave(campaign.id, {
-        date: v.date, state: v.state, place: v.place, time: v.time,
+        date: v.date, state: v.state, place: v.place, site: v.site, time: v.time,
         leader: v.leader, mobile: v.mobile.trim() || null,
         category: v.category ?? 'TWOL', tl_ok: v.tl_ok, sr_ok: v.sr_ok,
       });
@@ -70,12 +72,12 @@ export default function InlineEditForm({ campaign, isAdmin, categories, onSave, 
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Place</label>
           <select required={!isOtherPlace}
-            value={isOtherPlace ? 'OTHER_PLACE' : values.place}
+            value={isOtherPlace ? 'OTHER_PLACE' : combinePlaceAndSite(values.place, values.site)}
             onChange={(e) => handlePlaceChange(e.target.value)}
             disabled={!values.state}
             className={`${inputClass} disabled:opacity-50`}>
             <option value="">Select place</option>
-            {places.map((p) => <option key={p} value={p}>{p}</option>)}
+            {places.map((p) => <option key={p.label} value={p.label}>{p.label}</option>)}
             <option value="OTHER_PLACE">Other Place</option>
           </select>
           {isOtherPlace && (

@@ -10,6 +10,7 @@ import { useCampaignDates } from '@/contexts/CampaignDatesContext';
 import { formatDateForDb } from '@/lib/campaignDates';
 import { getErrorMessage } from '@/lib/errorUtils';
 import { getStateColor } from '@/lib/stateColors';
+import { combinePlaceAndSite } from '@/lib/placeSite';
 
 type ViewMode = 'total' | 'state' | 'place' | 'campaign';
 
@@ -83,7 +84,7 @@ export default function MemberActivityPage() {
     try {
       const { data: campaigns, error: campaignsError } = await supabase
         .from('campaigns')
-        .select('id, date, state, place, leader, actual_leader')
+        .select('id, date, state, place, site, leader, actual_leader')
         .gte('date', startDate)
         .lte('date', endDate)
         .order('date', { ascending: true })
@@ -118,7 +119,7 @@ export default function MemberActivityPage() {
         id: c.id,
         date: c.date,
         state: c.state,
-        place: c.place,
+        place: combinePlaceAndSite(c.place, c.site),
         leader: c.leader,
         actual_leader: c.actual_leader,
         memberNames: tmByCampaign.get(c.id) || [],

@@ -13,6 +13,7 @@ function makeRule(overrides: Partial<CampaignRule> = {}): CampaignRule {
     leader: 'Alice',
     state: 'VIC',
     place: 'Melbourne',
+    site: '',
     time: '10:00',
     mobile: null,
     frequency_type: 'weekly',
@@ -283,6 +284,13 @@ describe('evaluateRules conflict resolution', () => {
   it('different times do not conflict', () => {
     const rule1 = makeRule({ id: 'r1', time: '10:00', day_of_week: 6 });
     const rule2 = makeRule({ id: 'r2', time: '14:00', day_of_week: 6 });
+    const results = evaluateRules([rule1, rule2], local('2025-01-04'), local('2025-01-04'));
+    expect(results).toHaveLength(2);
+  });
+
+  it('different sites at the same place/time do not conflict — site is part of the dedup key', () => {
+    const rule1 = makeRule({ id: 'r1', place: 'Orange', site: '1', day_of_week: 6 });
+    const rule2 = makeRule({ id: 'r2', place: 'Orange', site: '2', day_of_week: 6 });
     const results = evaluateRules([rule1, rule2], local('2025-01-04'), local('2025-01-04'));
     expect(results).toHaveLength(2);
   });

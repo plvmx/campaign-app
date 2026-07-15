@@ -23,14 +23,14 @@ const mockGetSession = vi.mocked(supabase.auth.getSession);
 
 function makeCampaign(overrides: Partial<Campaign> = {}): Campaign {
   return {
-    id: 'c1', date: '2026-01-05', state: 'VIC', place: 'Melbourne', time: '10:00',
+    id: 'c1', date: '2026-01-05', state: 'VIC', place: 'Melbourne', site: '', time: '10:00',
     leader: 'Alice', mobile: null, category: 'TWOL', tl_ok: false, sr_ok: false,
     created_at: '2026-01-01T00:00:00Z', ...overrides,
   };
 }
 
 function makeStatePlace(overrides: Partial<StatePlace> = {}): StatePlace {
-  return { id: 'p1', state: 'VIC', place: 'Melbourne', created_at: '', ...overrides };
+  return { id: 'p1', state: 'VIC', place: 'Melbourne', site: '', created_at: '', ...overrides };
 }
 
 const originalFetch = global.fetch;
@@ -61,6 +61,27 @@ describe('getMapData', () => {
     expect(result.markers[0].campaigns.map((c) => c.id).sort()).toEqual(['c1', 'c2']);
   });
 
+  it('keeps distinct sites at the same place as separate markers', async () => {
+    mockGetCampaigns.mockResolvedValue([
+      makeCampaign({ id: 'c1', place: 'Orange', site: '1' }),
+      makeCampaign({ id: 'c2', place: 'Orange', site: '2' }),
+    ]);
+    mockGetStatePlaces.mockResolvedValue([
+      makeStatePlace({ place: 'Orange', site: '1', latitude: -33.28, longitude: 149.1 }),
+      makeStatePlace({ place: 'Orange', site: '2', latitude: -33.29, longitude: 149.11 }),
+    ]);
+
+    const result = await getMapData({ startDate: '2026-01-01', endDate: '2026-01-31' });
+
+    expect(result.markers).toHaveLength(2);
+    expect(result.markers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ place: 'Orange', site: '1', latitude: -33.28, longitude: 149.1 }),
+        expect.objectContaining({ place: 'Orange', site: '2', latitude: -33.29, longitude: 149.11 }),
+      ]),
+    );
+  });
+
   it('resolves coordinates from the cached state_places list without calling fetch', async () => {
     mockGetCampaigns.mockResolvedValue([makeCampaign()]);
     mockGetStatePlaces.mockResolvedValue([makeStatePlace({ latitude: -37.8, longitude: 144.9 })]);
@@ -82,7 +103,7 @@ describe('getMapData', () => {
     const result = await getMapData({ startDate: '2026-01-01', endDate: '2026-01-31' });
 
     expect(result.markers).toEqual([]);
-    expect(result.unresolvedPlaces).toEqual([{ state: 'VIC', place: 'Melbourne' }]);
+    expect(result.unresolvedPlaces).toEqual([{ state: 'VIC', place: 'Melbourne', site: '' }]);
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
@@ -124,7 +145,7 @@ describe('getMapData', () => {
     const result = await getMapData({ startDate: '2026-01-01', endDate: '2026-01-31' });
 
     expect(result.markers).toEqual([]);
-    expect(result.unresolvedPlaces).toEqual([{ state: 'VIC', place: 'Melbourne' }]);
+    expect(result.unresolvedPlaces).toEqual([{ state: 'VIC', place: 'Melbourne', site: '' }]);
   });
 
   it('spaces out multiple uncached geocode lookups by ~1.1s to respect Nominatim rate limits', async () => {

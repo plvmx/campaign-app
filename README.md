@@ -121,8 +121,9 @@ CREATE TABLE IF NOT EXISTS state_places (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   state TEXT NOT NULL,
   place TEXT NOT NULL,
+  site TEXT NOT NULL DEFAULT '',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  UNIQUE(state, place)
+  UNIQUE(state, place, site)
 );
 
 -- Create index for faster lookups

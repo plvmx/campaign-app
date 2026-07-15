@@ -14,6 +14,7 @@ import { getCampaignCategories } from '@/lib/services/dropdownService';
 import { getUserStateCode } from '@/lib/location';
 import { getUserAdminStatusAndMobile } from '@/lib/campaignFilter';
 import { getSlideViewEnabled, type SlideViewRole } from '@/lib/appSettings';
+import { combinePlaceAndSite } from '@/lib/placeSite';
 
 import AdminQuickActions from './components/AdminQuickActions';
 import CampaignFilters from './components/CampaignFilters';
@@ -108,7 +109,7 @@ function AppPageContent() {
   }, [dateFilteredForOptions, filterState]);
 
   const filterPlaceOptions = useMemo(
-    () => [...new Set(stateFilteredForOptions.map((c) => c.place ?? '').filter(Boolean))].sort(),
+    () => [...new Set(stateFilteredForOptions.map((c) => combinePlaceAndSite(c.place ?? '', c.site ?? '')).filter(Boolean))].sort(),
     [stateFilteredForOptions],
   );
   const filterLeaderOptions = useMemo(
@@ -124,7 +125,7 @@ function AppPageContent() {
     if (allCampaigns.length === 0) return [];
     let filtered = allCampaigns;
     if (filterState) filtered = filtered.filter((c) => c.state.toUpperCase() === filterState.toUpperCase());
-    if (filterPlace) filtered = filtered.filter((c) => (c.place ?? '').toLowerCase().includes(filterPlace.toLowerCase()));
+    if (filterPlace) filtered = filtered.filter((c) => combinePlaceAndSite(c.place ?? '', c.site ?? '').toLowerCase().includes(filterPlace.toLowerCase()));
     if (filterLeader) filtered = filtered.filter((c) => (c.leader ?? '').toLowerCase().includes(filterLeader.toLowerCase()));
     if (filterMobile) filtered = filtered.filter((c) => (c.mobile ?? '').replace(/\s/g, '').includes(filterMobile.replace(/\s/g, '')));
     return applyDateFilter(filtered);
@@ -312,6 +313,7 @@ function AppPageContent() {
         date: campaign.date,
         state: campaign.state,
         place: campaign.place,
+        site: campaign.site,
         time: campaign.time,
         leader: campaign.leader,
         returnFilter: dateFilter,

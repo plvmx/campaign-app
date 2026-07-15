@@ -35,6 +35,7 @@ function makeCampaign(overrides: Partial<Campaign> = {}): Campaign {
     date: '2026-01-05',
     state: 'VIC',
     place: 'Melbourne',
+    site: '',
     time: '10:00',
     leader: 'Alice',
     mobile: '0412345678',
@@ -80,6 +81,7 @@ describe('createCampaign', () => {
       date: '2026-01-05',
       state: ' VIC ',
       place: ' Melbourne ',
+      site: '',
       time: '10:00',
       leader: ' Alice ',
       mobile: '0412345678',
@@ -99,7 +101,7 @@ describe('createCampaign', () => {
     mockFrom.mockReturnValue(makeQueryBuilder({ data: null, error }));
     await expect(
       createCampaign({
-        date: '2026-01-05', state: 'VIC', place: 'Melbourne', time: '10:00',
+        date: '2026-01-05', state: 'VIC', place: 'Melbourne', site: '', time: '10:00',
         leader: 'Alice', mobile: null, category: 'TWOL', user_id: 'user-1',
       }),
     ).rejects.toEqual(error);
@@ -111,7 +113,7 @@ describe('createCampaign', () => {
     mockFrom.mockReturnValue(builder);
     await expect(
       createCampaign({
-        date: '2026-01-05', state: 'VIC', place: 'Melbourne', time: '10:00',
+        date: '2026-01-05', state: 'VIC', place: 'Melbourne', site: '', time: '10:00',
         leader: '   ', mobile: null, category: 'TWOL', user_id: 'user-1',
       }),
     ).rejects.toThrow('Leader is required');
@@ -186,7 +188,7 @@ describe('findCampaign / findCampaignsByKey', () => {
   it('findCampaign returns null when no match', async () => {
     mockFrom.mockReturnValue(makeQueryBuilder({ data: null, error: null }));
     expect(
-      await findCampaign({ date: '2026-01-05', state: 'VIC', place: 'Melbourne', time: '10:00', leader: 'Alice' }),
+      await findCampaign({ date: '2026-01-05', state: 'VIC', place: 'Melbourne', site: '', time: '10:00', leader: 'Alice' }),
     ).toBeNull();
   });
 
@@ -194,7 +196,7 @@ describe('findCampaign / findCampaignsByKey', () => {
     mockFrom.mockReturnValue(
       makeQueryBuilder({ data: [{ id: 'c1', mobile: null, state: 'VIC', leader: 'Alice' }], error: null }),
     );
-    const result = await findCampaignsByKey({ date: '2026-01-05', state: 'VIC', place: 'Melbourne', time: '10:00', leader: 'Alice' });
+    const result = await findCampaignsByKey({ date: '2026-01-05', state: 'VIC', place: 'Melbourne', site: '', time: '10:00', leader: 'Alice' });
     expect(result).toEqual([{ id: 'c1', mobile: null, state: 'VIC', leader: 'Alice' }]);
   });
 });

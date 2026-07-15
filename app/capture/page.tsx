@@ -61,6 +61,7 @@ export default function CapturePage() {
         date: data.date,
         state: data.state,
         place: data.place,
+        site: data.site,
         time: data.time,
         leader: data.leader,
         mobile: data.mobile || userMobile || null,

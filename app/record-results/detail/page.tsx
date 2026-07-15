@@ -28,6 +28,7 @@ import {
 } from '@/lib/recordResultsDraft';
 import { trackEvent } from '@/lib/analytics';
 import { getErrorMessage } from '@/lib/errorUtils';
+import { combinePlaceAndSite } from '@/lib/placeSite';
 
 interface NameSlot {
   value: string;
@@ -89,6 +90,7 @@ function RecordResultsDetailPageContent() {
     date: '',
     state: '',
     place: '',
+    site: '',
     time: '',
     leader: '',
   });
@@ -204,7 +206,7 @@ function RecordResultsDetailPageContent() {
   // and do a single fetch by ID instead.
   const findOrCreateCampaign = useCallback(async (
     userId: string,
-    campaignParams: { date: string; state: string; place: string; time: string; leader: string },
+    campaignParams: { date: string; state: string; place: string; site: string; time: string; leader: string },
     knownId?: string,
   ): Promise<string> => {
     const userMobileAndLeader = contextUserMobile && contextUserLeader
@@ -270,6 +272,7 @@ function RecordResultsDetailPageContent() {
       date: campaignParams.date,
       state: campaignParams.state,
       place: campaignParams.place,
+      site: campaignParams.site,
       time: campaignParams.time,
       leader: campaignParams.leader,
       mobile: userMobileAndLeader?.mobile || null,
@@ -328,15 +331,16 @@ function RecordResultsDetailPageContent() {
         const date = searchParams.get('date') || '';
         const state = searchParams.get('state') || '';
         const place = searchParams.get('place') || '';
+        const site = searchParams.get('site') || '';
         const time = searchParams.get('time') || '';
         const leader = searchParams.get('leader') || '';
         const filter = searchParams.get('returnFilter') || 'future';
 
         if (cancelled) return;
-        setCampaignData({ date, state, place, time, leader });
+        setCampaignData({ date, state, place, site, time, leader });
         setReturnFilter(filter);
 
-        const cid = await findOrCreateCampaign(contextUser!.id, { date, state, place, time, leader }, idParam);
+        const cid = await findOrCreateCampaign(contextUser!.id, { date, state, place, site, time, leader }, idParam);
         if (cancelled) return;
         setCampaignId(cid);
 
@@ -914,7 +918,7 @@ function RecordResultsDetailPageContent() {
           </h1>
           <div className="mt-2 space-y-1">
             <p className="text-base font-semibold text-gray-900 dark:text-gray-100">
-              {campaignData.place}, {campaignData.state}
+              {combinePlaceAndSite(campaignData.place, campaignData.site)}, {campaignData.state}
             </p>
             {campaignData.date && campaignData.time && (
               <p className="text-sm font-medium text-gray-700 dark:text-gray-300">

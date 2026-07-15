@@ -11,6 +11,8 @@ export interface Campaign {
   date: string;
   state: string;
   place: string;
+  /** Numeric sub-location suffix distinguishing multiple sites sharing a place name (e.g. "1" for "Orange 1"). Empty string when there is none. */
+  site: string;
   time: string;
   leader: string;
   mobile: string | null;
@@ -49,6 +51,7 @@ export interface CampaignRule {
   leader: string;
   state: string;
   place: string;
+  site: string;
   time: string;
   mobile: string | null;
   /**

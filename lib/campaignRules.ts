@@ -10,6 +10,7 @@ export interface GeneratedCampaign {
   date: string;
   state: string;
   place: string;
+  site: string;
   time: string;
   leader: string;
   mobile: string | null;
@@ -258,6 +259,7 @@ export function evaluateRule(
       date:     dateStr,
       state:    rule.state,
       place:    rule.place,
+      site:     rule.site,
       time:     typeof overrideFields.time === 'string' ? overrideFields.time : rule.time,
       leader:   rule.leader,
       mobile:   rule.mobile,
@@ -282,7 +284,7 @@ export function evaluateRules(
 
   for (const rule of sortedRules) {
     for (const campaign of evaluateRule(rule, targetStartDate, targetEndDate)) {
-      const key = `${campaign.date}_${campaign.state}_${campaign.place}_${campaign.time}`;
+      const key = `${campaign.date}_${campaign.state}_${campaign.place}_${campaign.site}_${campaign.time}`;
       if (!seen.has(key)) {
         seen.set(key, campaign);
         all.push(campaign);

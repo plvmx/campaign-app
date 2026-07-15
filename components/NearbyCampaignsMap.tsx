@@ -5,6 +5,7 @@ import { useEffect, useMemo } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Circle, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import type { NearbyMapMarker } from '@/lib/services/nearbyCampaignsService';
+import { combinePlaceAndSite } from '@/lib/placeSite';
 
 // Default marker icon — Leaflet's bundled assets don't resolve through Next.js's
 // bundler, so they're served from /public/leaflet (same-origin for CSP).
@@ -106,13 +107,13 @@ export default function NearbyCampaignsMap({ center, radiusKm, markers }: Nearby
       </Marker>
       {markers.map(marker => (
         <Marker
-          key={`${marker.state}::${marker.place}`}
+          key={`${marker.state}::${marker.place}::${marker.site}`}
           position={[marker.latitude, marker.longitude]}
           icon={campaignIcon}
         >
           <Popup>
             <div className="text-sm">
-              <p className="font-semibold">{marker.place}, {marker.state}</p>
+              <p className="font-semibold">{combinePlaceAndSite(marker.place, marker.site)}, {marker.state}</p>
               <p className="mt-1">{marker.distanceKm} km away · {marker.campaigns.length} campaign{marker.campaigns.length === 1 ? '' : 's'}</p>
               <ul className="mt-1 max-h-32 list-disc overflow-y-auto pl-4">
                 {marker.campaigns.map(c => (

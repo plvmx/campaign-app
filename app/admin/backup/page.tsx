@@ -27,6 +27,7 @@ interface StatePlace {
   id: string;
   state: string;
   place: string;
+  site?: string;
   created_at?: string;
 }
 

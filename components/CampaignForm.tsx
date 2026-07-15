@@ -3,12 +3,14 @@
 import { useState, FormEvent, useEffect } from 'react';
 import { getTodayDateString } from '@/lib/campaignDates';
 import { getErrorMessage } from '@/lib/errorUtils';
-import { getPlacesForState, getLeadersForState, getCampaignCategories } from '@/lib/services/dropdownService';
+import { getPlacesForState, getLeadersForState, getCampaignCategories, type PlaceOption } from '@/lib/services/dropdownService';
+import { combinePlaceAndSite } from '@/lib/placeSite';
 
 export interface CampaignData {
   date: string;
   state: string;
   place: string;
+  site: string;
   time: string;
   leader: string;
   mobile: string;
@@ -42,6 +44,7 @@ export default function CampaignForm({
     date: initialData?.date || todayDateString,
     state: initialData?.state || '',
     place: initialData?.place || '',
+    site: initialData?.site || '',
     time: initialData?.time || '',
     leader: initialData?.leader || '',
     mobile: initialData?.mobile || '',
@@ -49,7 +52,7 @@ export default function CampaignForm({
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [places, setPlaces] = useState<string[]>([]);
+  const [places, setPlaces] = useState<PlaceOption[]>([]);
   const [loadingPlaces, setLoadingPlaces] = useState(false);
   const [timeOptions, setTimeOptions] = useState<{ value: string; label: string }[]>([]);
   const [leaders, setLeaders] = useState<string[]>([]);
@@ -106,8 +109,9 @@ export default function CampaignForm({
     getPlacesForState(formData.state)
       .then((uniquePlaces) => {
         setPlaces(uniquePlaces);
-        if (formData.place && !uniquePlaces.includes(formData.place)) {
-          setFormData((prev) => ({ ...prev, place: '' }));
+        const currentLabel = combinePlaceAndSite(formData.place, formData.site);
+        if (formData.place && !uniquePlaces.some((p) => p.label === currentLabel)) {
+          setFormData((prev) => ({ ...prev, place: '', site: '' }));
         }
       })
       .finally(() => setLoadingPlaces(false));
@@ -148,9 +152,17 @@ export default function CampaignForm({
     setFormData((prev) => ({
       ...prev,
       [name]: value,
-      // Clear place when state changes
-      ...(name === 'state' ? { place: '' } : {}),
+      // Clear place/site when state changes
+      ...(name === 'state' ? { place: '', site: '' } : {}),
     }));
+    setError(null);
+  };
+
+  /** Resolves the selected PlaceOption.label back into place+site via the loaded options. */
+  const handlePlaceChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const label = e.target.value;
+    const match = places.find((p) => p.label === label);
+    setFormData((prev) => ({ ...prev, place: match?.place ?? label, site: match?.site ?? '' }));
     setError(null);
   };
 
@@ -232,8 +244,8 @@ export default function CampaignForm({
           id="place"
           name="place"
           required
-          value={formData.place}
-          onChange={handleChange}
+          value={combinePlaceAndSite(formData.place, formData.site)}
+          onChange={handlePlaceChange}
           disabled={!formData.state || loadingPlaces}
           className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:disabled:bg-gray-700"
         >
@@ -247,8 +259,8 @@ export default function CampaignForm({
               : 'Select a place'}
           </option>
           {places.map((place) => (
-            <option key={place} value={place}>
-              {place}
+            <option key={place.label} value={place.label}>
+              {place.label}
             </option>
           ))}
         </select>
@@ -316,7 +328,7 @@ export default function CampaignForm({
         </select>
         {formData.state && leaders.length === 0 && !loadingLeaders && (
           <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-            No leaders found for {formData.place ? `${formData.place}, ` : ''}
+            No leaders found for {formData.place ? `${combinePlaceAndSite(formData.place, formData.site)}, ` : ''}
             {formData.state}.
           </p>
         )}
