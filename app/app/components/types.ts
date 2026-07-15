@@ -2,6 +2,7 @@ export interface EditUpdates {
   date: string;
   state: string;
   place: string;
+  site: string;
   time: string;
   leader: string;
   mobile: string | null;

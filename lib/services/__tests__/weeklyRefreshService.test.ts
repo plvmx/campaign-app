@@ -32,7 +32,7 @@ function makeClient(responses: Partial<Record<string, TableResponse[]>>) {
 
 function makeRule(overrides: Partial<CampaignRule> = {}): CampaignRule {
   return {
-    id: 'rule-1', name: 'Test Rule', leader: 'Alice', state: 'VIC', place: 'Melbourne', time: '10:00',
+    id: 'rule-1', name: 'Test Rule', leader: 'Alice', state: 'VIC', place: 'Melbourne', site: '', time: '10:00',
     mobile: null, frequency_type: 'weekly', frequency_value: null, month_week_number: null,
     month_day_of_week: null, day_of_week: 1 /* Monday — always matches secondWeekStart */,
     start_date: null, end_date: null, is_active: true, priority: 0, rule_config: {}, notes: null,
@@ -90,7 +90,7 @@ describe('runWeeklyRefresh', () => {
     const insertBuilder = builders.campaigns[1];
     expect(insertBuilder.insert).toHaveBeenCalledWith([
       expect.objectContaining({
-        date: secondWeekStartStr, state: 'VIC', place: 'Melbourne', time: '10:00',
+        date: secondWeekStartStr, state: 'VIC', place: 'Melbourne', site: '', time: '10:00',
         leader: 'Alice', category: 'TWOL', user_id: 'user-1', source: 'RUL', tl_ok: false,
       }),
     ]);
@@ -102,7 +102,7 @@ describe('runWeeklyRefresh', () => {
       state_leaders: [{ data: [{ state: 'VIC' }], error: null }],
       campaign_rules: [{ data: [rule], error: null }],
       campaigns: [
-        { data: [{ date: secondWeekStartStr, state: 'VIC', place: 'Melbourne', time: '10:00', leader: 'Alice' }], error: null },
+        { data: [{ date: secondWeekStartStr, state: 'VIC', place: 'Melbourne', site: '', time: '10:00', leader: 'Alice' }], error: null },
         { data: [], error: null }, // delete old (no insert call in between — nothing to insert)
       ],
       campaign_changes_log: [{ data: [], error: null }],
@@ -114,6 +114,32 @@ describe('runWeeklyRefresh', () => {
     expect(result.created).toBe(0);
     expect(result.skipped).toBe(1);
     expect(builders.campaigns).toHaveLength(2); // existing-rows select + delete — no insert call
+  });
+
+  it('does not treat a different site at the same place/time/leader as an existing match', async () => {
+    // Regression: site must be part of the dedup slot key. A rule for "Orange 1" must not
+    // be skipped just because "Orange" (no site) already has a campaign at that date/time/leader.
+    const rule = makeRule({ place: 'Orange', site: '1' });
+    const { client, builders } = makeClient({
+      state_leaders: [{ data: [{ state: 'VIC' }], error: null }],
+      campaign_rules: [{ data: [rule], error: null }],
+      campaigns: [
+        { data: [{ date: secondWeekStartStr, state: 'VIC', place: 'Orange', site: '', time: '10:00', leader: 'Alice' }], error: null },
+        { data: null, error: null }, // insert
+        { data: [], error: null },   // delete old
+      ],
+      campaign_changes_log: [{ data: [], error: null }],
+      weekly_refresh_log: [{ data: null, error: null }],
+    });
+
+    const result = await runWeeklyRefresh(client, 'user-1');
+
+    expect(result.created).toBe(1);
+    expect(result.skipped).toBe(0);
+    const insertBuilder = builders.campaigns[1];
+    expect(insertBuilder.insert).toHaveBeenCalledWith([
+      expect.objectContaining({ place: 'Orange', site: '1' }),
+    ]);
   });
 
   it('backfills a biweekly rule\'s missing reference_date and updates it after a new campaign is created', async () => {
@@ -142,6 +168,7 @@ describe('runWeeklyRefresh', () => {
     const lookbackBuilder = builders.campaigns[1];
     expect(lookbackBuilder.eq).toHaveBeenCalledWith('state', 'VIC');
     expect(lookbackBuilder.eq).toHaveBeenCalledWith('place', 'Melbourne');
+    expect(lookbackBuilder.eq).toHaveBeenCalledWith('site', '');
     expect(lookbackBuilder.eq).toHaveBeenCalledWith('time', '10:00');
     expect(lookbackBuilder.eq).toHaveBeenCalledWith('leader', 'Bob');
 

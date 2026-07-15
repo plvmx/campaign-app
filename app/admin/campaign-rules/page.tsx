@@ -7,13 +7,14 @@ import LoadingSpinner from '@/components/LoadingSpinner';
 import Modal from '@/components/Modal';
 import { useUser } from '@/contexts/UserContext';
 import { getStateColor } from '@/lib/stateColors';
-import { getPlacesForState, getLeadersForState, getLeaderMobile } from '@/lib/services/dropdownService';
+import { getPlacesForState, getLeadersForState, getLeaderMobile, type PlaceOption } from '@/lib/services/dropdownService';
 import { getRules, createRule, updateRule, deleteRule, setRuleActive } from '@/lib/services/rulesService';
 import type { CampaignRule } from '@/lib/types';
 import { evaluateRule, previewRuleEvaluation } from '@/lib/campaignRules';
 import { formatDateReadable } from '@/lib/campaignDates';
 import { AUSTRALIAN_STATES } from '@/lib/constants';
 import { getErrorMessage } from '@/lib/errorUtils';
+import { combinePlaceAndSite } from '@/lib/placeSite';
 import { isRecognizedAdminStatus } from '@/lib/campaignFilter';
 const DAYS_OF_WEEK = [
   { value: 0, label: 'Sunday' },
@@ -109,6 +110,7 @@ function CampaignRulesPageContent() {
     leader: '',
     state: '',
     place: '',
+    site: '',
     time: '',
     mobile: '',
     frequency_type: 'weekly' as 'weekly' | 'biweekly' | 'monthly',
@@ -137,7 +139,7 @@ function CampaignRulesPageContent() {
   const [previewDates, setPreviewDates] = useState<Date[]>([]);
 
   // Dropdown data
-  const [places, setPlaces] = useState<string[]>([]);
+  const [places, setPlaces] = useState<PlaceOption[]>([]);
   const [leaders, setLeaders] = useState<string[]>([]);
   const [loadingPlaces, setLoadingPlaces] = useState(false);
   const [loadingLeaders, setLoadingLeaders] = useState(false);
@@ -197,7 +199,7 @@ function CampaignRulesPageContent() {
   useEffect(() => {
     if (!formState.state) {
       setPlaces([]);
-      setFormState(prev => ({ ...prev, place: '' }));
+      setFormState(prev => ({ ...prev, place: '', site: '' }));
       return;
     }
     setLoadingPlaces(true);
@@ -205,7 +207,9 @@ function CampaignRulesPageContent() {
       .then((uniquePlaces) => {
         setPlaces(uniquePlaces);
         setFormState(prev =>
-          prev.place && !uniquePlaces.includes(prev.place) ? { ...prev, place: '' } : prev,
+          prev.place && !uniquePlaces.some((p) => p.label === combinePlaceAndSite(prev.place, prev.site))
+            ? { ...prev, place: '', site: '' }
+            : prev,
         );
       })
       .catch(() => setPlaces([]))
@@ -310,6 +314,7 @@ function CampaignRulesPageContent() {
         leader: formState.leader.trim(),
         state: formState.state.trim(),
         place: formState.place.trim(),
+        site: formState.site.trim(),
         time: formState.time.trim(),
         mobile: mobileValue,
         frequency_type: formState.frequency_type,
@@ -398,6 +403,7 @@ function CampaignRulesPageContent() {
       leader: preservedLeader,
       state: preservedState,
       place: '',
+      site: '',
       time: '',
       mobile: '',
       frequency_type: 'weekly',
@@ -432,6 +438,7 @@ function CampaignRulesPageContent() {
       leader: rule.leader,
       state: stateToUse,
       place: rule.place,
+      site: rule.site,
       time: timeToHHMM(rule.time),
       mobile: rule.mobile || '',
       // 'custom' is no longer a supported frequency type in the UI; fall back to 'weekly'
@@ -537,6 +544,7 @@ function CampaignRulesPageContent() {
       leader:            formState.leader || '',
       state:             formState.state  || 'NSW',
       place:             formState.place  || 'Preview',
+      site:              formState.site,
       time:              formState.time   || '09:00',
       mobile:            null,
       frequency_type,
@@ -709,8 +717,12 @@ function CampaignRulesPageContent() {
                 <select
                   id="place"
                   required
-                  value={formState.place}
-                  onChange={(e) => setFormState({ ...formState, place: e.target.value })}
+                  value={combinePlaceAndSite(formState.place, formState.site)}
+                  onChange={(e) => {
+                    const label = e.target.value;
+                    const match = places.find((p) => p.label === label);
+                    setFormState({ ...formState, place: match?.place ?? label, site: match?.site ?? '' });
+                  }}
                   disabled={!formState.state || loadingPlaces}
                   className="mt-1 block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed dark:border-gray-500 dark:bg-gray-900 dark:text-white dark:disabled:bg-gray-700"
                 >
@@ -724,8 +736,8 @@ function CampaignRulesPageContent() {
                       : 'Select a place'}
                   </option>
                   {places.map((place) => (
-                    <option key={place} value={place}>
-                      {place}
+                    <option key={place.label} value={place.label}>
+                      {place.label}
                     </option>
                   ))}
                 </select>
@@ -1134,7 +1146,7 @@ function CampaignRulesPageContent() {
                           )}
                         </div>
                         <div className={`text-sm ${stateColor.text} opacity-75 mt-1`}>
-                          {rule.leader} - {rule.place}, {rule.state} at {timeToHHMM(rule.time)}
+                          {rule.leader} - {combinePlaceAndSite(rule.place, rule.site)}, {rule.state} at {timeToHHMM(rule.time)}
                         </div>
                         <div className={`text-xs ${stateColor.text} opacity-60 mt-1`}>
                           {frequencyLabel}{dayLabel ? ` on ${dayLabel}` : ''}
@@ -1237,7 +1249,7 @@ function CampaignRulesPageContent() {
                 </div>
                 <div>
                   <span className="font-medium">Where: </span>
-                  {pendingRuleData.place}, {pendingRuleData.state}
+                  {combinePlaceAndSite(pendingRuleData.place, pendingRuleData.site)}, {pendingRuleData.state}
                 </div>
                 <div>
                   <span className="font-medium">Time: </span>

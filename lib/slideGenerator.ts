@@ -16,6 +16,7 @@ import {
   STATE_CODES,
 } from '@/lib/slideLayout';
 import { formatCampaignTimeDisplay } from '@/lib/campaignUtils';
+import { combinePlaceAndSite } from '@/lib/placeSite';
 
 // ---------------------------------------------------------------------------
 // Canvas constants  (match generate-slides/page.tsx exactly)
@@ -41,6 +42,7 @@ interface SlideCampaign {
   date: string;
   state: string;
   place: string;
+  site: string;
   time: string;
   leader: string;
   mobile: string | null;
@@ -299,7 +301,7 @@ async function renderSlide(
     ctx.textBaseline = 'top';
 
     finalCampaigns.forEach((c, j) => {
-      let place = c.place;
+      let place = combinePlaceAndSite(c.place, c.site);
       const cat = c.category ?? 'TWOL';
       if (cat !== 'TWOL') place = `${place} ${cat}`;
       if (place.length > PLACE_COLS) place = place.substring(0, PLACE_COLS);

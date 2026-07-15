@@ -3,6 +3,7 @@ import { createCampaign } from '@/lib/services/campaignService';
 import { trackEvent } from '@/lib/analytics';
 import { getTodayDateString } from '@/lib/campaignDates';
 import { AUSTRALIAN_STATES } from '@/lib/constants';
+import { combinePlaceAndSite } from '@/lib/placeSite';
 import { useCampaignForm } from './useCampaignForm';
 import { TIME_OPTIONS } from './timeOptions';
 
@@ -32,12 +33,12 @@ export default function CampaignCreateForm({
     initialValues: {
       date: getTodayDateString(),
       state: userState ? userState.toUpperCase().trim() : '',
-      place: '', time: '', leader: '', mobile: '',
+      place: '', site: '', time: '', leader: '', mobile: '',
       category: 'TWOL', tl_ok: false, sr_ok: false,
     },
     onSubmit: async (v) => {
       await createCampaign({
-        date: v.date, state: v.state, place: v.place, time: v.time,
+        date: v.date, state: v.state, place: v.place, site: v.site, time: v.time,
         leader: v.leader, mobile: v.mobile.trim() || null,
         category: v.category ?? 'TWOL', tl_ok: v.tl_ok, sr_ok: v.sr_ok,
         user_id: userId, source: 'MAN',
@@ -83,12 +84,12 @@ export default function CampaignCreateForm({
           <div>
             <label htmlFor="create-place" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Place</label>
             <select id="create-place" required={!isOtherPlace}
-              value={isOtherPlace ? 'OTHER_PLACE' : values.place}
+              value={isOtherPlace ? 'OTHER_PLACE' : combinePlaceAndSite(values.place, values.site)}
               onChange={(e) => handlePlaceChange(e.target.value)}
               disabled={!values.state || loadingPlaces}
               className={`${fieldClass} disabled:opacity-50`}>
               <option value="">{loadingPlaces ? 'Loading...' : 'Select a place'}</option>
-              {places.map((p) => <option key={p} value={p}>{p}</option>)}
+              {places.map((p) => <option key={p.label} value={p.label}>{p.label}</option>)}
               <option value="OTHER_PLACE">Other Place</option>
             </select>
             {isOtherPlace && (

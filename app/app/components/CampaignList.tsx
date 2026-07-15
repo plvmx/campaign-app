@@ -4,6 +4,7 @@ import type { LeaderShareOwner } from '@/lib/types';
 import type { EditUpdates } from './types';
 import CampaignCard from './CampaignCard';
 import InlineEditForm from './InlineEditForm';
+import { combinePlaceAndSite } from '@/lib/placeSite';
 
 interface Props {
   campaigns: Campaign[];
@@ -41,10 +42,11 @@ export default function CampaignList({
   const grouped = campaigns.reduce(
     (acc, campaign) => {
       const d = campaign.date;
+      const placeKey = combinePlaceAndSite(campaign.place, campaign.site);
       if (!acc[d]) acc[d] = {};
       if (!acc[d][campaign.state]) acc[d][campaign.state] = {};
-      if (!acc[d][campaign.state][campaign.place]) acc[d][campaign.state][campaign.place] = [];
-      acc[d][campaign.state][campaign.place].push(campaign);
+      if (!acc[d][campaign.state][placeKey]) acc[d][campaign.state][placeKey] = [];
+      acc[d][campaign.state][placeKey].push(campaign);
       return acc;
     },
     {} as Record<string, Record<string, Record<string, Campaign[]>>>,

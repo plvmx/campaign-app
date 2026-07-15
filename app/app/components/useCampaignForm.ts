@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { getLeaderMobile } from '@/lib/services/dropdownService';
 import { addNewPlaceForState } from '@/lib/services/placeService';
+import { splitPlaceAndSite } from '@/lib/placeSite';
 import { getErrorMessage } from '@/lib/errorUtils';
 import { useStateDropdowns } from './useStateDropdowns';
 
@@ -9,6 +10,7 @@ export interface CampaignFormValues {
   date: string;
   state: string;
   place: string;
+  site: string;
   time: string;
   leader: string;
   mobile: string;
@@ -59,7 +61,7 @@ export function useCampaignForm({ initialValues, onSubmit, autoFill }: UseCampai
   };
 
   const handleStateChange = (newState: string) => {
-    setValues((prev) => ({ ...prev, state: newState, place: '', leader: '', mobile: '' }));
+    setValues((prev) => ({ ...prev, state: newState, place: '', site: '', leader: '', mobile: '' }));
     setIsOtherPlace(false);
     setCustomPlace('');
   };
@@ -73,14 +75,16 @@ export function useCampaignForm({ initialValues, onSubmit, autoFill }: UseCampai
     }
   };
 
-  const handlePlaceChange = (place: string) => {
-    if (place === 'OTHER_PLACE') {
+  /** `label` is a PlaceOption.label (e.g. "Orange 1") — resolved back into place+site via the loaded options. */
+  const handlePlaceChange = (label: string) => {
+    if (label === 'OTHER_PLACE') {
       setIsOtherPlace(true);
-      setValues((prev) => ({ ...prev, place: '', leader: '', mobile: '' }));
+      setValues((prev) => ({ ...prev, place: '', site: '', leader: '', mobile: '' }));
     } else {
       setIsOtherPlace(false);
       setCustomPlace('');
-      setValues((prev) => ({ ...prev, place, leader: '', mobile: '' }));
+      const match = places.find((p) => p.label === label);
+      setValues((prev) => ({ ...prev, place: match?.place ?? label, site: match?.site ?? '', leader: '', mobile: '' }));
     }
   };
 
@@ -91,18 +95,20 @@ export function useCampaignForm({ initialValues, onSubmit, autoFill }: UseCampai
     setIsSubmitting(true);
     try {
       let resolvedPlace = values.place;
+      let resolvedSite = values.site;
       if (isOtherPlace && customPlace.trim()) {
         if (!values.state?.trim()) throw new Error('Please select a state before entering a new place');
         const stateValue = values.state.toUpperCase().trim();
-        const newPlace   = customPlace.trim();
-        await addNewPlaceForState(stateValue, newPlace);
+        const { place: newPlace, site: newSite } = splitPlaceAndSite(customPlace);
+        await addNewPlaceForState(stateValue, newPlace, newSite);
         resolvedPlace = newPlace;
+        resolvedSite = newSite;
         const { getPlacesForState } = await import('@/lib/services/dropdownService');
         updatePlacesCache(stateValue, await getPlacesForState(stateValue));
       }
       if (!resolvedPlace?.trim()) throw new Error('Please select or enter a place');
       if (!values.leader?.trim()) throw new Error('Please select a leader');
-      await onSubmit({ ...values, place: resolvedPlace });
+      await onSubmit({ ...values, place: resolvedPlace, site: resolvedSite });
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Failed to save campaign'));
     } finally {

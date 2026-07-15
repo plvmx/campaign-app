@@ -14,6 +14,7 @@ import {
 } from '@/lib/ariseLayout';
 import { getSlideStateColor, formatSlideDateText, STATE_CODES } from '@/lib/slideLayout';
 import { formatCampaignTimeDisplay } from '@/lib/campaignUtils';
+import { combinePlaceAndSite } from '@/lib/placeSite';
 
 // Fraction of an average character width used for the gap between fields and
 // the side margins of a campaign line. Kept below 1 char so more of the
@@ -88,7 +89,7 @@ export function drawCampaignLine(
   y: number,
   colWidth: number,
 ): void {
-  let place = campaign.place;
+  let place = combinePlaceAndSite(campaign.place, campaign.site);
   const cat = campaign.category ?? 'TWOL';
   if (cat !== 'TWOL') place = `${place} ${cat}`;
   if (place.length > PLACE_COLS) place = place.substring(0, PLACE_COLS);

@@ -46,21 +46,21 @@ describe('createStatePlace', () => {
   it('inserts the place', async () => {
     const builder = makeQueryBuilder({ data: null, error: null });
     mockFrom.mockReturnValue(builder);
-    await createStatePlace({ state: 'VIC', place: 'Melbourne' });
-    expect(builder.insert).toHaveBeenCalledWith([{ state: 'VIC', place: 'Melbourne' }]);
+    await createStatePlace({ state: 'VIC', place: 'Melbourne', site: '' });
+    expect(builder.insert).toHaveBeenCalledWith([{ state: 'VIC', place: 'Melbourne', site: '' }]);
   });
 
-  it('raises a friendly error on a duplicate state+place (23505)', async () => {
+  it('raises a friendly error on a duplicate state+place+site (23505)', async () => {
     mockFrom.mockReturnValue(makeQueryBuilder({ data: null, error: { code: '23505' } }));
-    await expect(createStatePlace({ state: 'VIC', place: 'Melbourne' })).rejects.toThrow(
-      'This state-place combination already exists',
+    await expect(createStatePlace({ state: 'VIC', place: 'Melbourne', site: '' })).rejects.toThrow(
+      'This state-place-site combination already exists',
     );
   });
 
   it('rethrows other errors as-is', async () => {
     const error = { code: '500', message: 'boom' };
     mockFrom.mockReturnValue(makeQueryBuilder({ data: null, error }));
-    await expect(createStatePlace({ state: 'VIC', place: 'Melbourne' })).rejects.toEqual(error);
+    await expect(createStatePlace({ state: 'VIC', place: 'Melbourne', site: '' })).rejects.toEqual(error);
   });
 });
 
@@ -68,15 +68,15 @@ describe('updateStatePlace', () => {
   it('updates by id', async () => {
     const builder = makeQueryBuilder({ data: null, error: null });
     mockFrom.mockReturnValue(builder);
-    await updateStatePlace('p1', { state: 'VIC', place: 'Geelong' });
-    expect(builder.update).toHaveBeenCalledWith({ state: 'VIC', place: 'Geelong' });
+    await updateStatePlace('p1', { state: 'VIC', place: 'Geelong', site: '' });
+    expect(builder.update).toHaveBeenCalledWith({ state: 'VIC', place: 'Geelong', site: '' });
     expect(builder.eq).toHaveBeenCalledWith('id', 'p1');
   });
 
   it('throws on error', async () => {
     const error = { code: '500', message: 'boom' };
     mockFrom.mockReturnValue(makeQueryBuilder({ data: null, error }));
-    await expect(updateStatePlace('p1', { state: 'VIC', place: 'Geelong' })).rejects.toEqual(error);
+    await expect(updateStatePlace('p1', { state: 'VIC', place: 'Geelong', site: '' })).rejects.toEqual(error);
   });
 });
 

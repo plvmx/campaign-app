@@ -24,7 +24,7 @@ async function fetchCampaignsForDate(
 
   let q = client
     .from('campaigns')
-    .select('id, date, state, place, time, leader, category')
+    .select('id, date, state, place, site, time, leader, category')
     .eq('date', `${y}-${m}-${d}`)
     .order('state', { ascending: true })
     .order('place', { ascending: true })

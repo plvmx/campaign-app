@@ -882,10 +882,12 @@ Lookup table for valid state-place combinations.
 - `id` (UUID, PK)
 - `state` (TEXT, NOT NULL)
 - `place` (TEXT, NOT NULL)
+- `site` (TEXT, NOT NULL, default `''`) — numeric sub-location suffix, e.g. `"1"` for "Orange 1"
+- `latitude` / `longitude` (double precision, nullable) — geocoded lazily
 - `created_at` (TIMESTAMP)
 
 **Constraints**:
-- UNIQUE(state, place)
+- UNIQUE(state, place, site)
 
 **Indexes**:
 - `idx_state_places_state`

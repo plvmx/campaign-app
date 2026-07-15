@@ -12,12 +12,14 @@ import { downloadReportRows } from '@/lib/reportGenerator';
 import { getErrorMessage } from '@/lib/errorUtils';
 import { formatDownloadDate } from '@/lib/slideLayout';
 import { getStateColor } from '@/lib/stateColors';
+import { combinePlaceAndSite } from '@/lib/placeSite';
 
 interface Campaign {
   id: string;
   date: string;
   state: string;
   place: string;
+  site: string;
   time: string;
   leader: string;
   mobile: string | null;
@@ -146,7 +148,7 @@ export default function GenerateReportPage() {
         // Parse date to format like "6/12"
         const date = new Date(campaign.date);
         const dateStr = `${date.getDate()}/${date.getMonth() + 1}`;
-        const dateLocation = `${dateStr} ${campaign.place} ${campaign.state}`;
+        const dateLocation = `${dateStr} ${combinePlaceAndSite(campaign.place, campaign.site)} ${campaign.state}`;
         
         // Categorize results
         const members: string[] = [];

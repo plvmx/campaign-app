@@ -4,6 +4,7 @@ import type { LeaderShareOwner } from '@/lib/types';
 import { getStateColor } from '@/lib/stateColors';
 import { formatCampaignTimeDisplay, isCampaignPast } from '@/lib/campaignUtils';
 import { normalizeName, normalizeMobile } from '@/lib/auth';
+import { combinePlaceAndSite } from '@/lib/placeSite';
 
 const SOURCE_LABEL: Record<string, string> = {
   MAN: 'Manual',
@@ -68,7 +69,7 @@ export default function CampaignCard({
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="flex-1 min-w-0">
           <div className={`flex items-center justify-between gap-2 text-lg sm:text-xl font-bold ${stateColor.text} mb-2 break-words`}>
-            <span>{campaign.place} {campaign.state} • {displayTime}</span>
+            <span>{combinePlaceAndSite(campaign.place, campaign.site)} {campaign.state} • {displayTime}</span>
             {showCategoryBadge && <span className="shrink-0 ml-2">{campaignCat}</span>}
           </div>
           <div className={`text-base sm:text-lg ${stateColor.text} opacity-90 mb-1 break-words`}>

@@ -52,6 +52,7 @@ export interface AriseCampaign {
   date: string;
   state: string;
   place: string;
+  site: string;
   time: string;
   leader: string;
   category: string | null;

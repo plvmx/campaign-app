@@ -81,10 +81,11 @@ npx vitest run lib/__tests__/auth.test.ts   # Run a single test file
 All database access goes through service modules in `lib/services/`. Pages and components must not import `supabase` directly for CRUD operations.
 
 - **`lib/services/campaignService.ts`** — all CRUD for the `campaigns` table: `getCampaignById`, `createCampaign`, `updateCampaign`, `deleteCampaign`, `getCampaignsByDateRange`, `findCampaign`, `getCampaignsForUser` (role-aware fetch + shared-leader merge for the main feed).
-- **`lib/services/dropdownService.ts`** — `getPlacesForState`, `getLeadersForState`, `getLeaderMobile`. Single source of truth for dropdowns that appear on multiple pages.
+- **`lib/services/dropdownService.ts`** — `getPlacesForState` (returns `PlaceOption[]`, each with `place`/`site`/a combined `label` like "Orange 1"), `getLeadersForState`, `getLeaderMobile`. Single source of truth for dropdowns that appear on multiple pages.
 - **`lib/services/placeService.ts`** — `addNewPlaceForState` — inserts into `state_places`; silently ignores duplicate (23505). Used when a user types a new place in a campaign form.
 - **`lib/services/stateLeadersService.ts`** — CRUD for the `state_leaders` table: `getStateLeaders`, `createStateLeader`, `updateStateLeader`, `deleteStateLeader`. Exports the `StateLeader` interface.
-- **`lib/services/statePlacesService.ts`** — CRUD for the `state_places` table: `getStatePlaces`, `createStatePlace`, `updateStatePlace`, `deleteStatePlace`. Exports the `StatePlace` interface.
+- **`lib/services/statePlacesService.ts`** — CRUD for the `state_places` table: `getStatePlaces`, `createStatePlace`, `updateStatePlace`, `deleteStatePlace`. Exports the `StatePlace` interface (includes `site`; the table's uniqueness key is `state`+`place`+`site`).
+- **`lib/placeSite.ts`** — `splitPlaceAndSite()`/`combinePlaceAndSite()`. The single source of truth for parsing/joining the numeric site suffix (e.g. "Orange 1" ⇄ `{ place: "Orange", site: "1" }`); used by the migration script and every place selector/display.
 - **`lib/campaignLog.ts`** — fire-and-forget audit logging to `campaign_changes_log`. Skips automatically on admin routes and when logging is toggled off via `lib/appSettings.ts`. `fetchCampaignData` returns `Campaign | null`.
 
 ### Key shared libraries
@@ -128,10 +129,10 @@ All database access goes through service modules in `lib/services/`. Pages and c
 | `/admin/leader-shares` | Leader share links |
 
 ### Database tables (key ones)
-- `campaigns` — core records; `botj` column is the campaign category flag
+- `campaigns` — core records; `botj` column is the campaign category flag; `place`+`site` together identify the location
 - `state_leaders` — leaders per state; `admin` column drives role ('AD' / 'SR' / null)
-- `state_places` — valid places per state
-- `campaign_rules` — recurring scheduling rules
+- `state_places` — valid places per state; keyed on `state`+`place`+`site` (`site` holds a numeric sub-location suffix, e.g. "1" for "Orange 1")
+- `campaign_rules` — recurring scheduling rules; also carries `place`+`site`
 - `campaign_messages` — per-date banner messages
 - `campaign_changes_log` — audit trail
 

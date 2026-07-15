@@ -1,22 +1,22 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
-import { getPlacesForState, getLeadersForState } from '@/lib/services/dropdownService';
+import { getPlacesForState, getLeadersForState, type PlaceOption } from '@/lib/services/dropdownService';
 
 interface UseStateDropdownsResult {
-  places: string[];
+  places: PlaceOption[];
   leaders: string[];
   loadingPlaces: boolean;
   loadingLeaders: boolean;
   /** Overwrite the cached places list for the given state (call after adding a new place). */
-  updatePlacesCache: (state: string, updated: string[]) => void;
+  updatePlacesCache: (state: string, updated: PlaceOption[]) => void;
 }
 
 export function useStateDropdowns(state: string): UseStateDropdownsResult {
-  const [places, setPlaces] = useState<string[]>([]);
+  const [places, setPlaces] = useState<PlaceOption[]>([]);
   const [leaders, setLeaders] = useState<string[]>([]);
   const [loadingPlaces, setLoadingPlaces] = useState(false);
   const [loadingLeaders, setLoadingLeaders] = useState(false);
-  const placesCache = useRef<Record<string, string[]>>({});
+  const placesCache = useRef<Record<string, PlaceOption[]>>({});
   const leadersCache = useRef<Record<string, string[]>>({});
 
   useEffect(() => {
@@ -45,7 +45,7 @@ export function useStateDropdowns(state: string): UseStateDropdownsResult {
     ).then((l) => { setLeaders(l); setLoadingLeaders(false); });
   }, [state]);
 
-  const updatePlacesCache = (s: string, updated: string[]) => {
+  const updatePlacesCache = (s: string, updated: PlaceOption[]) => {
     placesCache.current[s.toUpperCase().trim()] = updated;
     setPlaces(updated);
   };

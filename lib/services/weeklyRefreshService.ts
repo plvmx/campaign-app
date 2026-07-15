@@ -23,6 +23,7 @@ interface NewCampaignRow {
   date: string;
   state: string;
   place: string;
+  site: string;
   time: string;
   leader: string;
   mobile: string | null;
@@ -104,15 +105,15 @@ export async function runWeeklyRefresh(
 
     const { data: existingRows, error: existingError } = await client
       .from('campaigns')
-      .select('date, state, place, time, leader')
+      .select('date, state, place, site, time, leader')
       .gte('date', secondWeekStartStr)
       .lte('date', secondWeekEndStr);
     if (existingError) throw existingError;
 
     const existingSlotKeys = new Set(
       (existingRows || []).map(
-        (c: { date: string; state: string; place: string; time: string; leader: string }) =>
-          `${c.date}_${c.state}_${c.place}_${c.time}_${c.leader}`
+        (c: { date: string; state: string; place: string; site: string; time: string; leader: string }) =>
+          `${c.date}_${c.state}_${c.place}_${c.site}_${c.time}_${c.leader}`
       )
     );
 
@@ -126,6 +127,7 @@ export async function runWeeklyRefresh(
           .select('date')
           .eq('state', rule.state)
           .eq('place', rule.place)
+          .eq('site', rule.site)
           .eq('time', rule.time)
           .eq('leader', rule.leader)
           .order('date', { ascending: false })
@@ -152,6 +154,7 @@ export async function runWeeklyRefresh(
           date:      campaign.date,
           state:     campaign.state,
           place:     campaign.place,
+          site:      campaign.site,
           time:      campaign.time,
           leader:    campaign.leader,
           mobile:    campaign.mobile,
@@ -168,8 +171,8 @@ export async function runWeeklyRefresh(
     // -----------------------------------------------------------------------
     // Deduplicate and insert
     // -----------------------------------------------------------------------
-    const slotKey = (c: { date: string; state: string; place: string; time: string; leader: string }) =>
-      `${c.date}_${c.state}_${c.place}_${c.time}_${c.leader}`;
+    const slotKey = (c: { date: string; state: string; place: string; site: string; time: string; leader: string }) =>
+      `${c.date}_${c.state}_${c.place}_${c.site}_${c.time}_${c.leader}`;
 
     const toInsert    = allNewCampaigns.filter((c) => !existingSlotKeys.has(slotKey(c)));
     const skippedCount = allNewCampaigns.length - toInsert.length;
@@ -187,6 +190,7 @@ export async function runWeeklyRefresh(
             (c) =>
               c.state  === rule.state  &&
               c.place  === rule.place  &&
+              c.site   === rule.site   &&
               c.time   === rule.time   &&
               c.leader === rule.leader
           );

@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import type { MapMarker } from '@/lib/services/campaignMapService';
+import { combinePlaceAndSite } from '@/lib/placeSite';
 
 // Leaflet's default marker icon assets don't resolve correctly through Next.js's
 // bundler, so they're served from /public/leaflet instead (also keeps them same-origin
@@ -69,10 +70,10 @@ export default function CampaignMap({ center, zoom, markers }: CampaignMapProps)
       <TileErrorBanner />
       <FlyTo center={center} zoom={zoom} />
       {markers.map(marker => (
-        <Marker key={`${marker.state}::${marker.place}`} position={[marker.latitude, marker.longitude]} icon={markerIcon}>
+        <Marker key={`${marker.state}::${marker.place}::${marker.site}`} position={[marker.latitude, marker.longitude]} icon={markerIcon}>
           <Popup>
             <div className="text-sm">
-              <p className="font-semibold">{marker.place}, {marker.state}</p>
+              <p className="font-semibold">{combinePlaceAndSite(marker.place, marker.site)}, {marker.state}</p>
               <p className="mt-1">{marker.campaigns.length} upcoming campaign{marker.campaigns.length === 1 ? '' : 's'}</p>
               <ul className="mt-1 max-h-32 list-disc overflow-y-auto pl-4">
                 {marker.campaigns.map(c => (

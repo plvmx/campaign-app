@@ -3,6 +3,7 @@
 import type { Campaign } from '@/lib/types';
 import { getSlideStateColor, STATE_CODES, formatSlideDateText } from '@/lib/slideLayout';
 import { formatCampaignTimeDisplay } from '@/lib/campaignUtils';
+import { combinePlaceAndSite } from '@/lib/placeSite';
 
 const PLACE_COLS  = 18;
 const LEADER_COLS = 12;
@@ -64,7 +65,7 @@ export default function CampaignSlideView({ campaigns, adminStatus }: Props) {
 
               {/* One flex row per campaign — stretches to fill container width */}
               {grouped[date].map(c => {
-                let place = c.place;
+                let place = combinePlaceAndSite(c.place, c.site);
                 const cat = c.category ?? 'TWOL';
                 if (cat !== 'TWOL') place = `${place} ${cat}`;
                 if (place.length > PLACE_COLS) place = place.substring(0, PLACE_COLS);

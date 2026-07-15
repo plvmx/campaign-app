@@ -1,6 +1,7 @@
 'use client';
 import type { Campaign } from '@/lib/types';
 import Modal from '@/components/Modal';
+import { combinePlaceAndSite } from '@/lib/placeSite';
 
 interface Props {
   campaign: Campaign;
@@ -14,7 +15,7 @@ export default function DeleteConfirmModal({ campaign, onConfirm, onCancel }: Pr
       <div className="w-full max-w-sm rounded-xl border-2 border-gray-800 bg-white p-6 shadow-2xl dark:border-gray-600 dark:bg-gray-900">
         <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Delete Campaign?</h2>
         <div className="mt-3 rounded-md bg-gray-50 px-4 py-3 text-sm text-gray-700 dark:bg-gray-800 dark:text-gray-300">
-          <p><span className="font-semibold">Place:</span> {campaign.place}, {campaign.state}</p>
+          <p><span className="font-semibold">Place:</span> {combinePlaceAndSite(campaign.place, campaign.site)}, {campaign.state}</p>
           <p><span className="font-semibold">Date:</span> {new Date(campaign.date).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' })}</p>
           <p><span className="font-semibold">Leader:</span> {campaign.leader}</p>
         </div>

@@ -11,7 +11,7 @@ import type { MapMarker } from '../campaignMapService';
 const mockGetMapData = vi.mocked(getMapData);
 
 function makeMarker(overrides: Partial<MapMarker> = {}): MapMarker {
-  return { state: 'VIC', place: 'Melbourne', latitude: -37.8136, longitude: 144.9631, campaigns: [], ...overrides };
+  return { state: 'VIC', place: 'Melbourne', site: '', latitude: -37.8136, longitude: 144.9631, campaigns: [], ...overrides };
 }
 
 beforeEach(() => {
@@ -70,7 +70,7 @@ describe('getNearbyCampaigns', () => {
   });
 
   it('passes unresolvedPlaces through unchanged', async () => {
-    const unresolvedPlaces = [{ state: 'VIC', place: 'Unknownville' }];
+    const unresolvedPlaces = [{ state: 'VIC', place: 'Unknownville', site: '' }];
     mockGetMapData.mockResolvedValue({ markers: [], unresolvedPlaces });
     const result = await getNearbyCampaigns({
       startDate: '2026-01-01', endDate: '2026-01-31', centerLat: 0, centerLng: 0, radiusKm: 10,

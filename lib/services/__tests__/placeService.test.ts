@@ -15,11 +15,18 @@ beforeEach(() => {
 });
 
 describe('addNewPlaceForState', () => {
-  it('inserts the uppercased state and trimmed place', async () => {
+  it('inserts the uppercased state and trimmed place, defaulting site to empty', async () => {
     const builder = makeQueryBuilder({ data: null, error: null });
     mockFrom.mockReturnValue(builder);
     await addNewPlaceForState(' vic ', '  Melbourne  ');
-    expect(builder.insert).toHaveBeenCalledWith([{ state: 'VIC', place: 'Melbourne' }]);
+    expect(builder.insert).toHaveBeenCalledWith([{ state: 'VIC', place: 'Melbourne', site: '' }]);
+  });
+
+  it('inserts the trimmed site when given one', async () => {
+    const builder = makeQueryBuilder({ data: null, error: null });
+    mockFrom.mockReturnValue(builder);
+    await addNewPlaceForState('VIC', 'Orange', ' 1 ');
+    expect(builder.insert).toHaveBeenCalledWith([{ state: 'VIC', place: 'Orange', site: '1' }]);
   });
 
   it('silently ignores a duplicate place (23505)', async () => {

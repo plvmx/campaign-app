@@ -28,6 +28,7 @@ function baseValues(overrides: Partial<CampaignFormValues> = {}): CampaignFormVa
     date: '2026-01-05',
     state: 'VIC',
     place: 'Melbourne',
+    site: '',
     time: '10:00',
     leader: 'Sam',
     mobile: '',
@@ -68,7 +69,7 @@ describe('useCampaignForm — field setters', () => {
     expect(result.current.isOtherPlace).toBe(true);
 
     act(() => result.current.handleStateChange('NSW'));
-    expect(result.current.values).toMatchObject({ state: 'NSW', place: '', leader: '', mobile: '' });
+    expect(result.current.values).toMatchObject({ state: 'NSW', place: '', site: '', leader: '', mobile: '' });
     expect(result.current.isOtherPlace).toBe(false);
     expect(result.current.customPlace).toBe('');
   });
@@ -163,7 +164,10 @@ describe('useCampaignForm — handleSubmit', () => {
 
   it('persists a custom place, refreshes the places cache, and submits with the new place', async () => {
     mockAddNewPlace.mockResolvedValue(undefined);
-    mockGetPlaces.mockResolvedValue(['Ballarat', 'New Place']);
+    mockGetPlaces.mockResolvedValue([
+      { place: 'Ballarat', site: '', label: 'Ballarat' },
+      { place: 'New Place', site: '', label: 'New Place' },
+    ]);
     const onSubmit = vi.fn().mockResolvedValue(undefined);
     const { result } = renderHook(() =>
       useCampaignForm({ initialValues: baseValues({ place: '' }), onSubmit }),
@@ -176,8 +180,27 @@ describe('useCampaignForm — handleSubmit', () => {
       await result.current.handleSubmit(makeSubmitEvent());
     });
 
-    expect(mockAddNewPlace).toHaveBeenCalledWith('VIC', 'New Place');
-    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ place: 'New Place' }));
+    expect(mockAddNewPlace).toHaveBeenCalledWith('VIC', 'New Place', '');
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ place: 'New Place', site: '' }));
+  });
+
+  it('splits a trailing numeric suffix off a custom place into site', async () => {
+    mockAddNewPlace.mockResolvedValue(undefined);
+    mockGetPlaces.mockResolvedValue([]);
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    const { result } = renderHook(() =>
+      useCampaignForm({ initialValues: baseValues({ place: '' }), onSubmit }),
+    );
+    act(() => result.current.handlePlaceChange('OTHER_PLACE'));
+    act(() => result.current.setCustomPlace('Somewhere 5'));
+    act(() => result.current.setValue('leader', 'Sam'));
+
+    await act(async () => {
+      await result.current.handleSubmit(makeSubmitEvent());
+    });
+
+    expect(mockAddNewPlace).toHaveBeenCalledWith('VIC', 'Somewhere', '5');
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ place: 'Somewhere', site: '5' }));
   });
 
   it('errors when no leader is selected, even when submitted via a MouseEvent (InlineEditForm has no <form>)', async () => {
