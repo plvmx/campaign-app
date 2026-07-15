@@ -8,6 +8,7 @@ import { useUser } from '@/contexts/UserContext';
 import { getStateColor } from '@/lib/stateColors';
 import { AUSTRALIAN_STATES } from '@/lib/constants';
 import { getErrorMessage } from '@/lib/errorUtils';
+import { combinePlaceAndSite } from '@/lib/placeSite';
 import {
   type StatePlace,
   getStatePlaces,
@@ -297,7 +298,7 @@ export default function StatePlacesPage() {
                     <div className="flex items-center justify-between">
                       <div>
                         <div className={`font-medium ${stateColor.text}`}>
-                          {item.place}{item.site && <span className="opacity-75"> — Site {item.site}</span>}
+                          {combinePlaceAndSite(item.place, item.site)}
                         </div>
                         <div className={`text-sm ${stateColor.text} opacity-75`}>
                           {item.state}
