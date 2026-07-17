@@ -55,7 +55,9 @@ export interface WeeklyRefreshResult {
  * Runs the weekly campaign refresh.
  *
  * Steps:
- *  1. Evaluate active campaign rules for the second upcoming week.
+ *  1. Evaluate active campaign rules for the second upcoming week, plus a one-off
+ *     "catch-up" pass into the current week for any rule with no campaign already
+ *     on the books (see below).
  *  2. Deduplicate against existing campaigns in that week.
  *  3. Insert new campaigns.
  *  4. Update biweekly rule reference_dates.
@@ -74,12 +76,20 @@ export async function runWeeklyRefresh(
   // -------------------------------------------------------------------------
   // Compute target date windows
   // -------------------------------------------------------------------------
-  const { secondWeekStart, pastCampaignStart } = calculateCampaignDates();
+  const { upcomingCampaignStart, secondWeekStart, pastCampaignStart } = calculateCampaignDates();
 
   const secondWeekEnd = new Date(secondWeekStart);
   secondWeekEnd.setDate(secondWeekEnd.getDate() + 6); // Mon – Sun
 
-  const secondWeekStartStr = formatDateForDb(secondWeekStart);
+  // Catch-up window: the current week, up to (but not overlapping) secondWeekStart.
+  // A rule normally gets exactly one shot at each week — evaluated once, when that
+  // week is the "second week" (1-2 weeks out). A rule created *after* that shot for
+  // the current week has already passed can never be revisited by the normal pass,
+  // since secondWeekStart only advances forward. This window gives such rules one
+  // catch-up evaluation into the current week.
+  const catchUpEnd = new Date(secondWeekStart);
+  catchUpEnd.setDate(catchUpEnd.getDate() - 1); // Sunday before secondWeekStart
+
   const secondWeekEndStr   = formatDateForDb(secondWeekEnd);
   const pastCampaignStartStr = formatDateForDb(pastCampaignStart);
 
@@ -103,10 +113,13 @@ export async function runWeeklyRefresh(
     if (rulesError) throw rulesError;
     const allRules = (fetchedRules || []) as CampaignRule[];
 
+    // Lower bound goes back to pastCampaignStart (not secondWeekStart) so this same
+    // fetch can also answer "has this rule's slot already got a campaign on the books
+    // anywhere in the retained window?" for the catch-up check below.
     const { data: existingRows, error: existingError } = await client
       .from('campaigns')
       .select('date, state, place, site, time, leader')
-      .gte('date', secondWeekStartStr)
+      .gte('date', pastCampaignStartStr)
       .lte('date', secondWeekEndStr);
     if (existingError) throw existingError;
 
@@ -114,6 +127,15 @@ export async function runWeeklyRefresh(
       (existingRows || []).map(
         (c: { date: string; state: string; place: string; site: string; time: string; leader: string }) =>
           `${c.date}_${c.state}_${c.place}_${c.site}_${c.time}_${c.leader}`
+      )
+    );
+
+    // Rule identity, ignoring date — used to detect rules with no campaign yet at all.
+    const ruleSlotKey = (r: { state: string; place: string; site: string; time: string; leader: string }) =>
+      `${r.state}_${r.place}_${r.site}_${r.time}_${r.leader}`;
+    const existingRuleSlotKeys = new Set(
+      (existingRows || []).map(
+        (c: { state: string; place: string; site: string; time: string; leader: string }) => ruleSlotKey(c)
       )
     );
 
@@ -145,27 +167,36 @@ export async function runWeeklyRefresh(
     const allNewCampaigns: NewCampaignRow[] = [];
     const rulesUsedInRefresh: CampaignRule[] = [];
 
+    const toNewCampaignRow = (campaign: ReturnType<typeof evaluateRules>[number]): NewCampaignRow => ({
+      date:      campaign.date,
+      state:     campaign.state,
+      place:     campaign.place,
+      site:      campaign.site,
+      time:      campaign.time,
+      leader:    campaign.leader,
+      mobile:    campaign.mobile,
+      category:  campaign.category ?? 'TWOL',
+      user_id:   userId,
+      team_size: null as null,
+      tl_ok:     false,
+      source:    'RUL',
+    });
+
     for (const state of states) {
       const stateRules = allRules.filter((r) => r.state === state);
       const ruleCampaigns = evaluateRules(stateRules, secondWeekStart, secondWeekEnd);
-
-      allNewCampaigns.push(
-        ...ruleCampaigns.map((campaign) => ({
-          date:      campaign.date,
-          state:     campaign.state,
-          place:     campaign.place,
-          site:      campaign.site,
-          time:      campaign.time,
-          leader:    campaign.leader,
-          mobile:    campaign.mobile,
-          category:  campaign.category ?? 'TWOL',
-          user_id:   userId,
-          team_size: null as null,
-          tl_ok:     false,
-          source:    'RUL',
-        }))
-      );
+      allNewCampaigns.push(...ruleCampaigns.map(toNewCampaignRow));
       rulesUsedInRefresh.push(...stateRules);
+
+      // Catch-up: rules with no existing campaign anywhere in the retained window get
+      // one extra evaluation pass into the current week (a range the normal pass above
+      // never covers), so a rule created after its first occurrence's normal window has
+      // already gone by still gets that occurrence generated.
+      const catchUpRules = stateRules.filter((r) => !existingRuleSlotKeys.has(ruleSlotKey(r)));
+      if (catchUpRules.length > 0) {
+        const catchUpCampaigns = evaluateRules(catchUpRules, upcomingCampaignStart, catchUpEnd);
+        allNewCampaigns.push(...catchUpCampaigns.map(toNewCampaignRow));
+      }
     }
 
     // -----------------------------------------------------------------------
