@@ -40,10 +40,13 @@ function makeRule(overrides: Partial<CampaignRule> = {}): CampaignRule {
   };
 }
 
-// secondWeekStart is always a Monday, computed relative to whatever "today" is —
-// deriving it live (rather than hardcoding a date) keeps these tests stable over time.
-const { secondWeekStart } = calculateCampaignDates();
+// secondWeekStart/upcomingCampaignStart/pastCampaignStart are always Mondays, computed
+// relative to whatever "today" is — deriving them live (rather than hardcoding a date)
+// keeps these tests stable over time.
+const { upcomingCampaignStart, secondWeekStart, pastCampaignStart } = calculateCampaignDates();
 const secondWeekStartStr = formatDateForDb(secondWeekStart);
+const upcomingCampaignStartStr = formatDateForDb(upcomingCampaignStart);
+const pastCampaignStartStr = formatDateForDb(pastCampaignStart);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -75,7 +78,10 @@ describe('runWeeklyRefresh', () => {
       state_leaders: [{ data: [{ state: 'VIC' }], error: null }],
       campaign_rules: [{ data: [rule], error: null }],
       campaigns: [
-        { data: [], error: null },   // no existing campaigns
+        // A decoy row for this rule's slot at a past date — signals the rule already
+        // has a campaign on the books, so it isn't picked up by the catch-up pass too
+        // (this test is about the ordinary secondWeek path, not catch-up).
+        { data: [{ date: pastCampaignStartStr, state: 'VIC', place: 'Melbourne', site: '', time: '10:00', leader: 'Alice' }], error: null },
         { data: null, error: null }, // insert
         { data: [], error: null },   // delete old
       ],
@@ -124,7 +130,16 @@ describe('runWeeklyRefresh', () => {
       state_leaders: [{ data: [{ state: 'VIC' }], error: null }],
       campaign_rules: [{ data: [rule], error: null }],
       campaigns: [
-        { data: [{ date: secondWeekStartStr, state: 'VIC', place: 'Orange', site: '', time: '10:00', leader: 'Alice' }], error: null },
+        {
+          data: [
+            { date: secondWeekStartStr, state: 'VIC', place: 'Orange', site: '', time: '10:00', leader: 'Alice' },
+            // Decoy for the rule's own slot (Orange/1) at a past date, so it's not
+            // treated as un-fired and picked up by the catch-up pass too — this test
+            // is specifically about the site-aware dedup key, not catch-up.
+            { date: pastCampaignStartStr, state: 'VIC', place: 'Orange', site: '1', time: '10:00', leader: 'Alice' },
+          ],
+          error: null,
+        },
         { data: null, error: null }, // insert
         { data: [], error: null },   // delete old
       ],
@@ -140,6 +155,67 @@ describe('runWeeklyRefresh', () => {
     expect(insertBuilder.insert).toHaveBeenCalledWith([
       expect.objectContaining({ place: 'Orange', site: '1' }),
     ]);
+  });
+
+  it('catches up a newly-created monthly rule whose only occurrence this month falls in the current week', async () => {
+    // Regression for the "Hornsby 3rd Saturday" incident: a rule created after the one
+    // secondWeek-window run that would have covered its imminent first occurrence could
+    // never generate that campaign — secondWeekStart only ever advances forward, and the
+    // normal pass never looks at the current week. Construct a monthly rule whose single
+    // occurrence this month is upcomingCampaignStart itself (always a Monday), bounded by
+    // end_date so it can't coincidentally also land inside the normal secondWeek window.
+    const monthWeekNumber = Math.ceil(upcomingCampaignStart.getDate() / 7);
+    const monthEnd = new Date(upcomingCampaignStart.getFullYear(), upcomingCampaignStart.getMonth() + 1, 0);
+    const rule = makeRule({
+      frequency_type: 'monthly', month_week_number: monthWeekNumber, month_day_of_week: 1 /* Monday */,
+      day_of_week: null, end_date: formatDateForDb(monthEnd),
+    });
+    const { client, builders } = makeClient({
+      state_leaders: [{ data: [{ state: 'VIC' }], error: null }],
+      campaign_rules: [{ data: [rule], error: null }],
+      campaigns: [
+        { data: [], error: null },   // no existing campaigns for this rule's slot anywhere
+        { data: null, error: null }, // insert
+        { data: [], error: null },   // delete old
+      ],
+      campaign_changes_log: [{ data: [], error: null }],
+      weekly_refresh_log: [{ data: null, error: null }],
+    });
+
+    const result = await runWeeklyRefresh(client, 'user-1');
+
+    expect(result.created).toBe(1);
+    expect(result.skipped).toBe(0);
+    const insertBuilder = builders.campaigns[1];
+    expect(insertBuilder.insert).toHaveBeenCalledWith([
+      expect.objectContaining({ date: upcomingCampaignStartStr, state: 'VIC', place: 'Melbourne', leader: 'Alice' }),
+    ]);
+  });
+
+  it('does not catch up a rule that already has a campaign on the books elsewhere in the retained window', async () => {
+    // Same imminent-occurrence shape as the test above, but this time the rule already
+    // has a campaign recorded (e.g. from a prior successful run) — catch-up must not
+    // fire a second time for it.
+    const monthWeekNumber = Math.ceil(upcomingCampaignStart.getDate() / 7);
+    const monthEnd = new Date(upcomingCampaignStart.getFullYear(), upcomingCampaignStart.getMonth() + 1, 0);
+    const rule = makeRule({
+      frequency_type: 'monthly', month_week_number: monthWeekNumber, month_day_of_week: 1 /* Monday */,
+      day_of_week: null, end_date: formatDateForDb(monthEnd),
+    });
+    const { client } = makeClient({
+      state_leaders: [{ data: [{ state: 'VIC' }], error: null }],
+      campaign_rules: [{ data: [rule], error: null }],
+      campaigns: [
+        { data: [{ date: pastCampaignStartStr, state: 'VIC', place: 'Melbourne', site: '', time: '10:00', leader: 'Alice' }], error: null },
+        { data: [], error: null }, // delete old — no insert call, nothing new to create
+      ],
+      campaign_changes_log: [{ data: [], error: null }],
+      weekly_refresh_log: [{ data: null, error: null }],
+    });
+
+    const result = await runWeeklyRefresh(client, 'user-1');
+
+    expect(result.created).toBe(0);
   });
 
   it('backfills a biweekly rule\'s missing reference_date and updates it after a new campaign is created', async () => {
