@@ -127,6 +127,7 @@ All database access goes through service modules in `lib/services/`. Pages and c
 | `/admin/generate-slides` | Generate JPEG slide ZIP |
 | `/admin/generate-report` | Generate campaign report |
 | `/admin/leader-shares` | Leader share links |
+| `/admin/results-metrics` | Results dashboard — names recorded per category (TM/P/F/SP), by state and by person, for a date range |
 
 ### Database tables (key ones)
 - `campaigns` — core records; `botj` column is the campaign category flag; `place`+`site` together identify the location
