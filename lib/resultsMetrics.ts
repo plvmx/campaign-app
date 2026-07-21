@@ -150,35 +150,28 @@ export function aggregateByState(rows: CampaignResultsRow[]): StateResultsTotal[
   return Array.from(map.values()).sort((a, b) => b.total - a.total);
 }
 
-export interface PersonResultsTotal {
-  /** Display name, using the casing of the first occurrence encountered. */
-  name: string;
+export interface PlaceResultsTotal {
+  state: string;
+  place: string;
+  campaigns: number;
   totals: Record<ResultCategory, number>;
   total: number;
 }
 
-/**
- * Leaderboard of recorded names across all categories. `first_name` is
- * free text (no foreign key to state_leaders), so entries are grouped by
- * trimmed, case-insensitive match — typos/variants will still fragment a
- * person's totals.
- */
-export function aggregateByPerson(rows: CampaignResultsRow[]): PersonResultsTotal[] {
-  const map = new Map<string, PersonResultsTotal>();
+export function aggregateByPlace(rows: CampaignResultsRow[]): PlaceResultsTotal[] {
+  const map = new Map<string, PlaceResultsTotal>();
   for (const row of rows) {
+    const key = `${row.state}||${row.place}`;
+    let entry = map.get(key);
+    if (!entry) {
+      entry = { state: row.state, place: row.place, campaigns: 0, totals: emptyCategoryCounts(), total: 0 };
+      map.set(key, entry);
+    }
+    entry.campaigns += 1;
     for (const category of RESULT_CATEGORIES) {
-      for (const rawName of row.names[category]) {
-        const name = rawName.trim();
-        if (!name) continue;
-        const key = name.toLowerCase();
-        let entry = map.get(key);
-        if (!entry) {
-          entry = { name, totals: emptyCategoryCounts(), total: 0 };
-          map.set(key, entry);
-        }
-        entry.totals[category] += 1;
-        entry.total += 1;
-      }
+      const n = row.names[category].length;
+      entry.totals[category] += n;
+      entry.total += n;
     }
   }
   return Array.from(map.values()).sort((a, b) => b.total - a.total);

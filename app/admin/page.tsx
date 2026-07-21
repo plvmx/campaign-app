@@ -378,7 +378,7 @@ export default function AdminPage() {
               Results Metrics
             </h2>
             <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-              Names recorded against past campaigns, broken down by category, state, and person
+              Names recorded against past campaigns, broken down by category, state, and place
             </p>
             <button
               onClick={() => router.push('/admin/results-metrics')}

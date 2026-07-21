@@ -103,7 +103,7 @@ All database access goes through service modules in `lib/services/`. Pages and c
 
 ### Component structure
 - `components/MobileLayout.tsx` — shared shell (header, bottom nav) wrapping every page. Resolves admin status via `getUserAdminStatusAndMobile()`.
-- `components/CampaignForm.tsx` — reusable add/edit form used by the admin panel; `CampaignData` interface includes `botj` field.
+- `components/CampaignForm.tsx` — reusable add/edit form used by the admin panel; `CampaignData` interface includes a `category` field (e.g. `TWOL`, `BOTJ`, `TLT`).
 - `components/ErrorBoundary.tsx` — global React error boundary.
 - `contexts/CampaignDatesContext.tsx` — shared date-range state for campaign views.
 - `app/app/components/useCampaignForm.ts` — unified form hook shared by `CampaignCreateForm` and `InlineEditForm`. Owns all form state (date, state, place, time, leader, mobile, category, tl_ok, sr_ok), place creation, leader mobile auto-fill, and submit orchestration. `handleSubmit` accepts both `FormEvent` and `MouseEvent`.
@@ -127,15 +127,22 @@ All database access goes through service modules in `lib/services/`. Pages and c
 | `/admin/generate-slides` | Generate JPEG slide ZIP |
 | `/admin/generate-report` | Generate campaign report |
 | `/admin/leader-shares` | Leader share links |
-| `/admin/results-metrics` | Results dashboard — names recorded per category (TM/P/F/SP), by state and by person, for a date range |
+| `/admin/campaign-map` | Interactive map of upcoming campaigns, filterable by date range and state |
+| `/admin/campaigns-near-me` | Upcoming campaigns near the admin's current location |
+| `/admin/member-activity` | Active member counts (leader + team) by total, state, place, or campaign |
+| `/admin/metrics` | Usage analytics, active users, and database row counts |
+| `/admin/results-metrics` | Results dashboard — names recorded per category (TM/P/F/SP), by state, place, and campaign, for a date range |
+| `/admin/campaign-categories` | Manage campaign categories (TWOL, BOTJ, TLT, …) |
+| `/admin/backup` | Export/restore a JSON snapshot of campaigns, state leaders, state places, and campaign rules |
 
 ### Database tables (key ones)
-- `campaigns` — core records; `botj` column is the campaign category flag; `place`+`site` together identify the location
+- `campaigns` — core records; `category` column is the campaign category flag (e.g. `TWOL`, `BOTJ`, `TLT`); `place`+`site` together identify the location
 - `state_leaders` — leaders per state; `admin` column drives role ('AD' / 'SR' / null)
 - `state_places` — valid places per state; keyed on `state`+`place`+`site` (`site` holds a numeric sub-location suffix, e.g. "1" for "Orange 1")
 - `campaign_rules` — recurring scheduling rules; also carries `place`+`site`
 - `campaign_messages` — per-date banner messages
 - `campaign_changes_log` — audit trail
+- `results` — recorded result names per campaign; `category_code` is `'TM' | 'P' | 'F' | 'SP' | 'IR'` (Team Member / Partial Presentation / Full Presentation / Full Presentation + Sinner's Prayer / Information Request); `first_name` is free text, not a foreign key to `state_leaders`
 
 ### Slide generation
 The arise (Week 1 Campaigns) list generator is split across three modules:

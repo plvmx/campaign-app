@@ -14,13 +14,21 @@ import {
   fetchResultsMetrics,
   aggregateByCategory,
   aggregateByState,
-  aggregateByPerson,
+  aggregateByPlace,
   RESULT_CATEGORIES,
   RESULT_CATEGORY_LABELS,
   type CampaignResultsRow,
+  type ResultCategory,
 } from '@/lib/resultsMetrics';
 
-type ViewMode = 'total' | 'category' | 'state' | 'person' | 'campaign';
+type ViewMode = 'total' | 'category' | 'state' | 'place' | 'campaign';
+
+/** Categories counted in the "by campaign" per-card total — team members are excluded. */
+const NON_TEAM_CATEGORIES: ResultCategory[] = RESULT_CATEGORIES.filter((c) => c !== 'TM');
+
+function nonTeamCount(r: CampaignResultsRow): number {
+  return NON_TEAM_CATEGORIES.reduce((sum, cat) => sum + r.names[cat].length, 0);
+}
 
 const CATEGORY_BAR_COLOR: Record<string, string> = {
   TM: 'bg-blue-500',
@@ -85,8 +93,9 @@ export default function ResultsMetricsPage() {
 
   const categoryTotals = useMemo(() => aggregateByCategory(rows), [rows]);
   const stateTotals = useMemo(() => aggregateByState(rows), [rows]);
-  const personTotals = useMemo(() => aggregateByPerson(rows), [rows]);
+  const placeTotals = useMemo(() => aggregateByPlace(rows), [rows]);
   const grandTotal = useMemo(() => categoryTotals.reduce((sum, c) => sum + c.count, 0), [categoryTotals]);
+  const nonTeamGrandTotal = useMemo(() => rows.reduce((sum, r) => sum + nonTeamCount(r), 0), [rows]);
 
   const formatDate = (dateStr: string) => {
     const d = new Date(dateStr + 'T00:00:00');
@@ -97,7 +106,7 @@ export default function ResultsMetricsPage() {
     { key: 'total', label: 'Total' },
     { key: 'category', label: 'By Category' },
     { key: 'state', label: 'By State' },
-    { key: 'person', label: 'By Person' },
+    { key: 'place', label: 'By Place' },
     { key: 'campaign', label: 'By Campaign' },
   ];
 
@@ -125,7 +134,7 @@ export default function ResultsMetricsPage() {
             Results Metrics
           </h1>
           <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-            Names recorded against past campaigns, by category, state, and person
+            Names recorded against past campaigns, by category, state, and place
           </p>
         </div>
 
@@ -291,52 +300,62 @@ export default function ResultsMetricsPage() {
               </div>
             )}
 
-            {/* By Person view */}
-            {view === 'person' && (
-              <div className="space-y-3">
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Names are grouped by exact spelling (case-insensitive). Typos or variant spellings will appear as separate entries.
-                </p>
-                <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
-                  <table className="w-full text-sm">
-                    <thead className="bg-gray-50 dark:bg-gray-700">
-                      <tr>
-                        <th className="px-4 py-3 text-left font-semibold text-gray-700 dark:text-gray-200">Name</th>
-                        {RESULT_CATEGORIES.map((cat) => (
-                          <th key={cat} className="px-4 py-3 text-right font-semibold text-gray-700 dark:text-gray-200">{cat}</th>
-                        ))}
-                        <th className="px-4 py-3 text-right font-semibold text-gray-700 dark:text-gray-200">Total</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                      {personTotals.map((p) => (
-                        <tr key={p.name.toLowerCase()}>
-                          <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{p.name}</td>
+            {/* By Place view */}
+            {view === 'place' && (
+              <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 dark:bg-gray-700">
+                    <tr>
+                      <th className="px-4 py-3 text-left font-semibold text-gray-700 dark:text-gray-200">Place</th>
+                      <th className="px-4 py-3 text-left font-semibold text-gray-700 dark:text-gray-200">State</th>
+                      <th className="px-4 py-3 text-right font-semibold text-gray-700 dark:text-gray-200">Campaigns</th>
+                      {RESULT_CATEGORIES.map((cat) => (
+                        <th key={cat} className="px-4 py-3 text-right font-semibold text-gray-700 dark:text-gray-200">{cat}</th>
+                      ))}
+                      <th className="px-4 py-3 text-right font-semibold text-gray-700 dark:text-gray-200">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                    {placeTotals.map((p) => {
+                      const stateColor = getStateColor(p.state);
+                      return (
+                        <tr key={`${p.state}-${p.place}`} className={stateColor.bg}>
+                          <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{p.place}</td>
+                          <td className="px-4 py-3 text-gray-700 dark:text-gray-300">{p.state}</td>
+                          <td className="px-4 py-3 text-right text-gray-700 dark:text-gray-300">{p.campaigns}</td>
                           {RESULT_CATEGORIES.map((cat) => (
                             <td key={cat} className="px-4 py-3 text-right text-gray-700 dark:text-gray-300">{p.totals[cat]}</td>
                           ))}
                           <td className="px-4 py-3 text-right font-bold text-gray-900 dark:text-gray-100">{p.total}</td>
                         </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot className="bg-gray-100 dark:bg-gray-600">
+                    <tr>
+                      <td colSpan={2} className="px-4 py-3 font-bold text-gray-900 dark:text-gray-100">Total</td>
+                      <td className="px-4 py-3 text-right font-bold text-gray-900 dark:text-gray-100">{rows.length}</td>
+                      {RESULT_CATEGORIES.map((cat) => (
+                        <td key={cat} className="px-4 py-3 text-right font-bold text-gray-900 dark:text-gray-100">
+                          {categoryTotals.find((c) => c.category === cat)?.count ?? 0}
+                        </td>
                       ))}
-                      {personTotals.length === 0 && (
-                        <tr>
-                          <td colSpan={RESULT_CATEGORIES.length + 2} className="px-4 py-6 text-center text-gray-500 dark:text-gray-400">
-                            No names recorded in this date range.
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+                      <td className="px-4 py-3 text-right font-bold text-gray-900 dark:text-gray-100">{grandTotal}</td>
+                    </tr>
+                  </tfoot>
+                </table>
               </div>
             )}
 
             {/* By Campaign view */}
             {view === 'campaign' && (
               <div className="space-y-3">
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  The total on the right counts Partial/Full Presentations and Sinner&rsquo;s Prayer results only — Team Members are excluded.
+                </p>
                 {rows.map((r) => {
                   const stateColor = getStateColor(r.state);
-                  const total = RESULT_CATEGORIES.reduce((sum, cat) => sum + r.names[cat].length, 0);
+                  const total = nonTeamCount(r);
                   const displayLeader = r.actualLeader || r.leader;
                   return (
                     <div
@@ -353,19 +372,14 @@ export default function ResultsMetricsPage() {
                             Leader: <span className="font-medium">{displayLeader}</span>
                           </p>
                           {RESULT_CATEGORIES.map((cat) => (
-                            r.names[cat].length > 0 && (
-                              <p key={cat} className="text-sm text-gray-700 dark:text-gray-300 mt-0.5">
-                                {RESULT_CATEGORY_LABELS[cat]}: {r.names[cat].join(', ')}
-                              </p>
-                            )
+                            <p key={cat} className="text-sm text-gray-700 dark:text-gray-300 mt-0.5">
+                              {RESULT_CATEGORY_LABELS[cat]}: <span className="font-medium">{r.names[cat].length}</span>
+                            </p>
                           ))}
-                          {total === 0 && (
-                            <p className="text-sm italic text-gray-500 dark:text-gray-400 mt-0.5">No results recorded</p>
-                          )}
                         </div>
                         <div className="flex-shrink-0 text-right">
                           <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{total}</p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">name{total !== 1 ? 's' : ''}</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">result{total !== 1 ? 's' : ''}</p>
                         </div>
                       </div>
                     </div>
@@ -373,7 +387,7 @@ export default function ResultsMetricsPage() {
                 })}
                 <div className="rounded-lg border-2 border-gray-400 bg-gray-100 dark:border-gray-600 dark:bg-gray-700 px-4 py-3 flex justify-between items-center">
                   <span className="font-bold text-gray-900 dark:text-gray-100">Total</span>
-                  <span className="text-xl font-bold text-gray-900 dark:text-gray-100">{grandTotal} names</span>
+                  <span className="text-xl font-bold text-gray-900 dark:text-gray-100">{nonTeamGrandTotal} results</span>
                 </div>
               </div>
             )}

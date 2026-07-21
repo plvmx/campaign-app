@@ -4,7 +4,7 @@ import {
   fetchResultsMetrics,
   aggregateByCategory,
   aggregateByState,
-  aggregateByPerson,
+  aggregateByPlace,
   type CampaignResultsRow,
 } from '../resultsMetrics';
 
@@ -118,22 +118,27 @@ describe('aggregateByState', () => {
   });
 });
 
-describe('aggregateByPerson', () => {
-  it('groups by trimmed, case-insensitive name and sums totals across categories', () => {
+describe('aggregateByPlace', () => {
+  it('totals campaigns and result counts per state+place, sorted by total descending', () => {
     const rows = [
-      row({ names: { TM: ['Alice'], P: [], F: [], SP: [] } }),
-      row({ names: { TM: [], P: ['alice '], F: [], SP: [] } }),
-      row({ names: { TM: [], P: [], F: [], SP: ['Bob'] } }),
+      row({ state: 'NSW', place: 'Orange 1', names: { TM: ['Alice'], P: [], F: [], SP: [] } }),
+      row({ state: 'NSW', place: 'Orange 2', names: { TM: ['Bob'], P: ['Carl'], F: ['Dana'], SP: [] } }),
+      row({ state: 'NSW', place: 'Orange 1', names: { TM: [], P: [], F: [], SP: [] } }),
     ];
-    const totals = aggregateByPerson(rows);
+    const totals = aggregateByPlace(rows);
     expect(totals).toEqual([
-      { name: 'Alice', totals: { TM: 1, P: 1, F: 0, SP: 0 }, total: 2 },
-      { name: 'Bob', totals: { TM: 0, P: 0, F: 0, SP: 1 }, total: 1 },
+      { state: 'NSW', place: 'Orange 2', campaigns: 1, totals: { TM: 1, P: 1, F: 1, SP: 0 }, total: 3 },
+      { state: 'NSW', place: 'Orange 1', campaigns: 2, totals: { TM: 1, P: 0, F: 0, SP: 0 }, total: 1 },
     ]);
   });
 
-  it('ignores blank names', () => {
-    const rows = [row({ names: { TM: ['  '], P: [], F: [], SP: [] } })];
-    expect(aggregateByPerson(rows)).toEqual([]);
+  it('keeps same-named places in different states separate', () => {
+    const rows = [
+      row({ state: 'NSW', place: 'Springfield', names: { TM: ['Alice'], P: [], F: [], SP: [] } }),
+      row({ state: 'VIC', place: 'Springfield', names: { TM: ['Bob'], P: [], F: [], SP: [] } }),
+    ];
+    const totals = aggregateByPlace(rows);
+    expect(totals).toHaveLength(2);
+    expect(totals.map((t) => t.state).sort()).toEqual(['NSW', 'VIC']);
   });
 });
