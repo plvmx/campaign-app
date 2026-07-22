@@ -9,7 +9,7 @@ import { useUser } from '@/contexts/UserContext';
 import { getStateColor } from '@/lib/stateColors';
 import { getPlacesForState, getLeadersForState, getLeaderMobile, type PlaceOption } from '@/lib/services/dropdownService';
 import { getRules, createRule, updateRule, deleteRule, setRuleActive } from '@/lib/services/rulesService';
-import type { CampaignRule } from '@/lib/types';
+import type { CampaignRule, CampaignRuleInput } from '@/lib/types';
 import { evaluateRule, previewRuleEvaluation } from '@/lib/campaignRules';
 import { formatDateReadable } from '@/lib/campaignDates';
 import { AUSTRALIAN_STATES } from '@/lib/constants';
@@ -132,7 +132,7 @@ function CampaignRulesPageContent() {
   // Create-confirmation modal
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [confirmDates, setConfirmDates] = useState<string[]>([]);
-  const [pendingRuleData, setPendingRuleData] = useState<Omit<CampaignRule, 'id'> | null>(null);
+  const [pendingRuleData, setPendingRuleData] = useState<CampaignRuleInput | null>(null);
   const [filterActive, setFilterActive] = useState<string>('all'); // 'all', 'active', 'inactive'
   const [filterFrequency, setFilterFrequency] = useState<string>('');
   const [previewRuleId, setPreviewRuleId] = useState<string | null>(null);
@@ -309,7 +309,7 @@ function CampaignRulesPageContent() {
       setFieldErrors({});
 
       const mobileValue = formState.mobile.trim() || null;
-      const ruleData: Omit<CampaignRule, 'id'> = {
+      const ruleData: CampaignRuleInput = {
         name: formState.name.trim(),
         leader: formState.leader.trim(),
         state: formState.state.trim(),
@@ -349,7 +349,7 @@ function CampaignRulesPageContent() {
         const searchEnd = new Date(searchStart);
         searchEnd.setMonth(searchEnd.getMonth() + 6);
 
-        const previewRule: CampaignRule = { id: '__preview__', ...ruleData };
+        const previewRule: CampaignRule = { id: '__preview__', catchup_evaluated_at: null, ...ruleData };
         const upcomingCampaigns = evaluateRule(previewRule, searchStart, searchEnd);
         const upcomingDates = upcomingCampaigns.slice(0, 5).map(c => c.date);
 
@@ -558,6 +558,7 @@ function CampaignRulesPageContent() {
       priority:          0,
       rule_config:       reference_date ? { reference_date } : {},
       notes:             null,
+      catchup_evaluated_at: null,
     };
 
     // Search from the Active From date (or today) up to 6 months ahead

@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabaseClient';
-import type { CampaignRule } from '@/lib/types';
+import type { CampaignRule, CampaignRuleInput } from '@/lib/types';
 
 interface GetRulesOptions {
   adminStatus: string | null;
@@ -35,7 +35,7 @@ export async function getRules({
 }
 
 export async function createRule(
-  ruleData: Omit<CampaignRule, 'id'>,
+  ruleData: CampaignRuleInput,
   createdBy: string,
 ): Promise<void> {
   const { error } = await supabase
@@ -46,7 +46,7 @@ export async function createRule(
 
 export async function updateRule(
   id: string,
-  ruleData: Partial<Omit<CampaignRule, 'id'>>,
+  ruleData: Partial<CampaignRuleInput>,
 ): Promise<void> {
   const { error } = await supabase.from('campaign_rules').update(ruleData).eq('id', id);
   if (error) throw error;

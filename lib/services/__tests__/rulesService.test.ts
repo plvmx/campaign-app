@@ -7,7 +7,7 @@ vi.mock('@/lib/supabaseClient', () => ({
 import { supabase } from '@/lib/supabaseClient';
 import { makeQueryBuilder } from './supabaseMock';
 import { getRules, createRule, updateRule, deleteRule, setRuleActive } from '../rulesService';
-import type { CampaignRule } from '@/lib/types';
+import type { CampaignRuleInput } from '@/lib/types';
 
 const mockFrom = vi.mocked(supabase.from) as unknown as ReturnType<typeof vi.fn>;
 
@@ -51,7 +51,7 @@ describe('getRules', () => {
 });
 
 describe('createRule / updateRule / deleteRule / setRuleActive', () => {
-  const rule: Omit<CampaignRule, 'id'> = {
+  const rule: CampaignRuleInput = {
     name: 'Weekly Melbourne', leader: 'Alice', state: 'VIC', place: 'Melbourne', site: '', time: '10:00',
     mobile: null, frequency_type: 'weekly', frequency_value: null, month_week_number: null,
     month_day_of_week: null, day_of_week: 6, start_date: null, end_date: null,

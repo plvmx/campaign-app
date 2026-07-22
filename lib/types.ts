@@ -69,7 +69,17 @@ export interface CampaignRule {
   priority: number;
   rule_config: RuleConfig;
   notes: string | null;
+  /**
+   * Set the first (and only) time the weekly refresh's catch-up pass evaluates this rule.
+   * Null means the rule hasn't had its one-off catch-up evaluation yet, so it's still
+   * eligible. System-managed — never set by the create/edit rule form.
+   */
+  catchup_evaluated_at: string | null;
 }
+
+/** Fields the create/edit rule form can set. `catchup_evaluated_at` is system-managed by
+ *  the weekly refresh and must never be written (or reset) from the form. */
+export type CampaignRuleInput = Omit<CampaignRule, 'id' | 'catchup_evaluated_at'>;
 
 // ---------------------------------------------------------------------------
 // User
