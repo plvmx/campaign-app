@@ -3,12 +3,6 @@ import { getCurrentUser } from './auth';
 import { getUserProfile } from './userProfile';
 import { isCampaignLoggingEnabled } from './appSettings';
 
-function isAdminRoute(): boolean {
-  if (typeof window === 'undefined') return false;
-  // Admin pages live at /admin/*, not /app/admin/*.
-  return window.location.pathname.startsWith('/admin');
-}
-
 /**
  * Get changed fields between old and new data
  */
@@ -38,9 +32,11 @@ function getChangedFields(oldData: Record<string, unknown>, newData: Record<stri
 }
 
 /**
- * Log a campaign change to the campaign_changes_log table
- * This function automatically skips logging if the change is from an admin route
- * 
+ * Log a campaign change to the campaign_changes_log table.
+ * Logs from every route, including admin screens — a past incident where campaigns went
+ * missing was much harder to investigate than it needed to be because admin-route changes
+ * were silently excluded (see #92 investigation).
+ *
  * @param campaignId - The ID of the campaign being changed (null for INSERT before creation)
  * @param changeType - Type of change: 'INSERT', 'UPDATE', or 'DELETE'
  * @param oldData - Previous values (for UPDATE/DELETE)
@@ -53,12 +49,6 @@ export async function logCampaignChange(
   newData?: Record<string, unknown> | null
 ): Promise<void> {
   try {
-    // Skip logging if this is from an admin route
-    if (isAdminRoute()) {
-      console.log('Skipping campaign change log - admin route detected');
-      return;
-    }
-
     // Check if logging is enabled
     const loggingEnabled = await isCampaignLoggingEnabled();
     if (!loggingEnabled) {
