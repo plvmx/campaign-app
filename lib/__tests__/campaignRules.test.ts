@@ -27,6 +27,7 @@ function makeRule(overrides: Partial<CampaignRule> = {}): CampaignRule {
     priority: 0,
     rule_config: {},
     notes: null,
+    catchup_evaluated_at: null,
     ...overrides,
   };
 }

@@ -113,9 +113,6 @@ export async function runWeeklyRefresh(
     if (rulesError) throw rulesError;
     const allRules = (fetchedRules || []) as CampaignRule[];
 
-    // Lower bound goes back to pastCampaignStart (not secondWeekStart) so this same
-    // fetch can also answer "has this rule's slot already got a campaign on the books
-    // anywhere in the retained window?" for the catch-up check below.
     const { data: existingRows, error: existingError } = await client
       .from('campaigns')
       .select('date, state, place, site, time, leader')
@@ -127,19 +124,6 @@ export async function runWeeklyRefresh(
       (existingRows || []).map(
         (c: { date: string; state: string; place: string; site: string; time: string; leader: string }) =>
           `${c.date}_${c.state}_${c.place}_${c.site}_${c.time}_${c.leader}`
-      )
-    );
-
-    // Rule identity, ignoring date AND time — used to detect rules with no campaign yet at
-    // all. `time` is deliberately excluded: a rule's scheduled time can be edited after
-    // campaigns were already generated from it (those keep their original time, correctly),
-    // so keying on time would make an already-fired rule look unfired forever and get a
-    // duplicate backfilled on every subsequent refresh.
-    const ruleSlotKey = (r: { state: string; place: string; site: string; leader: string }) =>
-      `${r.state}_${r.place}_${r.site}_${r.leader}`;
-    const existingRuleSlotKeys = new Set(
-      (existingRows || []).map(
-        (c: { state: string; place: string; site: string; leader: string }) => ruleSlotKey(c)
       )
     );
 
@@ -186,20 +170,29 @@ export async function runWeeklyRefresh(
       source:    'RUL',
     });
 
+    // Rules that get a catch-up evaluation this run — collected so they can be marked
+    // as caught-up (see below) once the run's insert has actually succeeded.
+    const rulesToMarkCaughtUp: CampaignRule[] = [];
+
     for (const state of states) {
       const stateRules = allRules.filter((r) => r.state === state);
       const ruleCampaigns = evaluateRules(stateRules, secondWeekStart, secondWeekEnd);
       allNewCampaigns.push(...ruleCampaigns.map(toNewCampaignRow));
       rulesUsedInRefresh.push(...stateRules);
 
-      // Catch-up: rules with no existing campaign anywhere in the retained window get
-      // one extra evaluation pass into the current week (a range the normal pass above
-      // never covers), so a rule created after its first occurrence's normal window has
-      // already gone by still gets that occurrence generated.
-      const catchUpRules = stateRules.filter((r) => !existingRuleSlotKeys.has(ruleSlotKey(r)));
+      // Catch-up: a rule gets exactly one extra evaluation pass into the current week (a
+      // range the normal pass above never covers), so a rule created after its first
+      // occurrence's normal window has already gone by still gets that occurrence
+      // generated. Eligibility is tracked with `catchup_evaluated_at` on the rule itself
+      // (null = not yet evaluated) rather than by looking for a matching campaign row —
+      // matching on campaign fields like `time` breaks the moment a rule's schedule is
+      // edited after its first occurrence was generated (see #91), since already-generated
+      // occurrences correctly keep their original values.
+      const catchUpRules = stateRules.filter((r) => !r.catchup_evaluated_at);
       if (catchUpRules.length > 0) {
         const catchUpCampaigns = evaluateRules(catchUpRules, upcomingCampaignStart, catchUpEnd);
         allNewCampaigns.push(...catchUpCampaigns.map(toNewCampaignRow));
+        rulesToMarkCaughtUp.push(...catchUpRules);
       }
     }
 
@@ -238,6 +231,22 @@ export async function runWeeklyRefresh(
           }
         }
       }
+    }
+
+    // -----------------------------------------------------------------------
+    // Mark catch-up-eligible rules as evaluated — placed after the insert above has
+    // succeeded (or been skipped because there was nothing to insert) so a rule is never
+    // marked "caught up" without its campaign actually landing. This is a one-off flip:
+    // once set, the rule never gets a catch-up pass again, regardless of what happens to
+    // the resulting campaign afterward (edited, deleted, etc.) — its future occurrences
+    // are reliably covered by the normal secondWeek pass from here on.
+    // -----------------------------------------------------------------------
+    if (rulesToMarkCaughtUp.length > 0) {
+      const { error: catchupMarkError } = await client
+        .from('campaign_rules')
+        .update({ catchup_evaluated_at: new Date().toISOString() })
+        .in('id', rulesToMarkCaughtUp.map((r) => r.id));
+      if (catchupMarkError) throw catchupMarkError;
     }
 
     // -----------------------------------------------------------------------
