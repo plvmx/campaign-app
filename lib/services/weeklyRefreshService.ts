@@ -130,12 +130,16 @@ export async function runWeeklyRefresh(
       )
     );
 
-    // Rule identity, ignoring date — used to detect rules with no campaign yet at all.
-    const ruleSlotKey = (r: { state: string; place: string; site: string; time: string; leader: string }) =>
-      `${r.state}_${r.place}_${r.site}_${r.time}_${r.leader}`;
+    // Rule identity, ignoring date AND time — used to detect rules with no campaign yet at
+    // all. `time` is deliberately excluded: a rule's scheduled time can be edited after
+    // campaigns were already generated from it (those keep their original time, correctly),
+    // so keying on time would make an already-fired rule look unfired forever and get a
+    // duplicate backfilled on every subsequent refresh.
+    const ruleSlotKey = (r: { state: string; place: string; site: string; leader: string }) =>
+      `${r.state}_${r.place}_${r.site}_${r.leader}`;
     const existingRuleSlotKeys = new Set(
       (existingRows || []).map(
-        (c: { state: string; place: string; site: string; time: string; leader: string }) => ruleSlotKey(c)
+        (c: { state: string; place: string; site: string; leader: string }) => ruleSlotKey(c)
       )
     );
 
