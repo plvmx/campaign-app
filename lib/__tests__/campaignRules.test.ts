@@ -219,7 +219,11 @@ describe('biweekly rules', () => {
     expect(results.map(r => r.date)).toEqual(['2025-01-04', '2025-01-18', '2025-02-01']);
   });
 
-  it('generates every 4 weeks over a longer period', () => {
+  it('generates every 4 weeks over a longer period, unaffected by the AEDT->AEST changeover', () => {
+    // Regression: this range crosses early April, when Australian clocks fall back an
+    // hour. Stepping occurrences with raw millisecond addition (rather than calendar-day
+    // arithmetic) drifted the final occurrence a full day early (Apr 25 instead of Apr 26)
+    // once that hour was lost.
     const rule = makeRule({
       frequency_type: 'biweekly',
       frequency_value: 4,
