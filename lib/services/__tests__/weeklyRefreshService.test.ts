@@ -218,6 +218,36 @@ describe('runWeeklyRefresh', () => {
     expect(result.created).toBe(0);
   });
 
+  it('does not catch up a rule whose existing campaign has a different time than the rule\'s current schedule', async () => {
+    // Regression: a rule's `time` can be edited after campaigns were already generated from
+    // it (already-scheduled occurrences correctly keep their original time). Catch-up
+    // eligibility must not use `time` as part of "does this rule already have a campaign" —
+    // otherwise every time-edited rule looks unfired forever and gets a duplicate backfilled
+    // on every subsequent refresh. Existing campaign is at the rule's slot/date but 09:30,
+    // while the rule now says 10:00.
+    const rule = makeRule();
+    const { client, builders } = makeClient({
+      state_leaders: [{ data: [{ state: 'VIC' }], error: null }],
+      campaign_rules: [{ data: [rule], error: null }],
+      campaigns: [
+        { data: [{ date: pastCampaignStartStr, state: 'VIC', place: 'Melbourne', site: '', time: '09:30', leader: 'Alice' }], error: null },
+        { data: null, error: null }, // insert (normal-pass campaign only)
+        { data: [], error: null },   // delete old
+      ],
+      campaign_changes_log: [{ data: [], error: null }],
+      weekly_refresh_log: [{ data: null, error: null }],
+    });
+
+    const result = await runWeeklyRefresh(client, 'user-1');
+
+    // Only the ordinary secondWeek occurrence should be created — no extra catch-up campaign.
+    expect(result.created).toBe(1);
+    const insertBuilder = builders.campaigns[1];
+    expect(insertBuilder.insert).toHaveBeenCalledWith([
+      expect.objectContaining({ date: secondWeekStartStr, state: 'VIC', place: 'Melbourne', leader: 'Alice' }),
+    ]);
+  });
+
   it('backfills a biweekly rule\'s missing reference_date and updates it after a new campaign is created', async () => {
     const rule = makeRule({
       id: 'rule-2', leader: 'Bob', frequency_type: 'biweekly', frequency_value: 2, rule_config: {},
