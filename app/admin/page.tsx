@@ -561,8 +561,8 @@ export default function AdminPage() {
                   Campaign Change Logging
                 </h3>
                 <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">
-                  {loggingEnabled 
-                    ? 'Logging is enabled. All campaign changes (except from Admin screen) are being recorded.'
+                  {loggingEnabled
+                    ? 'Logging is enabled. All campaign changes are being recorded.'
                     : 'Logging is disabled. Campaign changes are not being recorded.'}
                 </p>
               </div>

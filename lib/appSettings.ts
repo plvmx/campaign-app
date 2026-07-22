@@ -120,7 +120,7 @@ export async function setCampaignLoggingEnabled(enabled: boolean): Promise<void>
   await setSettingSecure(
     'campaign_logging_enabled',
     enabled ? 'true' : 'false',
-    'Enable or disable logging of campaign changes (excluding admin screen changes)'
+    'Enable or disable logging of campaign changes'
   );
 }
 

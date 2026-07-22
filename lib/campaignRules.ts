@@ -97,6 +97,20 @@ function findWeeklyOccurrences(
 }
 
 /**
+ * Whole calendar days between two local-midnight dates (b - a), DST-safe.
+ *
+ * Fix: raw millisecond subtraction between two local-midnight Dates is off by however many
+ * DST transitions fall between them (a 1-hour spring-forward/fall-back shifts the real ms
+ * gap away from an exact multiple of 86400000). Diffing at local noon instead of midnight
+ * keeps a wide enough margin that a ±1h shift can never flip the rounded day count.
+ */
+function daysBetweenLocalDates(a: Date, b: Date): number {
+  const noonA = new Date(a.getFullYear(), a.getMonth(), a.getDate(), 12);
+  const noonB = new Date(b.getFullYear(), b.getMonth(), b.getDate(), 12);
+  return Math.round((noonB.getTime() - noonA.getTime()) / (24 * 60 * 60 * 1000));
+}
+
+/**
  * Find ALL dates matching a biweekly pattern within the given range.
  *
  * Fix vs. previous implementation: the old function always returned at most one result,
@@ -107,6 +121,11 @@ function findWeeklyOccurrences(
  * Uses referenceDate (a known past occurrence) to anchor the repeating pattern so the
  * cycle stays consistent across cron runs. Falls back to the first matching dayOfWeek
  * on or after startDate when no reference is available.
+ *
+ * Fix: occurrences are stepped with `setDate()` (calendar-day arithmetic), never with raw
+ * millisecond offsets — a millisecond-based step drifts by an hour across any DST
+ * transition inside the range, which showed up as a real one-day-early result for a rule
+ * whose period crossed the early-April AEDT→AEST changeover.
  */
 function findBiweeklyOccurrences(
   frequencyValue: number,
@@ -116,7 +135,7 @@ function findBiweeklyOccurrences(
   referenceDate: string | null
 ): Date[] {
   const matches: Date[] = [];
-  const msPerPeriod = frequencyValue * 7 * 24 * 60 * 60 * 1000;
+  const periodDays = frequencyValue * 7;
 
   const normStart = new Date(startDate); normStart.setHours(0, 0, 0, 0);
   const normEnd   = new Date(endDate);   normEnd.setHours(23, 59, 59, 999);
@@ -137,24 +156,21 @@ function findBiweeklyOccurrences(
     anchor.setDate(anchor.getDate() + (dayOfWeek - anchor.getDay() + 7) % 7);
   }
 
-  // Walk the anchor to the first occurrence at or after normStart using integer arithmetic
-  // to avoid floating-point drift across many period steps.
-  let firstInRange: Date;
-  if (anchor <= normStart) {
-    const periods = Math.ceil((normStart.getTime() - anchor.getTime()) / msPerPeriod);
-    firstInRange = new Date(anchor.getTime() + periods * msPerPeriod);
-  } else {
-    // Anchor is after normStart: step back to the earliest occurrence still >= normStart.
-    const periods = Math.floor((anchor.getTime() - normStart.getTime()) / msPerPeriod);
-    const candidate = new Date(anchor.getTime() - periods * msPerPeriod);
-    firstInRange = candidate >= normStart ? candidate : anchor;
-  }
+  // Walk the anchor to the first occurrence at or after normStart in one jump, using a
+  // DST-safe day count rather than a millisecond period. `daysToStart` may be negative
+  // (anchor after normStart) — ceil still finds the smallest valid `periods` in both
+  // directions, e.g. ceil(-40/28) = -1 steps anchor back exactly one period.
+  const daysToStart = daysBetweenLocalDates(anchor, normStart);
+  const periods = Math.ceil(daysToStart / periodDays);
+  const firstInRange = new Date(anchor);
+  firstInRange.setDate(firstInRange.getDate() + periods * periodDays);
 
   // Collect every occurrence from firstInRange to normEnd.
   let current = new Date(firstInRange);
   while (current <= normEnd) {
     matches.push(new Date(current));
-    current = new Date(current.getTime() + msPerPeriod);
+    current = new Date(current);
+    current.setDate(current.getDate() + periodDays);
   }
 
   return matches;
