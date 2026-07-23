@@ -525,6 +525,27 @@ function CampaignRulesPageContent() {
     }
   };
 
+  /**
+   * Remove a single excluded date from a rule's rule_config.exceptions — e.g. a leader
+   * deleted a rule-generated campaign (which records the date here so it isn't silently
+   * recreated) but now wants that occurrence back. The next weekly refresh will regenerate
+   * it once the date is no longer in this list.
+   */
+  const handleRemoveException = async (rule: CampaignRule, date: string) => {
+    if (isTeamLeader && userLeader && rule.leader?.trim() !== userLeader.trim()) {
+      setError('You can only update your own campaign rules.');
+      return;
+    }
+    try {
+      const exceptions = (rule.rule_config?.exceptions ?? []).filter((d) => d !== date);
+      await updateRule(rule.id, { rule_config: { ...rule.rule_config, exceptions } });
+      setSuccess('Exception removed — this date will be regenerated on the next weekly refresh');
+      await fetchRules();
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to remove exception'));
+    }
+  };
+
   // ── Live "first campaign" hint ─────────────────────────────────────────────
   // Compute the first date the rule would generate a campaign, updating live as
   // the user fills in the form. Shown near the "Active From" field.
@@ -1163,6 +1184,31 @@ function CampaignRulesPageContent() {
                         {rule.notes && (
                           <div className={`text-xs ${stateColor.text} opacity-60 mt-1 italic`}>
                             {rule.notes}
+                          </div>
+                        )}
+                        {(rule.rule_config?.exceptions?.length ?? 0) > 0 && (
+                          <div className="mt-2 rounded bg-white/50 p-2 dark:bg-gray-900/50">
+                            <div className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                              Excluded dates (manually deleted — won&apos;t be regenerated):
+                            </div>
+                            <div className="mt-1 flex flex-wrap gap-1.5">
+                              {[...(rule.rule_config?.exceptions ?? [])].sort().map((dateStr) => (
+                                <span
+                                  key={dateStr}
+                                  className="inline-flex items-center gap-1 rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
+                                >
+                                  {formatDateReadable(new Date(dateStr + 'T00:00:00'))}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveException(rule, dateStr)}
+                                    title="Allow this date to be regenerated again"
+                                    className="ml-0.5 font-bold text-amber-600 hover:text-amber-900 dark:text-amber-400 dark:hover:text-amber-100"
+                                  >
+                                    ×
+                                  </button>
+                                </span>
+                              ))}
+                            </div>
                           </div>
                         )}
                         {previewRuleId === rule.id && (

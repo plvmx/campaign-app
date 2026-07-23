@@ -2,6 +2,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { logCampaignChange } from '@/lib/campaignLog';
 import { normalizeMobile, normalizeName } from '@/lib/auth';
 import { getSharedWithMeOwners } from '@/lib/leaderShares';
+import { excludeDateForDeletedCampaign } from '@/lib/services/rulesService';
 import type { Campaign, LeaderShareOwner } from '@/lib/types';
 
 export interface NewCampaignData {
@@ -102,6 +103,24 @@ export async function deleteCampaign(id: string, oldData?: Partial<Campaign> | n
   if (error) throw error;
 
   logCampaignChange(id, 'DELETE', oldData ?? null, null);
+
+  // Rule-generated campaign: record the exception so the next weekly refresh doesn't
+  // silently recreate what was just deleted (its dedup only checks whether a matching
+  // row currently exists — see #93).
+  if (
+    oldData?.source === 'RUL' &&
+    oldData.date && oldData.state && oldData.place && oldData.site != null &&
+    oldData.time && oldData.leader
+  ) {
+    excludeDateForDeletedCampaign({
+      date: oldData.date,
+      state: oldData.state,
+      place: oldData.place,
+      site: oldData.site,
+      time: oldData.time,
+      leader: oldData.leader,
+    });
+  }
 }
 
 /** Fetch campaigns within a date range, with optional state filter. */
