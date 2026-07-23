@@ -9,10 +9,14 @@ vi.mock('@/lib/campaignLog', () => ({
 vi.mock('@/lib/leaderShares', () => ({
   getSharedWithMeOwners: vi.fn(),
 }));
+vi.mock('@/lib/services/rulesService', () => ({
+  excludeDateForDeletedCampaign: vi.fn(),
+}));
 
 import { supabase } from '@/lib/supabaseClient';
 import { logCampaignChange } from '@/lib/campaignLog';
 import { getSharedWithMeOwners } from '@/lib/leaderShares';
+import { excludeDateForDeletedCampaign } from '@/lib/services/rulesService';
 import { makeQueryBuilder } from './supabaseMock';
 import {
   getCampaignById,
@@ -166,6 +170,33 @@ describe('deleteCampaign', () => {
     mockFrom.mockReturnValue(makeQueryBuilder({ data: null, error }));
     await expect(deleteCampaign('c1')).rejects.toEqual(error);
     expect(logCampaignChange).not.toHaveBeenCalled();
+  });
+
+  it('records a rule exception when deleting a rule-generated campaign, so the next weekly refresh does not recreate it', async () => {
+    mockFrom.mockReturnValue(makeQueryBuilder({ data: null, error: null }));
+    const oldData = makeCampaign({ source: 'RUL' });
+    await deleteCampaign('c1', oldData);
+    expect(excludeDateForDeletedCampaign).toHaveBeenCalledWith({
+      date: oldData.date,
+      state: oldData.state,
+      place: oldData.place,
+      site: oldData.site,
+      time: oldData.time,
+      leader: oldData.leader,
+    });
+  });
+
+  it('does not record a rule exception for a manually-created campaign', async () => {
+    mockFrom.mockReturnValue(makeQueryBuilder({ data: null, error: null }));
+    const oldData = makeCampaign({ source: 'MAN' });
+    await deleteCampaign('c1', oldData);
+    expect(excludeDateForDeletedCampaign).not.toHaveBeenCalled();
+  });
+
+  it('does not record a rule exception when no oldData is passed', async () => {
+    mockFrom.mockReturnValue(makeQueryBuilder({ data: null, error: null }));
+    await deleteCampaign('c1');
+    expect(excludeDateForDeletedCampaign).not.toHaveBeenCalled();
   });
 });
 
