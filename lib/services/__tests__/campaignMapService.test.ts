@@ -13,7 +13,7 @@ vi.mock('@/lib/services/statePlacesService', () => ({
 import { supabase } from '@/lib/supabaseClient';
 import { getCampaignsByDateRange } from '@/lib/services/campaignService';
 import { getStatePlaces } from '@/lib/services/statePlacesService';
-import { getMapData } from '../campaignMapService';
+import { getMapData, fetchPlaceCoordinates } from '../campaignMapService';
 import type { Campaign } from '@/lib/types';
 import type { StatePlace } from '../statePlacesService';
 
@@ -170,5 +170,51 @@ describe('getMapData', () => {
 
     expect(global.fetch).toHaveBeenCalledTimes(2);
     expect(result.markers).toHaveLength(2);
+  });
+});
+
+describe('fetchPlaceCoordinates', () => {
+  it('returns null without calling the API when there is no session', async () => {
+    mockGetSession.mockResolvedValue({ data: { session: null }, error: null } as never);
+
+    const result = await fetchPlaceCoordinates('VIC', 'Melbourne');
+
+    expect(result).toBeNull();
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('posts state and place to the geocode-place API and returns the coordinates', async () => {
+    mockGetSession.mockResolvedValue({
+      data: { session: { access_token: 'tok123' } },
+      error: null,
+    } as never);
+    vi.mocked(global.fetch).mockResolvedValue({
+      ok: true,
+      json: async () => ({ latitude: -37.8, longitude: 144.9 }),
+    } as Response);
+
+    const result = await fetchPlaceCoordinates('VIC', 'Melbourne');
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      '/api/admin/geocode-place',
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({ Authorization: 'Bearer tok123' }),
+        body: JSON.stringify({ state: 'VIC', place: 'Melbourne' }),
+      }),
+    );
+    expect(result).toEqual({ latitude: -37.8, longitude: 144.9 });
+  });
+
+  it('returns null when the API responds with an error status', async () => {
+    mockGetSession.mockResolvedValue({
+      data: { session: { access_token: 'tok123' } },
+      error: null,
+    } as never);
+    vi.mocked(global.fetch).mockResolvedValue({ ok: false } as Response);
+
+    const result = await fetchPlaceCoordinates('VIC', 'Melbourne');
+
+    expect(result).toBeNull();
   });
 });
