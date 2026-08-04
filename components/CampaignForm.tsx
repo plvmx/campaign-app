@@ -162,7 +162,7 @@ export default function CampaignForm({
   const handlePlaceChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const label = e.target.value;
     const match = places.find((p) => p.label === label);
-    setFormData((prev) => ({ ...prev, place: match?.place ?? label, site: match?.site ?? '' }));
+    setFormData((prev) => ({ ...prev, place: match?.place ?? label, site: '' }));
     setError(null);
   };
 

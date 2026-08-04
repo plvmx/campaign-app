@@ -8,7 +8,6 @@ import { useUser } from '@/contexts/UserContext';
 import { getStateColor } from '@/lib/stateColors';
 import { AUSTRALIAN_STATES } from '@/lib/constants';
 import { getErrorMessage } from '@/lib/errorUtils';
-import { combinePlaceAndSite } from '@/lib/placeSite';
 import {
   type StatePlace,
   getStatePlaces,
@@ -28,7 +27,7 @@ export default function StatePlacesPage() {
   
   // Form state
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [formState, setFormState] = useState({ state: '', place: '', site: '', location: '' });
+  const [formState, setFormState] = useState({ state: '', place: '', location: '' });
   const [filterState, setFilterState] = useState<string>('');
 
   useEffect(() => {
@@ -66,15 +65,15 @@ export default function StatePlacesPage() {
 
     try {
       if (editingId) {
-        await updateStatePlace(editingId, { state: formState.state, place: formState.place, site: formState.site, location: formState.location });
+        await updateStatePlace(editingId, { state: formState.state, place: formState.place, location: formState.location });
         setSuccess('State place updated successfully');
       } else {
-        await createStatePlace({ state: formState.state, place: formState.place, site: formState.site, location: formState.location });
+        await createStatePlace({ state: formState.state, place: formState.place, location: formState.location });
         setSuccess('State place created successfully');
       }
 
       // Reset form
-      setFormState({ state: '', place: '', site: '', location: '' });
+      setFormState({ state: '', place: '', location: '' });
       setEditingId(null);
       await fetchStatePlaces();
     } catch (err: unknown) {
@@ -86,7 +85,7 @@ export default function StatePlacesPage() {
 
   const handleEdit = (item: StatePlace) => {
     setEditingId(item.id);
-    setFormState({ state: item.state, place: item.place, site: item.site, location: item.location || '' });
+    setFormState({ state: item.state, place: item.place, location: item.location || '' });
     setError(null);
     setSuccess(null);
     // Scroll to form
@@ -109,7 +108,7 @@ export default function StatePlacesPage() {
 
   const handleCancel = () => {
     setEditingId(null);
-    setFormState({ state: '', place: '', site: '', location: '' });
+    setFormState({ state: '', place: '', location: '' });
     setError(null);
     setSuccess(null);
   };
@@ -221,20 +220,7 @@ export default function StatePlacesPage() {
                 value={formState.place}
                 onChange={(e) => setFormState({ ...formState, place: e.target.value })}
                 className="mt-1 block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
-                placeholder="Enter place name"
-              />
-            </div>
-            <div>
-              <label htmlFor="site" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                Site (optional)
-              </label>
-              <input
-                id="site"
-                type="text"
-                value={formState.site}
-                onChange={(e) => setFormState({ ...formState, site: e.target.value })}
-                className="mt-1 block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
-                placeholder="e.g. 1 — for a numbered sub-location like &quot;Orange 1&quot;"
+                placeholder="e.g. &quot;Orange&quot;, or &quot;Orange 1&quot; for a numbered sub-location"
               />
             </div>
             <div>
@@ -312,7 +298,7 @@ export default function StatePlacesPage() {
                     <div className="flex items-center justify-between">
                       <div>
                         <div className={`font-medium ${stateColor.text}`}>
-                          {combinePlaceAndSite(item.place, item.site)}
+                          {item.place}
                         </div>
                         <div className={`text-sm ${stateColor.text} opacity-75`}>
                           {item.state}

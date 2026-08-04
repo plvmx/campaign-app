@@ -165,8 +165,8 @@ describe('useCampaignForm — handleSubmit', () => {
   it('persists a custom place, refreshes the places cache, and submits with the new place', async () => {
     mockAddNewPlace.mockResolvedValue(undefined);
     mockGetPlaces.mockResolvedValue([
-      { place: 'Ballarat', site: '', label: 'Ballarat' },
-      { place: 'New Place', site: '', label: 'New Place' },
+      { place: 'Ballarat', label: 'Ballarat' },
+      { place: 'New Place', label: 'New Place' },
     ]);
     const onSubmit = vi.fn().mockResolvedValue(undefined);
     const { result } = renderHook(() =>
@@ -180,11 +180,11 @@ describe('useCampaignForm — handleSubmit', () => {
       await result.current.handleSubmit(makeSubmitEvent());
     });
 
-    expect(mockAddNewPlace).toHaveBeenCalledWith('VIC', 'New Place', '');
+    expect(mockAddNewPlace).toHaveBeenCalledWith('VIC', 'New Place');
     expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ place: 'New Place', site: '' }));
   });
 
-  it('splits a trailing numeric suffix off a custom place into site', async () => {
+  it('keeps a trailing numeric suffix as part of the custom place text, without a separate site', async () => {
     mockAddNewPlace.mockResolvedValue(undefined);
     mockGetPlaces.mockResolvedValue([]);
     const onSubmit = vi.fn().mockResolvedValue(undefined);
@@ -199,8 +199,8 @@ describe('useCampaignForm — handleSubmit', () => {
       await result.current.handleSubmit(makeSubmitEvent());
     });
 
-    expect(mockAddNewPlace).toHaveBeenCalledWith('VIC', 'Somewhere', '5');
-    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ place: 'Somewhere', site: '5' }));
+    expect(mockAddNewPlace).toHaveBeenCalledWith('VIC', 'Somewhere 5');
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ place: 'Somewhere 5', site: '' }));
   });
 
   it('errors when no leader is selected, even when submitted via a MouseEvent (InlineEditForm has no <form>)', async () => {

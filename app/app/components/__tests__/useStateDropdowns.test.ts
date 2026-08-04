@@ -12,9 +12,9 @@ import { useStateDropdowns } from '../useStateDropdowns';
 const mockGetPlaces = vi.mocked(getPlacesForState);
 const mockGetLeaders = vi.mocked(getLeadersForState);
 
-/** Builds a bare PlaceOption (no site) for a place name — shorthand for these tests. */
+/** Builds a bare PlaceOption for a place name — shorthand for these tests. */
 function po(place: string): PlaceOption {
-  return { place, site: '', label: place };
+  return { place, label: place };
 }
 
 beforeEach(() => {
