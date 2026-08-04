@@ -1,6 +1,6 @@
 /**
  * Server-side geocoding for the admin campaign map.
- * POST body: { state: string, place: string }
+ * POST body: { state: string, place: string, force?: boolean }
  * Authorization: Bearer <supabase_access_token>
  *
  * Looks up cached coordinates on state_places first; if missing, geocodes via
@@ -8,6 +8,10 @@
  * using the matching state_places row's `location` field — the sole source for
  * coordinates, since `place` is often a venue/event name rather than a real
  * suburb/town — and persists the result so future lookups for the same place are free.
+ *
+ * `force: true` skips the cache and re-geocodes + overwrites even when coordinates
+ * already exist — used when an admin edits a place's `location`, since the old
+ * coordinates were computed from the previous location text and are now stale.
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
@@ -71,7 +75,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  let body: { state?: unknown; place?: unknown };
+  let body: { state?: unknown; place?: unknown; force?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -80,6 +84,7 @@ export async function POST(request: NextRequest) {
 
   const state = typeof body.state === 'string' ? body.state.trim().toUpperCase() : null;
   const place = typeof body.place === 'string' ? body.place.trim() : null;
+  const force = body.force === true;
   if (!state || !place) {
     return NextResponse.json({ error: 'Missing state or place' }, { status: 400 });
   }
@@ -96,7 +101,7 @@ export async function POST(request: NextRequest) {
   const normalize = (s: string) => s.trim().replace(/\s+/g, ' ').toLowerCase();
   const existing = statePlaces?.find(p => normalize(p.place) === normalize(place)) ?? null;
 
-  if (existing?.latitude != null && existing?.longitude != null) {
+  if (!force && existing?.latitude != null && existing?.longitude != null) {
     return NextResponse.json({ latitude: existing.latitude, longitude: existing.longitude, cached: true });
   }
 

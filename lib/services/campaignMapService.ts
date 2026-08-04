@@ -31,10 +31,14 @@ function placeKey(state: string, place: string): string {
 
 /**
  * Calls the admin geocode-place API for a single place. Also used by the admin
- * Manage State Places page to geocode a place immediately on creation, rather than
+ * Manage State Places page to geocode a place immediately on create/edit, rather than
  * waiting for it to first appear on the campaign map.
+ *
+ * `force` skips the API's coordinate cache and re-geocodes even if coordinates already
+ * exist — pass it when a place's `location` was just edited, since the old coordinates
+ * were computed from the previous location text and are now stale.
  */
-export async function fetchPlaceCoordinates(state: string, place: string): Promise<{ latitude: number; longitude: number } | null> {
+export async function fetchPlaceCoordinates(state: string, place: string, force = false): Promise<{ latitude: number; longitude: number } | null> {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) return null;
 
@@ -44,7 +48,7 @@ export async function fetchPlaceCoordinates(state: string, place: string): Promi
       'Content-Type': 'application/json',
       Authorization: `Bearer ${session.access_token}`,
     },
-    body: JSON.stringify({ state, place }),
+    body: JSON.stringify({ state, place, ...(force ? { force: true } : {}) }),
     // Guards against a slow geocode (e.g. an unreachable Nominatim) hanging the map indefinitely.
     signal: AbortSignal.timeout(10000),
   }).catch(() => null);

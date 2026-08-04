@@ -217,4 +217,24 @@ describe('fetchPlaceCoordinates', () => {
 
     expect(result).toBeNull();
   });
+
+  it('includes force in the request body when passed, to bypass the API cache', async () => {
+    mockGetSession.mockResolvedValue({
+      data: { session: { access_token: 'tok123' } },
+      error: null,
+    } as never);
+    vi.mocked(global.fetch).mockResolvedValue({
+      ok: true,
+      json: async () => ({ latitude: -37.8, longitude: 144.9 }),
+    } as Response);
+
+    await fetchPlaceCoordinates('VIC', 'Melbourne', true);
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      '/api/admin/geocode-place',
+      expect.objectContaining({
+        body: JSON.stringify({ state: 'VIC', place: 'Melbourne', force: true }),
+      }),
+    );
+  });
 });
