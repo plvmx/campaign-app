@@ -6,6 +6,7 @@ export interface StatePlace {
   place: string;
   site: string;
   created_at: string;
+  location?: string | null;
   latitude?: number | null;
   longitude?: number | null;
 }
@@ -22,7 +23,7 @@ export async function getStatePlaces(filterState?: string): Promise<StatePlace[]
   return (data || []) as StatePlace[];
 }
 
-export async function createStatePlace(input: { state: string; place: string; site: string }): Promise<void> {
+export async function createStatePlace(input: { state: string; place: string; site: string; location: string }): Promise<void> {
   const { error } = await supabase.from('state_places').insert([input]);
   if (error) {
     if (error.code === '23505') throw new Error('This state-place-site combination already exists');
@@ -32,7 +33,7 @@ export async function createStatePlace(input: { state: string; place: string; si
 
 export async function updateStatePlace(
   id: string,
-  input: { state: string; place: string; site: string },
+  input: { state: string; place: string; site: string; location: string },
 ): Promise<void> {
   const { error } = await supabase.from('state_places').update(input).eq('id', id);
   if (error) throw error;

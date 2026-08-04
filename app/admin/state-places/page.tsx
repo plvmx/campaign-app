@@ -28,7 +28,7 @@ export default function StatePlacesPage() {
   
   // Form state
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [formState, setFormState] = useState({ state: '', place: '', site: '' });
+  const [formState, setFormState] = useState({ state: '', place: '', site: '', location: '' });
   const [filterState, setFilterState] = useState<string>('');
 
   useEffect(() => {
@@ -66,15 +66,15 @@ export default function StatePlacesPage() {
 
     try {
       if (editingId) {
-        await updateStatePlace(editingId, { state: formState.state, place: formState.place, site: formState.site });
+        await updateStatePlace(editingId, { state: formState.state, place: formState.place, site: formState.site, location: formState.location });
         setSuccess('State place updated successfully');
       } else {
-        await createStatePlace({ state: formState.state, place: formState.place, site: formState.site });
+        await createStatePlace({ state: formState.state, place: formState.place, site: formState.site, location: formState.location });
         setSuccess('State place created successfully');
       }
 
       // Reset form
-      setFormState({ state: '', place: '', site: '' });
+      setFormState({ state: '', place: '', site: '', location: '' });
       setEditingId(null);
       await fetchStatePlaces();
     } catch (err: unknown) {
@@ -86,7 +86,7 @@ export default function StatePlacesPage() {
 
   const handleEdit = (item: StatePlace) => {
     setEditingId(item.id);
-    setFormState({ state: item.state, place: item.place, site: item.site });
+    setFormState({ state: item.state, place: item.place, site: item.site, location: item.location || '' });
     setError(null);
     setSuccess(null);
     // Scroll to form
@@ -109,7 +109,7 @@ export default function StatePlacesPage() {
 
   const handleCancel = () => {
     setEditingId(null);
-    setFormState({ state: '', place: '', site: '' });
+    setFormState({ state: '', place: '', site: '', location: '' });
     setError(null);
     setSuccess(null);
   };
@@ -237,6 +237,20 @@ export default function StatePlacesPage() {
                 placeholder="e.g. 1 — for a numbered sub-location like &quot;Orange 1&quot;"
               />
             </div>
+            <div>
+              <label htmlFor="location" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Location
+              </label>
+              <input
+                id="location"
+                type="text"
+                required
+                value={formState.location}
+                onChange={(e) => setFormState({ ...formState, location: e.target.value })}
+                className="mt-1 block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
+                placeholder="Actual suburb/town, e.g. &quot;Eatons Hill&quot; — used to look up map coordinates"
+              />
+            </div>
             <div className="flex gap-2">
               <button
                 type="submit"
@@ -302,6 +316,9 @@ export default function StatePlacesPage() {
                         </div>
                         <div className={`text-sm ${stateColor.text} opacity-75`}>
                           {item.state}
+                        </div>
+                        <div className={`text-sm ${stateColor.text} opacity-75`}>
+                          {item.location || <span className="italic">No location set</span>}
                         </div>
                       </div>
                       <div className="flex gap-2">
