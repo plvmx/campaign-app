@@ -7,6 +7,11 @@
  * on either map the user waits ~1.1 s per uncached place. Backfilling once
  * means subsequent map loads are instant.
  *
+ * Geocodes against the `location` column (the actual suburb/town), not `place`
+ * (which is often a venue/event name) — see docs/migrations/006_add_state_places_location.sql.
+ * Rows without a `location` set are skipped; run
+ * `node scripts/backfill_state_places_location.js --apply` first.
+ *
  * Usage:
  *   node scripts/backfill_state_places_coords.js          # dry-run summary
  *   node scripts/backfill_state_places_coords.js --apply  # actually geocode + write
@@ -40,8 +45,8 @@ const supabase = createClient(
 const NOMINATIM_GAP_MS = 1100;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function geocode(place, state) {
-  const query = `${place}, ${state}, Australia`;
+async function geocode(location, state) {
+  const query = `${location}, ${state}, Australia`;
   const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=au&q=${encodeURIComponent(query)}`;
   let response;
   try {
@@ -62,9 +67,9 @@ async function geocode(place, state) {
 }
 
 (async () => {
-  const { data: rows, error } = await supabase
+  const { data: allMissing, error } = await supabase
     .from('state_places')
-    .select('id, state, place, latitude, longitude')
+    .select('id, state, place, location, latitude, longitude')
     .or('latitude.is.null,longitude.is.null')
     .order('state', { ascending: true })
     .order('place', { ascending: true });
@@ -74,15 +79,22 @@ async function geocode(place, state) {
     process.exit(1);
   }
 
-  console.log(`Found ${rows.length} state_places rows missing coordinates.`);
+  const rows = (allMissing || []).filter((r) => r.location);
+  const skippedNoLocation = (allMissing || []).filter((r) => !r.location);
+
+  console.log(`Found ${allMissing.length} state_places rows missing coordinates (${rows.length} have a location set, ${skippedNoLocation.length} skipped for missing location).`);
+  if (skippedNoLocation.length > 0) {
+    console.log('\nSkipped (no location set):');
+    skippedNoLocation.forEach((r) => console.log(`  ${r.state} :: ${r.place}`));
+  }
   if (rows.length === 0) {
-    console.log('Nothing to do.');
+    console.log('\nNothing to do.');
     return;
   }
 
   if (!apply) {
     console.log('\nDry run — pass --apply to geocode and write. First 20:');
-    rows.slice(0, 20).forEach((r) => console.log(`  ${r.state} :: ${r.place}`));
+    rows.slice(0, 20).forEach((r) => console.log(`  ${r.state} :: ${r.place} → location: ${r.location}`));
     if (rows.length > 20) console.log(`  …and ${rows.length - 20} more.`);
     const estSec = Math.ceil((rows.length * NOMINATIM_GAP_MS) / 1000);
     console.log(`\nEstimated run time at 1 req/${NOMINATIM_GAP_MS}ms: ~${estSec}s (${(estSec / 60).toFixed(1)} min).`);
@@ -99,11 +111,11 @@ async function geocode(place, state) {
     // Space out lookups to respect Nominatim's 1/sec policy.
     if (i > 0) await sleep(NOMINATIM_GAP_MS);
 
-    const result = await geocode(row.place, row.state);
+    const result = await geocode(row.location, row.state);
     if (result.error) {
       failed++;
       failures.push({ state: row.state, place: row.place, reason: result.error });
-      console.log(`  [${i + 1}/${rows.length}] ✗ ${row.state} :: ${row.place} — ${result.error}`);
+      console.log(`  [${i + 1}/${rows.length}] ✗ ${row.state} :: ${row.place} (${row.location}) — ${result.error}`);
       continue;
     }
 

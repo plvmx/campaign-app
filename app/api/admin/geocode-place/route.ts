@@ -5,7 +5,9 @@
  *
  * Looks up cached coordinates on state_places first; if missing, geocodes via
  * Nominatim (server-side, so a proper User-Agent can be set per their usage policy)
- * and persists the result so future lookups for the same place are free.
+ * using the matching state_places row's `location` field — the sole source for
+ * coordinates, since `place` is often a venue/event name rather than a real
+ * suburb/town — and persists the result so future lookups for the same place are free.
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
@@ -79,7 +81,7 @@ export async function POST(request: NextRequest) {
   // "Orange 1" and "Orange 2" are distinct sites with potentially distinct coordinates.
   const { data: statePlaces } = await supabaseAdmin
     .from('state_places')
-    .select('id, place, site, latitude, longitude')
+    .select('id, place, site, location, latitude, longitude')
     .eq('state', state);
 
   const normalize = (s: string) => s.trim().replace(/\s+/g, ' ').toLowerCase();
@@ -89,9 +91,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ latitude: existing.latitude, longitude: existing.longitude, cached: true });
   }
 
-  const geocoded = await geocodePlace(site ? `${place} ${site}` : place, state);
+  if (!existing?.location) {
+    return NextResponse.json({ error: 'No location set for this place' }, { status: 404 });
+  }
+
+  const geocoded = await geocodePlace(existing.location, state);
   if (!geocoded) {
-    return NextResponse.json({ error: 'No coordinates found for this place' }, { status: 404 });
+    return NextResponse.json({ error: 'No coordinates found for this location' }, { status: 404 });
   }
 
   if (existing?.id) {
