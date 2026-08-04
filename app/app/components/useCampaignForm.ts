@@ -2,7 +2,6 @@
 import { useState, useEffect } from 'react';
 import { getLeaderMobile } from '@/lib/services/dropdownService';
 import { addNewPlaceForState } from '@/lib/services/placeService';
-import { splitPlaceAndSite } from '@/lib/placeSite';
 import { getErrorMessage } from '@/lib/errorUtils';
 import { useStateDropdowns } from './useStateDropdowns';
 
@@ -84,7 +83,7 @@ export function useCampaignForm({ initialValues, onSubmit, autoFill }: UseCampai
       setIsOtherPlace(false);
       setCustomPlace('');
       const match = places.find((p) => p.label === label);
-      setValues((prev) => ({ ...prev, place: match?.place ?? label, site: match?.site ?? '', leader: '', mobile: '' }));
+      setValues((prev) => ({ ...prev, place: match?.place ?? label, site: '', leader: '', mobile: '' }));
     }
   };
 
@@ -99,10 +98,10 @@ export function useCampaignForm({ initialValues, onSubmit, autoFill }: UseCampai
       if (isOtherPlace && customPlace.trim()) {
         if (!values.state?.trim()) throw new Error('Please select a state before entering a new place');
         const stateValue = values.state.toUpperCase().trim();
-        const { place: newPlace, site: newSite } = splitPlaceAndSite(customPlace);
-        await addNewPlaceForState(stateValue, newPlace, newSite);
+        const newPlace = customPlace.trim();
+        await addNewPlaceForState(stateValue, newPlace);
         resolvedPlace = newPlace;
-        resolvedSite = newSite;
+        resolvedSite = '';
         const { getPlacesForState } = await import('@/lib/services/dropdownService');
         updatePlacesCache(stateValue, await getPlacesForState(stateValue));
       }

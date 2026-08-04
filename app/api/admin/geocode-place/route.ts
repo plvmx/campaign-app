@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  let body: { state?: unknown; place?: unknown; site?: unknown };
+  let body: { state?: unknown; place?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -80,7 +80,6 @@ export async function POST(request: NextRequest) {
 
   const state = typeof body.state === 'string' ? body.state.trim().toUpperCase() : null;
   const place = typeof body.place === 'string' ? body.place.trim() : null;
-  const site  = typeof body.site  === 'string' ? body.site.trim()  : '';
   if (!state || !place) {
     return NextResponse.json({ error: 'Missing state or place' }, { status: 400 });
   }
@@ -88,15 +87,14 @@ export async function POST(request: NextRequest) {
   // `place` is matched loosely (trim + collapsed whitespace + case-insensitive) because
   // campaigns.place and state_places.place are independently free-typed and can differ by
   // incidental whitespace (e.g. "Preston" vs "Preston "), which would otherwise silently
-  // break the coordinate cache. `site` is a structured column, so it's compared exactly —
-  // "Orange 1" and "Orange 2" are distinct sites with potentially distinct coordinates.
+  // break the coordinate cache.
   const { data: statePlaces } = await supabaseAdmin
     .from('state_places')
-    .select('id, place, site, location, latitude, longitude')
+    .select('id, place, location, latitude, longitude')
     .eq('state', state);
 
   const normalize = (s: string) => s.trim().replace(/\s+/g, ' ').toLowerCase();
-  const existing = statePlaces?.find(p => normalize(p.place) === normalize(place) && (p.site || '') === site) ?? null;
+  const existing = statePlaces?.find(p => normalize(p.place) === normalize(place)) ?? null;
 
   if (existing?.latitude != null && existing?.longitude != null) {
     return NextResponse.json({ latitude: existing.latitude, longitude: existing.longitude, cached: true });

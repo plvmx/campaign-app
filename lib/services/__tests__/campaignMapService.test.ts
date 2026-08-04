@@ -30,7 +30,7 @@ function makeCampaign(overrides: Partial<Campaign> = {}): Campaign {
 }
 
 function makeStatePlace(overrides: Partial<StatePlace> = {}): StatePlace {
-  return { id: 'p1', state: 'VIC', place: 'Melbourne', site: '', created_at: '', ...overrides };
+  return { id: 'p1', state: 'VIC', place: 'Melbourne', created_at: '', ...overrides };
 }
 
 const originalFetch = global.fetch;
@@ -61,14 +61,14 @@ describe('getMapData', () => {
     expect(result.markers[0].campaigns.map((c) => c.id).sort()).toEqual(['c1', 'c2']);
   });
 
-  it('keeps distinct sites at the same place as separate markers', async () => {
+  it('keeps distinct numbered sub-locations as separate markers', async () => {
     mockGetCampaigns.mockResolvedValue([
-      makeCampaign({ id: 'c1', place: 'Orange', site: '1' }),
-      makeCampaign({ id: 'c2', place: 'Orange', site: '2' }),
+      makeCampaign({ id: 'c1', place: 'Orange 1' }),
+      makeCampaign({ id: 'c2', place: 'Orange 2' }),
     ]);
     mockGetStatePlaces.mockResolvedValue([
-      makeStatePlace({ place: 'Orange', site: '1', latitude: -33.28, longitude: 149.1 }),
-      makeStatePlace({ place: 'Orange', site: '2', latitude: -33.29, longitude: 149.11 }),
+      makeStatePlace({ place: 'Orange 1', latitude: -33.28, longitude: 149.1 }),
+      makeStatePlace({ place: 'Orange 2', latitude: -33.29, longitude: 149.11 }),
     ]);
 
     const result = await getMapData({ startDate: '2026-01-01', endDate: '2026-01-31' });
@@ -76,8 +76,8 @@ describe('getMapData', () => {
     expect(result.markers).toHaveLength(2);
     expect(result.markers).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ place: 'Orange', site: '1', latitude: -33.28, longitude: 149.1 }),
-        expect.objectContaining({ place: 'Orange', site: '2', latitude: -33.29, longitude: 149.11 }),
+        expect.objectContaining({ place: 'Orange 1', latitude: -33.28, longitude: 149.1 }),
+        expect.objectContaining({ place: 'Orange 2', latitude: -33.29, longitude: 149.11 }),
       ]),
     );
   });
@@ -103,7 +103,7 @@ describe('getMapData', () => {
     const result = await getMapData({ startDate: '2026-01-01', endDate: '2026-01-31' });
 
     expect(result.markers).toEqual([]);
-    expect(result.unresolvedPlaces).toEqual([{ state: 'VIC', place: 'Melbourne', site: '' }]);
+    expect(result.unresolvedPlaces).toEqual([{ state: 'VIC', place: 'Melbourne' }]);
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
@@ -145,7 +145,7 @@ describe('getMapData', () => {
     const result = await getMapData({ startDate: '2026-01-01', endDate: '2026-01-31' });
 
     expect(result.markers).toEqual([]);
-    expect(result.unresolvedPlaces).toEqual([{ state: 'VIC', place: 'Melbourne', site: '' }]);
+    expect(result.unresolvedPlaces).toEqual([{ state: 'VIC', place: 'Melbourne' }]);
   });
 
   it('spaces out multiple uncached geocode lookups by ~1.1s to respect Nominatim rate limits', async () => {
