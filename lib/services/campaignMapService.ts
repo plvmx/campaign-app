@@ -29,7 +29,16 @@ function placeKey(state: string, place: string): string {
   return `${state.trim().toUpperCase()}::${place.trim().replace(/\s+/g, ' ').toLowerCase()}`;
 }
 
-async function fetchCoordinates(state: string, place: string): Promise<{ latitude: number; longitude: number } | null> {
+/**
+ * Calls the admin geocode-place API for a single place. Also used by the admin
+ * Manage State Places page to geocode a place immediately on create/edit, rather than
+ * waiting for it to first appear on the campaign map.
+ *
+ * `force` skips the API's coordinate cache and re-geocodes even if coordinates already
+ * exist — pass it when a place's `location` was just edited, since the old coordinates
+ * were computed from the previous location text and are now stale.
+ */
+export async function fetchPlaceCoordinates(state: string, place: string, force = false): Promise<{ latitude: number; longitude: number } | null> {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) return null;
 
@@ -39,7 +48,7 @@ async function fetchCoordinates(state: string, place: string): Promise<{ latitud
       'Content-Type': 'application/json',
       Authorization: `Bearer ${session.access_token}`,
     },
-    body: JSON.stringify({ state, place }),
+    body: JSON.stringify({ state, place, ...(force ? { force: true } : {}) }),
     // Guards against a slow geocode (e.g. an unreachable Nominatim) hanging the map indefinitely.
     signal: AbortSignal.timeout(10000),
   }).catch(() => null);
@@ -85,7 +94,7 @@ export async function getMapData(options: {
       // so a burst of new places doesn't get throttled into spurious "not found" results.
       if (!isFirstUncachedLookup) await new Promise(resolve => setTimeout(resolve, 1100));
       isFirstUncachedLookup = false;
-      coords = await fetchCoordinates(group.state, group.place) ?? undefined;
+      coords = await fetchPlaceCoordinates(group.state, group.place) ?? undefined;
     }
     if (coords) {
       markers.push({ state: group.state, place: group.place, latitude: coords.latitude, longitude: coords.longitude, campaigns: group.campaigns });

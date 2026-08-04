@@ -15,6 +15,7 @@ import {
   updateStatePlace,
   deleteStatePlace,
 } from '@/lib/services/statePlacesService';
+import { fetchPlaceCoordinates } from '@/lib/services/campaignMapService';
 
 export default function StatePlacesPage() {
   const router = useRouter();
@@ -64,13 +65,22 @@ export default function StatePlacesPage() {
     setIsSubmitting(true);
 
     try {
+      const action = editingId ? 'updated' : 'created';
       if (editingId) {
         await updateStatePlace(editingId, { state: formState.state, place: formState.place, location: formState.location });
-        setSuccess('State place updated successfully');
       } else {
         await createStatePlace({ state: formState.state, place: formState.place, location: formState.location });
-        setSuccess('State place created successfully');
       }
+
+      // Geocode immediately so the campaign map has coordinates ready right away, rather
+      // than waiting for this place to first appear on a map view. On edit, force a fresh
+      // geocode — the location text may have changed, so any cached coordinates are stale.
+      const coords = await fetchPlaceCoordinates(formState.state, formState.place, !!editingId);
+      setSuccess(
+        coords
+          ? `State place ${action} successfully. Map coordinates found and saved.`
+          : `State place ${action} successfully. Could not find map coordinates for this location yet — it will be retried the next time the campaign map loads.`,
+      );
 
       // Reset form
       setFormState({ state: '', place: '', location: '' });
