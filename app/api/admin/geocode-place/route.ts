@@ -15,6 +15,17 @@ import { normalizeName } from '@/lib/auth';
 import { enforceOrigin } from '@/lib/corsUtils';
 import { geocodePlace } from '@/lib/geocoding';
 
+// A few rows are administratively grouped under one state (`state_places.state`, which
+// drives who manages them / which campaign group they belong to) but are physically
+// located in another — geocoding with the row's own state then finds no match. Override
+// the state used in the *geocode query only* for these; the stored `state` column and
+// campaign grouping are untouched. Keep in sync with the same map in
+// scripts/backfill_state_places_coords.js.
+const GEOCODE_STATE_OVERRIDES: Record<string, string> = {
+  'f9811c68-0c9a-45e2-890a-e94fdcf0331c': 'NSW', // ACT :: Jervis Bay — physically on the NSW south coast
+  '4dd81bed-5b01-433b-91b6-629cbece75f9': 'NSW', // ACT :: Sanctuary Point — physically on the NSW south coast
+};
+
 export async function POST(request: NextRequest) {
   const corsBlock = enforceOrigin(request);
   if (corsBlock) return corsBlock;
@@ -95,7 +106,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'No location set for this place' }, { status: 404 });
   }
 
-  const geocoded = await geocodePlace(existing.location, state);
+  const geocodeState = (existing.id && GEOCODE_STATE_OVERRIDES[existing.id]) || state;
+  const geocoded = await geocodePlace(existing.location, geocodeState);
   if (!geocoded) {
     return NextResponse.json({ error: 'No coordinates found for this location' }, { status: 404 });
   }
