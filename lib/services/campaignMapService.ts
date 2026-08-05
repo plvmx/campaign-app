@@ -13,7 +13,9 @@ export interface MapMarker {
   place: string;
   latitude: number;
   longitude: number;
-  campaigns: Campaign[];
+  // Omitted for the state-places map (getStatePlacesMapData), which has no campaigns
+  // to attach — CampaignMap's popup falls back to a bare place/state label in that case.
+  campaigns?: Campaign[];
 }
 
 export interface MapDataResult {
@@ -101,6 +103,53 @@ export async function getMapData(options: {
     } else {
       unresolvedPlaces.push({ state: group.state, place: group.place });
     }
+  }
+
+  return { markers, unresolvedPlaces };
+}
+
+/**
+ * Builds map-ready data for every row in state_places (optionally filtered by state),
+ * for the admin "Show me where they are" map. Unlike getMapData, markers carry no
+ * campaigns — just the bare place/state pair for the popup.
+ *
+ * Two different state_places rows can still resolve to the same physical spot (e.g. a
+ * duplicate entered under a slightly different name), which would otherwise stack
+ * identical pins on top of each other — so markers are deduped by rounded coordinates
+ * (~1m precision) rather than by place name, keeping exactly one pin per location.
+ */
+export async function getStatePlacesMapData(options: { state?: string } = {}): Promise<MapDataResult> {
+  const places = await getStatePlaces(options.state);
+
+  const markers: MapMarker[] = [];
+  const unresolvedPlaces: { state: string; place: string }[] = [];
+  const seenCoordKeys = new Set<string>();
+
+  let isFirstUncachedLookup = true;
+  for (const place of places) {
+    let latitude = place.latitude ?? null;
+    let longitude = place.longitude ?? null;
+
+    if (latitude == null || longitude == null) {
+      // Nominatim's usage policy caps requests at 1/sec — space out uncached lookups
+      // so a burst of new places doesn't get throttled into spurious "not found" results.
+      if (!isFirstUncachedLookup) await new Promise(resolve => setTimeout(resolve, 1100));
+      isFirstUncachedLookup = false;
+      const coords = await fetchPlaceCoordinates(place.state, place.place);
+      latitude = coords?.latitude ?? null;
+      longitude = coords?.longitude ?? null;
+    }
+
+    if (latitude == null || longitude == null) {
+      unresolvedPlaces.push({ state: place.state, place: place.place });
+      continue;
+    }
+
+    const coordKey = `${latitude.toFixed(5)},${longitude.toFixed(5)}`;
+    if (seenCoordKeys.has(coordKey)) continue;
+    seenCoordKeys.add(coordKey);
+
+    markers.push({ state: place.state, place: place.place, latitude, longitude });
   }
 
   return { markers, unresolvedPlaces };

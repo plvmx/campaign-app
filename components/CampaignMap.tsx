@@ -71,17 +71,21 @@ export default function CampaignMap({ center, zoom, markers }: CampaignMapProps)
       {markers.map(marker => (
         <Marker key={`${marker.state}::${marker.place}`} position={[marker.latitude, marker.longitude]} icon={markerIcon}>
           <Popup>
-            <div className="text-sm">
-              <p className="font-semibold">{marker.place}, {marker.state}</p>
-              <p className="mt-1">{marker.campaigns.length} upcoming campaign{marker.campaigns.length === 1 ? '' : 's'}</p>
-              <ul className="mt-1 max-h-32 list-disc overflow-y-auto pl-4">
-                {marker.campaigns.map(c => (
-                  <li key={c.id}>
-                    {c.date} · {c.time} · {c.leader}
-                  </li>
-                ))}
-              </ul>
-            </div>
+            {marker.campaigns ? (
+              <div className="text-sm">
+                <p className="font-semibold">{marker.place}, {marker.state}</p>
+                <p className="mt-1">{marker.campaigns.length} upcoming campaign{marker.campaigns.length === 1 ? '' : 's'}</p>
+                <ul className="mt-1 max-h-32 list-disc overflow-y-auto pl-4">
+                  {marker.campaigns.map(c => (
+                    <li key={c.id}>
+                      {c.date} · {c.time} · {c.leader}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : (
+              <p className="text-sm font-semibold">{marker.place} {marker.state}</p>
+            )}
           </Popup>
         </Marker>
       ))}
