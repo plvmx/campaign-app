@@ -15,6 +15,9 @@ export interface NearbyCampaignsOptions {
 }
 
 export interface NearbyMapMarker extends MapMarker {
+  // Narrowed back to required: these markers are always built from getMapData's
+  // campaign-grouped markers below, which populate campaigns unconditionally.
+  campaigns: NonNullable<MapMarker['campaigns']>;
   /** Straight-line distance from the centre, in km, rounded to one decimal. */
   distanceKm: number;
 }
@@ -58,7 +61,9 @@ export async function getNearbyCampaigns(
   for (const marker of markers) {
     const distanceKm = haversineKm(center, { lat: marker.latitude, lng: marker.longitude });
     if (distanceKm <= radiusKm) {
-      nearby.push({ ...marker, distanceKm: Math.round(distanceKm * 10) / 10 });
+      // getMapData always populates campaigns; the fallback only satisfies the type
+      // checker for MapMarker's now-optional field, never actually engages.
+      nearby.push({ ...marker, campaigns: marker.campaigns ?? [], distanceKm: Math.round(distanceKm * 10) / 10 });
     }
   }
 

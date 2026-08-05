@@ -13,7 +13,7 @@ vi.mock('@/lib/services/statePlacesService', () => ({
 import { supabase } from '@/lib/supabaseClient';
 import { getCampaignsByDateRange } from '@/lib/services/campaignService';
 import { getStatePlaces } from '@/lib/services/statePlacesService';
-import { getMapData, fetchPlaceCoordinates } from '../campaignMapService';
+import { getMapData, getStatePlacesMapData, fetchPlaceCoordinates } from '../campaignMapService';
 import type { Campaign } from '@/lib/types';
 import type { StatePlace } from '../statePlacesService';
 
@@ -58,7 +58,7 @@ describe('getMapData', () => {
     const result = await getMapData({ startDate: '2026-01-01', endDate: '2026-01-31' });
 
     expect(result.markers).toHaveLength(1);
-    expect(result.markers[0].campaigns.map((c) => c.id).sort()).toEqual(['c1', 'c2']);
+    expect(result.markers[0]?.campaigns?.map((c) => c.id).sort()).toEqual(['c1', 'c2']);
   });
 
   it('keeps distinct numbered sub-locations as separate markers', async () => {
@@ -170,6 +170,83 @@ describe('getMapData', () => {
 
     expect(global.fetch).toHaveBeenCalledTimes(2);
     expect(result.markers).toHaveLength(2);
+  });
+});
+
+describe('getStatePlacesMapData', () => {
+  it('builds one marker per place using cached coordinates, without campaigns', async () => {
+    mockGetStatePlaces.mockResolvedValue([
+      makeStatePlace({ id: 'p1', place: 'Melbourne', latitude: -37.8, longitude: 144.9 }),
+      makeStatePlace({ id: 'p2', place: 'Geelong', latitude: -38.15, longitude: 144.36 }),
+    ]);
+
+    const result = await getStatePlacesMapData();
+
+    expect(result.markers).toHaveLength(2);
+    expect(result.markers.every((m) => m.campaigns === undefined)).toBe(true);
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('collapses two places that resolve to the same coordinates into a single pin', async () => {
+    mockGetStatePlaces.mockResolvedValue([
+      makeStatePlace({ id: 'p1', place: 'Chadstone', latitude: -37.888, longitude: 145.085 }),
+      makeStatePlace({ id: 'p2', place: 'Chadstone Shopping Centre', latitude: -37.888, longitude: 145.085 }),
+    ]);
+
+    const result = await getStatePlacesMapData();
+
+    expect(result.markers).toHaveLength(1);
+  });
+
+  it('keeps distinct places with different coordinates as separate pins', async () => {
+    mockGetStatePlaces.mockResolvedValue([
+      makeStatePlace({ id: 'p1', place: 'Orange 1', latitude: -33.28, longitude: 149.1 }),
+      makeStatePlace({ id: 'p2', place: 'Orange 2', latitude: -33.29, longitude: 149.11 }),
+    ]);
+
+    const result = await getStatePlacesMapData();
+
+    expect(result.markers).toHaveLength(2);
+  });
+
+  it('geocodes a place with no cached coordinates via the admin API', async () => {
+    mockGetStatePlaces.mockResolvedValue([makeStatePlace({ latitude: null, longitude: null })]);
+    mockGetSession.mockResolvedValue({
+      data: { session: { access_token: 'tok123' } },
+      error: null,
+    } as never);
+    vi.mocked(global.fetch).mockResolvedValue({
+      ok: true,
+      json: async () => ({ latitude: -37.8, longitude: 144.9 }),
+    } as Response);
+
+    const result = await getStatePlacesMapData();
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      '/api/admin/geocode-place',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(result.markers).toEqual([
+      expect.objectContaining({ state: 'VIC', place: 'Melbourne', latitude: -37.8, longitude: 144.9 }),
+    ]);
+  });
+
+  it('marks a place unresolved when coordinates cannot be found', async () => {
+    mockGetStatePlaces.mockResolvedValue([makeStatePlace({ latitude: null, longitude: null })]);
+    mockGetSession.mockResolvedValue({ data: { session: null }, error: null } as never);
+
+    const result = await getStatePlacesMapData();
+
+    expect(result.markers).toEqual([]);
+    expect(result.unresolvedPlaces).toEqual([{ state: 'VIC', place: 'Melbourne' }]);
+  });
+
+  it('passes the state filter through to getStatePlaces', async () => {
+    mockGetStatePlaces.mockResolvedValue([]);
+
+    await getStatePlacesMapData({ state: 'NSW' });
+
+    expect(mockGetStatePlaces).toHaveBeenCalledWith('NSW');
   });
 });
 
