@@ -6,11 +6,14 @@ import { generateAndDownloadSlides } from '@/lib/slideGenerator';
 import { generateAndDownloadReport } from '@/lib/reportGenerator';
 import { generateAndDownloadAriseList } from '@/lib/ariseGenerator';
 import { trackEvent } from '@/lib/analytics';
+import { AUSTRALIAN_STATES } from '@/lib/constants';
 
 interface Props {
   adminStatus: string | null;
   userState: string | null;
 }
+
+const ALL_STATES = 'ALL';
 
 export default function AdminQuickActions({ adminStatus, userState }: Props) {
   const [isGeneratingSlides, setIsGeneratingSlides] = useState(false);
@@ -18,6 +21,9 @@ export default function AdminQuickActions({ adminStatus, userState }: Props) {
   const [isGeneratingArise, setIsGeneratingArise] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState('');
+  const [downloadState, setDownloadState] = useState<string>(ALL_STATES);
+
+  const stateFilter = downloadState === ALL_STATES ? null : downloadState;
 
   const isAnyGenerating = isGeneratingSlides || isGeneratingReport || isGeneratingArise;
 
@@ -36,8 +42,8 @@ export default function AdminQuickActions({ adminStatus, userState }: Props) {
     setProgress('');
     try {
       const { upcomingCampaignStart } = calculateCampaignDates();
-      await generateAndDownloadSlides({ supabase, startDate: upcomingCampaignStart, adminStatus, userState, onProgress: setProgress });
-      trackEvent('generate_slides', { state: userState });
+      await generateAndDownloadSlides({ supabase, startDate: upcomingCampaignStart, adminStatus, userState, stateFilter, onProgress: setProgress });
+      trackEvent('generate_slides', { state: stateFilter ?? userState });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to generate campaign lists');
     } finally {
@@ -59,8 +65,9 @@ export default function AdminQuickActions({ adminStatus, userState }: Props) {
         endDate: formatDateForDb(pastEnd),
         adminStatus,
         userState,
+        stateFilter,
       });
-      trackEvent('generate_report', { state: userState });
+      trackEvent('generate_report', { state: stateFilter ?? userState });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to generate campaign results');
     } finally {
@@ -74,8 +81,8 @@ export default function AdminQuickActions({ adminStatus, userState }: Props) {
     setProgress('');
     try {
       const { upcomingCampaignStart } = calculateCampaignDates();
-      await generateAndDownloadAriseList({ supabase, startDate: upcomingCampaignStart, adminStatus, userState, onProgress: setProgress });
-      trackEvent('generate_week1', { state: userState });
+      await generateAndDownloadAriseList({ supabase, startDate: upcomingCampaignStart, adminStatus, userState, stateFilter, onProgress: setProgress });
+      trackEvent('generate_week1', { state: stateFilter ?? userState });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to generate Week 1 Campaigns list');
     } finally {
@@ -98,6 +105,18 @@ export default function AdminQuickActions({ adminStatus, userState }: Props) {
         <button onClick={handleArise} disabled={isAnyGenerating} className={btnClass(isGeneratingArise)}>
           {isGeneratingArise ? 'Generating…' : 'Week 1 Campaigns'}
         </button>
+        <select
+          value={downloadState}
+          onChange={e => setDownloadState(e.target.value)}
+          disabled={isAnyGenerating}
+          aria-label="Filter downloads by state"
+          className="rounded-md border-2 border-gray-800 bg-white px-3 py-2 text-sm font-bold text-purple-900 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 disabled:opacity-40 dark:border-gray-600 dark:bg-gray-800 dark:text-purple-200"
+        >
+          <option value={ALL_STATES}>All States</option>
+          {AUSTRALIAN_STATES.map(state => (
+            <option key={state} value={state}>{state}</option>
+          ))}
+        </select>
       </div>
       {progress && !error && <p className="mt-2 text-xs text-purple-700 dark:text-purple-300">{progress}</p>}
       {error && <p className="mt-2 text-xs font-medium text-red-600 dark:text-red-400">⚠ {error}</p>}

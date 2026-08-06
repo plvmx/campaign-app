@@ -15,8 +15,7 @@ import type { AriseCampaign } from '@/lib/ariseLayout';
 async function fetchCampaignsForDate(
   client: SupabaseClient,
   date: Date,
-  adminStatus: string | null | undefined,
-  userState: string | null | undefined,
+  filterState: string | null,
 ): Promise<AriseCampaign[]> {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -30,8 +29,8 @@ async function fetchCampaignsForDate(
     .order('place', { ascending: true })
     .order('time',  { ascending: true });
 
-  if (adminStatus === 'SR' && userState) {
-    q = q.eq('state', userState.toUpperCase().trim());
+  if (filterState) {
+    q = q.eq('state', filterState);
   }
 
   const { data } = await q;
@@ -48,6 +47,8 @@ export interface GenerateAriseOptions {
   startDate: Date;
   adminStatus?: string | null;
   userState?: string | null;
+  /** Explicit state to filter to, chosen by a full admin. Overrides the SR role-based filter. */
+  stateFilter?: string | null;
   onProgress?: (msg: string) => void;
 }
 
@@ -56,7 +57,11 @@ export interface GenerateAriseOptions {
  * JPEG, and triggers a browser download.
  */
 export async function generateAndDownloadAriseList(options: GenerateAriseOptions): Promise<void> {
-  const { supabase: client, startDate, adminStatus, userState, onProgress } = options;
+  const { supabase: client, startDate, adminStatus, userState, stateFilter, onProgress } = options;
+
+  const explicitState = stateFilter && stateFilter.trim() ? stateFilter.toUpperCase().trim() : null;
+  const roleState = adminStatus === 'SR' && userState ? userState.toUpperCase().trim() : null;
+  const filterState = explicitState || roleState;
 
   // Build the 8 date targets: week-1 days 0–6, week-2 Mon = day 7
   const dates = Array.from({ length: 8 }, (_, i) => {
@@ -69,7 +74,7 @@ export async function generateAndDownloadAriseList(options: GenerateAriseOptions
   const allCampaigns: AriseCampaign[][] = [];
   for (let i = 0; i < dates.length; i++) {
     onProgress?.(`Fetching day ${i + 1} of ${dates.length}…`);
-    allCampaigns.push(await fetchCampaignsForDate(client, dates[i], adminStatus, userState));
+    allCampaigns.push(await fetchCampaignsForDate(client, dates[i], filterState));
   }
 
   const canvas = await renderAriseCanvas(allCampaigns, dates, onProgress);
@@ -86,7 +91,7 @@ export async function generateAndDownloadAriseList(options: GenerateAriseOptions
   const url  = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href     = url;
-  link.download = `${formatDownloadDate(new Date())}_Week1_Campaigns.jpg`;
+  link.download = `${formatDownloadDate(new Date())}_Week1_Campaigns${explicitState ? `_${explicitState}` : ''}.jpg`;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
