@@ -50,6 +50,8 @@ export interface GenerateReportOptions {
   endDate: string;
   adminStatus?: string | null;
   userState?: string | null;
+  /** Explicit state to filter to, chosen by a full admin. Overrides the SR role-based filter. */
+  stateFilter?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -57,7 +59,11 @@ export interface GenerateReportOptions {
 // ---------------------------------------------------------------------------
 
 async function fetchReportRows(options: GenerateReportOptions): Promise<ReportRow[]> {
-  const { supabase: client, startDate, endDate, adminStatus, userState } = options;
+  const { supabase: client, startDate, endDate, adminStatus, userState, stateFilter } = options;
+
+  const explicitState = stateFilter && stateFilter.trim() ? stateFilter.toUpperCase().trim() : null;
+  const roleState = adminStatus === 'SR' && userState ? userState.toUpperCase().trim() : null;
+  const filterState = explicitState || roleState;
 
   let campaignsQ = client
     .from('campaigns')
@@ -68,8 +74,8 @@ async function fetchReportRows(options: GenerateReportOptions): Promise<ReportRo
     .order('state', { ascending: true })
     .order('place', { ascending: true });
 
-  if (adminStatus === 'SR' && userState) {
-    campaignsQ = campaignsQ.eq('state', userState.toUpperCase().trim());
+  if (filterState) {
+    campaignsQ = campaignsQ.eq('state', filterState);
   }
 
   const { data: campaigns, error: campaignsError } = await campaignsQ;
@@ -126,11 +132,15 @@ async function fetchReportRows(options: GenerateReportOptions): Promise<ReportRo
 /**
  * Renders an array of already-built ReportRows to JPEG pages and downloads as ZIP.
  * Used by the generate-report page where rows may have been manually edited.
+ *
+ * `stateSuffix`, when provided, is appended to the downloaded filename (e.g. a
+ * state explicitly chosen to filter the export by).
  */
-export async function downloadReportRows(rows: ReportRow[]): Promise<void> {
+export async function downloadReportRows(rows: ReportRow[], stateSuffix?: string | null): Promise<void> {
   const chunkCount = Math.ceil(rows.length / LINES_PER_JPEG);
   const zip = new JSZip();
   const datePrefix = formatDownloadDate(new Date());
+  const nameSuffix = stateSuffix ? `_${stateSuffix}` : '';
 
   for (let part = 0; part < chunkCount; part++) {
     const chunk  = rows.slice(part * LINES_PER_JPEG, (part + 1) * LINES_PER_JPEG);
@@ -138,7 +148,7 @@ export async function downloadReportRows(rows: ReportRow[]): Promise<void> {
     const blob   = await canvasToJpegBlob(canvas);
     const suffix = chunkCount > 1 ? `_part${part + 1}` : '';
     zip.file(
-      `${datePrefix}_Campaign_Results${suffix}.jpeg`,
+      `${datePrefix}_Campaign_Results${nameSuffix}${suffix}.jpeg`,
       await blob.arrayBuffer(),
     );
   }
@@ -147,7 +157,7 @@ export async function downloadReportRows(rows: ReportRow[]): Promise<void> {
   const url  = URL.createObjectURL(zipBlob);
   const link = document.createElement('a');
   link.href     = url;
-  link.download = `${datePrefix}_Campaign_Results.zip`;
+  link.download = `${datePrefix}_Campaign_Results${nameSuffix}.zip`;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
@@ -160,5 +170,8 @@ export async function downloadReportRows(rows: ReportRow[]): Promise<void> {
  */
 export async function generateAndDownloadReport(options: GenerateReportOptions): Promise<void> {
   const rows = await fetchReportRows(options);
-  await downloadReportRows(rows);
+  const explicitState = options.stateFilter && options.stateFilter.trim()
+    ? options.stateFilter.toUpperCase().trim()
+    : null;
+  await downloadReportRows(rows, explicitState);
 }

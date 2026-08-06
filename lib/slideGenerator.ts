@@ -55,6 +55,8 @@ export interface GenerateSlidesOptions {
   startDate: Date;
   adminStatus?: string | null;
   userState?: string | null;
+  /** Explicit state to filter to, chosen by a full admin. Overrides the SR role-based filter. */
+  stateFilter?: string | null;
   /** Optional callback invoked with status messages as generation proceeds. */
   onProgress?: (msg: string) => void;
 }
@@ -78,8 +80,7 @@ function dateHeadingsFrom(startDate: Date): Date[] {
 async function fetchCampaigns(
   client: SupabaseClient,
   date: Date,
-  adminStatus: string | null | undefined,
-  userState: string | null | undefined,
+  filterState: string | null,
 ): Promise<SlideCampaign[]> {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -94,8 +95,8 @@ async function fetchCampaigns(
     .order('place', { ascending: true })
     .order('time', { ascending: true });
 
-  if (adminStatus === 'SR' && userState) {
-    q = q.eq('state', userState.toUpperCase().trim());
+  if (filterState) {
+    q = q.eq('state', filterState);
   }
   const { data } = await q;
   return (data ?? []) as SlideCampaign[];
@@ -188,8 +189,7 @@ async function renderSlide(
   startDateIndex: number,
   startCampaignIndex: number,
   dateHeadings: Date[],
-  adminStatus: string | null | undefined,
-  userState: string | null | undefined,
+  filterState: string | null,
 ): Promise<{ canvas: HTMLCanvasElement; nextDateIndex: number | null; nextCampaignIndex: number }> {
   const canvas = document.createElement('canvas');
   canvas.width  = SLIDE_WIDTH;
@@ -250,7 +250,7 @@ async function renderSlide(
   for (let i = startDateIndex; i < dateHeadings.length; i++) {
     const date = dateHeadings[i];
     const week = i < 7 ? 1 : 2;
-    const campaigns = await fetchCampaigns(client, date, adminStatus, userState);
+    const campaigns = await fetchCampaigns(client, date, filterState);
 
     if (campaigns.length === 0) { previousWeek = week; currentCampaignIndex = 0; continue; }
 
@@ -365,7 +365,11 @@ async function renderSlide(
  * packages them into a ZIP, and triggers a browser download.
  */
 export async function generateAndDownloadSlides(options: GenerateSlidesOptions): Promise<void> {
-  const { supabase: client, startDate, adminStatus, userState, onProgress } = options;
+  const { supabase: client, startDate, adminStatus, userState, stateFilter, onProgress } = options;
+
+  const explicitState = stateFilter && stateFilter.trim() ? stateFilter.toUpperCase().trim() : null;
+  const roleState = adminStatus === 'SR' && userState ? userState.toUpperCase().trim() : null;
+  const filterState = explicitState || roleState;
 
   const dateHeadings = dateHeadingsFrom(startDate);
   const slides: Blob[] = [];
@@ -375,7 +379,7 @@ export async function generateAndDownloadSlides(options: GenerateSlidesOptions):
 
   while (slideNum <= 20) {
     onProgress?.(`Generating slide ${slideNum}…`);
-    const result = await renderSlide(client, dateIdx, campIdx, dateHeadings, adminStatus, userState);
+    const result = await renderSlide(client, dateIdx, campIdx, dateHeadings, filterState);
 
     const blob = await new Promise<Blob>((resolve, reject) => {
       result.canvas.toBlob(
@@ -407,7 +411,7 @@ export async function generateAndDownloadSlides(options: GenerateSlidesOptions):
   const url  = URL.createObjectURL(zipBlob);
   const link = document.createElement('a');
   link.href     = url;
-  link.download = `${formatDownloadDate(new Date())}_All_Campaigns.zip`;
+  link.download = `${formatDownloadDate(new Date())}_All_Campaigns${explicitState ? `_${explicitState}` : ''}.zip`;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
