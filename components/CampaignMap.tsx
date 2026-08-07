@@ -57,7 +57,7 @@ export default function CampaignMap({ center, zoom, markers }: CampaignMapProps)
       <TileErrorBanner />
       <FlyTo center={center} zoom={zoom} />
       {markers.map(marker => (
-        <Marker key={`${marker.state}::${marker.place}`} position={[marker.latitude, marker.longitude]} icon={getStateMarkerIcon(marker.state)}>
+        <Marker key={`${marker.state}::${marker.place}`} position={[marker.latitude, marker.longitude]} icon={getStateMarkerIcon(marker.state, marker.place)}>
           <Popup>
             {marker.campaigns ? (
               <div className="text-sm">

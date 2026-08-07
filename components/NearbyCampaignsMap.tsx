@@ -98,7 +98,7 @@ export default function NearbyCampaignsMap({ center, radiusKm, markers }: Nearby
         <Marker
           key={`${marker.state}::${marker.place}`}
           position={[marker.latitude, marker.longitude]}
-          icon={getStateMarkerIcon(marker.state)}
+          icon={getStateMarkerIcon(marker.state, marker.place)}
         >
           <Popup>
             <div className="text-sm">
