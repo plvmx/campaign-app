@@ -6,6 +6,7 @@ import { MapContainer, TileLayer, Marker, Popup, Circle, useMap } from 'react-le
 import L from 'leaflet';
 import type { NearbyMapMarker } from '@/lib/services/nearbyCampaignsService';
 import { getStateMarkerIcon } from '@/lib/leafletMarkerIcon';
+import { formatCampaignDateTimeDisplay, getEarliestCampaign } from '@/lib/campaignUtils';
 
 // Distinct centre marker drawn as a CSS pin so it can't be confused with a campaign.
 const centerIcon = L.divIcon({
@@ -114,27 +115,26 @@ export default function NearbyCampaignsMap({ center, radiusKm, markers }: Nearby
           </div>
         </Popup>
       </Marker>
-      {markers.map(marker => (
-        <Marker
-          key={`${marker.state}::${marker.place}`}
-          position={[marker.latitude, marker.longitude]}
-          icon={getStateMarkerIcon(marker.state, marker.place)}
-        >
-          <Popup>
-            <div className="text-sm">
-              <p className="font-semibold">{marker.place}, {marker.state}</p>
-              <p className="mt-1">{marker.distanceKm} km away · {marker.campaigns.length} campaign{marker.campaigns.length === 1 ? '' : 's'}</p>
-              <ul className="mt-1 max-h-32 list-disc overflow-y-auto pl-4">
-                {marker.campaigns.map(c => (
-                  <li key={c.id}>
-                    {c.date} · {c.time} · {c.leader}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </Popup>
-        </Marker>
-      ))}
+      {markers.map(marker => {
+        const firstCampaign = getEarliestCampaign(marker.campaigns);
+        if (!firstCampaign) return null;
+        return (
+          <Marker
+            key={`${marker.state}::${marker.place}`}
+            position={[marker.latitude, marker.longitude]}
+            icon={getStateMarkerIcon(marker.state, marker.place)}
+          >
+            <Popup>
+              <div className="text-sm">
+                <p className="font-semibold">{marker.place}, {marker.state}</p>
+                <p className="mt-1">{marker.distanceKm} km away</p>
+                <p className="mt-1">{formatCampaignDateTimeDisplay(firstCampaign.date, firstCampaign.time)}</p>
+                <p>Leader: {firstCampaign.leader}</p>
+              </div>
+            </Popup>
+          </Marker>
+        );
+      })}
     </MapContainer>
   );
 }

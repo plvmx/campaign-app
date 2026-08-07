@@ -1,6 +1,7 @@
 /**
  * Shared utility functions for campaign data formatting and parsing
  */
+import { formatSlideDateText } from '@/lib/slideLayout';
 
 /**
  * Parse campaign time string (HH:MM or HH:MM:SS or ISO timestamp) and return as display string (e.g. "2:30 PM")
@@ -29,4 +30,31 @@ export function isCampaignPast(date: string, time: string): boolean {
   const [hours, minutes] = (timeStr || '0:0').split(':').map(Number);
   campaignDate.setHours(hours || 0, minutes || 0, 0, 0);
   return campaignDate < new Date();
+}
+
+/**
+ * Combines a campaign's date and time into a single readable line, e.g.
+ * "Saturday 12th July 10:00 AM" — used in map marker popups to show a
+ * campaign's date/time without a separate date/time split.
+ */
+export function formatCampaignDateTimeDisplay(date: string, time: string): string {
+  const [y, m, d] = date.split('-').map(Number);
+  const dateText = formatSlideDateText(new Date(y, m - 1, d));
+  const timeText = formatCampaignTimeDisplay(time);
+  return `${dateText} ${timeText}`;
+}
+
+/**
+ * Returns the chronologically earliest campaign in a list (by date, then
+ * time). Used by map marker popups to show only the first upcoming campaign
+ * for a location — sorts explicitly rather than trusting array order, since
+ * getCampaignsByDateRange only guarantees ordering by date, not by time
+ * within a date. Returns undefined for an empty list.
+ */
+export function getEarliestCampaign<T extends { date: string; time: string }>(campaigns: T[]): T | undefined {
+  return campaigns.reduce<T | undefined>((earliest, c) => {
+    if (!earliest) return c;
+    if (c.date !== earliest.date) return c.date < earliest.date ? c : earliest;
+    return c.time < earliest.time ? c : earliest;
+  }, undefined);
 }

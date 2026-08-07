@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
 import type { MapMarker } from '@/lib/services/campaignMapService';
 import { getStateMarkerIcon } from '@/lib/leafletMarkerIcon';
+import { formatCampaignDateTimeDisplay, getEarliestCampaign } from '@/lib/campaignUtils';
 
 interface FlyToProps {
   center: [number, number];
@@ -56,27 +57,24 @@ export default function CampaignMap({ center, zoom, markers }: CampaignMapProps)
       />
       <TileErrorBanner />
       <FlyTo center={center} zoom={zoom} />
-      {markers.map(marker => (
-        <Marker key={`${marker.state}::${marker.place}`} position={[marker.latitude, marker.longitude]} icon={getStateMarkerIcon(marker.state, marker.place)}>
-          <Popup>
-            {marker.campaigns ? (
-              <div className="text-sm">
-                <p className="font-semibold">{marker.place}, {marker.state}</p>
-                <p className="mt-1">{marker.campaigns.length} upcoming campaign{marker.campaigns.length === 1 ? '' : 's'}</p>
-                <ul className="mt-1 max-h-32 list-disc overflow-y-auto pl-4">
-                  {marker.campaigns.map(c => (
-                    <li key={c.id}>
-                      {c.date} · {c.time} · {c.leader}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : (
-              <p className="text-sm font-semibold">{marker.place} {marker.state}</p>
-            )}
-          </Popup>
-        </Marker>
-      ))}
+      {markers.map(marker => {
+        const firstCampaign = marker.campaigns ? getEarliestCampaign(marker.campaigns) : undefined;
+        return (
+          <Marker key={`${marker.state}::${marker.place}`} position={[marker.latitude, marker.longitude]} icon={getStateMarkerIcon(marker.state, marker.place)}>
+            <Popup>
+              {firstCampaign ? (
+                <div className="text-sm">
+                  <p className="font-semibold">{marker.place}, {marker.state}</p>
+                  <p className="mt-1">{formatCampaignDateTimeDisplay(firstCampaign.date, firstCampaign.time)}</p>
+                  <p>Leader: {firstCampaign.leader}</p>
+                </div>
+              ) : (
+                <p className="text-sm font-semibold">{marker.place} {marker.state}</p>
+              )}
+            </Popup>
+          </Marker>
+        );
+      })}
     </MapContainer>
   );
 }
