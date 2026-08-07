@@ -3,20 +3,8 @@
 import 'leaflet/dist/leaflet.css';
 import { useEffect, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
-import L from 'leaflet';
 import type { MapMarker } from '@/lib/services/campaignMapService';
-
-// Leaflet's default marker icon assets don't resolve correctly through Next.js's
-// bundler, so they're served from /public/leaflet instead (also keeps them same-origin
-// for the CSP img-src policy).
-const markerIcon = L.icon({
-  iconUrl: '/leaflet/marker-icon.png',
-  iconRetinaUrl: '/leaflet/marker-icon-2x.png',
-  shadowUrl: '/leaflet/marker-shadow.png',
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-});
+import { getStateMarkerIcon } from '@/lib/leafletMarkerIcon';
 
 interface FlyToProps {
   center: [number, number];
@@ -69,7 +57,7 @@ export default function CampaignMap({ center, zoom, markers }: CampaignMapProps)
       <TileErrorBanner />
       <FlyTo center={center} zoom={zoom} />
       {markers.map(marker => (
-        <Marker key={`${marker.state}::${marker.place}`} position={[marker.latitude, marker.longitude]} icon={markerIcon}>
+        <Marker key={`${marker.state}::${marker.place}`} position={[marker.latitude, marker.longitude]} icon={getStateMarkerIcon(marker.state)}>
           <Popup>
             {marker.campaigns ? (
               <div className="text-sm">
