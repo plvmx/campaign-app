@@ -5,17 +5,7 @@ import { useEffect, useMemo } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Circle, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import type { NearbyMapMarker } from '@/lib/services/nearbyCampaignsService';
-
-// Default marker icon — Leaflet's bundled assets don't resolve through Next.js's
-// bundler, so they're served from /public/leaflet (same-origin for CSP).
-const campaignIcon = L.icon({
-  iconUrl: '/leaflet/marker-icon.png',
-  iconRetinaUrl: '/leaflet/marker-icon-2x.png',
-  shadowUrl: '/leaflet/marker-shadow.png',
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-});
+import { getStateMarkerIcon } from '@/lib/leafletMarkerIcon';
 
 // Distinct centre marker drawn as a CSS pin so it can't be confused with a campaign.
 const centerIcon = L.divIcon({
@@ -108,7 +98,7 @@ export default function NearbyCampaignsMap({ center, radiusKm, markers }: Nearby
         <Marker
           key={`${marker.state}::${marker.place}`}
           position={[marker.latitude, marker.longitude]}
-          icon={campaignIcon}
+          icon={getStateMarkerIcon(marker.state)}
         >
           <Popup>
             <div className="text-sm">
