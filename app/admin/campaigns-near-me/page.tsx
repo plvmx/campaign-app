@@ -202,7 +202,14 @@ export default function CampaignsNearMePage() {
 
   return (
     <MobileLayout>
-      <div className="flex h-[calc(100vh-4rem)] flex-col p-4">
+      {/* 100dvh (not vh) so mobile browser chrome that shows/hides on scroll doesn't
+          throw the height off. Subtracts the header (4rem), the fixed bottom nav
+          (5rem, matching MobileLayout's own pb-20 reservation for it), and the
+          dismissible PWA install banner's live height (--pwa-banner-height, set by
+          PWAInstallPrompt — it renders outside MobileLayout in the root layout and
+          pushes this page down by a variable amount) — otherwise the map renders
+          underneath the Home/Metrics/Admin buttons whenever that banner is showing. */}
+      <div className="flex h-[calc(100dvh-var(--pwa-banner-height,0px)-4rem-5rem)] flex-col p-4">
         <div className="mb-3 flex items-start justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Campaigns Near Me</h1>
