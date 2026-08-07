@@ -5,7 +5,6 @@ import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import MobileLayout from '@/components/MobileLayout';
 import LoadingSpinner from '@/components/LoadingSpinner';
-import MapStateLegend from '@/components/MapStateLegend';
 import { useUser } from '@/contexts/UserContext';
 import { getTodayDateString, formatDateForDb } from '@/lib/campaignDates';
 import { getUserLocation } from '@/lib/location';
@@ -296,8 +295,6 @@ export default function CampaignsNearMePage() {
             {markers.length} campaign{markers.length === 1 ? '' : 's'} within {RADIUS_KM} km
           </div>
         )}
-
-        <MapStateLegend />
 
         <div className="relative flex-1 overflow-hidden rounded-lg border-2 border-gray-800 dark:border-gray-600">
           {(isLoadingMap || isLocating) && (

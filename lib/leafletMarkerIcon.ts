@@ -5,6 +5,10 @@
  * in the app (Campaign Map, Campaigns Near Me, State Places Map) so a pin's color
  * matches its state at a glance, consistently with slides and badges elsewhere.
  *
+ * Rendered as a translucent halo with a solid dot at its centre — unlike a teardrop
+ * pin, the icon's own centre point *is* the location, so `iconAnchor` is the circle's
+ * centre rather than its bottom tip.
+ *
  * Only imported by map components that are dynamically loaded with `ssr: false`
  * (CampaignMap, NearbyCampaignsMap) since `leaflet` touches `window` at import time.
  */
@@ -15,6 +19,9 @@ import { getSlideStateColor } from '@/lib/slideLayout';
 // across every marker on the map instead of rebuilding an <svg> string per marker.
 const iconCache = new Map<string, L.DivIcon>();
 
+const SIZE = 22;
+const CENTER = SIZE / 2;
+
 export function getStateMarkerIcon(state: string): L.DivIcon {
   const key = state.trim().toUpperCase();
   const cached = iconCache.get(key);
@@ -23,13 +30,13 @@ export function getStateMarkerIcon(state: string): L.DivIcon {
   const color = getSlideStateColor(key);
   const icon = L.divIcon({
     className: 'state-color-marker',
-    html: `<svg width="25" height="41" viewBox="0 0 25 41" xmlns="http://www.w3.org/2000/svg">
-      <path d="M12.5 0C5.6 0 0 5.6 0 12.5c0 9.6 12.5 28.5 12.5 28.5S25 22.1 25 12.5C25 5.6 19.4 0 12.5 0z" fill="${color}" stroke="#1f2937" stroke-width="1.25"/>
-      <circle cx="12.5" cy="12.5" r="4.5" fill="#fff"/>
+    html: `<svg width="${SIZE}" height="${SIZE}" viewBox="0 0 ${SIZE} ${SIZE}" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="${CENTER}" cy="${CENTER}" r="${CENTER - 1}" fill="${color}" fill-opacity="0.35" stroke="${color}" stroke-width="1.5"/>
+      <circle cx="${CENTER}" cy="${CENTER}" r="4" fill="${color}"/>
     </svg>`,
-    iconSize: [25, 41],
-    iconAnchor: [12, 41],
-    popupAnchor: [1, -34],
+    iconSize: [SIZE, SIZE],
+    iconAnchor: [CENTER, CENTER],
+    popupAnchor: [0, -CENTER],
   });
   iconCache.set(key, icon);
   return icon;
