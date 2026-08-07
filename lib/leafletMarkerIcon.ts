@@ -7,10 +7,10 @@
  *
  * Rendered as a translucent halo ring around a tiny centre point — the point's
  * diameter matches the ring's own border thickness, so it reads as a precise mark
- * rather than a fat dot — with the place name printed directly beneath it, centred
- * on the ring. The icon's own centre point *is* the location, so `iconAnchor` is the
- * ring's centre; the label is allowed to overflow below the icon's nominal box,
- * which Leaflet renders without clipping.
+ * rather than a fat dot — with the place name overlaid in black directly on top of
+ * the ring, centred on it (a white outline keeps it legible over darker ring colors
+ * like NSW's black). The icon's own centre point *is* the location, so `iconAnchor`
+ * is the ring's centre.
  *
  * Only imported by map components that are dynamically loaded with `ssr: false`
  * (CampaignMap, NearbyCampaignsMap) since `leaflet` touches `window` at import time.
@@ -20,7 +20,7 @@ import { getSlideStateColor } from '@/lib/slideLayout';
 
 // Leaflet icons are immutable once built, so one instance per state+place can be
 // shared across every marker on the map instead of rebuilding an <svg>/label string
-// per marker. Keyed on place too now that the place name is baked into the icon.
+// per marker. Keyed on place too since the place name is baked into the icon.
 const iconCache = new Map<string, L.DivIcon>();
 
 const SIZE = 22;
@@ -49,12 +49,12 @@ export function getStateMarkerIcon(state: string, place: string): L.DivIcon {
   const label = escapeHtml(place);
   const icon = L.divIcon({
     className: 'state-color-marker',
-    html: `<div style="display:flex;flex-direction:column;align-items:center;width:${SIZE}px;">
+    html: `<div style="position:relative;width:${SIZE}px;height:${SIZE}px;">
       <svg width="${SIZE}" height="${SIZE}" viewBox="0 0 ${SIZE} ${SIZE}" xmlns="http://www.w3.org/2000/svg">
         <circle cx="${CENTER}" cy="${CENTER}" r="${CENTER - 1}" fill="${color}" fill-opacity="0.35" stroke="${color}" stroke-width="${BORDER_WIDTH}"/>
         <circle cx="${CENTER}" cy="${CENTER}" r="${POINT_RADIUS}" fill="${color}"/>
       </svg>
-      <span style="white-space:nowrap;font-size:11px;font-weight:600;line-height:1.2;color:${color};text-shadow:-1px -1px 0 #fff,1px -1px 0 #fff,-1px 1px 0 #fff,1px 1px 0 #fff;">${label}</span>
+      <span style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);white-space:nowrap;font-size:11px;font-weight:600;line-height:1;color:#000;text-shadow:-1px -1px 0 #fff,1px -1px 0 #fff,-1px 1px 0 #fff,1px 1px 0 #fff;">${label}</span>
     </div>`,
     iconSize: [SIZE, SIZE],
     iconAnchor: [CENTER, CENTER],
