@@ -5,7 +5,6 @@ import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import MobileLayout from '@/components/MobileLayout';
 import LoadingSpinner from '@/components/LoadingSpinner';
-import MapStateLegend from '@/components/MapStateLegend';
 import { useUser } from '@/contexts/UserContext';
 import { AUSTRALIAN_STATES, AUSTRALIA_MAP_CENTER, STATE_MAP_CENTERS, type AustralianState } from '@/lib/constants';
 import { getTodayDateString, formatDateForDb } from '@/lib/campaignDates';
@@ -186,8 +185,6 @@ export default function CampaignMapPage() {
             {unresolvedCount} place{unresolvedCount === 1 ? '' : 's'} could not be located on the map.
           </div>
         )}
-
-        <MapStateLegend />
 
         <div className="relative flex-1 overflow-hidden rounded-lg border-2 border-gray-800 dark:border-gray-600">
           {isLoadingMap && (
