@@ -6,6 +6,7 @@ import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 're
 import type { MapMarker } from '@/lib/services/campaignMapService';
 import { getStateMarkerIcon } from '@/lib/leafletMarkerIcon';
 import { formatCampaignDateTimeDisplay, getEarliestCampaign } from '@/lib/campaignUtils';
+import MapPopupActions from '@/components/MapPopupActions';
 
 interface FlyToProps {
   center: [number, number];
@@ -67,6 +68,7 @@ export default function CampaignMap({ center, zoom, markers }: CampaignMapProps)
                   <p className="font-semibold">{marker.place}, {marker.state}</p>
                   <p className="mt-1">{formatCampaignDateTimeDisplay(firstCampaign.date, firstCampaign.time)}</p>
                   <p>Leader: {firstCampaign.leader}</p>
+                  <MapPopupActions campaignId={firstCampaign.id} place={marker.place} state={marker.state} />
                 </div>
               ) : (
                 <p className="text-sm font-semibold">{marker.place} {marker.state}</p>
