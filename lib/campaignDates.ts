@@ -114,8 +114,10 @@ const SHORT_MONTH_NAMES = [
 ];
 
 /**
- * Format a Monday-start week as a compact range label, e.g. "3-9 Aug 26".
- * Spans a month/year boundary gracefully, e.g. "29 Jun-5 Jul 26" or "29 Dec 25-4 Jan 26".
+ * Format a Monday-start week as a compact range label, e.g. "3 Aug - 9 Aug".
+ * The month is always shown on both ends (even within a single month) and the
+ * year is omitted entirely — spans a month boundary the same way, e.g.
+ * "29 Jun - 5 Jul" or "28 Dec - 3 Jan".
  *
  * Uses a fixed month-abbreviation table rather than toLocaleString(), whose
  * 'short' month format is inconsistent across locales/ICU builds (e.g. 'en-AU'
@@ -129,16 +131,8 @@ export function formatWeekRangeLabel(monday: Date): string {
   const endDay = sunday.getDate();
   const startMonth = SHORT_MONTH_NAMES[monday.getMonth()];
   const endMonth = SHORT_MONTH_NAMES[sunday.getMonth()];
-  const startYear = String(monday.getFullYear()).slice(2);
-  const endYear = String(sunday.getFullYear()).slice(2);
 
-  if (startYear !== endYear) {
-    return `${startDay} ${startMonth} ${startYear}-${endDay} ${endMonth} ${endYear}`;
-  }
-  if (startMonth !== endMonth) {
-    return `${startDay} ${startMonth}-${endDay} ${endMonth} ${endYear}`;
-  }
-  return `${startDay}-${endDay} ${endMonth} ${endYear}`;
+  return `${startDay} ${startMonth} - ${endDay} ${endMonth}`;
 }
 
 /**

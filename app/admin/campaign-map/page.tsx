@@ -220,7 +220,7 @@ export default function CampaignMapPage() {
                     : 'bg-white text-gray-700 border-gray-400 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-700'
                 }`}
               >
-                Week {week} ({weeks[week].label})
+                {week === 1 ? 'This Week' : 'Next Week'} ({weeks[week].label})
               </button>
             ))}
           </div>

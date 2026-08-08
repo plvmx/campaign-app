@@ -110,22 +110,22 @@ describe('Campaign Dates Calculations', () => {
   });
 
   describe('formatWeekRangeLabel', () => {
-    it('formats a week within a single month as "D-D Mon YY"', () => {
+    it('formats a week within a single month as "D Mon - D Mon", with no year', () => {
       // Monday, August 3, 2026 -> Sunday, August 9, 2026
       const monday = createDate(2026, 8, 3);
-      expect(formatWeekRangeLabel(monday)).toBe('3-9 Aug 26');
+      expect(formatWeekRangeLabel(monday)).toBe('3 Aug - 9 Aug');
     });
 
-    it('formats a week spanning two months as "D Mon-D Mon YY"', () => {
+    it('formats a week spanning two months as "D Mon - D Mon", with no year', () => {
       // Monday, June 29, 2026 -> Sunday, July 5, 2026
       const monday = createDate(2026, 6, 29);
-      expect(formatWeekRangeLabel(monday)).toBe('29 Jun-5 Jul 26');
+      expect(formatWeekRangeLabel(monday)).toBe('29 Jun - 5 Jul');
     });
 
-    it('formats a week spanning two years as "D Mon YY-D Mon YY"', () => {
+    it('formats a week spanning two years as "D Mon - D Mon", with no year', () => {
       // Monday, December 28, 2026 -> Sunday, January 3, 2027
       const monday = createDate(2026, 12, 28);
-      expect(formatWeekRangeLabel(monday)).toBe('28 Dec 26-3 Jan 27');
+      expect(formatWeekRangeLabel(monday)).toBe('28 Dec - 3 Jan');
     });
   });
 });
