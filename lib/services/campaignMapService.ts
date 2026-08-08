@@ -6,6 +6,7 @@
 import { supabase } from '@/lib/supabaseClient';
 import { getCampaignsByDateRange } from '@/lib/services/campaignService';
 import { getStatePlaces } from '@/lib/services/statePlacesService';
+import { isCampaignPast } from '@/lib/campaignUtils';
 import type { Campaign } from '@/lib/types';
 
 export interface MapMarker {
@@ -65,7 +66,10 @@ export async function getMapData(options: {
   endDate: string;
   state?: string;
 }): Promise<MapDataResult> {
-  const campaigns = await getCampaignsByDateRange(options);
+  // Campaigns that have already started or finished are excluded — the map is
+  // for finding upcoming campaigns, not a record of ones already underway/done.
+  const campaigns = (await getCampaignsByDateRange(options))
+    .filter(campaign => !isCampaignPast(campaign.date, campaign.time));
 
   const grouped = new Map<string, { state: string; place: string; campaigns: Campaign[] }>();
   for (const campaign of campaigns) {
