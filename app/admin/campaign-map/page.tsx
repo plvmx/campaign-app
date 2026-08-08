@@ -6,8 +6,9 @@ import { useRouter } from 'next/navigation';
 import MobileLayout from '@/components/MobileLayout';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import { useUser } from '@/contexts/UserContext';
+import { useCampaignDates } from '@/contexts/CampaignDatesContext';
 import { AUSTRALIAN_STATES, AUSTRALIA_MAP_CENTER, STATE_MAP_CENTERS, type AustralianState } from '@/lib/constants';
-import { getTodayDateString, formatDateForDb } from '@/lib/campaignDates';
+import { formatDateForDb, formatDateReadable } from '@/lib/campaignDates';
 import { getMapData, type MapMarker } from '@/lib/services/campaignMapService';
 import { getErrorMessage } from '@/lib/errorUtils';
 
@@ -20,20 +21,26 @@ const CampaignMap = dynamic(() => import('@/components/CampaignMap'), {
   ),
 });
 
-function defaultEndDate(): string {
-  const date = new Date();
-  date.setDate(date.getDate() + 30);
-  return formatDateForDb(date);
-}
-
 export default function CampaignMapPage() {
   const router = useRouter();
   const { user, isAdmin, isLoading: isUserLoading } = useUser();
+  const { dates: campaignDates } = useCampaignDates();
   const [hasAccess, setHasAccess] = useState(false);
   const [accessError, setAccessError] = useState<string | null>(null);
 
-  const [startDate, setStartDate] = useState(getTodayDateString());
-  const [endDate, setEndDate] = useState(defaultEndDate());
+  // Fixed two-week window: Monday of the upcoming campaign start through the
+  // Sunday that ends the following week. No user-selectable range.
+  const { startDate, endDate, startDateReadable, endDateReadable } = useMemo(() => {
+    if (!campaignDates) return { startDate: '', endDate: '', startDateReadable: '', endDateReadable: '' };
+    const sunday = new Date(campaignDates.secondWeekStart);
+    sunday.setDate(sunday.getDate() + 6);
+    return {
+      startDate: formatDateForDb(campaignDates.upcomingCampaignStart),
+      endDate: formatDateForDb(sunday),
+      startDateReadable: formatDateReadable(campaignDates.upcomingCampaignStart),
+      endDateReadable: formatDateReadable(sunday),
+    };
+  }, [campaignDates]);
   const [selectedState, setSelectedState] = useState<AustralianState | ''>('');
 
   const [markers, setMarkers] = useState<MapMarker[]>([]);
@@ -136,7 +143,8 @@ export default function CampaignMapPage() {
           <div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Campaign Map</h1>
             <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-              Upcoming campaigns plotted by location across Australia
+              Campaigns plotted by location across Australia
+              {startDateReadable && <> for {startDateReadable} – {endDateReadable}</>}
             </p>
           </div>
           <button
@@ -147,38 +155,18 @@ export default function CampaignMapPage() {
           </button>
         </div>
 
-        <div className="mb-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <div>
-            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300">From</label>
-            <input
-              type="date"
-              value={startDate}
-              onChange={e => setStartDate(e.target.value)}
-              className="mt-1 w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300">To</label>
-            <input
-              type="date"
-              value={endDate}
-              onChange={e => setEndDate(e.target.value)}
-              className="mt-1 w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
-            />
-          </div>
-          <div className="col-span-2 sm:col-span-2">
-            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300">State</label>
-            <select
-              value={selectedState}
-              onChange={e => setSelectedState(e.target.value as AustralianState | '')}
-              className="mt-1 w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
-            >
-              <option value="">All states</option>
-              {AUSTRALIAN_STATES.map(state => (
-                <option key={state} value={state}>{state}</option>
-              ))}
-            </select>
-          </div>
+        <div className="mb-3">
+          <label className="block text-xs font-medium text-gray-700 dark:text-gray-300">State</label>
+          <select
+            value={selectedState}
+            onChange={e => setSelectedState(e.target.value as AustralianState | '')}
+            className="mt-1 w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+          >
+            <option value="">All states</option>
+            {AUSTRALIAN_STATES.map(state => (
+              <option key={state} value={state}>{state}</option>
+            ))}
+          </select>
         </div>
 
         {mapError && (

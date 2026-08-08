@@ -1,12 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import MobileLayout from '@/components/MobileLayout';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import { useUser } from '@/contexts/UserContext';
-import { getTodayDateString, formatDateForDb } from '@/lib/campaignDates';
+import { useCampaignDates } from '@/contexts/CampaignDatesContext';
+import { formatDateForDb, formatDateReadable } from '@/lib/campaignDates';
 import { getUserLocation } from '@/lib/location';
 import { supabase } from '@/lib/supabaseClient';
 import { getNearbyCampaigns, type NearbyMapMarker } from '@/lib/services/nearbyCampaignsService';
@@ -23,20 +24,26 @@ const NearbyCampaignsMap = dynamic(() => import('@/components/NearbyCampaignsMap
 
 const RADIUS_KM = 60;
 
-function defaultEndDate(): string {
-  const date = new Date();
-  date.setDate(date.getDate() + 30);
-  return formatDateForDb(date);
-}
-
 export default function CampaignsNearMePage() {
   const router = useRouter();
   const { user, isAdmin, isLoading: isUserLoading } = useUser();
+  const { dates: campaignDates } = useCampaignDates();
   const [hasAccess, setHasAccess] = useState(false);
   const [accessError, setAccessError] = useState<string | null>(null);
 
-  const [startDate, setStartDate] = useState(getTodayDateString());
-  const [endDate, setEndDate] = useState(defaultEndDate());
+  // Fixed two-week window: Monday of the upcoming campaign start through the
+  // Sunday that ends the following week. No user-selectable range.
+  const { startDate, endDate, startDateReadable, endDateReadable } = useMemo(() => {
+    if (!campaignDates) return { startDate: '', endDate: '', startDateReadable: '', endDateReadable: '' };
+    const sunday = new Date(campaignDates.secondWeekStart);
+    sunday.setDate(sunday.getDate() + 6);
+    return {
+      startDate: formatDateForDb(campaignDates.upcomingCampaignStart),
+      endDate: formatDateForDb(sunday),
+      startDateReadable: formatDateReadable(campaignDates.upcomingCampaignStart),
+      endDateReadable: formatDateReadable(sunday),
+    };
+  }, [campaignDates]);
 
   // Centre point: either browser geolocation or a geocoded address.
   const [center, setCenter] = useState<[number, number] | null>(null);
@@ -214,7 +221,8 @@ export default function CampaignsNearMePage() {
           <div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Campaigns Near Me</h1>
             <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-              Upcoming campaigns within {RADIUS_KM} km of your location
+              Campaigns within {RADIUS_KM} km of your location
+              {startDateReadable && <> for {startDateReadable} – {endDateReadable}</>}
             </p>
           </div>
           <button
@@ -223,27 +231,6 @@ export default function CampaignsNearMePage() {
           >
             Back
           </button>
-        </div>
-
-        <div className="mb-3 grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300">From</label>
-            <input
-              type="date"
-              value={startDate}
-              onChange={e => setStartDate(e.target.value)}
-              className="mt-1 w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300">To</label>
-            <input
-              type="date"
-              value={endDate}
-              onChange={e => setEndDate(e.target.value)}
-              className="mt-1 w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
-            />
-          </div>
         </div>
 
         <form onSubmit={handleAddressSubmit} className="mb-3">
