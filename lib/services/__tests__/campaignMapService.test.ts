@@ -38,6 +38,11 @@ const originalFetch = global.fetch;
 beforeEach(() => {
   vi.clearAllMocks();
   global.fetch = vi.fn();
+  // Fixed "now" well before the fixture campaigns' default date (2026-01-05) so the
+  // past-campaign filter in getMapData doesn't strip them out of unrelated tests.
+  // Tests that specifically exercise the filter override this with their own time.
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date('2025-12-01T00:00:00'));
 });
 
 afterEach(() => {
@@ -146,6 +151,37 @@ describe('getMapData', () => {
 
     expect(result.markers).toEqual([]);
     expect(result.unresolvedPlaces).toEqual([{ state: 'VIC', place: 'Melbourne' }]);
+  });
+
+  it('excludes campaigns whose date+time have already passed', async () => {
+    vi.setSystemTime(new Date('2026-01-05T12:00:00'));
+    mockGetCampaigns.mockResolvedValue([
+      makeCampaign({ id: 'past', date: '2026-01-05', time: '09:00' }),
+      makeCampaign({ id: 'future', date: '2026-01-05', time: '15:00' }),
+    ]);
+    mockGetStatePlaces.mockResolvedValue([
+      makeStatePlace({ latitude: -37.8, longitude: 144.9 }),
+    ]);
+
+    const result = await getMapData({ startDate: '2026-01-01', endDate: '2026-01-31' });
+
+    expect(result.markers).toHaveLength(1);
+    expect(result.markers[0]?.campaigns?.map((c) => c.id)).toEqual(['future']);
+  });
+
+  it('drops a place entirely when every campaign there is already past', async () => {
+    vi.setSystemTime(new Date('2026-01-05T12:00:00'));
+    mockGetCampaigns.mockResolvedValue([
+      makeCampaign({ id: 'past', date: '2026-01-05', time: '09:00' }),
+    ]);
+    mockGetStatePlaces.mockResolvedValue([
+      makeStatePlace({ latitude: -37.8, longitude: 144.9 }),
+    ]);
+
+    const result = await getMapData({ startDate: '2026-01-01', endDate: '2026-01-31' });
+
+    expect(result.markers).toEqual([]);
+    expect(result.unresolvedPlaces).toEqual([]);
   });
 
   it('spaces out multiple uncached geocode lookups by ~1.1s to respect Nominatim rate limits', async () => {
