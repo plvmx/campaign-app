@@ -7,7 +7,7 @@ import MobileLayout from '@/components/MobileLayout';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import { useUser } from '@/contexts/UserContext';
 import { useCampaignDates } from '@/contexts/CampaignDatesContext';
-import { formatDateForDb, formatDateReadable } from '@/lib/campaignDates';
+import { formatDateForDb, formatWeekRangeLabel } from '@/lib/campaignDates';
 import { getUserLocation } from '@/lib/location';
 import { supabase } from '@/lib/supabaseClient';
 import { getNearbyCampaigns, type NearbyMapMarker } from '@/lib/services/nearbyCampaignsService';
@@ -31,19 +31,27 @@ export default function CampaignsNearMePage() {
   const [hasAccess, setHasAccess] = useState(false);
   const [accessError, setAccessError] = useState<string | null>(null);
 
-  // Fixed two-week window: Monday of the upcoming campaign start through the
-  // Sunday that ends the following week. No user-selectable range.
-  const { startDate, endDate, startDateReadable, endDateReadable } = useMemo(() => {
-    if (!campaignDates) return { startDate: '', endDate: '', startDateReadable: '', endDateReadable: '' };
-    const sunday = new Date(campaignDates.secondWeekStart);
-    sunday.setDate(sunday.getDate() + 6);
+  // Week 1 is the upcoming campaign week; Week 2 is the one after it. The
+  // toggle below picks which week's campaigns are queried — Week 1 by default.
+  const [selectedWeek, setSelectedWeek] = useState<1 | 2>(1);
+
+  const weeks = useMemo(() => {
+    if (!campaignDates) return null;
+    const week1Start = campaignDates.upcomingCampaignStart;
+    const week2Start = campaignDates.secondWeekStart;
     return {
-      startDate: formatDateForDb(campaignDates.upcomingCampaignStart),
-      endDate: formatDateForDb(sunday),
-      startDateReadable: formatDateReadable(campaignDates.upcomingCampaignStart),
-      endDateReadable: formatDateReadable(sunday),
+      1: { startDate: formatDateForDb(week1Start), label: formatWeekRangeLabel(week1Start) },
+      2: { startDate: formatDateForDb(week2Start), label: formatWeekRangeLabel(week2Start) },
     };
   }, [campaignDates]);
+
+  const { startDate, endDate } = useMemo(() => {
+    if (!weeks) return { startDate: '', endDate: '' };
+    const start = weeks[selectedWeek].startDate;
+    const [y, m, d] = start.split('-').map(Number);
+    const end = new Date(y, m - 1, d + 6);
+    return { startDate: start, endDate: formatDateForDb(end) };
+  }, [weeks, selectedWeek]);
 
   // Centre point: either browser geolocation or a geocoded address.
   const [center, setCenter] = useState<[number, number] | null>(null);
@@ -222,7 +230,6 @@ export default function CampaignsNearMePage() {
             <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Campaigns Near Me</h1>
             <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
               Campaigns within {RADIUS_KM} km of your location
-              {startDateReadable && <> for {startDateReadable} – {endDateReadable}</>}
             </p>
           </div>
           <button
@@ -232,6 +239,25 @@ export default function CampaignsNearMePage() {
             Back
           </button>
         </div>
+
+        {weeks && (
+          <div className="mb-3 flex gap-2">
+            {([1, 2] as const).map(week => (
+              <button
+                key={week}
+                type="button"
+                onClick={() => setSelectedWeek(week)}
+                className={`rounded-md px-3 py-2 text-sm font-semibold border-2 transition-colors ${
+                  selectedWeek === week
+                    ? 'bg-blue-600 text-white border-blue-700'
+                    : 'bg-white text-gray-700 border-gray-400 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-700'
+                }`}
+              >
+                Week {week} ({weeks[week].label})
+              </button>
+            ))}
+          </div>
+        )}
 
         <form onSubmit={handleAddressSubmit} className="mb-3">
           <label className="block text-xs font-medium text-gray-700 dark:text-gray-300">

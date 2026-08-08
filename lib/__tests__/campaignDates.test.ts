@@ -3,7 +3,7 @@
  * Run with: npm test or jest
  */
 
-import { calculateCampaignDates, formatDateForDb } from '../campaignDates';
+import { calculateCampaignDates, formatDateForDb, formatWeekRangeLabel } from '../campaignDates';
 
 describe('Campaign Dates Calculations', () => {
   // Helper to create a date
@@ -106,6 +106,26 @@ describe('Campaign Dates Calculations', () => {
 
       expect(formatDateForDb(dates.upcomingCampaignStart)).toBe(formatDateForDb(expectedUpcoming));
       expect(formatDateForDb(dates.secondWeekStart)).toBe(formatDateForDb(expectedSecond));
+    });
+  });
+
+  describe('formatWeekRangeLabel', () => {
+    it('formats a week within a single month as "D-D Mon YY"', () => {
+      // Monday, August 3, 2026 -> Sunday, August 9, 2026
+      const monday = createDate(2026, 8, 3);
+      expect(formatWeekRangeLabel(monday)).toBe('3-9 Aug 26');
+    });
+
+    it('formats a week spanning two months as "D Mon-D Mon YY"', () => {
+      // Monday, June 29, 2026 -> Sunday, July 5, 2026
+      const monday = createDate(2026, 6, 29);
+      expect(formatWeekRangeLabel(monday)).toBe('29 Jun-5 Jul 26');
+    });
+
+    it('formats a week spanning two years as "D Mon YY-D Mon YY"', () => {
+      // Monday, December 28, 2026 -> Sunday, January 3, 2027
+      const monday = createDate(2026, 12, 28);
+      expect(formatWeekRangeLabel(monday)).toBe('28 Dec 26-3 Jan 27');
     });
   });
 });

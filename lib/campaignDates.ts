@@ -108,6 +108,39 @@ export function formatDateReadable(date: Date): string {
   });
 }
 
+const SHORT_MONTH_NAMES = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
+
+/**
+ * Format a Monday-start week as a compact range label, e.g. "3-9 Aug 26".
+ * Spans a month/year boundary gracefully, e.g. "29 Jun-5 Jul 26" or "29 Dec 25-4 Jan 26".
+ *
+ * Uses a fixed month-abbreviation table rather than toLocaleString(), whose
+ * 'short' month format is inconsistent across locales/ICU builds (e.g. 'en-AU'
+ * can render "June" instead of "Jun" depending on the runtime's ICU data).
+ */
+export function formatWeekRangeLabel(monday: Date): string {
+  const sunday = new Date(monday);
+  sunday.setDate(sunday.getDate() + 6);
+
+  const startDay = monday.getDate();
+  const endDay = sunday.getDate();
+  const startMonth = SHORT_MONTH_NAMES[monday.getMonth()];
+  const endMonth = SHORT_MONTH_NAMES[sunday.getMonth()];
+  const startYear = String(monday.getFullYear()).slice(2);
+  const endYear = String(sunday.getFullYear()).slice(2);
+
+  if (startYear !== endYear) {
+    return `${startDay} ${startMonth} ${startYear}-${endDay} ${endMonth} ${endYear}`;
+  }
+  if (startMonth !== endMonth) {
+    return `${startDay} ${startMonth}-${endDay} ${endMonth} ${endYear}`;
+  }
+  return `${startDay}-${endDay} ${endMonth} ${endYear}`;
+}
+
 /**
  * Get the current campaign dates as formatted strings
  */
