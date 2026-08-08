@@ -11,6 +11,11 @@ import { AUSTRALIAN_STATES, AUSTRALIA_MAP_CENTER, STATE_MAP_CENTERS, type Austra
 import { formatDateForDb, formatWeekRangeLabel } from '@/lib/campaignDates';
 import { getMapData, type MapMarker } from '@/lib/services/campaignMapService';
 import { getErrorMessage } from '@/lib/errorUtils';
+import { getUserLocation } from '@/lib/location';
+
+/** Approximate zoom level for a ~60km-radius view (matches the small-territory
+ *  entries in STATE_MAP_CENTERS, e.g. ACT, which cover a similar area). */
+const NEAR_ME_ZOOM = 10;
 
 const CampaignMap = dynamic(() => import('@/components/CampaignMap'), {
   ssr: false,
@@ -23,7 +28,7 @@ const CampaignMap = dynamic(() => import('@/components/CampaignMap'), {
 
 export default function CampaignMapPage() {
   const router = useRouter();
-  const { user, isAdmin, isLoading: isUserLoading } = useUser();
+  const { user, isAdmin, userState, isLoading: isUserLoading } = useUser();
   const { dates: campaignDates } = useCampaignDates();
   const [hasAccess, setHasAccess] = useState(false);
   const [accessError, setAccessError] = useState<string | null>(null);
@@ -99,13 +104,52 @@ export default function CampaignMapPage() {
     return () => { cancelled = true; };
   }, [hasAccess, startDate, endDate, selectedState]);
 
+  // "Near Me" override — takes precedence over the state selector until the
+  // user picks a state explicitly (which clears it, see the <select> below).
+  const [nearMeTarget, setNearMeTarget] = useState<{ center: [number, number]; zoom: number } | null>(null);
+  const [isLocatingNearMe, setIsLocatingNearMe] = useState(false);
+  const [nearMeNotice, setNearMeNotice] = useState<string | null>(null);
+
+  const handleNearMe = async () => {
+    setIsLocatingNearMe(true);
+    setNearMeNotice(null);
+    try {
+      const { coords, deniedByUser } = await getUserLocation();
+      if (coords) {
+        setNearMeTarget({ center: [coords.latitude, coords.longitude], zoom: NEAR_ME_ZOOM });
+        return;
+      }
+      const fallbackState = userState && (AUSTRALIAN_STATES as readonly string[]).includes(userState)
+        ? (userState as AustralianState)
+        : null;
+      if (fallbackState) {
+        const target = STATE_MAP_CENTERS[fallbackState];
+        setNearMeTarget({ center: [target.lat, target.lng], zoom: target.zoom });
+        setNearMeNotice(
+          deniedByUser
+            ? 'Location permission denied — showing your state instead.'
+            : 'Could not determine your location — showing your state instead.'
+        );
+      } else {
+        setNearMeNotice(
+          deniedByUser
+            ? 'Location permission denied and no state on file for your account.'
+            : 'Could not determine your location and no state on file for your account.'
+        );
+      }
+    } finally {
+      setIsLocatingNearMe(false);
+    }
+  };
+
   const { center, zoom } = useMemo(() => {
+    if (nearMeTarget) return nearMeTarget;
     if (selectedState) {
       const target = STATE_MAP_CENTERS[selectedState];
       return { center: [target.lat, target.lng] as [number, number], zoom: target.zoom };
     }
     return { center: [AUSTRALIA_MAP_CENTER.lat, AUSTRALIA_MAP_CENTER.lng] as [number, number], zoom: AUSTRALIA_MAP_CENTER.zoom };
-  }, [selectedState]);
+  }, [selectedState, nearMeTarget]);
 
   if (isUserLoading) {
     return (
@@ -150,9 +194,9 @@ export default function CampaignMapPage() {
       <div className="flex h-[calc(100dvh-var(--pwa-banner-height,0px)-4rem-5rem)] flex-col p-4">
         <div className="mb-3 flex items-start justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Campaign Map</h1>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Upcoming AFJ Campaigns</h1>
             <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-              Campaigns plotted by location across Australia
+              Click on a coloured campaign marker to view details or to register your interest in the campaign. Use your fingers or mouse to zoom in and out, or move around the map
             </p>
           </div>
           <button
@@ -170,7 +214,7 @@ export default function CampaignMapPage() {
                 key={week}
                 type="button"
                 onClick={() => setSelectedWeek(week)}
-                className={`rounded-md px-3 py-2 text-sm font-semibold border-2 transition-colors ${
+                className={`flex-1 rounded-md px-3 py-2 text-sm font-semibold border-2 transition-colors ${
                   selectedWeek === week
                     ? 'bg-blue-600 text-white border-blue-700'
                     : 'bg-white text-gray-700 border-gray-400 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-700'
@@ -183,11 +227,14 @@ export default function CampaignMapPage() {
         )}
 
         <div className="mb-3">
-          <label className="block text-xs font-medium text-gray-700 dark:text-gray-300">State</label>
           <select
             value={selectedState}
-            onChange={e => setSelectedState(e.target.value as AustralianState | '')}
-            className="mt-1 w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+            onChange={e => {
+              setSelectedState(e.target.value as AustralianState | '');
+              setNearMeTarget(null);
+              setNearMeNotice(null);
+            }}
+            className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
           >
             <option value="">All states</option>
             {AUSTRALIAN_STATES.map(state => (
@@ -208,7 +255,21 @@ export default function CampaignMapPage() {
           </div>
         )}
 
+        {nearMeNotice && (
+          <div className="mb-3 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-200">
+            {nearMeNotice}
+          </div>
+        )}
+
         <div className="relative flex-1 overflow-hidden rounded-lg border-2 border-gray-800 dark:border-gray-600">
+          <button
+            type="button"
+            onClick={handleNearMe}
+            disabled={isLocatingNearMe}
+            className="absolute top-2 right-2 z-[1000] rounded-md border-2 border-gray-800 bg-white px-2 py-1 text-xs font-bold text-gray-700 shadow hover:bg-gray-100 disabled:opacity-60 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+          >
+            {isLocatingNearMe ? 'Locating…' : '📍 Near Me'}
+          </button>
           {isLoadingMap && (
             // z-[1100] keeps the overlay above Leaflet's stacked panes (tile=200,
             // overlay=400, marker=600, popup=700, controls=~1000) — otherwise the
