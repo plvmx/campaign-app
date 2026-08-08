@@ -7,6 +7,7 @@ import L from 'leaflet';
 import type { NearbyMapMarker } from '@/lib/services/nearbyCampaignsService';
 import { getStateMarkerIcon } from '@/lib/leafletMarkerIcon';
 import { formatCampaignDateTimeDisplay, getEarliestCampaign } from '@/lib/campaignUtils';
+import MapPopupActions from '@/components/MapPopupActions';
 
 // Distinct centre marker drawn as a CSS pin so it can't be confused with a campaign.
 const centerIcon = L.divIcon({
@@ -130,6 +131,7 @@ export default function NearbyCampaignsMap({ center, radiusKm, markers }: Nearby
                 <p className="mt-1">{marker.distanceKm} km away</p>
                 <p className="mt-1">{formatCampaignDateTimeDisplay(firstCampaign.date, firstCampaign.time)}</p>
                 <p>Leader: {firstCampaign.leader}</p>
+                <MapPopupActions campaignId={firstCampaign.id} place={marker.place} state={marker.state} />
               </div>
             </Popup>
           </Marker>
