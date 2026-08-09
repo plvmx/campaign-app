@@ -1,8 +1,9 @@
 /**
  * Campaign Date Management
- * 
+ *
  * Calculates and manages global campaign dates based on the current day of the week.
  */
+import { getOrdinalSuffix } from '@/lib/slideLayout';
 
 export interface CampaignDates {
   pastCampaignStart: Date;
@@ -133,6 +134,25 @@ export function formatWeekRangeLabel(monday: Date): string {
   const endMonth = SHORT_MONTH_NAMES[sunday.getMonth()];
 
   return `${startDay} ${startMonth} - ${endDay} ${endMonth}`;
+}
+
+/**
+ * Format a Monday-start week as a full date range string, e.g.
+ * "Mon 10th Aug 26 - Sun 16th Aug 26" — used where the week needs to be
+ * spelled out in full rather than the compact formatWeekRangeLabel().
+ */
+export function formatWeekDateRangeString(monday: Date): string {
+  const sunday = new Date(monday);
+  sunday.setDate(sunday.getDate() + 6);
+
+  const format = (date: Date, dayName: string) => {
+    const day = date.getDate();
+    const month = SHORT_MONTH_NAMES[date.getMonth()];
+    const year = String(date.getFullYear()).slice(2);
+    return `${dayName} ${day}${getOrdinalSuffix(day)} ${month} ${year}`;
+  };
+
+  return `${format(monday, 'Mon')} - ${format(sunday, 'Sun')}`;
 }
 
 /**
