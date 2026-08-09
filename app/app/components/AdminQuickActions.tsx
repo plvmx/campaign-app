@@ -17,6 +17,7 @@ const ALL_STATES = 'ALL';
 
 export default function AdminQuickActions({ adminStatus, userState }: Props) {
   const [isGeneratingSlides, setIsGeneratingSlides] = useState(false);
+  const [isGeneratingLeaderSlides, setIsGeneratingLeaderSlides] = useState(false);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [isGeneratingArise, setIsGeneratingArise] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -25,7 +26,7 @@ export default function AdminQuickActions({ adminStatus, userState }: Props) {
 
   const stateFilter = downloadState === ALL_STATES ? null : downloadState;
 
-  const isAnyGenerating = isGeneratingSlides || isGeneratingReport || isGeneratingArise;
+  const isAnyGenerating = isGeneratingSlides || isGeneratingLeaderSlides || isGeneratingReport || isGeneratingArise;
 
   const btnClass = (isThis: boolean) =>
     `rounded-md px-4 py-2 text-sm font-bold text-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600 cursor-pointer ${
@@ -48,6 +49,21 @@ export default function AdminQuickActions({ adminStatus, userState }: Props) {
       setError(err instanceof Error ? err.message : 'Failed to generate campaign lists');
     } finally {
       setIsGeneratingSlides(false);
+    }
+  };
+
+  const handleLeaderSlides = async () => {
+    setIsGeneratingLeaderSlides(true);
+    setError(null);
+    setProgress('');
+    try {
+      const { upcomingCampaignStart } = calculateCampaignDates();
+      await generateAndDownloadSlides({ supabase, startDate: upcomingCampaignStart, adminStatus, userState, stateFilter, hideMobile: true, onProgress: setProgress });
+      trackEvent('generate_leader_slides', { state: stateFilter ?? userState });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to generate leader campaign lists');
+    } finally {
+      setIsGeneratingLeaderSlides(false);
     }
   };
 
@@ -98,6 +114,9 @@ export default function AdminQuickActions({ adminStatus, userState }: Props) {
       <div className="flex flex-wrap gap-2">
         <button onClick={handleSlides} disabled={isAnyGenerating} className={btnClass(isGeneratingSlides)}>
           {isGeneratingSlides ? 'Generating…' : 'Campaign Lists'}
+        </button>
+        <button onClick={handleLeaderSlides} disabled={isAnyGenerating} className={btnClass(isGeneratingLeaderSlides)}>
+          {isGeneratingLeaderSlides ? 'Generating…' : 'Leader Campaign Lists'}
         </button>
         <button onClick={handleReport} disabled={isAnyGenerating} className={btnClass(isGeneratingReport)}>
           {isGeneratingReport ? 'Generating…' : 'Campaign Results'}

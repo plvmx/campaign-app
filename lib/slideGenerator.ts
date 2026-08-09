@@ -5,6 +5,11 @@
  * into a parameter-driven function. Used by:
  *   - app/admin/generate-slides/page.tsx  (with optional custom start date)
  *   - app/app/page.tsx admin quick-action  (always uses upcomingCampaignStart)
+ *
+ * The optional `hideMobile` flag produces the "Leader Campaign Lists" variant:
+ * identical output except the mobile number column is omitted and the freed
+ * width is given to the place column so long place names (e.g. "Macquarie
+ * University") are no longer truncated.
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -28,10 +33,11 @@ const SLIDE_HEIGHT        = Math.floor(10  * DPI);  // 3000 px
 
 const FONT_SIZES = { title: 72, colorKey: 54, date: 78, campaign: 84 } as const;
 
-const PLACE_COLS      = 18;
-const TIME_COLS       = 9;
-const LEADER_COLS     = 12;
-const MOBILE_MAX_COLS = 10;
+const PLACE_COLS         = 18;
+const PLACE_COLS_LEADER  = 29; // wider place column when the mobile column is omitted
+const TIME_COLS          = 9;
+const LEADER_COLS        = 12;
+const MOBILE_MAX_COLS    = 10;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -59,6 +65,8 @@ export interface GenerateSlidesOptions {
   stateFilter?: string | null;
   /** Optional callback invoked with status messages as generation proceeds. */
   onProgress?: (msg: string) => void;
+  /** When true, omits the mobile number column and widens the place column ("Leader Campaign Lists"). */
+  hideMobile?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -190,6 +198,7 @@ async function renderSlide(
   startCampaignIndex: number,
   dateHeadings: Date[],
   filterState: string | null,
+  hideMobile: boolean,
 ): Promise<{ canvas: HTMLCanvasElement; nextDateIndex: number | null; nextCampaignIndex: number }> {
   const canvas = document.createElement('canvas');
   canvas.width  = SLIDE_WIDTH;
@@ -292,9 +301,12 @@ async function renderSlide(
     // Campaign lines (scaled to fill width edge-to-edge)
     const campaignY = currentY + dateHeight + dateHeaderSpace;
     ctx.font = `bold ${FONT_SIZES.campaign}px "Courier New", monospace`;
+    const placeCols        = hideMobile ? PLACE_COLS_LEADER : PLACE_COLS;
     const oneCharW        = Math.round(ctx.measureText('M').width);
     const availW          = SLIDE_WIDTH - 2 * oneCharW;
-    const totalCols       = PLACE_COLS + 1 + TIME_COLS + 1 + LEADER_COLS + 1 + MOBILE_MAX_COLS;
+    const totalCols       = hideMobile
+      ? placeCols + 1 + TIME_COLS + 1 + LEADER_COLS
+      : placeCols + 1 + TIME_COLS + 1 + LEADER_COLS + 1 + MOBILE_MAX_COLS;
     const naturalW        = ctx.measureText('M'.repeat(totalCols)).width;
     const scaleX          = availW / naturalW;
     ctx.textAlign = 'left';
@@ -304,13 +316,14 @@ async function renderSlide(
       let place = combinePlaceAndSite(c.place, c.site);
       const cat = c.category ?? 'TWOL';
       if (cat !== 'TWOL') place = `${place} ${cat}`;
-      if (place.length > PLACE_COLS) place = place.substring(0, PLACE_COLS);
+      if (place.length > placeCols) place = place.substring(0, placeCols);
 
       const time   = formatCampaignTimeDisplay(c.time);
       const leader = c.leader.length > LEADER_COLS ? c.leader.substring(0, LEADER_COLS) : c.leader;
-      const mobile = (c.mobile ?? '').replace(/\s/g, '');
 
-      const text = `${place.padEnd(PLACE_COLS)} ${time.padStart(TIME_COLS)} ${leader.padEnd(LEADER_COLS)} ${mobile}`;
+      const text = hideMobile
+        ? `${place.padEnd(placeCols)} ${time.padStart(TIME_COLS)} ${leader.padEnd(LEADER_COLS)}`
+        : `${place.padEnd(placeCols)} ${time.padStart(TIME_COLS)} ${leader.padEnd(LEADER_COLS)} ${(c.mobile ?? '').replace(/\s/g, '')}`;
       const color = getSlideStateColor(c.state);
       ctx.save();
       ctx.translate(oneCharW, campaignY + j * lineSpacing);
@@ -365,7 +378,7 @@ async function renderSlide(
  * packages them into a ZIP, and triggers a browser download.
  */
 export async function generateAndDownloadSlides(options: GenerateSlidesOptions): Promise<void> {
-  const { supabase: client, startDate, adminStatus, userState, stateFilter, onProgress } = options;
+  const { supabase: client, startDate, adminStatus, userState, stateFilter, onProgress, hideMobile = false } = options;
 
   const explicitState = stateFilter && stateFilter.trim() ? stateFilter.toUpperCase().trim() : null;
   const roleState = adminStatus === 'SR' && userState ? userState.toUpperCase().trim() : null;
@@ -379,7 +392,7 @@ export async function generateAndDownloadSlides(options: GenerateSlidesOptions):
 
   while (slideNum <= 20) {
     onProgress?.(`Generating slide ${slideNum}…`);
-    const result = await renderSlide(client, dateIdx, campIdx, dateHeadings, filterState);
+    const result = await renderSlide(client, dateIdx, campIdx, dateHeadings, filterState, hideMobile);
 
     const blob = await new Promise<Blob>((resolve, reject) => {
       result.canvas.toBlob(
@@ -411,7 +424,8 @@ export async function generateAndDownloadSlides(options: GenerateSlidesOptions):
   const url  = URL.createObjectURL(zipBlob);
   const link = document.createElement('a');
   link.href     = url;
-  link.download = `${formatDownloadDate(new Date())}_All_Campaigns${explicitState ? `_${explicitState}` : ''}.zip`;
+  const listLabel = hideMobile ? 'Leader_Campaigns' : 'All_Campaigns';
+  link.download = `${formatDownloadDate(new Date())}_${listLabel}${explicitState ? `_${explicitState}` : ''}.zip`;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
