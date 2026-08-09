@@ -5,7 +5,7 @@ import { getSlideStateColor, STATE_CODES, formatSlideDateText } from '@/lib/slid
 import { formatCampaignTimeDisplay } from '@/lib/campaignUtils';
 import { combinePlaceAndSite } from '@/lib/placeSite';
 
-const PLACE_COLS  = 18;
+const PLACE_COLS  = 32;
 const LEADER_COLS = 12;
 
 interface Props {
@@ -91,8 +91,9 @@ export default function CampaignCheckboxList({ campaigns, checkedIds, onToggle }
                     className="flex items-baseline px-3 py-px font-mono font-bold text-sm leading-snug cursor-pointer"
                     style={{ color, ...(cat !== 'TWOL' ? { backgroundColor: '#fcd34d' } : {}) }}
                   >
-                    {/* Checkbox */}
-                    <span style={{ flex: 2, display: 'flex', alignItems: 'center' }}>
+                    {/* Checkbox — alignSelf overrides the row's items-baseline so it
+                        sits centered on the line text instead of on its baseline */}
+                    <span style={{ flex: 2, display: 'flex', alignItems: 'center', alignSelf: 'center' }}>
                       <input
                         type="checkbox"
                         checked={checked}
@@ -102,7 +103,7 @@ export default function CampaignCheckboxList({ campaigns, checkedIds, onToggle }
                       />
                     </span>
                     {/* Place — left-aligned, grows to fill spare space */}
-                    <span style={{ flex: 18, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <span style={{ flex: 30, minWidth: 0, paddingLeft: '1.5ch', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {place}
                     </span>
                     {/* Time — right-aligned within its column */}
