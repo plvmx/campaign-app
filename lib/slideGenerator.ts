@@ -38,6 +38,7 @@ const PLACE_COLS_LEADER  = 29; // wider place column when the mobile column is o
 const TIME_COLS          = 9;
 const LEADER_COLS        = 12;
 const MOBILE_MAX_COLS    = 10;
+const TIME_LEADER_GAP_LEADER = 4; // extra breathing room between the time and leader fields when the mobile column is omitted
 
 // ---------------------------------------------------------------------------
 // Types
@@ -305,7 +306,7 @@ async function renderSlide(
     const oneCharW        = Math.round(ctx.measureText('M').width);
     const availW          = SLIDE_WIDTH - 2 * oneCharW;
     const totalCols       = hideMobile
-      ? placeCols + 1 + TIME_COLS + 1 + LEADER_COLS
+      ? placeCols + 1 + TIME_COLS + TIME_LEADER_GAP_LEADER + LEADER_COLS
       : placeCols + 1 + TIME_COLS + 1 + LEADER_COLS + 1 + MOBILE_MAX_COLS;
     const naturalW        = ctx.measureText('M'.repeat(totalCols)).width;
     const scaleX          = availW / naturalW;
@@ -322,7 +323,7 @@ async function renderSlide(
       const leader = c.leader.length > LEADER_COLS ? c.leader.substring(0, LEADER_COLS) : c.leader;
 
       const text = hideMobile
-        ? `${place.padEnd(placeCols)} ${time.padStart(TIME_COLS)} ${leader.padEnd(LEADER_COLS)}`
+        ? `${place.padEnd(placeCols)} ${time.padStart(TIME_COLS)}${' '.repeat(TIME_LEADER_GAP_LEADER)}${leader.padEnd(LEADER_COLS)}`
         : `${place.padEnd(placeCols)} ${time.padStart(TIME_COLS)} ${leader.padEnd(LEADER_COLS)} ${(c.mobile ?? '').replace(/\s/g, '')}`;
       const color = getSlideStateColor(c.state);
       ctx.save();
