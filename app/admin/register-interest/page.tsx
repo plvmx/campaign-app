@@ -208,7 +208,7 @@ export default function RegisterInterestPage() {
             ))}
           </select>
           {weeks && (
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            <span className="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
               {weeks[selectedWeek].rangeText}
             </span>
           )}
@@ -246,7 +246,7 @@ export default function RegisterInterestPage() {
           <button
             type="button"
             onClick={() => setPopupAction('more')}
-            className="flex-1 rounded-md bg-blue-600 px-4 py-3 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
+            className="flex-1 rounded-md bg-orange-500 px-4 py-3 text-base font-bold text-white hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
           >
             Tell Me More
           </button>
