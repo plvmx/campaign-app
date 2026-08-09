@@ -19,6 +19,7 @@ export type AppEventType =
   | 'record_results_save'
   | 'record_results_save_error'
   | 'generate_slides'
+  | 'generate_leader_slides'
   | 'generate_report'
   | 'generate_week1'
   | 'weekly_refresh_manual'
