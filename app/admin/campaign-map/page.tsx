@@ -8,7 +8,7 @@ import LoadingSpinner from '@/components/LoadingSpinner';
 import { useUser } from '@/contexts/UserContext';
 import { useCampaignDates } from '@/contexts/CampaignDatesContext';
 import { AUSTRALIAN_STATES, AUSTRALIA_MAP_CENTER, STATE_MAP_CENTERS, type AustralianState } from '@/lib/constants';
-import { formatDateForDb, formatWeekRangeLabel } from '@/lib/campaignDates';
+import { formatDateForDb, formatWeekDateRangeString } from '@/lib/campaignDates';
 import { getMapData, type MapMarker } from '@/lib/services/campaignMapService';
 import { getErrorMessage } from '@/lib/errorUtils';
 import { getUserLocation } from '@/lib/location';
@@ -42,8 +42,8 @@ export default function CampaignMapPage() {
     const week1Start = campaignDates.upcomingCampaignStart;
     const week2Start = campaignDates.secondWeekStart;
     return {
-      1: { startDate: formatDateForDb(week1Start), label: formatWeekRangeLabel(week1Start) },
-      2: { startDate: formatDateForDb(week2Start), label: formatWeekRangeLabel(week2Start) },
+      1: { startDate: formatDateForDb(week1Start), rangeText: formatWeekDateRangeString(week1Start) },
+      2: { startDate: formatDateForDb(week2Start), rangeText: formatWeekDateRangeString(week2Start) },
     };
   }, [campaignDates]);
 
@@ -220,13 +220,13 @@ export default function CampaignMapPage() {
                     : 'bg-white text-gray-700 border-gray-400 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-700'
                 }`}
               >
-                {week === 1 ? 'This Week' : 'Next Week'} ({weeks[week].label})
+                {week === 1 ? 'This Week' : 'Next Week'}
               </button>
             ))}
           </div>
         )}
 
-        <div className="mb-3">
+        <div className="mb-3 flex flex-wrap items-center gap-2">
           <select
             value={selectedState}
             onChange={e => {
@@ -234,13 +234,18 @@ export default function CampaignMapPage() {
               setNearMeTarget(null);
               setNearMeNotice(null);
             }}
-            className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+            className="rounded-md border-2 border-gray-800 bg-white px-3 py-2 text-sm font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
           >
             <option value="">All states</option>
             {AUSTRALIAN_STATES.map(state => (
               <option key={state} value={state}>{state}</option>
             ))}
           </select>
+          {weeks && (
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              {weeks[selectedWeek].rangeText}
+            </span>
+          )}
         </div>
 
         {mapError && (

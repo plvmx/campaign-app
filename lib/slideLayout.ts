@@ -29,7 +29,7 @@ export function getSlideStateColor(state: string): string {
   return SLIDE_STATE_COLORS[upper] ?? 'rgb(0, 0, 0)';
 }
 
-function getOrdinalSuffix(day: number): string {
+export function getOrdinalSuffix(day: number): string {
   if (day >= 11 && day <= 13) return 'th';
   const last = day % 10;
   switch (last) {

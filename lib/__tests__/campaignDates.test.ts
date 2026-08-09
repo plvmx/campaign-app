@@ -3,7 +3,7 @@
  * Run with: npm test or jest
  */
 
-import { calculateCampaignDates, formatDateForDb, formatWeekRangeLabel } from '../campaignDates';
+import { calculateCampaignDates, formatDateForDb, formatWeekRangeLabel, formatWeekDateRangeString } from '../campaignDates';
 
 describe('Campaign Dates Calculations', () => {
   // Helper to create a date
@@ -126,6 +126,32 @@ describe('Campaign Dates Calculations', () => {
       // Monday, December 28, 2026 -> Sunday, January 3, 2027
       const monday = createDate(2026, 12, 28);
       expect(formatWeekRangeLabel(monday)).toBe('28 Dec - 3 Jan');
+    });
+  });
+
+  describe('formatWeekDateRangeString', () => {
+    it('formats a week within a single month as "Mon Dth Mon YY - Sun Dth Mon YY"', () => {
+      // Monday, August 10, 2026 -> Sunday, August 16, 2026
+      const monday = createDate(2026, 8, 10);
+      expect(formatWeekDateRangeString(monday)).toBe('Mon 10th Aug 26 - Sun 16th Aug 26');
+    });
+
+    it('formats a week spanning two months, each with its own month and year', () => {
+      // Monday, June 29, 2026 -> Sunday, July 5, 2026
+      const monday = createDate(2026, 6, 29);
+      expect(formatWeekDateRangeString(monday)).toBe('Mon 29th Jun 26 - Sun 5th Jul 26');
+    });
+
+    it('formats a week spanning two years, each with its own year', () => {
+      // Monday, December 28, 2026 -> Sunday, January 3, 2027
+      const monday = createDate(2026, 12, 28);
+      expect(formatWeekDateRangeString(monday)).toBe('Mon 28th Dec 26 - Sun 3rd Jan 27');
+    });
+
+    it('uses the correct ordinal suffix for each day (1st, 2nd, 3rd, 11th-13th, 21st...)', () => {
+      expect(formatWeekDateRangeString(createDate(2026, 3, 1))).toBe('Mon 1st Mar 26 - Sun 7th Mar 26');
+      expect(formatWeekDateRangeString(createDate(2026, 6, 2))).toBe('Mon 2nd Jun 26 - Sun 8th Jun 26');
+      expect(formatWeekDateRangeString(createDate(2026, 12, 21))).toBe('Mon 21st Dec 26 - Sun 27th Dec 26');
     });
   });
 });
