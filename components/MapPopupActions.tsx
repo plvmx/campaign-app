@@ -20,17 +20,17 @@ export default function MapPopupActions({ campaignId, place, state }: MapPopupAc
     <div className="mt-2 flex gap-2">
       <button
         type="button"
-        onClick={() => console.log(`"Yes, I'm In" clicked — campaign ${campaignId} at ${place}, ${state}`)}
-        className="rounded-md border border-gray-800 bg-blue-600 px-2 py-1 text-xs font-bold text-white hover:bg-blue-700"
+        onClick={() => console.log(`"Yes I'm In" clicked — campaign ${campaignId} at ${place}, ${state}`)}
+        className="rounded-md border border-gray-800 bg-green-600 px-2 py-1 text-xs font-bold text-white hover:bg-green-700"
       >
-        Yes, I&apos;m In
+        Yes I&apos;m In
       </button>
       <button
         type="button"
-        onClick={() => console.log(`"Tell me more" clicked — campaign ${campaignId} at ${place}, ${state}`)}
-        className="rounded-md border border-gray-800 bg-gray-200 px-2 py-1 text-xs font-bold text-gray-700 hover:bg-gray-300"
+        onClick={() => console.log(`"Tell Me More" clicked — campaign ${campaignId} at ${place}, ${state}`)}
+        className="rounded-md border border-gray-800 bg-orange-500 px-2 py-1 text-xs font-bold text-white hover:bg-orange-600"
       >
-        Tell me more
+        Tell Me More
       </button>
     </div>
   );
