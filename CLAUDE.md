@@ -129,6 +129,7 @@ All database access goes through service modules in `lib/services/`. Pages and c
 | `/admin/leader-shares` | Leader share links |
 | `/admin/campaign-map` | Interactive map of upcoming campaigns, filterable by date range and state |
 | `/admin/campaigns-near-me` | Upcoming campaigns near the admin's current location |
+| `/admin/register-interest` | Tick upcoming campaigns and register interest ("Yes I'm In" / "Tell Me More") |
 | `/admin/member-activity` | Active member counts (leader + team) by total, state, place, or campaign |
 | `/admin/metrics` | Usage analytics, active users, and database row counts |
 | `/admin/results-metrics` | Results dashboard — names recorded per category (TM/P/F/SP), by state, place, and campaign, for a date range |
