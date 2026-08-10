@@ -3,7 +3,7 @@
  * Run with: npm test or jest
  */
 
-import { calculateCampaignDates, formatDateForDb, formatWeekRangeLabel, formatWeekDateRangeString, formatFortnightDateRangeString } from '../campaignDates';
+import { calculateCampaignDates, formatDateForDb, formatWeekRangeLabel, formatWeekDateRangeString, formatFortnightDateRangeString, formatShortDateWithOrdinal } from '../campaignDates';
 
 describe('Campaign Dates Calculations', () => {
   // Helper to create a date
@@ -172,6 +172,19 @@ describe('Campaign Dates Calculations', () => {
       // Monday, December 21, 2026 -> Sunday, January 3, 2027
       const monday = createDate(2026, 12, 21);
       expect(formatFortnightDateRangeString(monday)).toBe('Mon 21st Dec 26 - Sun 3rd Jan 27');
+    });
+  });
+
+  describe('formatShortDateWithOrdinal', () => {
+    it('formats a date as "Ddd Dth Mon" — short day name, ordinal day, short month, no year', () => {
+      // Wednesday, August 12, 2026
+      expect(formatShortDateWithOrdinal(createDate(2026, 8, 12))).toBe('Wed 12th Aug');
+    });
+
+    it('uses the correct ordinal suffix for each day (1st, 2nd, 3rd, 11th-13th, 21st...)', () => {
+      expect(formatShortDateWithOrdinal(createDate(2026, 3, 1))).toBe('Sun 1st Mar');
+      expect(formatShortDateWithOrdinal(createDate(2026, 6, 2))).toBe('Tue 2nd Jun');
+      expect(formatShortDateWithOrdinal(createDate(2026, 12, 21))).toBe('Mon 21st Dec');
     });
   });
 });
