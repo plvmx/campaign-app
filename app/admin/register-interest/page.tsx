@@ -7,7 +7,7 @@ import LoadingSpinner from '@/components/LoadingSpinner';
 import { useUser } from '@/contexts/UserContext';
 import { useCampaignDates } from '@/contexts/CampaignDatesContext';
 import { AUSTRALIAN_STATES, type AustralianState } from '@/lib/constants';
-import { formatDateForDb, formatWeekDateRangeString } from '@/lib/campaignDates';
+import { formatDateForDb, formatFortnightDateRangeString } from '@/lib/campaignDates';
 import { getCampaignsByDateRange } from '@/lib/services/campaignService';
 import { isCampaignPast } from '@/lib/campaignUtils';
 import { getErrorMessage } from '@/lib/errorUtils';
@@ -22,29 +22,27 @@ export default function RegisterInterestPage() {
   const [hasAccess, setHasAccess] = useState(false);
   const [accessError, setAccessError] = useState<string | null>(null);
 
-  // Week 1 is the upcoming campaign week; Week 2 is the one after it. The
-  // toggle below picks which week's campaigns are queried — Week 1 by default.
-  const [selectedWeek, setSelectedWeek] = useState<1 | 2>(1);
-
-  const weeks = useMemo(() => {
+  // The full fortnight — both the upcoming week and the one after it —
+  // starting at Upcoming Campaigns Start. Unlike the campaign map, there's
+  // no per-week toggle here: the whole two-week period is shown at once.
+  const fortnight = useMemo(() => {
     if (!campaignDates) return null;
-    const week1Start = campaignDates.upcomingCampaignStart;
-    const week2Start = campaignDates.secondWeekStart;
-    return {
-      1: { startDate: formatDateForDb(week1Start), rangeText: formatWeekDateRangeString(week1Start) },
-      2: { startDate: formatDateForDb(week2Start), rangeText: formatWeekDateRangeString(week2Start) },
-    };
+    const start = campaignDates.upcomingCampaignStart;
+    const startDate = formatDateForDb(start);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 13);
+    return { startDate, endDate: formatDateForDb(end), rangeText: formatFortnightDateRangeString(start) };
   }, [campaignDates]);
 
-  const { startDate, endDate } = useMemo(() => {
-    if (!weeks) return { startDate: '', endDate: '' };
-    const start = weeks[selectedWeek].startDate;
-    const [y, m, d] = start.split('-').map(Number);
-    const end = new Date(y, m - 1, d + 6);
-    return { startDate: start, endDate: formatDateForDb(end) };
-  }, [weeks, selectedWeek]);
+  const startDate = fortnight?.startDate ?? '';
+  const endDate = fortnight?.endDate ?? '';
 
   const [selectedState, setSelectedState] = useState<AustralianState | ''>('');
+
+  // Captured for the interest submission that will be wired up later —
+  // not yet persisted anywhere.
+  const [firstName, setFirstName] = useState('');
+  const [mobileNumber, setMobileNumber] = useState('');
 
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [isLoadingCampaigns, setIsLoadingCampaigns] = useState(false);
@@ -163,38 +161,42 @@ export default function RegisterInterestPage() {
           100dvh and the PWA-banner var are needed. */}
       <div className="flex h-[calc(100dvh-var(--pwa-banner-height,0px)-4rem-5rem)] flex-col p-4">
         <div className="mb-3 flex items-start justify-between gap-3">
-          <div>
+          <div className="min-w-0 flex-1">
             <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Upcoming AFJ Campaigns</h1>
             <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-              Tick the campaigns below that you&apos;d like to be part of, then use the buttons at the bottom to register your interest or ask for more details.
+              All upcoming campaigns for this fortnight are listed below. To register your interest in joining a campaign, or to get more information please provide enter your first name and mobile phone number here, click on the campaign that you are interested in and then click on the green or orange button at the bottom of the page.
             </p>
           </div>
           <button
             onClick={() => router.push('/admin')}
-            className="shrink-0 rounded-md bg-gray-200 px-3 py-2 text-base font-bold text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 border-2 border-gray-800 dark:border-gray-600"
+            className="shrink-0 rounded-md bg-gray-200 px-2 py-1 text-sm font-bold text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 border-2 border-gray-800 dark:border-gray-600"
           >
             Back
           </button>
         </div>
 
-        {weeks && (
-          <div className="mb-3 flex gap-2">
-            {([1, 2] as const).map(week => (
-              <button
-                key={week}
-                type="button"
-                onClick={() => setSelectedWeek(week)}
-                className={`flex-1 rounded-md px-3 py-2 text-sm font-semibold border-2 transition-colors ${
-                  selectedWeek === week
-                    ? 'bg-blue-600 text-white border-blue-700'
-                    : 'bg-white text-gray-700 border-gray-400 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-700'
-                }`}
-              >
-                {week === 1 ? 'This Week' : 'Next Week'}
-              </button>
-            ))}
-          </div>
-        )}
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <label className="flex-1 min-w-[8rem]">
+            <span className="sr-only">First name</span>
+            <input
+              type="text"
+              value={firstName}
+              onChange={e => setFirstName(e.target.value)}
+              placeholder="First name"
+              className="w-full rounded-md border-2 border-gray-800 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:placeholder:text-gray-500"
+            />
+          </label>
+          <label className="flex-1 min-w-[8rem]">
+            <span className="sr-only">Mobile number</span>
+            <input
+              type="tel"
+              value={mobileNumber}
+              onChange={e => setMobileNumber(e.target.value)}
+              placeholder="Mobile number"
+              className="w-full rounded-md border-2 border-gray-800 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:placeholder:text-gray-500"
+            />
+          </label>
+        </div>
 
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <select
@@ -207,9 +209,9 @@ export default function RegisterInterestPage() {
               <option key={state} value={state}>{state}</option>
             ))}
           </select>
-          {weeks && (
+          {fortnight && (
             <span className="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-              {weeks[selectedWeek].rangeText}
+              {fortnight.rangeText}
             </span>
           )}
         </div>
