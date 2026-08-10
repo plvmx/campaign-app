@@ -156,6 +156,25 @@ export function formatWeekDateRangeString(monday: Date): string {
 }
 
 /**
+ * Format a Monday-start fortnight (14 days — the combined upcoming + second
+ * week period) as a full date range string, e.g. "Mon 10th Aug 26 - Sun 23rd
+ * Aug 26". Same format as formatWeekDateRangeString but spans two weeks.
+ */
+export function formatFortnightDateRangeString(monday: Date): string {
+  const secondSunday = new Date(monday);
+  secondSunday.setDate(secondSunday.getDate() + 13);
+
+  const format = (date: Date, dayName: string) => {
+    const day = date.getDate();
+    const month = SHORT_MONTH_NAMES[date.getMonth()];
+    const year = String(date.getFullYear()).slice(2);
+    return `${dayName} ${day}${getOrdinalSuffix(day)} ${month} ${year}`;
+  };
+
+  return `${format(monday, 'Mon')} - ${format(secondSunday, 'Sun')}`;
+}
+
+/**
  * Get the current campaign dates as formatted strings
  */
 export function getCampaignDatesFormatted() {

@@ -3,7 +3,7 @@
  * Run with: npm test or jest
  */
 
-import { calculateCampaignDates, formatDateForDb, formatWeekRangeLabel, formatWeekDateRangeString } from '../campaignDates';
+import { calculateCampaignDates, formatDateForDb, formatWeekRangeLabel, formatWeekDateRangeString, formatFortnightDateRangeString } from '../campaignDates';
 
 describe('Campaign Dates Calculations', () => {
   // Helper to create a date
@@ -152,6 +152,26 @@ describe('Campaign Dates Calculations', () => {
       expect(formatWeekDateRangeString(createDate(2026, 3, 1))).toBe('Mon 1st Mar 26 - Sun 7th Mar 26');
       expect(formatWeekDateRangeString(createDate(2026, 6, 2))).toBe('Mon 2nd Jun 26 - Sun 8th Jun 26');
       expect(formatWeekDateRangeString(createDate(2026, 12, 21))).toBe('Mon 21st Dec 26 - Sun 27th Dec 26');
+    });
+  });
+
+  describe('formatFortnightDateRangeString', () => {
+    it('formats a fortnight within a single month as "Mon Dth Mon YY - Sun Dth Mon YY"', () => {
+      // Monday, August 10, 2026 -> Sunday, August 23, 2026 (13 days later)
+      const monday = createDate(2026, 8, 10);
+      expect(formatFortnightDateRangeString(monday)).toBe('Mon 10th Aug 26 - Sun 23rd Aug 26');
+    });
+
+    it('formats a fortnight spanning two months, each with its own month and year', () => {
+      // Monday, June 29, 2026 -> Sunday, July 12, 2026
+      const monday = createDate(2026, 6, 29);
+      expect(formatFortnightDateRangeString(monday)).toBe('Mon 29th Jun 26 - Sun 12th Jul 26');
+    });
+
+    it('formats a fortnight spanning two years, each with its own year', () => {
+      // Monday, December 21, 2026 -> Sunday, January 3, 2027
+      const monday = createDate(2026, 12, 21);
+      expect(formatFortnightDateRangeString(monday)).toBe('Mon 21st Dec 26 - Sun 3rd Jan 27');
     });
   });
 });
