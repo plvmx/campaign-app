@@ -164,12 +164,12 @@ export default function RegisterInterestPage() {
           <div className="min-w-0 flex-1">
             <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Upcoming AFJ Campaigns</h1>
             <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-              All upcoming campaigns for this fortnight are listed below. To register your interest in joining a campaign, or to get more information please provide enter your first name and mobile phone number here, click on the campaign that you are interested in and then click on the green or orange button at the bottom of the page.
+              All upcoming campaigns for this fortnight are listed below. To <strong className="font-bold">join a campaign</strong>, or to <strong className="font-bold">get more information</strong> please enter your first name and mobile phone number here, click on the campaign that you are interested in and then click on the green or orange button at the bottom of the page.
             </p>
           </div>
           <button
             onClick={() => router.push('/admin')}
-            className="shrink-0 rounded-md bg-gray-200 px-2 py-1 text-sm font-bold text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 border-2 border-gray-800 dark:border-gray-600"
+            className="shrink-0 rounded bg-gray-200 px-1.5 py-0.5 text-xs font-bold text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 border border-gray-800 dark:border-gray-600"
           >
             Back
           </button>
