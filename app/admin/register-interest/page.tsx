@@ -56,6 +56,9 @@ export default function RegisterInterestPage() {
       return next;
     });
   };
+  // Preserves the campaigns' existing date/state/place/time sort order for
+  // the confirmation popup's list.
+  const checkedCampaigns = campaigns.filter(c => checkedIds.has(c.id));
 
   const [popupAction, setPopupAction] = useState<'in' | 'more' | null>(null);
 
@@ -259,9 +262,16 @@ export default function RegisterInterestPage() {
 
       {popupAction && (
         <InterestSummaryModal
-          action={popupAction}
-          count={checkedIds.size}
-          onClose={() => setPopupAction(null)}
+          campaigns={checkedCampaigns}
+          onProceed={() => {
+            // Stub — recording the interest (against firstName/mobileNumber
+            // and the ticked campaigns) is a follow-up piece of work.
+            console.log(`"${popupAction === 'in' ? "Yes I'm In" : 'Tell Me More'}" proceed clicked`, {
+              firstName, mobileNumber, campaignIds: [...checkedIds],
+            });
+            setPopupAction(null);
+          }}
+          onCancel={() => setPopupAction(null)}
         />
       )}
     </MobileLayout>

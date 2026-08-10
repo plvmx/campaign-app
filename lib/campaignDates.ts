@@ -174,6 +174,23 @@ export function formatFortnightDateRangeString(monday: Date): string {
   return `${format(monday, 'Mon')} - ${format(secondSunday, 'Sun')}`;
 }
 
+const SHORT_DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+/**
+ * Format a single date as a compact "Wed 12th Aug" string — short day name,
+ * ordinal day, short month, no year. Used for one-line campaign summaries
+ * (e.g. the Register Interest confirmation popup) where a full date range
+ * would be too long. Uses fixed day/month abbreviation tables rather than
+ * toLocaleString(), for the same ICU-consistency reason as the range
+ * formatters above.
+ */
+export function formatShortDateWithOrdinal(date: Date): string {
+  const dayName = SHORT_DAY_NAMES[date.getDay()];
+  const day = date.getDate();
+  const month = SHORT_MONTH_NAMES[date.getMonth()];
+  return `${dayName} ${day}${getOrdinalSuffix(day)} ${month}`;
+}
+
 /**
  * Get the current campaign dates as formatted strings
  */
