@@ -160,19 +160,21 @@ export default function RegisterInterestPage() {
       {/* Same height calc as the campaign map screen — see that page for why
           100dvh and the PWA-banner var are needed. */}
       <div className="flex h-[calc(100dvh-var(--pwa-banner-height,0px)-4rem-5rem)] flex-col p-4">
-        <div className="mb-3 flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Upcoming AFJ Campaigns</h1>
-            <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-              All upcoming campaigns for this fortnight are listed below. To <strong className="font-bold">join a campaign</strong>, or to <strong className="font-bold">get more information</strong> please enter your first name and mobile phone number here, click on the campaign that you are interested in and then click on the green or orange button at the bottom of the page.
-            </p>
-          </div>
+        {/* relative + absolute Back button (instead of a flex sibling) so only the
+            title line needs to leave room for it — the paragraph below, which is
+            taller than the button, isn't squeezed by a flex column it doesn't
+            actually need past the button's own height. */}
+        <div className="relative mb-3">
           <button
             onClick={() => router.push('/admin')}
-            className="shrink-0 rounded bg-gray-200 px-1.5 py-0.5 text-xs font-bold text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 border border-gray-800 dark:border-gray-600"
+            className="absolute right-0 top-0 rounded bg-gray-200 px-1.5 py-0.5 text-xs font-bold text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 border border-gray-800 dark:border-gray-600"
           >
             Back
           </button>
+          <h1 className="pr-14 text-2xl font-bold text-gray-900 dark:text-gray-100">Upcoming AFJ Campaigns</h1>
+          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+            All upcoming campaigns for this fortnight are listed below. To <strong className="font-bold">join a campaign</strong>, or to <strong className="font-bold">get more information</strong> please enter your first name and mobile phone number here, click on the campaign that you are interested in and then click on the green or orange button at the bottom of the page.
+          </p>
         </div>
 
         <div className="mb-3 flex flex-wrap items-center gap-2">
