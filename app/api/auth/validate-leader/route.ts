@@ -7,33 +7,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { normalizeMobile, normalizeName } from '@/lib/auth';
 import { enforceOrigin } from '@/lib/corsUtils';
+import { createRateLimiter, getClientIp } from '@/lib/rateLimit';
 
-// ---------------------------------------------------------------------------
 // Rate limiting — in-memory, per IP, 10 attempts per 15 minutes.
-// Resets across serverless cold starts, which is acceptable for this use case.
-// ---------------------------------------------------------------------------
-const RATE_LIMIT_MAP = new Map<string, { count: number; resetAt: number }>();
-const WINDOW_MS = 15 * 60 * 1000;
-const MAX_ATTEMPTS = 10;
-
-function checkRateLimit(ip: string): boolean {
-  const now = Date.now();
-
-  // Prevent unbounded growth: evict expired entries when the map gets large.
-  if (RATE_LIMIT_MAP.size > 5000) {
-    for (const [k, v] of RATE_LIMIT_MAP) {
-      if (now > v.resetAt) RATE_LIMIT_MAP.delete(k);
-    }
-  }
-
-  const entry = RATE_LIMIT_MAP.get(ip);
-  if (!entry || now > entry.resetAt) {
-    RATE_LIMIT_MAP.set(ip, { count: 1, resetAt: now + WINDOW_MS });
-    return false; // not limited
-  }
-  entry.count++;
-  return entry.count > MAX_ATTEMPTS;
-}
+const rateLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, maxAttempts: 10 });
 
 // ---------------------------------------------------------------------------
 // Handler
@@ -42,13 +19,8 @@ export async function POST(request: NextRequest) {
   const corsBlock = enforceOrigin(request);
   if (corsBlock) return corsBlock;
 
-  // Rate limit by IP
-  const ip =
-    request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
-    request.headers.get('x-real-ip') ??
-    'unknown';
-
-  if (checkRateLimit(ip)) {
+  const ip = getClientIp(request);
+  if (rateLimiter.isLimited(ip)) {
     return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
   }
 

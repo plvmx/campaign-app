@@ -6,7 +6,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { formatDownloadDate } from '@/lib/slideLayout';
 import { renderAriseCanvas } from '@/lib/ariseCanvas';
-import type { AriseCampaign } from '@/lib/ariseLayout';
+import { getAriseDateRange, type AriseCampaign } from '@/lib/ariseLayout';
 
 // ---------------------------------------------------------------------------
 // Data fetching
@@ -63,12 +63,7 @@ export async function generateAndDownloadAriseList(options: GenerateAriseOptions
   const roleState = adminStatus === 'SR' && userState ? userState.toUpperCase().trim() : null;
   const filterState = explicitState || roleState;
 
-  // Build the 8 date targets: week-1 days 0–6, week-2 Mon = day 7
-  const dates = Array.from({ length: 8 }, (_, i) => {
-    const d = new Date(startDate);
-    d.setDate(d.getDate() + i);
-    return d;
-  });
+  const dates = getAriseDateRange(startDate);
 
   onProgress?.('Fetching Week 1 campaign data…');
   const allCampaigns: AriseCampaign[][] = [];

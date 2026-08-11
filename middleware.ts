@@ -19,6 +19,11 @@ import { NextRequest, NextResponse } from 'next/server';
 const PROTECTED_PREFIXES = ['/app', '/admin', '/capture', '/record-results', '/results', '/view-slides'];
 const LOGIN_PATH = '/login';
 
+// Note: `/public/*` (and its `/api/public/*` data routes) is intentionally
+// NOT in PROTECTED_PREFIXES — those routes are meant to be reachable via a
+// static link with no login. Each one is responsible for exposing only
+// public-safe data server-side (see app/api/public/week1-campaigns/route.ts).
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 

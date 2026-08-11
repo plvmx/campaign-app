@@ -1,5 +1,37 @@
 import { describe, it, expect } from 'vitest';
-import { computeTimeLeaderGap, MIN_COMFORTABLE_SCALE } from '../ariseLayout';
+import { computeTimeLeaderGap, getAriseDateRange, MIN_COMFORTABLE_SCALE } from '../ariseLayout';
+
+describe('getAriseDateRange', () => {
+  it('returns 8 consecutive days starting at startDate', () => {
+    const start = new Date(2026, 7, 10); // Mon 10 Aug 2026
+    const dates = getAriseDateRange(start);
+    expect(dates).toHaveLength(8);
+    expect(dates.map((d) => d.getDate())).toEqual([10, 11, 12, 13, 14, 15, 16, 17]);
+  });
+
+  it('day 7 (index 7) is the Monday that starts week 2', () => {
+    const start = new Date(2026, 7, 10); // Mon 10 Aug 2026
+    const dates = getAriseDateRange(start);
+    expect(dates[7].getDate()).toBe(17);
+    expect(dates[7].getDay()).toBe(1); // Monday
+  });
+
+  it('rolls over a month boundary correctly', () => {
+    const start = new Date(2026, 7, 27); // Thu 27 Aug 2026
+    const dates = getAriseDateRange(start);
+    // 27, 28, 29, 30, 31 Aug then 1, 2, 3 Sep
+    expect(dates.map((d) => `${d.getMonth()}-${d.getDate()}`)).toEqual([
+      '7-27', '7-28', '7-29', '7-30', '7-31', '8-1', '8-2', '8-3',
+    ]);
+  });
+
+  it('does not mutate the startDate argument', () => {
+    const start = new Date(2026, 7, 10);
+    const startCopy = new Date(start);
+    getAriseDateRange(start);
+    expect(start.getTime()).toBe(startCopy.getTime());
+  });
+});
 
 describe('computeTimeLeaderGap', () => {
   it('uses two space-widths when the column has room to spare', () => {

@@ -59,6 +59,27 @@ export interface AriseCampaign {
 }
 
 // ---------------------------------------------------------------------------
+// Date range
+// ---------------------------------------------------------------------------
+
+/** Number of days covered by the Week 1 Campaigns list: week-1 (0–6) + week-2 Monday (7). */
+export const ARISE_DATE_RANGE_DAYS = 8;
+
+/**
+ * Builds the 8 date targets for the Week 1 Campaigns list: every day of
+ * week-1, plus the Monday that starts week-2. Shared by the authenticated
+ * generator (ariseGenerator.ts) and the public API route so both stay in
+ * sync with a single definition of "the current window".
+ */
+export function getAriseDateRange(startDate: Date): Date[] {
+  return Array.from({ length: ARISE_DATE_RANGE_DAYS }, (_, i) => {
+    const d = new Date(startDate);
+    d.setDate(d.getDate() + i);
+    return d;
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Time → leader gap
 // ---------------------------------------------------------------------------
 
