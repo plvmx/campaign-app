@@ -123,12 +123,6 @@ export default function CampaignCreateForm({
             </select>
           </div>
           <div>
-            <label htmlFor="create-mobile" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Mobile (Optional)</label>
-            <input id="create-mobile" type="tel" value={values.mobile}
-              onChange={(e) => setValue('mobile', e.target.value)}
-              placeholder="Enter mobile number" className={fieldClass} />
-          </div>
-          <div>
             <label htmlFor="create-category" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Category</label>
             <select id="create-category" required value={values.category}
               onChange={(e) => setValue('category', e.target.value)} className={fieldClass}>
