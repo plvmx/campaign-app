@@ -9,7 +9,7 @@ import {
   CONTENT_TOP, CONTENT_BOTTOM,
   DATE_PAD, DATE_BLOCK_H, DATE_HDR_SPACE, DATE_TOP_MARGIN,
   LINE_SPACING, SEP_H,
-  apx, simulateColumnCount, computeColLayout,
+  apx, simulateColumnCount, computeColLayout, computeTimeLeaderGap,
   type AriseCampaign,
 } from '@/lib/ariseLayout';
 import { getSlideStateColor, formatSlideDateText, STATE_CODES } from '@/lib/slideLayout';
@@ -111,11 +111,19 @@ export function drawCampaignLine(
   const placeColW   = avgCharW * PLACE_COLS;
   const timeColW    = avgCharW * TIME_COLS;
   const leaderColW  = avgCharW * LEADER_COLS;
-  const gapW        = avgCharW * FIELD_GAP_CHARS;
-  const naturalW    = placeColW + gapW + timeColW + gapW + leaderColW;
+  const placeTimeGapW = avgCharW * FIELD_GAP_CHARS;
 
-  const oneCharW = Math.round(avgCharW * MARGIN_CHARS);
-  const scaleX   = (colWidth - 2 * oneCharW) / naturalW;
+  const oneCharW  = Math.round(avgCharW * MARGIN_CHARS);
+  const availableW = colWidth - 2 * oneCharW;
+
+  // Give the AM/PM → leader gap one or two full space-widths (wider than the
+  // other inter-field gaps) so the leader name doesn't crowd the time.
+  const spaceW = ctx.measureText(' ').width;
+  const naturalWWithoutTimeLeaderGap = placeColW + placeTimeGapW + timeColW + leaderColW;
+  const timeLeaderGapW = computeTimeLeaderGap(naturalWWithoutTimeLeaderGap, availableW, spaceW);
+  const naturalW = naturalWWithoutTimeLeaderGap + timeLeaderGapW;
+
+  const scaleX = availableW / naturalW;
 
   const color = getSlideStateColor(campaign.state);
   ctx.save();
@@ -131,13 +139,13 @@ export function drawCampaignLine(
   ctx.textAlign = 'left';
   ctx.strokeText(place, x, 0);
   ctx.fillText(place, x, 0);
-  x += placeColW + gapW;
+  x += placeColW + placeTimeGapW;
 
   const timeW = ctx.measureText(time).width;
   ctx.textAlign = 'left';
   ctx.strokeText(time, x + (timeColW - timeW), 0);
   ctx.fillText(time, x + (timeColW - timeW), 0);
-  x += timeColW + gapW;
+  x += timeColW + timeLeaderGapW;
 
   ctx.strokeText(leader, x, 0);
   ctx.fillText(leader, x, 0);

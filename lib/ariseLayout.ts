@@ -59,6 +59,30 @@ export interface AriseCampaign {
 }
 
 // ---------------------------------------------------------------------------
+// Time → leader gap
+// ---------------------------------------------------------------------------
+
+// Below this horizontal scale, a line is already compressed enough that
+// widening the time→leader gap to two space-widths would visibly shrink the
+// text further — fall back to one space instead.
+export const MIN_COMFORTABLE_SCALE = 0.85;
+
+/**
+ * Picks the gap (in canvas units) to leave between the AM/PM time and the
+ * leader name on a campaign line: two space-widths when the column has room
+ * to spare, one otherwise. Pure (no canvas ops) so it's testable without
+ * mocking Canvas — callers measure `spaceW` via `ctx.measureText(' ')`.
+ */
+export function computeTimeLeaderGap(
+  naturalWWithoutGap: number,
+  availableW: number,
+  spaceW: number,
+): number {
+  const twoSpaceScale = availableW / (naturalWWithoutGap + 2 * spaceW);
+  return twoSpaceScale >= MIN_COMFORTABLE_SCALE ? 2 * spaceW : spaceW;
+}
+
+// ---------------------------------------------------------------------------
 // Layout simulation
 // ---------------------------------------------------------------------------
 
