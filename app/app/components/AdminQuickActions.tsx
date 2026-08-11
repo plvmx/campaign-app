@@ -23,6 +23,7 @@ export default function AdminQuickActions({ adminStatus, userState }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState('');
   const [downloadState, setDownloadState] = useState<string>(ALL_STATES);
+  const [linkCopied, setLinkCopied] = useState(false);
 
   const stateFilter = downloadState === ALL_STATES ? null : downloadState;
 
@@ -106,6 +107,17 @@ export default function AdminQuickActions({ adminStatus, userState }: Props) {
     }
   };
 
+  const handleCopyPublicLink = async () => {
+    const url = `${window.location.origin}/public/week1-campaigns`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    } catch {
+      setError('Could not copy link — copy it manually: ' + url);
+    }
+  };
+
   return (
     <div className="mt-4 rounded-lg border-2 border-purple-300 bg-purple-50 p-3 dark:border-purple-700 dark:bg-purple-900/20">
       <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-purple-700 dark:text-purple-400">
@@ -123,6 +135,14 @@ export default function AdminQuickActions({ adminStatus, userState }: Props) {
         </button>
         <button onClick={handleArise} disabled={isAnyGenerating} className={btnClass(isGeneratingArise)}>
           {isGeneratingArise ? 'Generating…' : 'Week 1 Campaigns'}
+        </button>
+        <button
+          type="button"
+          onClick={handleCopyPublicLink}
+          title="Copy a public, no-login link that always shows the current Week 1 Campaigns list (all states)"
+          className="rounded-md bg-gray-600 px-4 py-2 text-sm font-bold text-white hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600 cursor-pointer"
+        >
+          {linkCopied ? 'Link copied!' : '🔗 Copy Public Link'}
         </button>
         <select
           value={downloadState}
