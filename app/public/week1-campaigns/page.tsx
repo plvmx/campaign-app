@@ -80,7 +80,7 @@ export default function PublicWeek1CampaignsPage() {
       <div className="mx-auto max-w-4xl">
         <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">Week 1 Campaigns</h1>
         <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-          All upcoming campaigns for this fortnight, all states.
+          All upcoming campaigns for this week, all states.
         </p>
 
         {error && (
