@@ -22,6 +22,7 @@ import {
 } from '@/lib/slideLayout';
 import { formatCampaignTimeDisplay } from '@/lib/campaignUtils';
 import { combinePlaceAndSite } from '@/lib/placeSite';
+import { formatDateForDb, getFortnightDateRange } from '@/lib/campaignDates';
 
 // ---------------------------------------------------------------------------
 // Canvas constants  (match generate-slides/page.tsx exactly)
@@ -44,7 +45,8 @@ const TIME_LEADER_GAP_LEADER = 4; // extra breathing room between the time and l
 // Types
 // ---------------------------------------------------------------------------
 
-interface SlideCampaign {
+/** Exported so callers building a prefetched data source (e.g. a public API route) share the exact shape renderSlide expects. */
+export interface SlideCampaign {
   id: string;
   date: string;
   state: string;
@@ -70,20 +72,25 @@ export interface GenerateSlidesOptions {
   hideMobile?: boolean;
 }
 
+/**
+ * Where renderSlide gets its per-date data from. The authenticated flow
+ * (generateAndDownloadSlides) backs this with live Supabase queries; the
+ * public flow (generateAndDownloadSlidesFromData) backs it with a dataset
+ * fetched up-front from a service-role API route, since anonymous visitors
+ * have no RLS access to `campaigns` or `campaign_messages`. renderSlide
+ * itself is identical either way — only the data source changes.
+ */
+interface SlideDataSource {
+  getCampaigns(date: Date): Promise<SlideCampaign[]>;
+  getMessage(date: Date): Promise<string | null>;
+}
+
 // ---------------------------------------------------------------------------
 // Private helpers
 // ---------------------------------------------------------------------------
 
 function px(inches: number): number {
   return Math.floor(inches * DPI);
-}
-
-function dateHeadingsFrom(startDate: Date): Date[] {
-  return Array.from({ length: 14 }, (_, i) => {
-    const d = new Date(startDate);
-    d.setDate(d.getDate() + i);
-    return d;
-  });
 }
 
 async function fetchCampaigns(
@@ -124,6 +131,14 @@ async function fetchMessage(
     .eq('date', `${y}-${m}-${d}`)
     .single();
   return data?.message ?? null;
+}
+
+/** SlideDataSource backed by live, per-date Supabase queries — the existing authenticated behavior, unchanged. */
+function supabaseSlideDataSource(client: SupabaseClient, filterState: string | null): SlideDataSource {
+  return {
+    getCampaigns: (date) => fetchCampaigns(client, date, filterState),
+    getMessage: (date) => fetchMessage(client, date),
+  };
 }
 
 function drawFestiveBanner(
@@ -194,11 +209,10 @@ function drawMessageBanner(
 }
 
 async function renderSlide(
-  client: SupabaseClient,
+  dataSource: SlideDataSource,
   startDateIndex: number,
   startCampaignIndex: number,
   dateHeadings: Date[],
-  filterState: string | null,
   hideMobile: boolean,
 ): Promise<{ canvas: HTMLCanvasElement; nextDateIndex: number | null; nextCampaignIndex: number }> {
   const canvas = document.createElement('canvas');
@@ -260,7 +274,7 @@ async function renderSlide(
   for (let i = startDateIndex; i < dateHeadings.length; i++) {
     const date = dateHeadings[i];
     const week = i < 7 ? 1 : 2;
-    const campaigns = await fetchCampaigns(client, date, filterState);
+    const campaigns = await dataSource.getCampaigns(date);
 
     if (campaigns.length === 0) { previousWeek = week; currentCampaignIndex = 0; continue; }
 
@@ -346,7 +360,7 @@ async function renderSlide(
     if (finishingDate) {
       currentY += drawFestiveBanner(ctx, date, currentY + px(0.2), SLIDE_WIDTH);
 
-      const msg = await fetchMessage(client, date);
+      const msg = await dataSource.getMessage(date);
       if (msg) {
         currentY += px(0.05) + drawMessageBanner(ctx, msg, currentY + px(0.05), SLIDE_WIDTH);
       }
@@ -371,21 +385,17 @@ async function renderSlide(
 }
 
 // ---------------------------------------------------------------------------
-// Public API
+// Shared orchestration — rendering a full slide deck and zipping it up.
+// Used by both the authenticated and public entry points below.
 // ---------------------------------------------------------------------------
 
-/**
- * Generates JPEG slides for the two-week window starting at `startDate`,
- * packages them into a ZIP, and triggers a browser download.
- */
-export async function generateAndDownloadSlides(options: GenerateSlidesOptions): Promise<void> {
-  const { supabase: client, startDate, adminStatus, userState, stateFilter, onProgress, hideMobile = false } = options;
-
-  const explicitState = stateFilter && stateFilter.trim() ? stateFilter.toUpperCase().trim() : null;
-  const roleState = adminStatus === 'SR' && userState ? userState.toUpperCase().trim() : null;
-  const filterState = explicitState || roleState;
-
-  const dateHeadings = dateHeadingsFrom(startDate);
+/** Renders slides until the data source is exhausted (or the 20-slide safety cap is hit). */
+async function buildSlideBlobs(
+  dataSource: SlideDataSource,
+  dateHeadings: Date[],
+  hideMobile: boolean,
+  onProgress?: (msg: string) => void,
+): Promise<Blob[]> {
   const slides: Blob[] = [];
   let slideNum = 1;
   let dateIdx  = 0;
@@ -393,7 +403,7 @@ export async function generateAndDownloadSlides(options: GenerateSlidesOptions):
 
   while (slideNum <= 20) {
     onProgress?.(`Generating slide ${slideNum}…`);
-    const result = await renderSlide(client, dateIdx, campIdx, dateHeadings, filterState, hideMobile);
+    const result = await renderSlide(dataSource, dateIdx, campIdx, dateHeadings, hideMobile);
 
     const blob = await new Promise<Blob>((resolve, reject) => {
       result.canvas.toBlob(
@@ -410,10 +420,15 @@ export async function generateAndDownloadSlides(options: GenerateSlidesOptions):
     slideNum++;
   }
 
-  if (slides.length === 0) {
-    throw new Error('No slides generated. Check that campaigns exist in the database.');
-  }
+  return slides;
+}
 
+/** Packages rendered slides into a ZIP and triggers a browser download. */
+async function zipAndDownloadSlides(
+  slides: Blob[],
+  filename: string,
+  onProgress?: (msg: string) => void,
+): Promise<void> {
   onProgress?.(`Creating ZIP with ${slides.length} slide(s)…`);
 
   const zip = new JSZip();
@@ -425,12 +440,81 @@ export async function generateAndDownloadSlides(options: GenerateSlidesOptions):
   const url  = URL.createObjectURL(zipBlob);
   const link = document.createElement('a');
   link.href     = url;
-  const listLabel = hideMobile ? 'Leader_Campaigns' : 'All_Campaigns';
-  link.download = `${formatDownloadDate(new Date())}_${listLabel}${explicitState ? `_${explicitState}` : ''}.zip`;
+  link.download = filename;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
 
   onProgress?.(`Done — ${slides.length} slide(s) downloaded.`);
+}
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
+/**
+ * Generates JPEG slides for the two-week window starting at `startDate`,
+ * packages them into a ZIP, and triggers a browser download. Fetches its
+ * own data live via the (authenticated, RLS-scoped) Supabase client.
+ */
+export async function generateAndDownloadSlides(options: GenerateSlidesOptions): Promise<void> {
+  const { supabase: client, startDate, adminStatus, userState, stateFilter, onProgress, hideMobile = false } = options;
+
+  const explicitState = stateFilter && stateFilter.trim() ? stateFilter.toUpperCase().trim() : null;
+  const roleState = adminStatus === 'SR' && userState ? userState.toUpperCase().trim() : null;
+  const filterState = explicitState || roleState;
+
+  const dateHeadings = getFortnightDateRange(startDate);
+  const dataSource = supabaseSlideDataSource(client, filterState);
+  const slides = await buildSlideBlobs(dataSource, dateHeadings, hideMobile, onProgress);
+
+  if (slides.length === 0) {
+    throw new Error('No slides generated. Check that campaigns exist in the database.');
+  }
+
+  const listLabel = hideMobile ? 'Leader_Campaigns' : 'All_Campaigns';
+  const filename = `${formatDownloadDate(new Date())}_${listLabel}${explicitState ? `_${explicitState}` : ''}.zip`;
+  await zipAndDownloadSlides(slides, filename, onProgress);
+}
+
+/** One day's worth of prefetched data for generateAndDownloadSlidesFromData. */
+export interface PublicSlideDay {
+  /** YYYY-MM-DD */
+  date: string;
+  campaigns: SlideCampaign[];
+  message: string | null;
+}
+
+/**
+ * Same output as generateAndDownloadSlides(hideMobile: true, all states),
+ * but from a dataset fetched up-front (e.g. by a public API route) instead
+ * of live Supabase queries — for use on public, unauthenticated pages where
+ * there is no RLS-scoped client available. Always hides mobile numbers,
+ * matching the "Leader Campaign Lists" output this mirrors.
+ */
+export async function generateAndDownloadSlidesFromData(
+  days: PublicSlideDay[],
+  onProgress?: (msg: string) => void,
+): Promise<void> {
+  const dateHeadings = days.map((d) => {
+    const [y, m, dd] = d.date.split('-').map(Number);
+    return new Date(y, m - 1, dd);
+  });
+  const campaignsByDate = new Map(days.map((d) => [d.date, d.campaigns]));
+  const messageByDate = new Map(days.map((d) => [d.date, d.message]));
+
+  const dataSource: SlideDataSource = {
+    getCampaigns: async (date) => campaignsByDate.get(formatDateForDb(date)) ?? [],
+    getMessage: async (date) => messageByDate.get(formatDateForDb(date)) ?? null,
+  };
+
+  const slides = await buildSlideBlobs(dataSource, dateHeadings, /* hideMobile */ true, onProgress);
+
+  if (slides.length === 0) {
+    throw new Error('No slides generated. Check that campaigns exist in the database.');
+  }
+
+  const filename = `${formatDownloadDate(new Date())}_Leader_Campaigns.zip`;
+  await zipAndDownloadSlides(slides, filename, onProgress);
 }
