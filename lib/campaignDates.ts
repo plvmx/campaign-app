@@ -97,6 +97,23 @@ export function getTodayDateString(): string {
   return formatDateForDb(new Date());
 }
 
+/** Number of days covered by "the fortnight": the upcoming week plus the one after it. */
+export const FORTNIGHT_DAYS = 14;
+
+/**
+ * Builds the 14 consecutive date targets covering a fortnight starting at
+ * `startDate`. Shared by the slide/ZIP generator (lib/slideGenerator.ts) and
+ * any public route that needs the same "current fortnight" window, so both
+ * stay in sync with a single definition.
+ */
+export function getFortnightDateRange(startDate: Date): Date[] {
+  return Array.from({ length: FORTNIGHT_DAYS }, (_, i) => {
+    const d = new Date(startDate);
+    d.setDate(d.getDate() + i);
+    return d;
+  });
+}
+
 /**
  * Format a date as a readable string (e.g., "Mon, Jan 15, 2026")
  */

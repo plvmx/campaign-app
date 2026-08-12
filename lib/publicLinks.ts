@@ -20,4 +20,9 @@ export const PUBLIC_LINKS: PublicLink[] = [
     description: 'Always-current Week 1 Campaigns list (all states) as a viewable/downloadable JPEG — no login required.',
     path: '/public/week1-campaigns',
   },
+  {
+    title: 'Temporary Upcoming Campaigns',
+    description: 'Read-only fortnight campaign list for leaders to check their details, with links to edit (login) or download a copy — no login required to view.',
+    path: '/public/temporary-upcoming-campaigns',
+  },
 ];

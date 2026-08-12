@@ -3,7 +3,7 @@
  * Run with: npm test or jest
  */
 
-import { calculateCampaignDates, formatDateForDb, formatWeekRangeLabel, formatWeekDateRangeString, formatFortnightDateRangeString, formatShortDateWithOrdinal } from '../campaignDates';
+import { calculateCampaignDates, formatDateForDb, formatWeekRangeLabel, formatWeekDateRangeString, formatFortnightDateRangeString, formatShortDateWithOrdinal, getFortnightDateRange } from '../campaignDates';
 
 describe('Campaign Dates Calculations', () => {
   // Helper to create a date
@@ -185,6 +185,33 @@ describe('Campaign Dates Calculations', () => {
       expect(formatShortDateWithOrdinal(createDate(2026, 3, 1))).toBe('Sun 1st Mar');
       expect(formatShortDateWithOrdinal(createDate(2026, 6, 2))).toBe('Tue 2nd Jun');
       expect(formatShortDateWithOrdinal(createDate(2026, 12, 21))).toBe('Mon 21st Dec');
+    });
+  });
+
+  describe('getFortnightDateRange', () => {
+    it('returns 14 consecutive days starting at startDate', () => {
+      const start = createDate(2026, 8, 10); // Mon 10 Aug 2026
+      const dates = getFortnightDateRange(start);
+      expect(dates).toHaveLength(14);
+      expect(dates.map((d) => formatDateForDb(d))).toEqual([
+        '2026-08-10', '2026-08-11', '2026-08-12', '2026-08-13', '2026-08-14',
+        '2026-08-15', '2026-08-16', '2026-08-17', '2026-08-18', '2026-08-19',
+        '2026-08-20', '2026-08-21', '2026-08-22', '2026-08-23',
+      ]);
+    });
+
+    it('rolls over a month boundary correctly', () => {
+      const start = createDate(2026, 8, 27); // Thu 27 Aug 2026
+      const dates = getFortnightDateRange(start);
+      expect(formatDateForDb(dates[0])).toBe('2026-08-27');
+      expect(formatDateForDb(dates[13])).toBe('2026-09-09');
+    });
+
+    it('does not mutate the startDate argument', () => {
+      const start = createDate(2026, 8, 10);
+      const startCopy = new Date(start);
+      getFortnightDateRange(start);
+      expect(start.getTime()).toBe(startCopy.getTime());
     });
   });
 });
