@@ -40,11 +40,17 @@ export async function generateMetadata(): Promise<Metadata> {
       // the bare domain under the preview card. WhatsApp shows the domain
       // regardless, as its own transparency feature — not controllable here.
       siteName: 'AFJ Campaign App',
+      // Branded app icon. Without an explicit image, some clients (iMessage
+      // link previews on macOS) fall back to a generic placeholder — in this
+      // case a default Vercel image — rather than no image at all, which
+      // reads worse than just showing our own icon.
+      images: ['/icons/icon-512x512.png'],
     },
     twitter: {
       card: 'summary',
       title,
       description,
+      images: ['/icons/icon-512x512.png'],
     },
   };
 }
