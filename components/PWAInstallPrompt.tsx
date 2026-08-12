@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
+import { usePathname } from 'next/navigation';
 
 type Platform = 'ios' | 'android' | 'desktop' | null;
 
@@ -26,6 +27,12 @@ function isStandalone(): boolean {
 }
 
 export default function PWAInstallPrompt() {
+  // Public, unauthenticated pages (shared as one-off links, e.g. via WhatsApp)
+  // should open straight into their content — no install pitch aimed at
+  // logged-in leaders using the main app.
+  const pathname = usePathname();
+  const isPublicPage = pathname?.startsWith('/public/') ?? false;
+
   // Lazy initializer runs once on the client — avoids any setState call inside an effect.
   // null = hidden; non-null = visible with the detected platform.
   const [platform, setPlatform] = useState<Platform>(() => {
@@ -66,7 +73,7 @@ export default function PWAInstallPrompt() {
   const bannerRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = bannerRef.current;
-    if (!platform || !el) {
+    if (isPublicPage || !platform || !el) {
       document.documentElement.style.setProperty('--pwa-banner-height', '0px');
       return;
     }
@@ -80,7 +87,7 @@ export default function PWAInstallPrompt() {
       observer.disconnect();
       document.documentElement.style.setProperty('--pwa-banner-height', '0px');
     };
-  }, [platform]);
+  }, [platform, isPublicPage]);
 
   const handleInstallClick = async () => {
     if (deferredPrompt) {
@@ -95,7 +102,7 @@ export default function PWAInstallPrompt() {
     }
   };
 
-  if (!platform) return null;
+  if (isPublicPage || !platform) return null;
 
   const isIOS = platform === 'ios';
   const isAndroid = platform === 'android';

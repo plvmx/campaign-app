@@ -7,6 +7,7 @@ import { Providers } from "./providers";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import ServiceWorkerRegistration from "@/components/ServiceWorkerRegistration";
 import PWAInstallPrompt from "@/components/PWAInstallPrompt";
+import { getSiteUrl } from "@/lib/siteUrl";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -19,6 +20,10 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  // Required for Open Graph/Twitter image and canonical URLs (used by public
+  // pages' own metadata, e.g. app/public/*/page.tsx) to resolve to absolute
+  // URLs — link previews in WhatsApp/iMessage/etc. need absolute URLs.
+  metadataBase: new URL(getSiteUrl()),
   title: "AFJ Campaign App",
   description: "AFJ Campaign Activity System",
   manifest: "/manifest.json",
