@@ -1,4 +1,46 @@
 import { supabase } from './supabaseClient';
+import { supabaseAdmin } from './supabaseAdmin';
+import { publicLinkTitleSettingKey, publicLinkDescriptionSettingKey } from './publicLinks';
+
+// ---------------------------------------------------------------------------
+// Server-only read (no user session available, e.g. generateMetadata on a
+// public page) — bypasses RLS via the service-role client, since the
+// anon-key client getSetting() below has no reliable read access without an
+// authenticated session. Short in-memory cache so a burst of link-preview
+// crawlers (WhatsApp, Slack, etc.) re-fetching the same page doesn't hit
+// Postgres on every request.
+// ---------------------------------------------------------------------------
+
+const SERVER_SETTING_CACHE_TTL_MS = 60 * 1000;
+const serverSettingCache = new Map<string, { value: string | null; expiresAt: number }>();
+
+/** Server-only variant of getSetting() — for use in Server Components/API routes with no logged-in user. */
+export async function getSettingServer(key: string): Promise<string | null> {
+  const cached = serverSettingCache.get(key);
+  if (cached && cached.expiresAt > Date.now()) return cached.value;
+
+  let value: string | null = null;
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('app_settings')
+      .select('setting_value')
+      .eq('setting_key', key)
+      .single();
+
+    if (error) {
+      // PGRST116 = no row found, which just means "no override" — anything
+      // else is a real failure worth logging.
+      if (error.code !== 'PGRST116') console.error('Error fetching setting (server):', error);
+    } else {
+      value = data?.setting_value || null;
+    }
+  } catch (error) {
+    console.error('Exception fetching setting (server):', error);
+  }
+
+  serverSettingCache.set(key, { value, expiresAt: Date.now() + SERVER_SETTING_CACHE_TTL_MS });
+  return value;
+}
 
 // ---------------------------------------------------------------------------
 // Secure server-gated mutation (admin writes only)
@@ -156,4 +198,30 @@ export async function getSlideViewEnabled(role: SlideViewRole): Promise<boolean>
  */
 export async function setSlideViewEnabled(role: SlideViewRole, enabled: boolean): Promise<void> {
   await setSettingSecure(SLIDE_VIEW_KEYS[role], enabled ? 'true' : 'false', SLIDE_VIEW_DESCRIPTIONS[role]);
+}
+
+// ---------------------------------------------------------------------------
+// Public link display text overrides (see lib/publicLinks.ts for the
+// slug/setting-key scheme and the defaults these override). Empty string is
+// treated as "no override" — getSetting/getSettingServer both fall through
+// `|| null` for an empty value — so "reset to default" is just saving ''.
+// ---------------------------------------------------------------------------
+
+/**
+ * Override a public link's display title (shown on /admin/public-links and
+ * used as the page's <title>/Open Graph title). Pass '' to reset to the
+ * code default in lib/publicLinks.ts.
+ * Writes through the server-verified API route — admin status is confirmed server-side.
+ */
+export async function setPublicLinkTitle(slug: string, value: string): Promise<void> {
+  await setSettingSecure(publicLinkTitleSettingKey(slug), value, `Display title override for public link "${slug}"`);
+}
+
+/**
+ * Override a public link's display description. Pass '' to reset to the
+ * code default in lib/publicLinks.ts.
+ * Writes through the server-verified API route — admin status is confirmed server-side.
+ */
+export async function setPublicLinkDescription(slug: string, value: string): Promise<void> {
+  await setSettingSecure(publicLinkDescriptionSettingKey(slug), value, `Display description override for public link "${slug}"`);
 }

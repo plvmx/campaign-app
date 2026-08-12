@@ -12,13 +12,19 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { normalizeName } from '@/lib/auth';
 import { enforceOrigin } from '@/lib/corsUtils';
+import { PUBLIC_LINKS, publicLinkTitleSettingKey, publicLinkDescriptionSettingKey } from '@/lib/publicLinks';
 
+// Public link keys are derived from PUBLIC_LINKS so a new entry there is
+// automatically writable here too, without touching this allowlist.
 const ALLOWED_SETTING_KEYS = new Set([
   'campaign_logging_enabled',
   'slide_view_leaders',
   'slide_view_sr',
   'slide_view_admin',
+  ...PUBLIC_LINKS.flatMap((link) => [publicLinkTitleSettingKey(link.slug), publicLinkDescriptionSettingKey(link.slug)]),
 ]);
+
+const MAX_VALUE_LENGTH = 2000;
 
 export async function POST(request: NextRequest) {
   const corsBlock = enforceOrigin(request);
@@ -82,6 +88,10 @@ export async function POST(request: NextRequest) {
 
   if (!key || value === null) {
     return NextResponse.json({ error: 'Missing key or value' }, { status: 400 });
+  }
+
+  if (value.length > MAX_VALUE_LENGTH) {
+    return NextResponse.json({ error: `Value too long (max ${MAX_VALUE_LENGTH} characters)` }, { status: 400 });
   }
 
   // Allowlist of valid setting keys — prevents writing arbitrary rows
