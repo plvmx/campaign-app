@@ -11,18 +11,18 @@ const DESCRIPTION = 'Always-current Week 1 Campaigns list, all states — no log
 export const metadata: Metadata = {
   title: TITLE,
   description: DESCRIPTION,
+  // No `images` — text-only preview card (title + description + link), no
+  // thumbnail, per request after seeing the branded icon in a WhatsApp preview.
   openGraph: {
     title: TITLE,
     description: DESCRIPTION,
     url: '/public/week1-campaigns',
     type: 'website',
-    images: ['/icons/icon-512x512.png'],
   },
   twitter: {
     card: 'summary',
     title: TITLE,
     description: DESCRIPTION,
-    images: ['/icons/icon-512x512.png'],
   },
 };
 
