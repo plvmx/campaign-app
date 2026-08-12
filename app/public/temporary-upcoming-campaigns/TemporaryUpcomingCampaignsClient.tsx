@@ -21,8 +21,14 @@ import { generateAndDownloadSlidesFromData, type PublicSlideDay } from '@/lib/sl
 import type { AriseCampaign } from '@/lib/ariseLayout';
 import type { TemporaryUpcomingCampaignsResponse } from '@/app/api/public/temporary-upcoming-campaigns/route';
 
-const BODY_TEXT =
-  "Here is the temporary upcoming campaign list for this fortnight. ALL LEADERS please find your campaigns and check that the details displayed are correct.  If you need to make any changes click on the green 'Edit' button at the bottom. There is also a download button if you want to keep a copy of this list.";
+const INTRO_TEXT = 'Here is the temporary upcoming campaign list for this fortnight.';
+
+/** Each bullet as [before, bold word, after] so the bold word can be styled inline. */
+const LEADER_BULLETS: [string, string, string][] = [
+  ['', 'Check', ' that your campaign details are correct'],
+  ['Click on the ', 'Edit', ' button to make changes'],
+  ['Click on the ', 'Download', ' button to save a copy'],
+];
 
 export default function TemporaryUpcomingCampaignsClient() {
   const router = useRouter();
@@ -73,8 +79,18 @@ export default function TemporaryUpcomingCampaignsClient() {
   return (
     <div className="flex h-[calc(100dvh-var(--pwa-banner-height,0px))] flex-col p-4">
       <div className="mb-3">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Temporary Upcoming Campaigns</h1>
-        <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">{BODY_TEXT}</p>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">AFJ Temporary Campaign List</h1>
+        <p className="mt-1 text-base text-gray-600 dark:text-gray-400">{INTRO_TEXT}</p>
+        <p className="mt-2 text-base text-gray-600 dark:text-gray-400">ALL LEADERS please:</p>
+        <ul className="mt-1 list-disc space-y-1 pl-5 text-base text-gray-600 dark:text-gray-400">
+          {LEADER_BULLETS.map(([before, bold, after]) => (
+            <li key={bold}>
+              {before}
+              <span className="font-bold">{bold}</span>
+              {after}
+            </li>
+          ))}
+        </ul>
       </div>
 
       {loadError && (
