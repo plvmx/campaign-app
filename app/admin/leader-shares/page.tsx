@@ -5,19 +5,11 @@ import { useRouter } from 'next/navigation';
 import MobileLayout from '@/components/MobileLayout';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import { useUser } from '@/contexts/UserContext';
-import { supabase } from '@/lib/supabaseClient';
+import { getLeaderShares, createLeaderShare, deleteLeaderShare, type LeaderShare } from '@/lib/services/leaderSharesService';
+import { getStateLeaders } from '@/lib/services/stateLeadersService';
 import { getStateColor } from '@/lib/stateColors';
 import { AUSTRALIAN_STATES } from '@/lib/constants';
 import { getErrorMessage } from '@/lib/errorUtils';
-
-interface LeaderShare {
-  id: string;
-  owner_state: string;
-  owner_leader: string;
-  shared_with_state: string;
-  shared_with_leader: string;
-  created_at: string;
-}
 
 interface StateLeaderOption {
   state: string;
@@ -52,13 +44,7 @@ export default function LeaderSharesPage() {
 
   const fetchShares = async () => {
     try {
-      const { data, error: fetchError } = await supabase
-        .from('leader_shares')
-        .select('*')
-        .order('owner_state', { ascending: true })
-        .order('owner_leader', { ascending: true });
-      if (fetchError) throw fetchError;
-      setShares(data || []);
+      setShares(await getLeaderShares());
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Failed to fetch leader shares'));
     }
@@ -66,13 +52,8 @@ export default function LeaderSharesPage() {
 
   const fetchStateLeaders = async () => {
     try {
-      const { data, error: fetchError } = await supabase
-        .from('state_leaders')
-        .select('state, leader')
-        .order('state', { ascending: true })
-        .order('leader', { ascending: true });
-      if (fetchError) throw fetchError;
-      setStateLeaders((data || []) as StateLeaderOption[]);
+      const leaders = await getStateLeaders();
+      setStateLeaders(leaders.map(({ state, leader }) => ({ state, leader })));
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Failed to fetch state leaders'));
     }
@@ -99,20 +80,12 @@ export default function LeaderSharesPage() {
       if (!ownerState || !formState.owner_leader?.trim() || !sharedWithState || !formState.shared_with_leader?.trim()) {
         throw new Error('Please select owner and shared-with state and leader');
       }
-      const { error: insertError } = await supabase.from('leader_shares').insert([
-        {
-          owner_state: ownerState,
-          owner_leader: formState.owner_leader.trim(),
-          shared_with_state: sharedWithState,
-          shared_with_leader: formState.shared_with_leader.trim(),
-        },
-      ]);
-      if (insertError) {
-        if (insertError.code === '23505') {
-          throw new Error('This sharing relationship already exists');
-        }
-        throw insertError;
-      }
+      await createLeaderShare({
+        owner_state: ownerState,
+        owner_leader: formState.owner_leader.trim(),
+        shared_with_state: sharedWithState,
+        shared_with_leader: formState.shared_with_leader.trim(),
+      });
       setSuccess('Leader sharing added. All campaigns by the owner are now visible to the shared-with leader.');
       setFormState({ owner_state: '', owner_leader: '', shared_with_state: '', shared_with_leader: '' });
       await fetchShares();
@@ -126,8 +99,7 @@ export default function LeaderSharesPage() {
   const handleDelete = async (id: string) => {
     if (!confirm('Remove this sharing? The shared-with leader will no longer see the owner\'s campaigns.')) return;
     try {
-      const { error: deleteError } = await supabase.from('leader_shares').delete().eq('id', id);
-      if (deleteError) throw deleteError;
+      await deleteLeaderShare(id);
       setSuccess('Sharing removed');
       await fetchShares();
     } catch (err: unknown) {
