@@ -85,6 +85,7 @@ All database access goes through service modules in `lib/services/`. Pages and c
 - **`lib/services/placeService.ts`** — `addNewPlaceForState` — inserts into `state_places`; silently ignores duplicate (23505). Used when a user types a new place in a campaign form.
 - **`lib/services/stateLeadersService.ts`** — CRUD for the `state_leaders` table: `getStateLeaders`, `createStateLeader`, `updateStateLeader`, `deleteStateLeader`. Exports the `StateLeader` interface.
 - **`lib/services/statePlacesService.ts`** — CRUD for the `state_places` table: `getStatePlaces`, `createStatePlace`, `updateStatePlace`, `deleteStatePlace`. Exports the `StatePlace` interface (includes `site`; the table's uniqueness key is `state`+`place`+`site`).
+- **`lib/services/backupService.ts`** — `exportBackup`/`restoreBackup` for `/admin/backup`. `BACKUP_TABLE_CONFIG` is the single source of truth for which tables are backed up and in what order — listed FK-safe (a table only ever appears after every table it references), since "replace" mode restore inserts top-to-bottom but deletes bottom-to-top.
 - **`lib/placeSite.ts`** — `splitPlaceAndSite()`/`combinePlaceAndSite()`. The single source of truth for parsing/joining the numeric site suffix (e.g. "Orange 1" ⇄ `{ place: "Orange", site: "1" }`); used by the migration script and every place selector/display.
 - **`lib/campaignLog.ts`** — fire-and-forget audit logging to `campaign_changes_log`. Skips automatically on admin routes and when logging is toggled off via `lib/appSettings.ts`. `fetchCampaignData` returns `Campaign | null`.
 
@@ -134,7 +135,7 @@ All database access goes through service modules in `lib/services/`. Pages and c
 | `/admin/metrics` | Usage analytics, active users, and database row counts |
 | `/admin/results-metrics` | Results dashboard — names recorded per category (TM/P/F/SP), by state, place, and campaign, for a date range |
 | `/admin/campaign-categories` | Manage campaign categories (TWOL, BOTJ, TLT, …) |
-| `/admin/backup` | Export/restore a JSON snapshot of campaigns, state leaders, state places, and campaign rules |
+| `/admin/backup` | Export/restore a JSON snapshot of every admin-curated table (see `lib/services/backupService.ts`'s `BACKUP_TABLE_CONFIG` for the full, current list and restore ordering) |
 
 ### Database tables (key ones)
 - `campaigns` — core records; `category` column is the campaign category flag (e.g. `TWOL`, `BOTJ`, `TLT`); `place`+`site` together identify the location
