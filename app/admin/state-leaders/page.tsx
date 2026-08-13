@@ -295,16 +295,21 @@ export default function StateLeadersPage() {
             </div>
             <div>
               <label htmlFor="admin" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                Admin (Optional)
+                Admin Role (Optional)
               </label>
-              <input
+              {/* Constrained to the only three values this column may ever hold — a free-text
+                  field here is exactly what caused the #78 stray-admin-value bug (a recruiter's
+                  name typed in instead of a real role code). */}
+              <select
                 id="admin"
-                type="text"
                 value={formState.admin}
                 onChange={(e) => setFormState({ ...formState, admin: e.target.value })}
                 className="mt-1 block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
-                placeholder="Enter admin name"
-              />
+              >
+                <option value="">None (regular leader)</option>
+                <option value="AD">AD — Full Admin</option>
+                <option value="SR">SR — State Reporter</option>
+              </select>
             </div>
             <div className="flex gap-2">
               <button

@@ -60,6 +60,30 @@ describe('createStateLeader', () => {
       createStateLeader({ state: 'VIC', leader: 'Alice', mobile: null, admin: null }),
     ).rejects.toEqual(error);
   });
+
+  it('accepts AD and SR', async () => {
+    const builder = makeQueryBuilder({ data: null, error: null });
+    mockFrom.mockReturnValue(builder);
+    await createStateLeader({ state: 'VIC', leader: 'Alice', mobile: null, admin: 'AD' });
+    await createStateLeader({ state: 'VIC', leader: 'Bob', mobile: null, admin: 'SR' });
+    expect(builder.insert).toHaveBeenCalledTimes(2);
+  });
+
+  it('rejects a non-AD/SR admin value without hitting the database — the #78 stray-value bug (a recruiter\'s name typed into this column)', async () => {
+    const builder = makeQueryBuilder({ data: null, error: null });
+    mockFrom.mockReturnValue(builder);
+    await expect(
+      createStateLeader({ state: 'WA', leader: 'Dena', mobile: null, admin: 'Lorraine' }),
+    ).rejects.toThrow('"Lorraine" is not a valid admin role — must be AD, SR, or left blank');
+    expect(builder.insert).not.toHaveBeenCalled();
+  });
+
+  it('rejects lowercase variants — must be an exact match, same as isRecognizedAdminStatus', async () => {
+    mockFrom.mockReturnValue(makeQueryBuilder({ data: null, error: null }));
+    await expect(
+      createStateLeader({ state: 'VIC', leader: 'Alice', mobile: null, admin: 'ad' }),
+    ).rejects.toThrow('is not a valid admin role');
+  });
 });
 
 describe('updateStateLeader', () => {
@@ -78,6 +102,15 @@ describe('updateStateLeader', () => {
     await expect(
       updateStateLeader('l1', { state: 'VIC', leader: 'Alice', mobile: null, admin: null }),
     ).rejects.toEqual(error);
+  });
+
+  it('rejects a non-AD/SR admin value without hitting the database', async () => {
+    const builder = makeQueryBuilder({ data: null, error: null });
+    mockFrom.mockReturnValue(builder);
+    await expect(
+      updateStateLeader('l1', { state: 'WA', leader: 'Dena', mobile: null, admin: 'Lorraine' }),
+    ).rejects.toThrow('is not a valid admin role');
+    expect(builder.update).not.toHaveBeenCalled();
   });
 });
 
