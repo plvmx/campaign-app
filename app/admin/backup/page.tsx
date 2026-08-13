@@ -180,9 +180,26 @@ export default function BackupPage() {
           </Link>
         </div>
 
-        <h1 className="mb-6 text-2xl font-bold text-gray-900 dark:text-gray-100">
+        <h1 className="mb-2 text-2xl font-bold text-gray-900 dark:text-gray-100">
           Backup &amp; Restore
         </h1>
+
+        <div className="mb-6 rounded-md border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600 dark:border-gray-600 dark:bg-gray-700/50 dark:text-gray-400">
+          <p className="font-medium text-gray-800 dark:text-gray-200">
+            This isn&apos;t the only backup — there&apos;s also an automatic one.
+          </p>
+          <p className="mt-1">
+            A full database backup (every table, not just the ones below) runs automatically every{' '}
+            <strong>Saturday at 23:00 UTC</strong> — timed to land before Sunday&apos;s Weekly Refresh
+            job, so it captures a pre-refresh snapshot. It&apos;s pushed to a private GitHub repo, not
+            this app. See <code className="rounded bg-gray-200 px-1 py-0.5 text-xs dark:bg-gray-600">scripts/BACKUP_RESTORE.md</code> for
+            restore instructions.
+          </p>
+          <p className="mt-1">
+            Use the tools below for on-demand, per-table snapshots or restores — the automatic backup
+            is for full disaster recovery.
+          </p>
+        </div>
 
         {error && (
           <div className="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800 dark:bg-red-900/20 dark:border-red-800 dark:text-red-200">

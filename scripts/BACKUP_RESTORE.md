@@ -1,10 +1,13 @@
 # Database backup and restore
 
-Weekly backups run automatically **every Sunday at 06:00 UTC** via GitHub Actions. Backups are pushed
-straight to the private [plvmx/campaign-app-backups](https://github.com/plvmx/campaign-app-backups)
-repo — **not** uploaded as a GitHub Actions artifact on this repo. Public-repo Actions artifacts are
-downloadable by anyone with no repo access required, so keeping backups in a dedicated private repo
-means they stay protected even if `campaign-app` itself is ever made public.
+Weekly backups run automatically **every Saturday at 23:00 UTC** via GitHub Actions — deliberately
+timed to land 2 hours *before* the Weekly Refresh cron (Sunday 01:00 UTC, see `vercel.json`), so each
+snapshot reflects the database as it looked before that week's campaigns are pruned/generated, not
+after. Backups are pushed straight to the private
+[plvmx/campaign-app-backups](https://github.com/plvmx/campaign-app-backups) repo — **not** uploaded
+as a GitHub Actions artifact on this repo. Public-repo Actions artifacts are downloadable by anyone
+with no repo access required, so keeping backups in a dedicated private repo means they stay
+protected even if `campaign-app` itself is ever made public.
 
 You can also run a backup manually or restore from a backup file.
 
@@ -33,15 +36,17 @@ is required for this cross-repo push.
 5. In `campaign-app`'s repo settings → **Secrets and variables** → **Actions** → **New repository secret**: name `BACKUP_REPO_TOKEN`, value = the token.
    - Prefer running `gh secret set BACKUP_REPO_TOKEN --repo plvmx/campaign-app` in your own terminal (it reads the token from stdin/prompt, so it never appears in shell history or anywhere else) rather than pasting the token value into any chat or document.
 
-After both secrets are set, the scheduled workflow will run every Sunday and push the backup straight
-to `campaign-app-backups`.
+After both secrets are set, the scheduled workflow will run every Saturday night and push the backup
+straight to `campaign-app-backups`.
 
 ### 3. (Optional) Change backup time
 
-Edit `.github/workflows/backup-database.yml` and change the cron expression:
+Edit `.github/workflows/backup-database.yml` and change the cron expression. If you move Weekly
+Refresh's own schedule (`vercel.json`, currently Sunday 01:00 UTC), keep this one at least an hour or
+two ahead of it so backups stay pre-refresh:
 
-- `0 6 * * 0` = Sunday 06:00 UTC  
-- `0 8 * * 0` = Sunday 08:00 UTC  
+- `0 23 * * 6` = Saturday 23:00 UTC (current — 2h before Sunday 01:00 UTC refresh)
+- `0 22 * * 6` = Saturday 22:00 UTC
 - [Cron format](https://crontab.guru): minute hour day-of-month month day-of-week
 
 ## Running a backup manually

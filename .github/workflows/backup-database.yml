@@ -1,4 +1,9 @@
-# Weekly Supabase database backup (Sunday morning).
+# Weekly Supabase database backup — Saturday night, deliberately timed to run
+# BEFORE the Weekly Refresh cron (vercel.json: Sunday 01:00 UTC), so each
+# snapshot captures the database as it looked before that week's campaigns are
+# pruned/generated, not after. Saturday 23:00 UTC gives a 2-hour buffer ahead
+# of the refresh — comfortable headroom for either job's schedule to slip a
+# little without the ordering flipping.
 #
 # Backups are pushed directly to the private plvmx/campaign-app-backups repo —
 # never uploaded as a GitHub Actions artifact on *this* repo. Public-repo Actions
@@ -17,8 +22,9 @@ name: Weekly database backup
 
 on:
   schedule:
-    # Sunday at 06:00 UTC (adjust for your timezone, e.g. 08:00 = 8am UTC)
-    - cron: '0 6 * * 0'
+    # Saturday 23:00 UTC — 2 hours before Sunday 01:00 UTC's Weekly Refresh
+    # cron (vercel.json), so this snapshot is always pre-refresh.
+    - cron: '0 23 * * 6'
   workflow_dispatch: # Allow manual run from Actions tab
 
 jobs:
