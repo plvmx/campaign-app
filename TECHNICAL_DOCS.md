@@ -18,8 +18,8 @@
 9. [Component Hierarchy](#9-component-hierarchy)
 10. [Service Layer](#10-service-layer)
 11. [Campaign Rules Engine](#11-campaign-rules-engine)
-12. [Weekly Refresh Automation](#12-weekly-refresh-automation)
-13. [Common Change Recipes](#13-common-change-recipes)
+12. [Common Change Recipes](#12-common-change-recipes)
+13. [Testing Policy](#13-testing-policy)
 14. [Environment Variables](#14-environment-variables)
 15. [Running the App Locally](#15-running-the-app-locally)
 16. [Change Management — Git Workflow](#16-change-management--git-workflow)
@@ -175,52 +175,82 @@ campaign-app/
 │   │
 │   ├── app/                    # Route group: main app pages
 │   │   ├── page.tsx            # Route: /app (main campaign feed)
-│   │   ├── sr-admin/page.tsx   # Route: /app/sr-admin
-│   │   ├── tl-admin/page.tsx   # Route: /app/tl-admin
+│   │   ├── sr-admin/page.tsx   # Route: /app/sr-admin (State Reporter dashboard)
+│   │   ├── tl-admin/page.tsx   # Route: /app/tl-admin (Team Leader dashboard)
 │   │   └── components/         # Components used ONLY by /app pages
 │   │       ├── AdminQuickActions.tsx
 │   │       ├── CampaignCard.tsx
 │   │       ├── CampaignCreateForm.tsx
 │   │       ├── CampaignFilters.tsx
 │   │       ├── CampaignList.tsx
+│   │       ├── CampaignSlideView.tsx
 │   │       ├── DeleteConfirmModal.tsx
 │   │       ├── InlineEditForm.tsx
 │   │       ├── useCampaignForm.ts  # Unified form logic hook (shared by Create + InlineEdit)
 │   │       ├── useStateDropdowns.ts # State-scoped place/leader dropdowns with caching
 │   │       ├── timeOptions.ts
-│   │       └── types.ts
+│   │       ├── types.ts
+│   │       └── __tests__/      # useCampaignForm.test.ts, useStateDropdowns.test.ts
 │   │
-│   ├── admin/                  # Admin-only pages
-│   │   ├── page.tsx            # Route: /admin (admin hub)
-│   │   ├── campaign-rules/     # Route: /admin/campaign-rules
-│   │   ├── campaign-logs/      # Route: /admin/campaign-logs
-│   │   ├── campaign-messages/  # Route: /admin/campaign-messages
-│   │   ├── campaign-categories/
-│   │   ├── state-leaders/      # Route: /admin/state-leaders
-│   │   ├── state-places/       # Route: /admin/state-places
-│   │   ├── leader-shares/      # Route: /admin/leader-shares
-│   │   ├── generate-slides/    # Route: /admin/generate-slides
-│   │   ├── generate-report/    # Route: /admin/generate-report
-│   │   ├── metrics/            # Route: /admin/metrics
-│   │   └── backup/             # Route: /admin/backup
+│   ├── admin/                  # Admin-only pages (full admin, some also allow SR — see §7)
+│   │   ├── page.tsx                # Route: /admin (admin hub)
+│   │   ├── backup/                 # Route: /admin/backup — export/restore JSON snapshot
+│   │   ├── campaign-categories/    # Route: /admin/campaign-categories — manage TWOL/BOTJ/TLT etc.
+│   │   ├── campaign-logs/          # Route: /admin/campaign-logs — audit log, paginated
+│   │   ├── campaign-map/           # Route: /admin/campaign-map — map of upcoming campaigns
+│   │   ├── campaign-messages/      # Route: /admin/campaign-messages — per-date banner text
+│   │   ├── campaign-rules/         # Route: /admin/campaign-rules — recurring scheduling rules
+│   │   ├── campaigns-near-me/      # Route: /admin/campaigns-near-me — geolocation-filtered map
+│   │   ├── generate-report/        # Route: /admin/generate-report — canvas-based PDF report
+│   │   ├── generate-slides/        # Route: /admin/generate-slides — JPEG slide ZIP download
+│   │   ├── leader-shares/          # Route: /admin/leader-shares — leader-to-leader sharing links
+│   │   ├── member-activity/        # Route: /admin/member-activity — active member counts
+│   │   ├── metrics/                # Route: /admin/metrics — usage analytics, row counts
+│   │   ├── public-links/           # Route: /admin/public-links — title/description for /public/* pages
+│   │   ├── register-interest/      # Route: /admin/register-interest — RSVP ("Yes I'm In")
+│   │   ├── results-metrics/        # Route: /admin/results-metrics — names recorded by category
+│   │   ├── state-leaders/          # Route: /admin/state-leaders — manage leaders per state
+│   │   ├── state-places/           # Route: /admin/state-places — manage places per state
+│   │   └── state-places-map/       # Route: /admin/state-places-map — map of all valid places
 │   │
 │   ├── record-results/
 │   │   ├── page.tsx            # Route: /record-results
 │   │   └── detail/page.tsx     # Route: /record-results/detail
 │   │
-│   ├── results/page.tsx        # Route: /results
+│   ├── results/page.tsx        # Route: /results (signed-in JPEG slide viewer)
 │   ├── capture/page.tsx        # Route: /capture
-│   ├── view-slides/page.tsx    # Route: /view-slides
+│   ├── view-slides/page.tsx    # Route: /view-slides (public, no-login JPEG slide viewer)
+│   │
+│   ├── public/                 # No-login pages, server-rendered for link-preview metadata
+│   │   ├── week1-campaigns/page.tsx
+│   │   └── temporary-upcoming-campaigns/page.tsx
+│   │
+│   ├── auth/callback/route.ts  # Route: /auth/callback — Supabase OAuth code exchange, then redirects
+│   │
 │   └── api/                    # Server-side API routes
-│       ├── auth/validate-leader/route.ts
-│       └── cron/weekly-refresh/route.ts
+│       ├── auth/validate-leader/route.ts          # Service-role leader lookup on sign-in
+│       ├── admin/geocode-address/route.ts
+│       ├── admin/geocode-place/route.ts
+│       ├── admin/invalidate-user-session/route.ts
+│       ├── admin/settings/route.ts
+│       ├── public/week1-campaigns/route.ts        # Data route backing /public/week1-campaigns
+│       ├── public/temporary-upcoming-campaigns/route.ts
+│       ├── tiles/[z]/[x]/[y]/route.ts             # Server-side map tile proxy
+│       └── cron/weekly-refresh/route.ts           # Called by Vercel Cron
 │
 ├── components/                 # Shared components (used across multiple pages)
 │   ├── CampaignForm.tsx        # Generic campaign add/edit form
+│   ├── CampaignMap.tsx         # Leaflet map used by /admin/campaign-map, /admin/state-places-map
 │   ├── ErrorBoundary.tsx       # React error boundary
 │   ├── LoadingSpinner.tsx      # Loading indicator
+│   ├── MapPopupActions.tsx     # RSVP buttons shown inside map popups
 │   ├── MobileLayout.tsx        # Page shell: header + bottom nav + content
-│   └── Modal.tsx               # Modal overlay wrapper
+│   ├── Modal.tsx               # Modal overlay wrapper
+│   ├── NearbyCampaignsMap.tsx  # Map for /admin/campaigns-near-me
+│   ├── PWAInstallPrompt.tsx    # Install-banner prompt (hidden on /public/* pages)
+│   ├── PublicCampaignList.tsx  # Shared list rendering for /public/* pages
+│   ├── ServiceWorkerRegistration.tsx
+│   └── __tests__/
 │
 ├── contexts/                   # React Contexts (global state)
 │   ├── UserContext.tsx         # Auth state: user, role, state, leader
@@ -233,7 +263,7 @@ campaign-app/
 │   ├── supabaseAdmin.ts        # Server-only Supabase admin client
 │   ├── auth.ts                 # Login, sign-out, session helpers
 │   ├── userProfile.ts          # user_profiles table CRUD
-│   ├── campaignFilter.ts       # getUserAdminStatusAndMobile()
+│   ├── campaignFilter.ts       # getUserAdminStatusAndMobile(), isRecognizedAdminStatus()
 │   ├── campaignRules.ts        # Rules evaluation engine
 │   ├── campaignDates.ts        # Date window calculations
 │   ├── campaignLog.ts          # Audit logging (fetchCampaignData → Campaign | null)
@@ -248,25 +278,30 @@ campaign-app/
 │   ├── reportCanvas.ts         # Canvas drawing helpers for reports
 │   ├── leaderShares.ts         # Campaign sharing logic
 │   ├── location.ts             # Geolocation → state code
-│   ├── errorUtils.ts           # Error message extraction helper
+│   ├── geocoding.ts            # Nominatim (OpenStreetMap) address/place → lat-lon
+│   ├── placeSite.ts            # splitPlaceAndSite()/combinePlaceAndSite()
+│   ├── publicLinks.ts          # Registry of /public/* pages: slug, default title/description
+│   ├── rateLimit.ts            # Shared in-memory per-IP rate limiter for public API routes
+│   ├── corsUtils.ts            # Origin enforcement for internal API routes
+│   ├── siteUrl.ts              # Absolute site origin (for OG tags, canonical URLs)
+│   ├── leafletMarkerIcon.ts    # State-tinted map pin icons (shared by every map)
+│   ├── recordResultsDraft.ts   # Local-only draft recovery for /record-results/detail
+│   ├── resultsLog.ts           # Audit logging for results changes
+│   ├── resultsMetrics.ts       # Aggregation for /admin/results-metrics
+│   ├── stateRefreshSettings.ts # Per-state weekly-refresh mode ('copy' | 'rules' | 'both' | 'either')
+│   ├── errorUtils.ts           # getErrorMessage() — safe error-to-string coercion
 │   ├── analytics.ts            # Fire-and-forget event tracking
-│   ├── appSettings.ts          # App-level toggles (logging on/off)
-│   ├── weeklyRefresh.ts        # (legacy — logic moved to services/)
-│   └── services/               # Database service layer
-│       ├── authService.ts      # getAuthenticatedUser() (all auth in one query)
-│       ├── campaignService.ts  # campaigns table CRUD + getCampaignsForUser()
-│       ├── dropdownService.ts  # Form dropdown data
-│       ├── placeService.ts     # addNewPlaceForState() (ignores duplicate)
-│       ├── stateLeadersService.ts  # state_leaders CRUD + StateLeader interface
-│       ├── statePlacesService.ts   # state_places CRUD + StatePlace interface
-│       ├── resultsService.ts   # results table CRUD
-│       ├── rulesService.ts     # campaign_rules table CRUD
-│       └── weeklyRefreshService.ts # Weekly campaign generation logic
+│   ├── appSettings.ts          # App-level toggles (logging on/off, public link overrides)
+│   ├── weeklyRefresh.ts        # getLeadersNotSignedInSinceRefreshByState() + legacy helpers
+│   └── services/               # Database service layer — see §10
 │
-└── lib/__tests__/              # Vitest unit tests
-    ├── auth.test.ts
-    ├── campaignDates.test.ts
-    └── campaignRules.test.ts
+└── lib/__tests__/              # Vitest unit tests — see §13 for the testing policy behind these
+    ├── (17 files covering auth, campaignDates, campaignRules, campaignFilter, campaignLog,
+    │    campaignUtils, appSettings, ariseLayout, errorUtils, leaderShares, placeSite,
+    │    publicLinks, rateLimit, recordResultsDraft, resultsLog, resultsMetrics,
+    │    stateRefreshSettings, weeklyRefresh)
+    └── lib/services/__tests__/ (13 files, one per service — see §10 — plus supabaseMock.ts,
+         the shared Supabase-client mock builder every service test should use)
 ```
 
 ---
@@ -311,7 +346,8 @@ campaigns ───────────────────────�
 results ────────────────────────────────────────────┐
   campaign_id (FK → campaigns.id)                   │
   first_name                                         │
-  category_code  'partial' | 'full' | 'full_sinners' | 'information'
+  category_code  'TM' | 'P' | 'F' | 'SP' | 'IR'
+    (Team Member / Partial / Full / Full+Sinner's Prayer / Information Request)
   UNIQUE(campaign_id, first_name, category_code)     │
                                                      │
 state_places ──────────────────────────────────────┐│
@@ -492,30 +528,43 @@ There is no separate permissions module. Role logic is kept inline wherever it i
 ### 8.1 Route Overview
 
 ```
-/                         Auth guard — redirects to /app or /login
-/login                    Sign in with mobile + name
-/app                      Main campaign feed (home screen)
-/app/sr-admin             State Reporter dashboard
-/app/tl-admin             Team Leader dashboard
-/record-results           Select a campaign to record results for
-/record-results/detail    Enter result names + counts
-/results                  View result summaries
-/capture                  Geolocation-based campaign capture
-/view-slides              Browse generated presentation slides
-/debug                    Development debugging tools
-/admin                    Admin hub (full admin only)
-/admin/campaign-rules     Manage recurring scheduling rules
-/admin/state-leaders      Manage the state_leaders master list
-/admin/state-places       Manage valid place/suburb names per state
-/admin/campaign-categories Manage campaign type codes
-/admin/campaign-messages  Manage date-specific banner messages
-/admin/campaign-logs      View campaign change audit log
-/admin/leader-shares      Manage campaign sharing between leaders
-/admin/generate-slides    Generate downloadable presentation slides
-/admin/generate-report    Generate downloadable campaign reports
-/admin/metrics            Admin analytics dashboard
-/admin/backup             Export/restore JSON backup
+/                                     Auth guard — redirects to /app or /login
+/login                                Sign in with mobile + name
+/app                                  Main campaign feed (home screen)
+/app/sr-admin                         State Reporter dashboard
+/app/tl-admin                         Team Leader dashboard
+/record-results                       Select a campaign to record results for
+/record-results/detail                Enter result names + counts
+/results                              View result summaries (signed-in JPEG slide viewer)
+/capture                              Geolocation-based campaign capture
+/view-slides                          Public, no-login JPEG slide viewer
+
+/public/week1-campaigns               Public, no-login "Week 1 Campaigns" link (shareable)
+/public/temporary-upcoming-campaigns  Public, no-login temporary-upcoming-campaigns link
+/auth/callback                        Supabase OAuth code-exchange handler, not user-facing
+
+/admin                                Admin hub (full admin only)
+/admin/campaign-rules                 Manage recurring scheduling rules
+/admin/state-leaders                  Manage the state_leaders master list
+/admin/state-places                   Manage valid place/suburb names per state
+/admin/state-places-map               Map of every valid place, by state
+/admin/campaign-categories            Manage campaign type codes (TWOL, BOTJ, TLT, …)
+/admin/campaign-messages              Manage date-specific banner messages
+/admin/campaign-logs                  View campaign change audit log
+/admin/campaign-map                   Interactive map of upcoming campaigns
+/admin/campaigns-near-me              Upcoming campaigns near the admin's current location
+/admin/register-interest              Tick upcoming campaigns, RSVP ("Yes I'm In" / "Tell Me More")
+/admin/member-activity                Active member counts, by total/state/place/campaign
+/admin/leader-shares                  Manage campaign sharing between leaders
+/admin/public-links                   Edit title/description shown on /public/* link previews
+/admin/generate-slides                Generate downloadable presentation slides (JPEG ZIP)
+/admin/generate-report                Generate downloadable campaign reports
+/admin/metrics                        Admin analytics dashboard (usage, active users, row counts)
+/admin/results-metrics                Names recorded per category (TM/P/F/SP), by state/place/campaign
+/admin/backup                         Export/restore JSON backup of every admin-curated table
 ```
+
+> There is no `/debug` route in the current codebase — if you find a reference to one elsewhere, it's stale.
 
 ### 8.2 Main App Page (`/app`) — Most Important Page
 
@@ -751,6 +800,29 @@ Supabase Postgres
 |----------|-------------|
 | `runWeeklyRefresh(supabaseClient, userId)` | Run the full weekly campaign generation pipeline |
 
+#### `lib/services/leaderSharesService.ts`
+
+| Function | Description |
+|----------|-------------|
+| `getLeaderShares()` | All leader-share rows (owner → shared_with) |
+| `createLeaderShare(input)` | Insert a new share; throws on duplicate |
+| `deleteLeaderShare(id)` | Delete a share |
+
+#### `lib/services/campaignMapService.ts`
+
+| Function | Description |
+|----------|-------------|
+| `getMapData(options)` | Campaigns in a date range (optionally by state), grouped by place, with coordinates resolved from `state_places` or on-demand geocoding — backs `/admin/campaign-map` |
+| `getStatePlacesMapData(options)` | Same coordinate-resolution pipeline for every valid place — backs `/admin/state-places-map` |
+| `fetchPlaceCoordinates(state, place, force?)` | Look up (or force-refresh) one place's lat/lon |
+
+#### `lib/services/nearbyCampaignsService.ts`
+
+| Function | Description |
+|----------|-------------|
+| `getNearbyCampaigns(...)` | Campaigns within a radius (km) of a centre point, reusing `getMapData()` — backs `/admin/campaigns-near-me` |
+| `haversineKm(...)` | Distance-between-two-coordinates helper |
+
 ---
 
 ## 11. Campaign Rules Engine
@@ -810,7 +882,7 @@ Step 10: Log result to weekly_refresh_log
 
 ## 12. Common Change Recipes
 
-Use this section to quickly find **which files to edit** for any given type of change.
+Use this section to quickly find **which files to edit** for any given type of change. Once you're done editing, see [§13 Testing Policy](#13-testing-policy) before you commit — a bug fix isn't finished until you have a test that fails on the old code and passes on the new code.
 
 ---
 
@@ -1034,9 +1106,59 @@ To change font size, column widths, or colors for the Arise list: edit the const
 
 ---
 
-## 13. Environment Variables
+## 13. Testing Policy
 
-### 13.1 All Variables
+These rules apply to **every** change, not just the recipes above. They come from [CLAUDE.md](../CLAUDE.md) and CI enforces the first four automatically (see §15) — but only a human (or an AI assistant) reviewing the diff enforces "does the test actually prove the fix."
+
+### 13.1 The Rules
+
+1. **Every bug-fix PR includes a regression test that fails on the pre-fix code and passes on the post-fix code, in the same PR.** If the bug is purely visual/CSS/copy and genuinely can't be captured in a test, say so explicitly in the PR description instead of silently skipping it.
+2. **Every new function added to `lib/` or `lib/services/` ships with a test in the same PR.**
+3. **Prove red → green before calling a fix "done."** Run the new/updated test against the pre-fix code first (see §13.3 below) to confirm it actually fails, then against the fix to confirm it passes. A test that currently passes is not sufficient on its own — it must be shown to have caught the original bug.
+4. **Mock the Supabase client with the shared builder** in `lib/services/__tests__/supabaseMock.ts` rather than hand-rolling `vi.mock` chains per test file. Every file in `lib/services/__tests__/` already does this — copy the pattern from the closest existing test rather than inventing a new one.
+5. **If you're investigating a production incident with a one-off script in `scripts/`, the investigation isn't closed until the root cause is captured as a permanent test** in `lib/__tests__/` or `lib/services/__tests__/` — the script is evidence, not the fix's safety net.
+6. **Role/status checks against `state_leaders.admin` must go through `isRecognizedAdminStatus()`** in `lib/campaignFilter.ts` — never re-implement `=== 'AD' || === 'SR'` inline. A past bug (a truthy check at one call site silently misrouted leaders with junk data in that column) is exactly why this rule exists.
+
+### 13.2 Where Tests Live
+
+| Directory | What goes here |
+|-----------|-----------------|
+| `lib/__tests__/` | Tests for pure logic in `lib/*.ts` (dates, rules, filters, formatting, etc.) |
+| `lib/services/__tests__/` | Tests for every `lib/services/*.ts` file, using `supabaseMock.ts` |
+| `app/app/components/__tests__/` | Tests for the hooks in `app/app/components/` (`useCampaignForm`, `useStateDropdowns`) |
+| `components/__tests__/` | Tests for shared components in `components/` |
+
+Run one file directly with:
+
+```bash
+npx vitest run lib/__tests__/campaignFilter.test.ts
+```
+
+### 13.3 How to Prove Red → Green
+
+For a bug fix, before you consider it done:
+
+```bash
+# 1. Write the regression test against the FIXED code first, then confirm
+#    it currently passes (sanity check the test itself isn't broken).
+npx vitest run lib/__tests__/yourNewTest.test.ts
+
+# 2. Stash your fix (keep the test) and re-run — it MUST fail now.
+git stash push -- lib/theFileYouFixed.ts
+npx vitest run lib/__tests__/yourNewTest.test.ts   # expect: FAIL
+
+# 3. Restore your fix and confirm green again.
+git stash pop
+npx vitest run lib/__tests__/yourNewTest.test.ts   # expect: PASS
+```
+
+If the fix and the test live in the same file (rare), use `git show HEAD~1:path/to/file.ts > /tmp/old.ts` and diff manually, or check out the parent commit for that one file instead of stashing.
+
+---
+
+## 14. Environment Variables
+
+### 14.1 All Variables
 
 | Variable | Where Used | Required |
 |----------|-----------|---------|
@@ -1046,22 +1168,22 @@ To change font size, column widths, or colors for the Arise list: edit the const
 | `CRON_SECRET` | `app/api/cron/weekly-refresh/route.ts` | Yes (production) |
 | `NEXT_PUBLIC_ADMIN_EMAILS` | Referenced but not actively enforced | No |
 
-### 13.2 Where to Set Them
+### 14.2 Where to Set Them
 
 - **Local development**: Create `.env.local` in the project root (never commit this file)
 - **Production (Vercel)**: Vercel Dashboard → Project Settings → Environment Variables
 
 ---
 
-## 14. Running the App Locally
+## 15. Running the App Locally
 
-### 14.1 Prerequisites
+### 15.1 Prerequisites
 
 - Node.js 20+
 - npm 10+
 - Access to the Supabase project credentials
 
-### 14.2 First-Time Setup
+### 15.2 First-Time Setup
 
 ```bash
 # 1. Clone the repository
@@ -1081,7 +1203,7 @@ cp .env.example .env.local   # or create manually
 #    CRON_SECRET=any-random-string-for-local-testing
 ```
 
-### 14.3 Daily Development
+### 15.3 Daily Development
 
 ```bash
 # Start the development server (hot reload)
@@ -1089,7 +1211,7 @@ npm run dev
 # Opens at http://localhost:3000
 ```
 
-### 14.4 Before Committing
+### 15.4 Before Committing
 
 Always run all four checks locally before pushing:
 
@@ -1107,9 +1229,11 @@ npm test
 npm run build
 ```
 
+These are the same four jobs CI runs on every push (Lint · Type-check · Unit tests · Build). Before you get here, make sure you've actually followed the [Testing Policy](#13-testing-policy) above — `npm test` passing is not the bar; a regression test that's been proven to fail on the pre-fix code is.
+
 ---
 
-## 15. Change Management — Git Workflow
+## 16. Change Management — Git Workflow
 
 This section gives exact git commands to follow for every change. The rule is simple: **every change goes through a feature branch and passes CI before merging**.
 
