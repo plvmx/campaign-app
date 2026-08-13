@@ -9,72 +9,23 @@ import { useUser } from '@/contexts/UserContext';
 import { supabase } from '@/lib/supabaseClient';
 import { getErrorMessage } from '@/lib/errorUtils';
 import { trackEvent } from '@/lib/analytics';
-import type { Campaign } from '@/lib/types';
-import type { CampaignRule } from '@/lib/types';
-
-// ─── Local types ──────────────────────────────────────────────────────────────
-
-interface StateLeader {
-  id: string;
-  state: string;
-  leader: string;
-  mobile: string | null;
-  admin: string | null;
-  created_at?: string;
-}
-
-interface StatePlace {
-  id: string;
-  state: string;
-  place: string;
-  location?: string;
-  created_at?: string;
-}
-
-interface BackupData {
-  exported_at: string;
-  version: string;
-  campaigns?: Campaign[];
-  state_leaders?: StateLeader[];
-  state_places?: StatePlace[];
-  campaign_rules?: CampaignRule[];
-}
+import {
+  BACKUP_TABLE_CONFIG,
+  exportBackup,
+  restoreBackup,
+  isValidBackupFile,
+  type BackupData,
+  type BackupTableKey,
+  type RestoreMode,
+} from '@/lib/services/backupService';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const BATCH_SIZE = 500;
+/** All table keys checked/selected by default — a "full backup" out of the box. */
+const ALL_KEYS: BackupTableKey[] = BACKUP_TABLE_CONFIG.map((cfg) => cfg.key);
 
-async function upsertRecords<T extends { id: string }>(
-  table: string,
-  records: T[],
-): Promise<void> {
-  for (let i = 0; i < records.length; i += BATCH_SIZE) {
-    const { error } = await supabase.from(table).upsert(records.slice(i, i + BATCH_SIZE));
-    if (error) throw error;
-  }
-}
-
-async function replaceRecords<T extends { id: string }>(
-  table: string,
-  records: T[],
-): Promise<void> {
-  // Fetch all current IDs then delete in batches to satisfy RLS
-  const { data: current, error: fetchErr } = await supabase.from(table).select('id');
-  if (fetchErr) throw fetchErr;
-
-  const currentIds = (current ?? []).map((r: { id: string }) => r.id);
-  for (let i = 0; i < currentIds.length; i += BATCH_SIZE) {
-    const { error } = await supabase
-      .from(table)
-      .delete()
-      .in('id', currentIds.slice(i, i + BATCH_SIZE));
-    if (error) throw error;
-  }
-
-  for (let i = 0; i < records.length; i += BATCH_SIZE) {
-    const { error } = await supabase.from(table).insert(records.slice(i, i + BATCH_SIZE));
-    if (error) throw error;
-  }
+function allChecked(keys: BackupTableKey[] = ALL_KEYS): Record<BackupTableKey, boolean> {
+  return Object.fromEntries(ALL_KEYS.map((key) => [key, keys.includes(key)])) as Record<BackupTableKey, boolean>;
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
@@ -83,25 +34,19 @@ export default function BackupPage() {
   const router = useRouter();
   const { user, isAdmin, isLoading: isUserLoading } = useUser();
 
-  // Export checkboxes
-  const [exportCampaigns,     setExportCampaigns]     = useState(true);
-  const [exportStateLeaders,  setExportStateLeaders]  = useState(true);
-  const [exportStatePlaces,   setExportStatePlaces]   = useState(true);
-  const [exportCampaignRules, setExportCampaignRules] = useState(true);
-  const [isExporting,         setIsExporting]         = useState(false);
+  // Export checkboxes — every table selected by default (a "full backup").
+  const [exportSelected, setExportSelected] = useState<Record<BackupTableKey, boolean>>(() => allChecked());
+  const [isExporting, setIsExporting] = useState(false);
 
   // Import state
   const [backupFile,     setBackupFile]     = useState<BackupData | null>(null);
   const [backupFileName, setBackupFileName] = useState('');
-  const [restoreMode,    setRestoreMode]    = useState<'merge' | 'replace'>('merge');
+  const [restoreMode,    setRestoreMode]    = useState<RestoreMode>('merge');
   const [restoreConfirm, setRestoreConfirm] = useState(false);
   const [isRestoring,    setIsRestoring]    = useState(false);
 
-  // Per-table restore toggles (set from backup file contents)
-  const [restoreCampaigns,     setRestoreCampaigns]     = useState(false);
-  const [restoreStateLeaders,  setRestoreStateLeaders]  = useState(false);
-  const [restoreStatePlaces,   setRestoreStatePlaces]   = useState(false);
-  const [restoreCampaignRules, setRestoreCampaignRules] = useState(false);
+  // Per-table restore toggles — set from the uploaded backup file's contents.
+  const [restoreSelected, setRestoreSelected] = useState<Record<BackupTableKey, boolean>>(() => allChecked([]));
 
   const [error,     setError]     = useState<string | null>(null);
   const [success,   setSuccess]   = useState<string | null>(null);
@@ -119,8 +64,10 @@ export default function BackupPage() {
 
   // ── Export ─────────────────────────────────────────────────────────────────
 
+  const selectedExportKeys = ALL_KEYS.filter((key) => exportSelected[key]);
+
   const handleExport = async () => {
-    if (!exportCampaigns && !exportStateLeaders && !exportStatePlaces && !exportCampaignRules) {
+    if (selectedExportKeys.length === 0) {
       setError('Please select at least one table to include in the backup.');
       return;
     }
@@ -131,43 +78,7 @@ export default function BackupPage() {
     setStatusLog([]);
 
     try {
-      const backup: BackupData = { exported_at: new Date().toISOString(), version: '1' };
-
-      if (exportCampaigns) {
-        addLog('Exporting campaigns…');
-        const { data, error } = await supabase
-          .from('campaigns').select('*').order('date', { ascending: true });
-        if (error) throw error;
-        backup.campaigns = (data ?? []) as Campaign[];
-        addLog(`  ✓ ${backup.campaigns.length} campaigns`);
-      }
-
-      if (exportStateLeaders) {
-        addLog('Exporting state leaders…');
-        const { data, error } = await supabase
-          .from('state_leaders').select('*').order('state').order('leader');
-        if (error) throw error;
-        backup.state_leaders = (data ?? []) as StateLeader[];
-        addLog(`  ✓ ${backup.state_leaders.length} state leaders`);
-      }
-
-      if (exportStatePlaces) {
-        addLog('Exporting state places…');
-        const { data, error } = await supabase
-          .from('state_places').select('*').order('state').order('place');
-        if (error) throw error;
-        backup.state_places = (data ?? []) as StatePlace[];
-        addLog(`  ✓ ${backup.state_places.length} state places`);
-      }
-
-      if (exportCampaignRules) {
-        addLog('Exporting campaign rules…');
-        const { data, error } = await supabase
-          .from('campaign_rules').select('*').order('state').order('name');
-        if (error) throw error;
-        backup.campaign_rules = (data ?? []) as CampaignRule[];
-        addLog(`  ✓ ${backup.campaign_rules.length} campaign rules`);
-      }
+      const backup = await exportBackup(supabase, selectedExportKeys, addLog);
 
       // Trigger browser download
       const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
@@ -182,14 +93,7 @@ export default function BackupPage() {
 
       addLog('✅ Backup downloaded successfully.');
       setSuccess('Backup downloaded.');
-      trackEvent('backup_export', {
-        tables: [
-          exportCampaigns     && 'campaigns',
-          exportStateLeaders  && 'state_leaders',
-          exportStatePlaces   && 'state_places',
-          exportCampaignRules && 'campaign_rules',
-        ].filter(Boolean),
-      });
+      trackEvent('backup_export', { tables: selectedExportKeys });
     } catch (err) {
       setError(getErrorMessage(err, 'Export failed'));
     } finally {
@@ -213,22 +117,21 @@ export default function BackupPage() {
     const reader = new FileReader();
     reader.onload = (ev) => {
       try {
-        const parsed = JSON.parse(ev.target?.result as string) as BackupData;
-        if (!parsed.exported_at || !parsed.version) {
+        const parsed = JSON.parse(ev.target?.result as string) as unknown;
+        if (!isValidBackupFile(parsed)) {
           throw new Error('Not a valid backup file — missing exported_at or version.');
         }
         setBackupFile(parsed);
         // Default: restore only tables present in the file
-        setRestoreCampaigns(!!parsed.campaigns);
-        setRestoreStateLeaders(!!parsed.state_leaders);
-        setRestoreStatePlaces(!!parsed.state_places);
-        setRestoreCampaignRules(!!parsed.campaign_rules);
+        setRestoreSelected(allChecked(ALL_KEYS.filter((key) => !!parsed[key])));
       } catch (err) {
         setError(getErrorMessage(err, 'Failed to parse backup file'));
       }
     };
     reader.readAsText(file);
   };
+
+  const selectedRestoreKeys = ALL_KEYS.filter((key) => restoreSelected[key] && !!backupFile?.[key]);
 
   const handleRestore = async () => {
     if (!backupFile) return;
@@ -239,60 +142,12 @@ export default function BackupPage() {
     setStatusLog([]);
     setRestoreConfirm(false);
 
-    const isReplace = restoreMode === 'replace';
-
     try {
-      if (restoreCampaigns && backupFile.campaigns) {
-        addLog(`Restoring campaigns (${restoreMode})…`);
-        if (isReplace) {
-          await replaceRecords('campaigns', backupFile.campaigns);
-        } else {
-          await upsertRecords('campaigns', backupFile.campaigns);
-        }
-        addLog(`  ✓ ${backupFile.campaigns.length} campaigns restored`);
-      }
-
-      if (restoreStateLeaders && backupFile.state_leaders) {
-        addLog(`Restoring state leaders (${restoreMode})…`);
-        if (isReplace) {
-          await replaceRecords('state_leaders', backupFile.state_leaders);
-        } else {
-          await upsertRecords('state_leaders', backupFile.state_leaders);
-        }
-        addLog(`  ✓ ${backupFile.state_leaders.length} state leaders restored`);
-      }
-
-      if (restoreStatePlaces && backupFile.state_places) {
-        addLog(`Restoring state places (${restoreMode})…`);
-        if (isReplace) {
-          await replaceRecords('state_places', backupFile.state_places);
-        } else {
-          await upsertRecords('state_places', backupFile.state_places);
-        }
-        addLog(`  ✓ ${backupFile.state_places.length} state places restored`);
-      }
-
-      if (restoreCampaignRules && backupFile.campaign_rules) {
-        addLog(`Restoring campaign rules (${restoreMode})…`);
-        if (isReplace) {
-          await replaceRecords('campaign_rules', backupFile.campaign_rules);
-        } else {
-          await upsertRecords('campaign_rules', backupFile.campaign_rules);
-        }
-        addLog(`  ✓ ${backupFile.campaign_rules.length} campaign rules restored`);
-      }
+      await restoreBackup(supabase, backupFile, selectedRestoreKeys, restoreMode, addLog);
 
       addLog('✅ Restore completed successfully.');
       setSuccess('Restore completed successfully.');
-      trackEvent('backup_restore', {
-        mode: restoreMode,
-        tables: [
-          restoreCampaigns     && 'campaigns',
-          restoreStateLeaders  && 'state_leaders',
-          restoreStatePlaces   && 'state_places',
-          restoreCampaignRules && 'campaign_rules',
-        ].filter(Boolean),
-      });
+      trackEvent('backup_restore', { mode: restoreMode, tables: selectedRestoreKeys });
     } catch (err) {
       setError(getErrorMessage(err, 'Restore failed'));
     } finally {
@@ -311,20 +166,6 @@ export default function BackupPage() {
       </MobileLayout>
     );
   }
-
-  const exportTableRows = [
-    { label: 'Campaigns',      value: exportCampaigns,     setter: setExportCampaigns     },
-    { label: 'State Leaders',  value: exportStateLeaders,  setter: setExportStateLeaders  },
-    { label: 'State Places',   value: exportStatePlaces,   setter: setExportStatePlaces   },
-    { label: 'Campaign Rules', value: exportCampaignRules, setter: setExportCampaignRules },
-  ];
-
-  const restoreTableRows = [
-    { label: 'Campaigns',      available: !!backupFile?.campaigns,      value: restoreCampaigns,     setter: setRestoreCampaigns     },
-    { label: 'State Leaders',  available: !!backupFile?.state_leaders,  value: restoreStateLeaders,  setter: setRestoreStateLeaders  },
-    { label: 'State Places',   available: !!backupFile?.state_places,   value: restoreStatePlaces,   setter: setRestoreStatePlaces   },
-    { label: 'Campaign Rules', available: !!backupFile?.campaign_rules, value: restoreCampaignRules, setter: setRestoreCampaignRules },
-  ];
 
   return (
     <MobileLayout>
@@ -361,19 +202,19 @@ export default function BackupPage() {
           </h2>
           <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">
             Download a JSON snapshot of the selected tables. Keep the file somewhere safe so you
-            can restore from it if needed.
+            can restore from it if needed. Every table is included by default for a full backup.
           </p>
 
           <fieldset className="mb-4 space-y-2">
             <legend className="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">
               Tables to include
             </legend>
-            {exportTableRows.map(({ label, value, setter }) => (
-              <label key={label} className="flex items-center gap-2 cursor-pointer">
+            {BACKUP_TABLE_CONFIG.map(({ key, label }) => (
+              <label key={key} className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
-                  checked={value}
-                  onChange={(e) => setter(e.target.checked)}
+                  checked={exportSelected[key]}
+                  onChange={(e) => setExportSelected((prev) => ({ ...prev, [key]: e.target.checked }))}
                   className="h-4 w-4 rounded border-gray-300"
                 />
                 <span className="text-sm text-gray-700 dark:text-gray-300">{label}</span>
@@ -427,10 +268,11 @@ export default function BackupPage() {
                   Exported: {new Date(backupFile.exported_at).toLocaleString('en-AU')}
                 </p>
                 <ul className="space-y-0.5 text-blue-700 dark:text-blue-400">
-                  {backupFile.campaigns      && <li>• {backupFile.campaigns.length.toLocaleString()} campaigns</li>}
-                  {backupFile.state_leaders  && <li>• {backupFile.state_leaders.length.toLocaleString()} state leaders</li>}
-                  {backupFile.state_places   && <li>• {backupFile.state_places.length.toLocaleString()} state places</li>}
-                  {backupFile.campaign_rules && <li>• {backupFile.campaign_rules.length.toLocaleString()} campaign rules</li>}
+                  {BACKUP_TABLE_CONFIG.map(({ key, label }) => {
+                    const rows = backupFile[key];
+                    if (!rows) return null;
+                    return <li key={key}>• {rows.length.toLocaleString()} {label.toLowerCase()}</li>;
+                  })}
                 </ul>
               </div>
 
@@ -439,26 +281,29 @@ export default function BackupPage() {
                 <legend className="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">
                   Tables to restore
                 </legend>
-                {restoreTableRows.map(({ label, available, value, setter }) => (
-                  <label
-                    key={label}
-                    className={`flex items-center gap-2 ${available ? 'cursor-pointer' : 'cursor-not-allowed opacity-40'}`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={value && available}
-                      disabled={!available}
-                      onChange={(e) => setter(e.target.checked)}
-                      className="h-4 w-4 rounded border-gray-300"
-                    />
-                    <span className="text-sm text-gray-700 dark:text-gray-300">
-                      {label}
-                      {!available && (
-                        <span className="ml-1 text-xs text-gray-400">(not in this backup)</span>
-                      )}
-                    </span>
-                  </label>
-                ))}
+                {BACKUP_TABLE_CONFIG.map(({ key, label }) => {
+                  const available = !!backupFile[key];
+                  return (
+                    <label
+                      key={key}
+                      className={`flex items-center gap-2 ${available ? 'cursor-pointer' : 'cursor-not-allowed opacity-40'}`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={restoreSelected[key] && available}
+                        disabled={!available}
+                        onChange={(e) => setRestoreSelected((prev) => ({ ...prev, [key]: e.target.checked }))}
+                        className="h-4 w-4 rounded border-gray-300"
+                      />
+                      <span className="text-sm text-gray-700 dark:text-gray-300">
+                        {label}
+                        {!available && (
+                          <span className="ml-1 text-xs text-gray-400">(not in this backup)</span>
+                        )}
+                      </span>
+                    </label>
+                  );
+                })}
               </fieldset>
 
               {/* Restore mode */}
@@ -497,7 +342,10 @@ export default function BackupPage() {
                       <span className="font-semibold">Replace</span>
                       <span className="text-gray-500 dark:text-gray-400">
                         {' '}— deletes all current records in the selected tables, then restores
-                        from backup exactly; use this to fully undo corruption
+                        from backup exactly; use this to fully undo corruption. Replacing
+                        Campaigns without also replacing Results (or vice versa) can fail, since
+                        each result row references a campaign — select both together, or use
+                        Merge instead.
                       </span>
                     </span>
                   </label>
@@ -524,7 +372,7 @@ export default function BackupPage() {
 
               <button
                 onClick={handleRestore}
-                disabled={isRestoring || (restoreMode === 'replace' && !restoreConfirm)}
+                disabled={isRestoring || selectedRestoreKeys.length === 0 || (restoreMode === 'replace' && !restoreConfirm)}
                 className="rounded-md bg-green-600 px-4 py-2 text-base font-bold text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 border-2 border-gray-800 dark:border-gray-600"
               >
                 {isRestoring ? 'Restoring…' : '⬆ Restore Backup'}
