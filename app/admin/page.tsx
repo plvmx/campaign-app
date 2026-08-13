@@ -195,32 +195,6 @@ export default function AdminPage() {
         )}
 
         <div className="space-y-4">
-          {/* Campaign Dates Info */}
-          {dates && (
-            <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 shadow-sm dark:border-blue-800 dark:bg-blue-900/20">
-              <h2 className="text-lg font-semibold text-blue-900 dark:text-blue-100">
-                Campaign Date Periods
-              </h2>
-              <p className="mt-2 text-sm text-blue-800 dark:text-blue-200">
-                These dates are automatically calculated based on the current day of the week
-              </p>
-              <div className="mt-4 space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="font-medium text-blue-900 dark:text-blue-100">Past Campaign Start:</span>
-                  <span className="text-blue-800 dark:text-blue-200">{formatDateReadable(dates.pastCampaignStart)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="font-medium text-blue-900 dark:text-blue-100">Upcoming Campaign Start:</span>
-                  <span className="text-blue-800 dark:text-blue-200">{formatDateReadable(dates.upcomingCampaignStart)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="font-medium text-blue-900 dark:text-blue-100">Second Week Start:</span>
-                  <span className="text-blue-800 dark:text-blue-200">{formatDateReadable(dates.secondWeekStart)}</span>
-                </div>
-              </div>
-            </div>
-          )}
-
           {/* Weekly Refresh */}
           <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
             {/* Header row with automation badge */}
@@ -271,6 +245,21 @@ export default function AdminPage() {
                 <p className="text-xs text-gray-500 dark:text-gray-400">No runs recorded yet.</p>
               )}
             </div>
+
+            {/* Forecast: what running it right now would do */}
+            {dates && (
+              <div className="mt-3 rounded-md border border-purple-200 bg-purple-50 px-3 py-2 text-xs text-purple-800 dark:border-purple-800 dark:bg-purple-900/20 dark:text-purple-200">
+                <p className="font-medium">If run right now, it would:</p>
+                <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                  <li>Delete any campaign dated before {formatDateReadable(dates.pastCampaignStart)}</li>
+                  <li>Create missing campaigns for the week of {formatDateReadable(dates.secondWeekStart)}</li>
+                </ul>
+                <p className="mt-1 text-purple-600 dark:text-purple-400">
+                  These dates shift with today&apos;s day of the week, so they can differ from what
+                  the last run above actually applied.
+                </p>
+              </div>
+            )}
 
             <p className="mt-3 text-sm text-gray-600 dark:text-gray-400">
               The button below runs the same process as the automated job — it will create
