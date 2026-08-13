@@ -111,7 +111,7 @@ export default function AdminPage() {
   const handleToggleLogging = async () => {
     setIsTogglingLogging(true);
     setError(null);
-    
+
     try {
       const newValue = !loggingEnabled;
       await setCampaignLoggingEnabled(newValue);
@@ -136,6 +136,49 @@ export default function AdminPage() {
       setIsTogglingSlideView(prev => ({ ...prev, [role]: false }));
     }
   };
+
+  /**
+   * Renders the "last weekly-refresh run" summary box. Shown twice: once at the
+   * top of the page (as "Last Refresh Run", for at-a-glance visibility) and
+   * once inside the Weekly Refresh panel itself (as "Last run", next to the
+   * manual-run button it explains) — both read the same fetched state.
+   */
+  const renderLastRefreshBox = (label: string, className: string) => (
+    <div className={`${className} rounded-md border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-600 dark:bg-gray-700/50`}>
+      {isLoadingLastRefresh ? (
+        <p className="text-xs text-gray-500 dark:text-gray-400">Loading last run…</p>
+      ) : lastRefresh ? (
+        <div className="text-xs">
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-medium text-gray-700 dark:text-gray-300">{label}</span>
+            <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+              lastRefresh.triggered_by === 'auto'
+                ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
+                : 'bg-gray-200 text-gray-700 dark:bg-gray-600 dark:text-gray-300'
+            }`}>
+              {lastRefresh.triggered_by === 'auto' ? '🤖 auto' : '👤 manual'}
+            </span>
+          </div>
+          <p className="mt-1 text-gray-600 dark:text-gray-400">
+            {new Date(lastRefresh.completed_at).toLocaleString()}
+          </p>
+          {lastRefresh.error_message ? (
+            <p className="mt-1 font-medium text-red-600 dark:text-red-400">
+              ⚠ Failed: {lastRefresh.error_message}
+            </p>
+          ) : (
+            <p className="mt-1 text-gray-600 dark:text-gray-400">
+              {lastRefresh.campaigns_created ?? '—'} created ·{' '}
+              {lastRefresh.campaigns_skipped ?? '—'} skipped ·{' '}
+              {lastRefresh.campaigns_deleted ?? '—'} deleted
+            </p>
+          )}
+        </div>
+      ) : (
+        <p className="text-xs text-gray-500 dark:text-gray-400">No runs recorded yet.</p>
+      )}
+    </div>
+  );
 
   if (isUserLoading) {
     return (
@@ -182,6 +225,8 @@ export default function AdminPage() {
           </p>
         </div>
 
+        {renderLastRefreshBox('Last Refresh Run', 'mb-4')}
+
         {error && (
           <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20">
             <p className="text-sm text-red-800 dark:text-red-200">{error}</p>
@@ -195,83 +240,105 @@ export default function AdminPage() {
         )}
 
         <div className="space-y-4">
-          {/* Weekly Refresh */}
+          {/* Results Metrics */}
           <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
-            {/* Header row with automation badge */}
-            <div className="flex items-center justify-between gap-2">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                Weekly Refresh
-              </h2>
-              <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-semibold text-green-800 dark:bg-green-900/40 dark:text-green-300">
-                🤖 Automated
-              </span>
-            </div>
-            <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-              Runs automatically every Sunday at 1 AM UTC
-            </p>
-
-            {/* Last run info */}
-            <div className="mt-3 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-600 dark:bg-gray-700/50">
-              {isLoadingLastRefresh ? (
-                <p className="text-xs text-gray-500 dark:text-gray-400">Loading last run…</p>
-              ) : lastRefresh ? (
-                <div className="text-xs">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-medium text-gray-700 dark:text-gray-300">Last run</span>
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                      lastRefresh.triggered_by === 'auto'
-                        ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
-                        : 'bg-gray-200 text-gray-700 dark:bg-gray-600 dark:text-gray-300'
-                    }`}>
-                      {lastRefresh.triggered_by === 'auto' ? '🤖 auto' : '👤 manual'}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-gray-600 dark:text-gray-400">
-                    {new Date(lastRefresh.completed_at).toLocaleString()}
-                  </p>
-                  {lastRefresh.error_message ? (
-                    <p className="mt-1 font-medium text-red-600 dark:text-red-400">
-                      ⚠ Failed: {lastRefresh.error_message}
-                    </p>
-                  ) : (
-                    <p className="mt-1 text-gray-600 dark:text-gray-400">
-                      {lastRefresh.campaigns_created ?? '—'} created ·{' '}
-                      {lastRefresh.campaigns_skipped ?? '—'} skipped ·{' '}
-                      {lastRefresh.campaigns_deleted ?? '—'} deleted
-                    </p>
-                  )}
-                </div>
-              ) : (
-                <p className="text-xs text-gray-500 dark:text-gray-400">No runs recorded yet.</p>
-              )}
-            </div>
-
-            {/* Forecast: what running it right now would do */}
-            {dates && (
-              <div className="mt-3 rounded-md border border-purple-200 bg-purple-50 px-3 py-2 text-xs text-purple-800 dark:border-purple-800 dark:bg-purple-900/20 dark:text-purple-200">
-                <p className="font-medium">If run right now, it would:</p>
-                <ul className="mt-1 list-disc space-y-0.5 pl-4">
-                  <li>Delete any campaign dated before {formatDateReadable(dates.pastCampaignStart)}</li>
-                  <li>Create missing campaigns for the week of {formatDateReadable(dates.secondWeekStart)}</li>
-                </ul>
-                <p className="mt-1 text-purple-600 dark:text-purple-400">
-                  These dates shift with today&apos;s day of the week, so they can differ from what
-                  the last run above actually applied.
-                </p>
-              </div>
-            )}
-
-            <p className="mt-3 text-sm text-gray-600 dark:text-gray-400">
-              The button below runs the same process as the automated job — it will create
-              campaigns and delete old ones immediately. Use it if the automated refresh
-              didn&apos;t complete, or to apply newly-added rules without waiting until Sunday.
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+              Results Metrics
+            </h2>
+            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+              Names recorded against past campaigns, broken down by category, state, and place
             </p>
             <button
-              onClick={handleWeeklyRefresh}
-              disabled={isRefreshing}
-              className="mt-4 w-full rounded-md bg-purple-600 px-4 py-2 text-base font-bold text-white hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 disabled:bg-gray-400 disabled:cursor-not-allowed border-2 border-gray-800 dark:border-gray-600"
+              onClick={() => router.push('/admin/results-metrics')}
+              className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
             >
-              {isRefreshing ? 'Refreshing…' : 'Run Manually'}
+              View Results Metrics
+            </button>
+          </div>
+
+          {/* State Places Management */}
+          <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+              State Places Management
+            </h2>
+            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+              Manage state-place combinations used in campaigns
+            </p>
+            <button
+              onClick={() => router.push('/admin/state-places')}
+              className="mt-4 block rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
+            >
+              Manage State Places
+            </button>
+            <button
+              onClick={() => router.push('/admin/state-places-map')}
+              className="mt-3 block rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
+            >
+              Show me where they are
+            </button>
+          </div>
+
+          {/* State Leaders Management */}
+          <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+              State Leaders Management
+            </h2>
+            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+              Manage state-leader combinations with mobile numbers
+            </p>
+            <button
+              onClick={() => router.push('/admin/state-leaders')}
+              className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
+            >
+              Manage State Leaders
+            </button>
+          </div>
+
+          {/* Leader Sharing */}
+          <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+              Leader sharing
+            </h2>
+            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+              Define which leader can see another leader’s campaigns (all current and future)
+            </p>
+            <button
+              onClick={() => router.push('/admin/leader-shares')}
+              className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
+            >
+              Manage leader sharing
+            </button>
+          </div>
+
+          {/* Campaign Messages */}
+          <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+              Campaign Messages
+            </h2>
+            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+              Add special messages to display on campaign slides for specific dates
+            </p>
+            <button
+              onClick={() => router.push('/admin/campaign-messages')}
+              className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
+            >
+              Manage Campaign Messages
+            </button>
+          </div>
+
+          {/* Campaign Categories */}
+          <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+              Campaign Categories
+            </h2>
+            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+              Manage campaign categories (TWOL, BOTJ, TLT, …)
+            </p>
+            <button
+              onClick={() => router.push('/admin/campaign-categories')}
+              className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
+            >
+              Manage Categories
             </button>
           </div>
 
@@ -307,31 +374,19 @@ export default function AdminPage() {
             </button>
           </div>
 
-          {/* Campaign Map */}
+          {/* Campaign Results Report */}
           <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-              Campaign Map
+              Campaign Results Report
             </h2>
             <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-              View upcoming campaigns on an interactive map of Australia, filterable by date range and state
+              Generate a comprehensive campaign results report in landscape JPEG format
             </p>
             <button
-              onClick={() => router.push('/admin/campaign-map')}
-              className="mt-4 block rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
+              onClick={() => router.push('/admin/generate-report')}
+              className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
             >
-              View Campaign Map
-            </button>
-            <button
-              onClick={() => router.push('/admin/campaigns-near-me')}
-              className="mt-3 block rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
-            >
-              Campaigns Near Me
-            </button>
-            <button
-              onClick={() => router.push('/admin/register-interest')}
-              className="mt-3 block rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
-            >
-              Register Interest
+              Generate Report
             </button>
           </div>
 
@@ -351,38 +406,6 @@ export default function AdminPage() {
             </button>
           </div>
 
-          {/* Campaign Results Report */}
-          <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-              Campaign Results Report
-            </h2>
-            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-              Generate a comprehensive campaign results report in landscape JPEG format
-            </p>
-            <button
-              onClick={() => router.push('/admin/generate-report')}
-              className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
-            >
-              Generate Report
-            </button>
-          </div>
-
-          {/* Results Metrics */}
-          <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-              Results Metrics
-            </h2>
-            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-              Names recorded against past campaigns, broken down by category, state, and place
-            </p>
-            <button
-              onClick={() => router.push('/admin/results-metrics')}
-              className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
-            >
-              View Results Metrics
-            </button>
-          </div>
-
           {/* Campaign Logs Viewer */}
           <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
@@ -399,87 +422,23 @@ export default function AdminPage() {
             </button>
           </div>
 
+          {/* Metrics */}
           <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-              Campaign Messages
+              Metrics
             </h2>
             <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-              Add special messages to display on campaign slides for specific dates
+              Usage analytics, active users, and database row counts
             </p>
             <button
-              onClick={() => router.push('/admin/campaign-messages')}
-              className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
+              onClick={() => router.push('/admin/metrics')}
+              className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 border-2 border-gray-800 dark:border-gray-600"
             >
-              Manage Campaign Messages
-            </button>
-          </div>
-          
-          <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-              Campaign Categories
-            </h2>
-            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-              Manage campaign categories (TWOL, BOTJ, TLT, …)
-            </p>
-            <button
-              onClick={() => router.push('/admin/campaign-categories')}
-              className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
-            >
-              Manage Categories
+              View Metrics
             </button>
           </div>
 
-          <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-              State Places Management
-            </h2>
-            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-              Manage state-place combinations used in campaigns
-            </p>
-            <button
-              onClick={() => router.push('/admin/state-places')}
-              className="mt-4 block rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
-            >
-              Manage State Places
-            </button>
-            <button
-              onClick={() => router.push('/admin/state-places-map')}
-              className="mt-3 block rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
-            >
-              Show me where they are
-            </button>
-          </div>
-
-          <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-              State Leaders Management
-            </h2>
-            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-              Manage state-leader combinations with mobile numbers
-            </p>
-            <button
-              onClick={() => router.push('/admin/state-leaders')}
-              className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
-            >
-              Manage State Leaders
-            </button>
-          </div>
-
-          <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-              Leader sharing
-            </h2>
-            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-              Define which leader can see another leader’s campaigns (all current and future)
-            </p>
-            <button
-              onClick={() => router.push('/admin/leader-shares')}
-              className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
-            >
-              Manage leader sharing
-            </button>
-          </div>
-
+          {/* Public Links */}
           <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
               Public Links
@@ -495,21 +454,24 @@ export default function AdminPage() {
             </button>
           </div>
 
+          {/* Backup & Restore */}
           <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-              User Management
+              Backup &amp; Restore
             </h2>
             <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-              Manage user accounts and permissions
+              Export a JSON snapshot of campaigns, state leaders, state places, and campaign rules.
+              Restore from a backup to recover from data corruption.
             </p>
             <button
-              disabled
-              className="mt-4 rounded-md bg-gray-200 px-4 py-2 text-base font-bold text-gray-600 dark:bg-gray-700 dark:text-gray-400 border-2 border-gray-800 dark:border-gray-600"
+              onClick={() => router.push('/admin/backup')}
+              className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
             >
-              Coming Soon
+              Backup &amp; Restore
             </button>
           </div>
 
+          {/* System Settings */}
           <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
               System Settings
@@ -517,7 +479,7 @@ export default function AdminPage() {
             <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
               Configure system-wide settings
             </p>
-            
+
             {/* Slide View Feature Flags */}
             <div className="mt-4 space-y-3">
               <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
@@ -607,34 +569,93 @@ export default function AdminPage() {
             </div>
           </div>
 
+          {/* Weekly Refresh */}
           <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-              Metrics
-            </h2>
-            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-              Usage analytics, active users, and database row counts
+            {/* Header row with automation badge */}
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                Weekly Refresh
+              </h2>
+              <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-semibold text-green-800 dark:bg-green-900/40 dark:text-green-300">
+                🤖 Automated
+              </span>
+            </div>
+            <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+              Runs automatically every Sunday at 1 AM UTC
+            </p>
+
+            {renderLastRefreshBox('Last run', 'mt-3')}
+
+            {/* Forecast: what running it right now would do */}
+            {dates && (
+              <div className="mt-3 rounded-md border border-purple-200 bg-purple-50 px-3 py-2 text-xs text-purple-800 dark:border-purple-800 dark:bg-purple-900/20 dark:text-purple-200">
+                <p className="font-medium">If run right now, it would:</p>
+                <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                  <li>Delete any campaign dated before {formatDateReadable(dates.pastCampaignStart)}</li>
+                  <li>Create missing campaigns for the week of {formatDateReadable(dates.secondWeekStart)}</li>
+                </ul>
+                <p className="mt-1 text-purple-600 dark:text-purple-400">
+                  These dates shift with today&apos;s day of the week, so they can differ from what
+                  the last run above actually applied.
+                </p>
+              </div>
+            )}
+
+            <p className="mt-3 text-sm text-gray-600 dark:text-gray-400">
+              The button below runs the same process as the automated job — it will create
+              campaigns and delete old ones immediately. Use it if the automated refresh
+              didn&apos;t complete, or to apply newly-added rules without waiting until Sunday.
             </p>
             <button
-              onClick={() => router.push('/admin/metrics')}
-              className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 border-2 border-gray-800 dark:border-gray-600"
+              onClick={handleWeeklyRefresh}
+              disabled={isRefreshing}
+              className="mt-4 w-full rounded-md bg-purple-600 px-4 py-2 text-base font-bold text-white hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 disabled:bg-gray-400 disabled:cursor-not-allowed border-2 border-gray-800 dark:border-gray-600"
             >
-              View Metrics
+              {isRefreshing ? 'Refreshing…' : 'Run Manually'}
             </button>
           </div>
 
+          {/* Campaign Map — in development */}
           <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-              Backup &amp; Restore
+              In Development
             </h2>
             <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-              Export a JSON snapshot of campaigns, state leaders, state places, and campaign rules.
-              Restore from a backup to recover from data corruption.
+              View upcoming campaigns on an interactive map of Australia, filterable by date range and state
             </p>
             <button
-              onClick={() => router.push('/admin/backup')}
-              className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
+              onClick={() => router.push('/admin/campaign-map')}
+              className="mt-4 block rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
             >
-              Backup &amp; Restore
+              View Campaign Map
+            </button>
+            <button
+              onClick={() => router.push('/admin/campaigns-near-me')}
+              className="mt-3 block rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
+            >
+              Campaigns Near Me
+            </button>
+            <button
+              onClick={() => router.push('/admin/register-interest')}
+              className="mt-3 block rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
+            >
+              Register Interest
+            </button>
+          </div>
+
+          {/* User Management */}
+          <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+              User Management
+            </h2>
+            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+              Manage user accounts and permissions
+            </p>
+            <button
+              disabled
+              className="mt-4 rounded-md bg-gray-200 px-4 py-2 text-base font-bold text-gray-600 dark:bg-gray-700 dark:text-gray-400 border-2 border-gray-800 dark:border-gray-600"
+            >
+              Coming Soon
             </button>
           </div>
         </div>
@@ -642,4 +663,3 @@ export default function AdminPage() {
     </MobileLayout>
   );
 }
-
