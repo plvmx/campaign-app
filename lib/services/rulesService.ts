@@ -43,10 +43,24 @@ export async function getRules({
   return (data || []) as CampaignRule[];
 }
 
+/**
+ * A rule with a blank leader generates blank-leader campaigns every single
+ * week via the automated refresh (weeklyRefreshService inserts rule-generated
+ * rows directly, bypassing campaignService's own leader-required guard — see
+ * #84, which closed this gap for manual campaign create/update but not for
+ * rules). Rejecting it here is the service-layer choke point for every
+ * caller (the admin rules form today, any future one).
+ */
+function assertLeaderPresent(leader: string | undefined): void {
+  if (!leader?.trim()) throw new Error('Leader is required');
+}
+
 export async function createRule(
   ruleData: CampaignRuleInput,
   createdBy: string,
 ): Promise<void> {
+  assertLeaderPresent(ruleData.leader);
+
   const { error } = await supabase
     .from('campaign_rules')
     .insert([{ ...ruleData, created_by: createdBy }]);
@@ -57,6 +71,10 @@ export async function updateRule(
   id: string,
   ruleData: Partial<CampaignRuleInput>,
 ): Promise<void> {
+  // Only enforced when this update actually touches `leader` — partial updates
+  // to unrelated fields (rule_config exceptions, is_active, etc.) don't include it.
+  if ('leader' in ruleData) assertLeaderPresent(ruleData.leader);
+
   const { error } = await supabase.from('campaign_rules').update(ruleData).eq('id', id);
   if (error) throw error;
 }

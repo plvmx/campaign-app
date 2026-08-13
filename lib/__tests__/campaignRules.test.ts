@@ -274,6 +274,30 @@ describe('custom rules', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Blank-leader rules — defence in depth
+//
+// rulesService rejects a blank leader at create/update time, but a rule row
+// already sitting in the DB with one (e.g. from before that guard existed)
+// must not keep silently generating blank-leader campaigns on every future
+// weekly refresh — weeklyRefreshService inserts rule-generated campaigns
+// directly, bypassing campaignService's own leader-required guard (#84).
+// ---------------------------------------------------------------------------
+
+describe('blank-leader rules', () => {
+  it('generates no campaigns for a rule with an empty leader', () => {
+    const rule = makeRule({ leader: '' });
+    const results = evaluateRule(rule, local('2025-06-02'), local('2025-06-15'));
+    expect(results).toHaveLength(0);
+  });
+
+  it('generates no campaigns for a rule with a whitespace-only leader', () => {
+    const rule = makeRule({ leader: '   ' });
+    const results = evaluateRule(rule, local('2025-06-02'), local('2025-06-15'));
+    expect(results).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // evaluateRules — conflict resolution
 // ---------------------------------------------------------------------------
 

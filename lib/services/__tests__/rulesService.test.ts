@@ -78,12 +78,33 @@ describe('createRule / updateRule / deleteRule / setRuleActive', () => {
     await expect(createRule(rule, 'user-1')).rejects.toEqual(error);
   });
 
+  it('rejects a blank leader without hitting the database — a rule with no leader would silently spawn blank-leader campaigns on every weekly refresh (bypasses campaignService entirely)', async () => {
+    const builder = makeQueryBuilder({ data: null, error: null });
+    mockFrom.mockReturnValue(builder);
+    await expect(createRule({ ...rule, leader: '   ' }, 'user-1')).rejects.toThrow('Leader is required');
+    expect(builder.insert).not.toHaveBeenCalled();
+  });
+
   it('updateRule updates by id', async () => {
     const builder = makeQueryBuilder({ data: null, error: null });
     mockFrom.mockReturnValue(builder);
     await updateRule('r1', { time: '11:00' });
     expect(builder.update).toHaveBeenCalledWith({ time: '11:00' });
     expect(builder.eq).toHaveBeenCalledWith('id', 'r1');
+  });
+
+  it('updateRule rejects an update that blanks out the leader field', async () => {
+    const builder = makeQueryBuilder({ data: null, error: null });
+    mockFrom.mockReturnValue(builder);
+    await expect(updateRule('r1', { leader: '' })).rejects.toThrow('Leader is required');
+    expect(builder.update).not.toHaveBeenCalled();
+  });
+
+  it('updateRule allows partial updates that never touch leader (e.g. rule_config exceptions)', async () => {
+    const builder = makeQueryBuilder({ data: null, error: null });
+    mockFrom.mockReturnValue(builder);
+    await updateRule('r1', { rule_config: { exceptions: ['2026-08-10'] } });
+    expect(builder.update).toHaveBeenCalledWith({ rule_config: { exceptions: ['2026-08-10'] } });
   });
 
   it('deleteRule deletes by id', async () => {
