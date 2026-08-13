@@ -25,20 +25,37 @@ export async function getResultsByCampaignId(campaignId: string): Promise<Result
 }
 
 /**
- * Insert new result rows in one round-trip. Returns the inserted rows
- * (including their server-generated `id`s) in the same order they were
- * supplied, so the caller can map ids back onto its in-memory slots.
+ * Insert new result rows, one round-trip per row, run concurrently. Returns
+ * the inserted rows (including their server-generated `id`s) in the same
+ * order they were supplied, so the caller can map ids back onto its
+ * in-memory slots.
+ *
+ * Deliberately not a single multi-row `INSERT ... RETURNING`: PostgREST/
+ * Postgres don't contractually guarantee a multi-row RETURNING preserves
+ * insert order, and the caller (record-results) maps ids back onto its rows
+ * purely by array position. There's no way to cross-check that mapping by
+ * content instead, because duplicate `first_name`+`category_code` pairs are
+ * explicitly allowed (see #68). One row per request makes each result
+ * unambiguous by construction — `Promise.all` preserves the correspondence
+ * between `rows[i]` and the returned array's `i`th entry regardless of which
+ * request resolves first.
  */
 export async function insertResults(
   rows: NewResultRow[],
 ): Promise<Array<{ id: string; first_name: string; category_code: string }>> {
   if (rows.length === 0) return [];
-  const { data, error } = await supabase
-    .from('results')
-    .insert(rows)
-    .select('id, first_name, category_code');
-  if (error) throw error;
-  return data || [];
+  return Promise.all(
+    rows.map(async (row) => {
+      const { data, error } = await supabase
+        .from('results')
+        .insert([row])
+        .select('id, first_name, category_code')
+        .single();
+      if (error) throw error;
+      if (!data) throw new Error('Insert succeeded but no row was returned');
+      return data;
+    }),
+  );
 }
 
 /**

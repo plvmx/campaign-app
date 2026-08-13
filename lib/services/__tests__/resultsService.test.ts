@@ -43,13 +43,12 @@ describe('insertResults', () => {
     expect(mockFrom).not.toHaveBeenCalled();
   });
 
-  it('inserts all rows in one round-trip and returns them with generated ids', async () => {
-    const inserted = [
-      { id: '1', first_name: 'Alice', category_code: 'TM' },
-      { id: '2', first_name: 'Bob', category_code: 'P' },
-    ];
-    const builder = makeQueryBuilder({ data: inserted, error: null });
-    mockFrom.mockReturnValue(builder);
+  it('inserts each row in its own round-trip and returns them in input order', async () => {
+    const rowAlice = { id: '1', first_name: 'Alice', category_code: 'TM' };
+    const rowBob   = { id: '2', first_name: 'Bob', category_code: 'P' };
+    const builderAlice = makeQueryBuilder({ data: rowAlice, error: null });
+    const builderBob   = makeQueryBuilder({ data: rowBob, error: null });
+    mockFrom.mockReturnValueOnce(builderAlice).mockReturnValueOnce(builderBob);
 
     const rows = [
       { campaign_id: 'c1', first_name: 'Alice', category_code: 'TM', user_id: 'u1' },
@@ -57,8 +56,34 @@ describe('insertResults', () => {
     ];
     const result = await insertResults(rows);
 
-    expect(builder.insert).toHaveBeenCalledWith(rows);
-    expect(result).toEqual(inserted);
+    expect(builderAlice.insert).toHaveBeenCalledWith([rows[0]]);
+    expect(builderBob.insert).toHaveBeenCalledWith([rows[1]]);
+    expect(result).toEqual([rowAlice, rowBob]);
+  });
+
+  it('preserves input-order correspondence even when later rows resolve before earlier ones', async () => {
+    // Row 0 resolves after row 1 — Promise.all must still return [row0Result, row1Result]
+    // in that order, since the caller maps ids back onto its in-memory rows by array index.
+    const rowFast = { id: 'fast', first_name: 'Zed', category_code: 'P' };
+    const rowSlow = { id: 'slow', first_name: 'Amy', category_code: 'F' };
+    let resolveSlow!: (v: { data: unknown; error: unknown }) => void;
+    const slowBuilder = makeQueryBuilder({ data: rowSlow, error: null });
+    slowBuilder.single = vi.fn().mockReturnValue(
+      new Promise((resolve) => { resolveSlow = resolve; }),
+    );
+    const fastBuilder = makeQueryBuilder({ data: rowFast, error: null });
+    mockFrom.mockReturnValueOnce(slowBuilder).mockReturnValueOnce(fastBuilder);
+
+    const promise = insertResults([
+      { campaign_id: 'c1', first_name: 'Amy', category_code: 'F', user_id: 'u1' },
+      { campaign_id: 'c1', first_name: 'Zed', category_code: 'P', user_id: 'u1' },
+    ]);
+
+    // Let the "fast" (second) request resolve first.
+    await Promise.resolve();
+    resolveSlow({ data: rowSlow, error: null });
+
+    expect(await promise).toEqual([rowSlow, rowFast]);
   });
 
   it('propagates the real Supabase error instead of swallowing it (the #69 failure mode)', async () => {
@@ -72,11 +97,11 @@ describe('insertResults', () => {
     ).rejects.toEqual(error);
   });
 
-  it('returns [] when Supabase returns no data despite no error', async () => {
+  it('throws when Supabase returns no row despite no error, rather than silently returning a hole', async () => {
     mockFrom.mockReturnValue(makeQueryBuilder({ data: null, error: null }));
-    expect(
-      await insertResults([{ campaign_id: 'c1', first_name: 'Carl', category_code: 'TM', user_id: 'u1' }]),
-    ).toEqual([]);
+    await expect(
+      insertResults([{ campaign_id: 'c1', first_name: 'Carl', category_code: 'TM', user_id: 'u1' }]),
+    ).rejects.toThrow('Insert succeeded but no row was returned');
   });
 });
 
