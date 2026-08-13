@@ -30,20 +30,23 @@ export async function getLastWeeklyRefreshAt(): Promise<Date | null> {
 }
 
 /**
- * Get leaders who have not signed in since the last Weekly Refresh.
- * If no refresh has been logged, returns all leaders who have never signed in (last_sign_in_at IS NULL).
+ * Shared implementation for the two exports below. `state`, when given, is
+ * pushed down to the query (`.eq('state', ...)`) rather than fetched for
+ * every state and filtered in JS — the by-state variant only ever needs one
+ * state's rows.
  */
-export async function getLeadersNotSignedInSinceRefresh(): Promise<{
+async function fetchLeadersNotSignedInSinceRefresh(state?: string): Promise<{
   leaders: LeaderNotSignedIn[];
   lastRefreshAt: Date | null;
 }> {
   const lastRefreshAt = await getLastWeeklyRefreshAt();
 
-  const query = supabase
+  let query = supabase
     .from('state_leaders')
     .select('id, state, leader, mobile, admin, last_sign_in_at')
     .order('state', { ascending: true })
     .order('leader', { ascending: true });
+  if (state) query = query.eq('state', state);
 
   const { data, error } = await query;
 
@@ -65,6 +68,17 @@ export async function getLeadersNotSignedInSinceRefresh(): Promise<{
 }
 
 /**
+ * Get leaders who have not signed in since the last Weekly Refresh.
+ * If no refresh has been logged, returns all leaders who have never signed in (last_sign_in_at IS NULL).
+ */
+export async function getLeadersNotSignedInSinceRefresh(): Promise<{
+  leaders: LeaderNotSignedIn[];
+  lastRefreshAt: Date | null;
+}> {
+  return fetchLeadersNotSignedInSinceRefresh();
+}
+
+/**
  * Get leaders in a given state who have not signed in since the last Weekly Refresh.
  * For State Reporters to see their state only.
  */
@@ -76,7 +90,5 @@ export async function getLeadersNotSignedInSinceRefreshByState(state: string): P
   if (!normalizedState) {
     return { leaders: [], lastRefreshAt: null };
   }
-  const { leaders, lastRefreshAt } = await getLeadersNotSignedInSinceRefresh();
-  const leadersInState = leaders.filter((row) => row.state.toUpperCase() === normalizedState);
-  return { leaders: leadersInState, lastRefreshAt };
+  return fetchLeadersNotSignedInSinceRefresh(normalizedState);
 }
