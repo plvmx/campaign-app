@@ -210,6 +210,11 @@ export function evaluateRule(
   targetEndDate: Date
 ): GeneratedCampaign[] {
   if (!rule.is_active) return [];
+  // Defence in depth against a blank-leader rule row (rulesService rejects these at
+  // create/update time — see assertLeaderPresent — but this guard also stops any rule
+  // already sitting in the DB with a blank leader from continuing to silently spawn
+  // blank-leader campaigns on every future weekly refresh).
+  if (!rule.leader?.trim()) return [];
 
   let matchingDates: Date[] = [];
 
