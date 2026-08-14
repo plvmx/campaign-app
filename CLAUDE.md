@@ -93,6 +93,7 @@ All database access goes through service modules in `lib/services/`. Pages and c
 - **`lib/services/stateLeadersService.ts`** — CRUD for the `state_leaders` table: `getStateLeaders`, `createStateLeader`, `updateStateLeader`, `deleteStateLeader`. Exports the `StateLeader` interface.
 - **`lib/services/statePlacesService.ts`** — CRUD for the `state_places` table: `getStatePlaces`, `createStatePlace`, `updateStatePlace`, `deleteStatePlace`. Exports the `StatePlace` interface (includes `site`; the table's uniqueness key is `state`+`place`+`site`).
 - **`lib/services/backupService.ts`** — `exportBackup`/`restoreBackup` for `/admin/backup`. `BACKUP_TABLE_CONFIG` is the single source of truth for which tables are backed up and in what order — listed FK-safe (a table only ever appears after every table it references), since "replace" mode restore inserts top-to-bottom but deletes bottom-to-top.
+- **`lib/services/campaignInterestService.ts`** — CRUD for the `campaign_interest` table: `registerCampaignInterest` (bulk insert, one row per ticked campaign), `getCampaignInterestList` (all rows newest-first, paired with each campaign's key details via a second query), `setCampaignInterestContacted`. Exports the `CampaignInterest`/`CampaignInterestWithCampaign` interfaces.
 - **`lib/placeSite.ts`** — `splitPlaceAndSite()`/`combinePlaceAndSite()`. The single source of truth for parsing/joining the numeric site suffix (e.g. "Orange 1" ⇄ `{ place: "Orange", site: "1" }`); used by the migration script and every place selector/display.
 - **`lib/campaignLog.ts`** — fire-and-forget audit logging to `campaign_changes_log`. Skips automatically on admin routes and when logging is toggled off via `lib/appSettings.ts`. `fetchCampaignData` returns `Campaign | null`.
 
@@ -137,7 +138,8 @@ All database access goes through service modules in `lib/services/`. Pages and c
 | `/admin/leader-shares` | Leader share links |
 | `/admin/campaign-map` | Interactive map of upcoming campaigns, filterable by date range and state |
 | `/admin/campaigns-near-me` | Upcoming campaigns near the admin's current location |
-| `/admin/register-interest` | Tick upcoming campaigns and register interest ("Yes I'm In" / "Tell Me More") |
+| `/admin/register-interest` | Tick upcoming campaigns and register interest ("Yes I'm In" / "Tell Me More"), capturing first name + mobile number into `campaign_interest` |
+| `/admin/registered-interest` | List everyone who has registered interest (per campaign), with a Contacted checkbox per registration. Not yet wired to leader-specific login/filtering — admin-only for now |
 | `/admin/member-activity` | Active member counts (leader + team) by total, state, place, or campaign |
 | `/admin/metrics` | Usage analytics, active users, and database row counts |
 | `/admin/results-metrics` | Results dashboard — names recorded per category (TM/P/F/SP), by state, place, and campaign, for a date range |
@@ -152,6 +154,7 @@ All database access goes through service modules in `lib/services/`. Pages and c
 - `campaign_messages` — per-date banner messages
 - `campaign_changes_log` — audit trail
 - `results` — recorded result names per campaign; `category_code` is `'TM' | 'P' | 'F' | 'SP' | 'IR'` (Team Member / Partial Presentation / Full Presentation / Full Presentation + Sinner's Prayer / Information Request); `first_name` is free text, not a foreign key to `state_leaders`
+- `campaign_interest` — members registering interest via `/admin/register-interest`; one row per (campaign, person). `interest_type` is `'in' | 'more'` ("Yes I'm In" / "Tell Me More"); `contacted` + `contacted_at` track admin/leader follow-up. See `scripts/create_campaign_interest_table.sql`
 
 ### Slide generation
 The arise (Week 1 Campaigns) list generator is split across three modules:
