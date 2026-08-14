@@ -210,6 +210,21 @@ CREATE POLICY "campaign_messages: only admin can write"
 
 
 -- =============================================================================
+-- campaign_interest
+-- Holds registrants' names + mobile numbers (PII, via /admin/register-interest)
+-- — admin-only in both directions, unlike campaign_messages/campaign_rules
+-- above which only restrict writes. See scripts/create_campaign_interest_table.sql
+-- for the table definition.
+-- =============================================================================
+ALTER TABLE campaign_interest ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "campaign_interest: only admin can access" ON campaign_interest;
+CREATE POLICY "campaign_interest: only admin can access"
+  ON campaign_interest FOR ALL TO authenticated
+  USING (public.is_admin()) WITH CHECK (public.is_admin());
+
+
+-- =============================================================================
 -- app_settings
 -- All authenticated users need SELECT (feature flags are read on page load).
 -- Writes go through /api/admin/settings (service role), so no anon write policy

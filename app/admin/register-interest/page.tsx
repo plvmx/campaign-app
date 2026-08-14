@@ -9,6 +9,7 @@ import { useCampaignDates } from '@/contexts/CampaignDatesContext';
 import { AUSTRALIAN_STATES, type AustralianState } from '@/lib/constants';
 import { formatDateForDb, formatFortnightDateRangeString } from '@/lib/campaignDates';
 import { getCampaignsByDateRange } from '@/lib/services/campaignService';
+import { registerCampaignInterest, type CampaignInterestType } from '@/lib/services/campaignInterestService';
 import { isCampaignPast } from '@/lib/campaignUtils';
 import { getErrorMessage } from '@/lib/errorUtils';
 import type { Campaign } from '@/lib/types';
@@ -39,8 +40,8 @@ export default function RegisterInterestPage() {
 
   const [selectedState, setSelectedState] = useState<AustralianState | ''>('');
 
-  // Captured for the interest submission that will be wired up later —
-  // not yet persisted anywhere.
+  // Captured for the interest submission — persisted via registerCampaignInterest()
+  // in handleProceed below.
   const [firstName, setFirstName] = useState('');
   const [mobileNumber, setMobileNumber] = useState('');
 
@@ -60,7 +61,62 @@ export default function RegisterInterestPage() {
   // the confirmation popup's list.
   const checkedCampaigns = campaigns.filter(c => checkedIds.has(c.id));
 
-  const [popupAction, setPopupAction] = useState<'in' | 'more' | null>(null);
+  const [popupAction, setPopupAction] = useState<CampaignInterestType | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const [isSubmittingInterest, setIsSubmittingInterest] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const openPopup = (action: CampaignInterestType) => {
+    setValidationError(null);
+    if (checkedIds.size === 0) {
+      setValidationError('Tick at least one campaign below first.');
+      return;
+    }
+    if (!firstName.trim()) {
+      setValidationError('Please enter your first name.');
+      return;
+    }
+    if (!mobileNumber.trim()) {
+      setValidationError('Please enter your mobile number.');
+      return;
+    }
+    setPopupAction(action);
+  };
+
+  const closePopup = () => {
+    setPopupAction(null);
+    setSubmitError(null);
+  };
+
+  const handleProceed = async () => {
+    if (!popupAction) return;
+    // checkedCampaigns can go stale between opening the popup and pressing
+    // Proceed (e.g. the campaigns-refresh effect prunes a ticked campaign
+    // that's dropped out of the fortnight) — re-check rather than silently
+    // "succeeding" with a no-op insert.
+    if (checkedCampaigns.length === 0) {
+      setSubmitError('The selected campaign(s) are no longer available — please close this and tick again.');
+      return;
+    }
+    setIsSubmittingInterest(true);
+    setSubmitError(null);
+    try {
+      await registerCampaignInterest(
+        checkedCampaigns.map(c => ({
+          campaignId: c.id,
+          firstName: firstName.trim(),
+          mobile: mobileNumber.trim(),
+          interestType: popupAction,
+        })),
+      );
+      setCheckedIds(new Set());
+      setPopupAction(null);
+    } catch (err: unknown) {
+      setSubmitError(getErrorMessage(err, 'Failed to register your interest'));
+    } finally {
+      setIsSubmittingInterest(false);
+    }
+  };
 
   useEffect(() => {
     if (isUserLoading) return;
@@ -240,19 +296,25 @@ export default function RegisterInterestPage() {
           </div>
         </div>
 
+        {validationError && (
+          <div className="mt-3 shrink-0 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-800 dark:bg-red-900/20 dark:text-red-200">
+            {validationError}
+          </div>
+        )}
+
         {/* Bottom action buttons — outside the campaign lines box, stretching
             the full width of the screen. */}
         <div className="mt-3 flex shrink-0 gap-2">
           <button
             type="button"
-            onClick={() => setPopupAction('in')}
+            onClick={() => openPopup('in')}
             className="flex-1 rounded-md bg-green-600 px-4 py-3 text-base font-bold text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
           >
             Yes I&apos;m In
           </button>
           <button
             type="button"
-            onClick={() => setPopupAction('more')}
+            onClick={() => openPopup('more')}
             className="flex-1 rounded-md bg-orange-500 px-4 py-3 text-base font-bold text-white hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
           >
             Tell Me More
@@ -263,15 +325,10 @@ export default function RegisterInterestPage() {
       {popupAction && (
         <InterestSummaryModal
           campaigns={checkedCampaigns}
-          onProceed={() => {
-            // Stub — recording the interest (against firstName/mobileNumber
-            // and the ticked campaigns) is a follow-up piece of work.
-            console.log(`"${popupAction === 'in' ? "Yes I'm In" : 'Tell Me More'}" proceed clicked`, {
-              firstName, mobileNumber, campaignIds: [...checkedIds],
-            });
-            setPopupAction(null);
-          }}
-          onCancel={() => setPopupAction(null)}
+          onProceed={handleProceed}
+          onCancel={closePopup}
+          isSubmitting={isSubmittingInterest}
+          error={submitError}
         />
       )}
     </MobileLayout>

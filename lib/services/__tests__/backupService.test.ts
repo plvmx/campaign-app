@@ -252,6 +252,11 @@ describe('BACKUP_TABLE_CONFIG', () => {
     expect(keys.indexOf('campaigns')).toBeLessThan(keys.indexOf('results'));
   });
 
+  it('lists campaign_interest after campaigns (FK: campaign_interest.campaign_id -> campaigns.id)', () => {
+    const keys = BACKUP_TABLE_CONFIG.map((c) => c.key);
+    expect(keys.indexOf('campaigns')).toBeLessThan(keys.indexOf('campaign_interest'));
+  });
+
   it('has a unique key and table for every entry', () => {
     const keys = BACKUP_TABLE_CONFIG.map((c) => c.key);
     const tables = BACKUP_TABLE_CONFIG.map((c) => c.table);
