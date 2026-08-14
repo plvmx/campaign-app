@@ -818,19 +818,22 @@ function CampaignRulesPageContent() {
               </div>
             </div>
 
-            <div>
-              <label htmlFor="mobile" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                Mobile (Optional - auto-filled from state_leaders)
-              </label>
-              <input
-                id="mobile"
-                type="tel"
-                value={formState.mobile}
-                onChange={(e) => setFormState({ ...formState, mobile: e.target.value })}
-                className="mt-1 block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
-                placeholder="Auto-filled or enter manually"
-              />
-            </div>
+            {/* Mobile field — only shown to admins/state reporters; regular team leaders have it auto-populated */}
+            {isRecognizedAdminStatus(adminStatus) && (
+              <div>
+                <label htmlFor="mobile" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Mobile (Optional - auto-filled from state_leaders)
+                </label>
+                <input
+                  id="mobile"
+                  type="tel"
+                  value={formState.mobile}
+                  onChange={(e) => setFormState({ ...formState, mobile: e.target.value })}
+                  className="mt-1 block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
+                  placeholder="Auto-filled or enter manually"
+                />
+              </div>
+            )}
 
             <div>
               <label htmlFor="frequency_type" className="block text-sm font-medium text-gray-700 dark:text-gray-300">

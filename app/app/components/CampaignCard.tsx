@@ -4,6 +4,7 @@ import type { LeaderShareOwner } from '@/lib/types';
 import { getStateColor } from '@/lib/stateColors';
 import { formatCampaignTimeDisplay, isCampaignPast } from '@/lib/campaignUtils';
 import { normalizeName, normalizeMobile } from '@/lib/auth';
+import { isRecognizedAdminStatus } from '@/lib/campaignFilter';
 import { combinePlaceAndSite } from '@/lib/placeSite';
 
 const SOURCE_LABEL: Record<string, string> = {
@@ -75,7 +76,7 @@ export default function CampaignCard({
           <div className={`text-base sm:text-lg ${stateColor.text} opacity-90 mb-1 break-words`}>
             <span className="font-semibold">Leader: </span>
             <span className="font-bold">{campaign.leader}</span>
-            {campaign.mobile && (
+            {isRecognizedAdminStatus(adminStatus) && campaign.mobile && (
               <> <span className="font-normal">{campaign.mobile}</span></>
             )}
             {isAdmin && campaign.source && (
