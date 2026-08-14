@@ -3,6 +3,7 @@
 import type { Campaign } from '@/lib/types';
 import { getSlideStateColor, STATE_CODES, formatSlideDateText } from '@/lib/slideLayout';
 import { formatCampaignTimeDisplay } from '@/lib/campaignUtils';
+import { isRecognizedAdminStatus } from '@/lib/campaignFilter';
 import { combinePlaceAndSite } from '@/lib/placeSite';
 
 const PLACE_COLS  = 18;
@@ -21,6 +22,11 @@ export default function CampaignSlideView({ campaigns, adminStatus }: Props) {
       </div>
     );
   }
+
+  // Mobile numbers are sensitive — only show them to full admins/state reporters,
+  // matching the main feed's CampaignCard and the mobile-free "Leader Campaign
+  // Lists" JPEG export (#118).
+  const showMobile = isRecognizedAdminStatus(adminStatus);
 
   // Group by date (campaigns arrive pre-sorted by date/state/place/time)
   const grouped: Record<string, Campaign[]> = {};
@@ -95,10 +101,12 @@ export default function CampaignSlideView({ campaigns, adminStatus }: Props) {
                     <span style={{ flex: 13, paddingLeft: '0.75ch', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {leader}
                     </span>
-                    {/* Mobile */}
-                    <span style={{ flex: 10, paddingLeft: '0.75ch', whiteSpace: 'nowrap' }}>
-                      {mobile}
-                    </span>
+                    {/* Mobile — admin/state-reporter only */}
+                    {showMobile && (
+                      <span style={{ flex: 10, paddingLeft: '0.75ch', whiteSpace: 'nowrap' }}>
+                        {mobile}
+                      </span>
+                    )}
                   </div>
                 );
               })}
