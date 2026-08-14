@@ -38,6 +38,13 @@ Never suppress lint errors with disable comments unless there is no correct refa
 - If a production incident is investigated with a one-off script in `scripts/`, the investigation isn't closed until the root cause is captured as a permanent test in `lib/__tests__/` (or `lib/services/__tests__/`) — the script is evidence, not the fix's safety net.
 - Role/status checks against `state_leaders.admin` must go through `isRecognizedAdminStatus()` in `lib/campaignFilter.ts` — never re-implement `=== 'AD' || === 'SR'` inline. See #78 (login role bug) for why: a truthy check in one call site silently misrouted leaders with junk data in that column.
 
+## Pre-PR checklist (standing rule)
+Before opening a PR, work through this list and note the outcome of each item in the PR description (a plain "N/A" is fine — don't skip silently). This exists because it's easy for backups, docs, and cleanup to quietly fall behind as the app grows.
+
+1. **Backups in sync** — did this change add, remove, or rename a database table, or change a column that a backup depends on? If so, update `BACKUP_TABLE_CONFIG` in `lib/services/backupService.ts` (new tables go in FK-safe order — only after every table they reference), bump the export format `version` per the comment above it, and confirm `/admin/backup` still exports/restores cleanly.
+2. **Docs in sync** — did this change add/remove/rename a route, page, service module or exported function, database table, or otherwise touch something described in this file's Architecture section (Page map, Database tables, service tables)? Update `CLAUDE.md` itself in the same PR. If it changes setup steps, env vars, or user-facing behaviour covered in `README.md` or `TECHNICAL_DOCS.md`, update those too.
+3. **Quality pass** — run `/code-review` (or `/simplify`) against the diff, specifically looking for redundancy the change introduced: logic that duplicates an existing `lib/services/` function, inline role checks bypassing `isRecognizedAdminStatus()`, repeated/N+1 Supabase calls that could be batched, or dead code left behind by the change. Either fix what's found in this PR, or note it explicitly as a follow-up in the PR description — don't let it pass unmentioned.
+
 ## Deployment
 - `main` branch → auto-deploys to production via Vercel/hosting
 - Do not merge until CI is green and Peter has approved the PR
