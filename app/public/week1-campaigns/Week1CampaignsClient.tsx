@@ -14,6 +14,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import LoadingSpinner from '@/components/LoadingSpinner';
+import FullscreenImageViewer from '@/components/FullscreenImageViewer';
 import { getErrorMessage } from '@/lib/errorUtils';
 import { formatDownloadDate } from '@/lib/slideLayout';
 import { renderAriseCanvas } from '@/lib/ariseCanvas';
@@ -31,6 +32,7 @@ export default function Week1CampaignsClient() {
   const [progress, setProgress] = useState('Loading Week 1 campaign data…');
   const [error, setError] = useState<string | null>(null);
   const [imgUrl, setImgUrl] = useState<string | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const objectUrlRef = useRef<string | null>(null);
   const filenameRef = useRef('Week1_Campaigns.jpg');
 
@@ -112,11 +114,20 @@ export default function Week1CampaignsClient() {
             <img
               src={imgUrl}
               alt="Week 1 Campaigns list"
-              className="mt-4 w-full rounded-lg border-2 border-gray-800 shadow-sm dark:border-gray-600"
+              onClick={() => setIsFullscreen(true)}
+              className="mt-4 w-full cursor-zoom-in rounded-lg border-2 border-gray-800 shadow-sm dark:border-gray-600"
             />
           </div>
         )}
       </div>
+
+      {imgUrl && isFullscreen && (
+        <FullscreenImageViewer
+          src={imgUrl}
+          alt="Week 1 Campaigns list"
+          onClose={() => setIsFullscreen(false)}
+        />
+      )}
     </div>
   );
 }
