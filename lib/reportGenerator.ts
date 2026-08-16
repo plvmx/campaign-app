@@ -58,7 +58,12 @@ export interface GenerateReportOptions {
 // Data fetching
 // ---------------------------------------------------------------------------
 
-async function fetchReportRows(options: GenerateReportOptions): Promise<ReportRow[]> {
+/**
+ * Fetches and shapes campaign results into report rows for `startDate`–`endDate`.
+ * Exported for reuse by /api/public/campaign-results, which calls this with a
+ * service-role client and no adminStatus/userState (all states, unauthenticated).
+ */
+export async function fetchReportRows(options: GenerateReportOptions): Promise<ReportRow[]> {
   const { supabase: client, startDate, endDate, adminStatus, userState, stateFilter } = options;
 
   const explicitState = stateFilter && stateFilter.trim() ? stateFilter.toUpperCase().trim() : null;
@@ -130,6 +135,20 @@ async function fetchReportRows(options: GenerateReportOptions): Promise<ReportRo
 // ---------------------------------------------------------------------------
 
 /**
+ * Splits report rows into per-JPEG-page chunks (LINES_PER_JPEG rows each) —
+ * the same pagination used for the downloadable ZIP. Exported so callers that
+ * render pages individually (e.g. the public campaign-results page, which
+ * shows one image per page rather than a ZIP) stay in sync with the ZIP's
+ * page boundaries.
+ */
+export function chunkReportRows(rows: ReportRow[]): ReportRow[][] {
+  const chunkCount = Math.ceil(rows.length / LINES_PER_JPEG);
+  return Array.from({ length: chunkCount }, (_, part) =>
+    rows.slice(part * LINES_PER_JPEG, (part + 1) * LINES_PER_JPEG),
+  );
+}
+
+/**
  * Renders an array of already-built ReportRows to JPEG pages and downloads as ZIP.
  * Used by the generate-report page where rows may have been manually edited.
  *
@@ -137,16 +156,15 @@ async function fetchReportRows(options: GenerateReportOptions): Promise<ReportRo
  * state explicitly chosen to filter the export by).
  */
 export async function downloadReportRows(rows: ReportRow[], stateSuffix?: string | null): Promise<void> {
-  const chunkCount = Math.ceil(rows.length / LINES_PER_JPEG);
+  const pages = chunkReportRows(rows);
   const zip = new JSZip();
   const datePrefix = formatDownloadDate(new Date());
   const nameSuffix = stateSuffix ? `_${stateSuffix}` : '';
 
-  for (let part = 0; part < chunkCount; part++) {
-    const chunk  = rows.slice(part * LINES_PER_JPEG, (part + 1) * LINES_PER_JPEG);
-    const canvas = drawReportPage(chunk);
+  for (let part = 0; part < pages.length; part++) {
+    const canvas = drawReportPage(pages[part]);
     const blob   = await canvasToJpegBlob(canvas);
-    const suffix = chunkCount > 1 ? `_part${part + 1}` : '';
+    const suffix = pages.length > 1 ? `_part${part + 1}` : '';
     zip.file(
       `${datePrefix}_Campaign_Results${nameSuffix}${suffix}.jpeg`,
       await blob.arrayBuffer(),
