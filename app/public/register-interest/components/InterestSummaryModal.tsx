@@ -1,13 +1,13 @@
 'use client';
 
 import Modal from '@/components/Modal';
-import type { Campaign } from '@/lib/types';
+import type { AriseCampaign } from '@/lib/ariseLayout';
 import { formatShortDateWithOrdinal } from '@/lib/campaignDates';
 import { formatCampaignTimeDisplay } from '@/lib/campaignUtils';
 import { combinePlaceAndSite } from '@/lib/placeSite';
 
 interface Props {
-  campaigns: Campaign[];
+  campaigns: AriseCampaign[];
   onProceed: () => void;
   onCancel: () => void;
   isSubmitting?: boolean;
@@ -15,7 +15,7 @@ interface Props {
 }
 
 /** e.g. "Frankston Wed 12th Aug 11:30am Linda" */
-function formatCampaignLine(c: Campaign): string {
+function formatCampaignLine(c: AriseCampaign): string {
   const place = combinePlaceAndSite(c.place, c.site);
   const [y, m, d] = c.date.split('-').map(Number);
   const dateText = formatShortDateWithOrdinal(new Date(y, m - 1, d));
@@ -26,9 +26,9 @@ function formatCampaignLine(c: Campaign): string {
 
 /**
  * Confirmation shown when "Yes I'm In" or "Tell Me More" is pressed, listing
- * the ticked campaigns and asking the leader to confirm before proceeding.
- * Proceeding records the interest against each ticked campaign (see
- * lib/services/campaignInterestService.ts).
+ * the ticked campaigns and asking the visitor to confirm before proceeding.
+ * Proceeding records the interest against each ticked campaign via
+ * POST /api/public/register-interest.
  */
 export default function InterestSummaryModal({ campaigns, onProceed, onCancel, isSubmitting = false, error = null }: Props) {
   return (

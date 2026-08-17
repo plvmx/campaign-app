@@ -7,7 +7,6 @@ vi.mock('@/lib/supabaseClient', () => ({
 import { supabase } from '@/lib/supabaseClient';
 import { makeQueryBuilder } from './supabaseMock';
 import {
-  registerCampaignInterest,
   getCampaignInterestList,
   setCampaignInterestContacted,
 } from '../campaignInterestService';
@@ -16,34 +15,6 @@ const mockFrom = vi.mocked(supabase.from) as unknown as ReturnType<typeof vi.fn>
 
 beforeEach(() => {
   vi.clearAllMocks();
-});
-
-describe('registerCampaignInterest', () => {
-  it('inserts one row per entry', async () => {
-    const builder = makeQueryBuilder({ data: null, error: null });
-    mockFrom.mockReturnValue(builder);
-    await registerCampaignInterest([
-      { campaignId: 'c1', firstName: 'Linda', mobile: '0400 000 001', interestType: 'in' },
-      { campaignId: 'c2', firstName: 'Linda', mobile: '0400 000 001', interestType: 'in' },
-    ]);
-    expect(builder.insert).toHaveBeenCalledWith([
-      { campaign_id: 'c1', first_name: 'Linda', mobile: '0400 000 001', interest_type: 'in' },
-      { campaign_id: 'c2', first_name: 'Linda', mobile: '0400 000 001', interest_type: 'in' },
-    ]);
-  });
-
-  it('does nothing (no query) when given an empty list', async () => {
-    await registerCampaignInterest([]);
-    expect(mockFrom).not.toHaveBeenCalled();
-  });
-
-  it('throws on error', async () => {
-    const error = { code: '500', message: 'boom' };
-    mockFrom.mockReturnValue(makeQueryBuilder({ data: null, error }));
-    await expect(
-      registerCampaignInterest([{ campaignId: 'c1', firstName: 'Linda', mobile: '0400 000 001', interestType: 'more' }]),
-    ).rejects.toEqual(error);
-  });
 });
 
 describe('getCampaignInterestList', () => {

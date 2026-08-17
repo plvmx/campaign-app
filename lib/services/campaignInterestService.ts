@@ -1,7 +1,14 @@
 /**
  * campaign_interest — members registering interest in joining a campaign via
- * the Register Interest screen (app/admin/register-interest). One row per
- * (campaign, person) pair. See scripts/create_campaign_interest_table.sql.
+ * the public Register Interest screen (app/public/register-interest). One
+ * row per (campaign, person) pair. See scripts/create_campaign_interest_table.sql.
+ *
+ * Note: this module's functions use the browser client, which is RLS-gated
+ * to admins for this table — so only the admin-only /admin/registered-interest
+ * listing screen (getCampaignInterestList, setCampaignInterestContacted) uses
+ * it. The public submission flow can't (anonymous visitors have no RLS
+ * access) — it inserts via the service role directly in
+ * app/api/public/register-interest/route.ts instead.
  */
 import { supabase } from '@/lib/supabaseClient';
 import type { Campaign } from '@/lib/types';
@@ -25,24 +32,6 @@ export type CampaignInterestCampaignInfo = Pick<Campaign, 'id' | 'date' | 'state
 export interface CampaignInterestWithCampaign extends CampaignInterest {
   /** Null if the referenced campaign has since been deleted independently of this row (shouldn't normally happen — FK is ON DELETE CASCADE). */
   campaign: CampaignInterestCampaignInfo | null;
-}
-
-/**
- * Record one or more campaign interest registrations — one row per ticked
- * campaign, all sharing the same submitter details and interest type.
- */
-export async function registerCampaignInterest(
-  entries: { campaignId: string; firstName: string; mobile: string; interestType: CampaignInterestType }[],
-): Promise<void> {
-  if (entries.length === 0) return;
-  const rows = entries.map(e => ({
-    campaign_id: e.campaignId,
-    first_name: e.firstName,
-    mobile: e.mobile,
-    interest_type: e.interestType,
-  }));
-  const { error } = await supabase.from('campaign_interest').insert(rows);
-  if (error) throw error;
 }
 
 /**

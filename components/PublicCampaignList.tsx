@@ -14,10 +14,10 @@ interface Props {
 
 /**
  * Read-only campaign list for public pages — same colour key, grouping-by-date,
- * and per-line formatting as CampaignCheckboxList (app/admin/register-interest/
+ * and per-line formatting as CampaignCheckboxList (app/public/register-interest/
  * components/CampaignCheckboxList.tsx), minus the checkbox column and the
- * onToggle/checkedIds selection state, since public viewers can't select
- * campaigns to register interest in.
+ * onToggle/checkedIds selection state, since this list has no selection to make
+ * (Register Interest is the page where visitors tick campaigns).
  */
 export default function PublicCampaignList({ campaigns }: Props) {
   if (campaigns.length === 0) {

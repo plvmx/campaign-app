@@ -45,6 +45,12 @@ export const PUBLIC_LINKS: PublicLink[] = [
     description: 'Latest campaign results, all states — no login required.',
     path: '/public/campaign-results',
   },
+  {
+    slug: 'register-interest',
+    title: 'Register Interest',
+    description: "Tick the campaigns you'd like to join or find out more about, then let us know — no login required.",
+    path: '/public/register-interest',
+  },
 ];
 
 /** app_settings key for a public link's title override. */

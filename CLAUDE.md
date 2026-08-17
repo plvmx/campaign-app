@@ -138,13 +138,22 @@ All database access goes through service modules in `lib/services/`. Pages and c
 | `/admin/leader-shares` | Leader share links |
 | `/admin/campaign-map` | Interactive map of upcoming campaigns, filterable by date range and state |
 | `/admin/campaigns-near-me` | Upcoming campaigns near the admin's current location |
-| `/admin/register-interest` | Tick upcoming campaigns and register interest ("Yes I'm In" / "Tell Me More"), capturing first name + mobile number into `campaign_interest` |
-| `/admin/registered-interest` | List everyone who has registered interest (per campaign), with a Contacted checkbox per registration. Not yet wired to leader-specific login/filtering — admin-only for now |
+| `/admin/registered-interest` | List everyone who has registered interest via the public Register Interest link (per campaign), with a Contacted checkbox per registration. Not yet wired to leader-specific login/filtering — admin-only for now |
 | `/admin/member-activity` | Active member counts (leader + team) by total, state, place, or campaign |
 | `/admin/metrics` | Usage analytics, active users, and database row counts |
 | `/admin/results-metrics` | Results dashboard — names recorded per category (TM/P/F/SP), by state, place, and campaign, for a date range |
 | `/admin/campaign-categories` | Manage campaign categories (TWOL, BOTJ, TLT, …) |
 | `/admin/backup` | Export/restore a JSON snapshot of every admin-curated table (see `lib/services/backupService.ts`'s `BACKUP_TABLE_CONFIG` for the full, current list and restore ordering) |
+
+### Public links (`/public/*`)
+No-login pages, each registered in `lib/publicLinks.ts` (single source of truth for slug/title/description/path — drives both the page's own `<title>`/Open Graph metadata and the admin-managed list at `/admin/public-links`, where an admin can override a link's title/description without a redeploy). `middleware.ts`'s `PROTECTED_PREFIXES` doesn't include `/public`, so these pages are open by default; each is backed by a matching `/api/public/*` route using `supabaseAdmin` (service role) rather than the browser client, since anonymous visitors have no RLS access. Every `/api/public/*` route calls `enforceOrigin()` and a per-IP `createRateLimiter()` (`lib/corsUtils.ts` / `lib/rateLimit.ts`), and GETs are briefly in-memory cached since the response is identical for every caller.
+
+| Path | Description |
+|------|-------------|
+| `/public/week1-campaigns` | Always-current Week 1 Campaigns list, all states |
+| `/public/temporary-upcoming-campaigns` | Leader-facing fortnight list — check/edit-redirect/download, distinct from Register Interest |
+| `/public/campaign-results` | Latest campaign results, all states, with per-page JPEG downloads |
+| `/public/register-interest` | Tick upcoming campaigns and register interest ("Yes I'm In" / "Tell Me More"), capturing first name + mobile number into `campaign_interest`. The only `/public/*` route with a POST (write) as well as a GET — see `app/api/public/register-interest/route.ts` |
 
 ### Database tables (key ones)
 - `campaigns` — core records; `category` column is the campaign category flag (e.g. `TWOL`, `BOTJ`, `TLT`); `place`+`site` together identify the location
@@ -154,7 +163,7 @@ All database access goes through service modules in `lib/services/`. Pages and c
 - `campaign_messages` — per-date banner messages
 - `campaign_changes_log` — audit trail
 - `results` — recorded result names per campaign; `category_code` is `'TM' | 'P' | 'F' | 'SP' | 'IR'` (Team Member / Partial Presentation / Full Presentation / Full Presentation + Sinner's Prayer / Information Request); `first_name` is free text, not a foreign key to `state_leaders`
-- `campaign_interest` — members registering interest via `/admin/register-interest`; one row per (campaign, person). `interest_type` is `'in' | 'more'` ("Yes I'm In" / "Tell Me More"); `contacted` + `contacted_at` track admin/leader follow-up. See `scripts/create_campaign_interest_table.sql`
+- `campaign_interest` — members registering interest via the public `/public/register-interest` link; one row per (campaign, person). `interest_type` is `'in' | 'more'` ("Yes I'm In" / "Tell Me More"); `contacted` + `contacted_at` track admin/leader follow-up. RLS is admin-only (`public.is_admin()`, see `supabase/rls-policies.sql`) — the public page inserts via the service role in its API route, not the browser client. See `scripts/create_campaign_interest_table.sql`
 
 ### Slide generation
 The arise (Week 1 Campaigns) list generator is split across three modules:
