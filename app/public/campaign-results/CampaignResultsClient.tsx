@@ -18,6 +18,7 @@
 import { useEffect, useRef, useState } from 'react';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import FullscreenImageViewer from '@/components/FullscreenImageViewer';
+import SaveImageButton from '@/components/SaveImageButton';
 import { getErrorMessage } from '@/lib/errorUtils';
 import { formatDownloadDate } from '@/lib/slideLayout';
 import { drawReportPage, canvasToJpegBlob } from '@/lib/reportCanvas';
@@ -27,6 +28,7 @@ import type { CampaignResultsResponse } from '@/app/api/public/campaign-results/
 interface ResultPage {
   imgUrl: string;
   filename: string;
+  blob: Blob;
 }
 
 export default function CampaignResultsClient() {
@@ -67,7 +69,7 @@ export default function CampaignResultsClient() {
           const url = URL.createObjectURL(blob);
           objectUrls.push(url);
           const suffix = rowPages.length > 1 ? `_part${i + 1}` : '';
-          built.push({ imgUrl: url, filename: `${datePrefix}_Campaign_Results${suffix}.jpeg` });
+          built.push({ imgUrl: url, filename: `${datePrefix}_Campaign_Results${suffix}.jpeg`, blob });
         }
 
         if (cancelled) return;
@@ -113,13 +115,21 @@ export default function CampaignResultsClient() {
           <div className="mt-4 space-y-8">
             {pages.map((page, i) => (
               <div key={page.imgUrl}>
-                <a
-                  href={page.imgUrl}
-                  download={page.filename}
-                  className="inline-block rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 border-2 border-gray-800 dark:border-gray-600"
-                >
-                  Download JPEG for Page {i + 1}
-                </a>
+                <div className="flex flex-wrap items-start gap-2">
+                  <SaveImageButton
+                    blob={page.blob}
+                    filename={page.filename}
+                    label={pages.length > 1 ? `Save Page ${i + 1} to Photos` : 'Save to Photos'}
+                    className="rounded-md bg-green-600 px-4 py-2 text-base font-bold text-white hover:bg-green-700 disabled:opacity-50 border-2 border-gray-800 dark:border-gray-600"
+                  />
+                  <a
+                    href={page.imgUrl}
+                    download={page.filename}
+                    className="inline-block rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 border-2 border-gray-800 dark:border-gray-600"
+                  >
+                    Download JPEG for Page {i + 1}
+                  </a>
+                </div>
                 {/* eslint-disable-next-line @next/next/no-img-element -- object URL, not an optimizable static/remote asset */}
                 <img
                   src={page.imgUrl}

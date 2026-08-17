@@ -15,6 +15,7 @@
 import { useEffect, useRef, useState } from 'react';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import FullscreenImageViewer from '@/components/FullscreenImageViewer';
+import SaveImageButton from '@/components/SaveImageButton';
 import { getErrorMessage } from '@/lib/errorUtils';
 import { formatDownloadDate } from '@/lib/slideLayout';
 import { renderAriseCanvas } from '@/lib/ariseCanvas';
@@ -32,6 +33,7 @@ export default function Week1CampaignsClient() {
   const [progress, setProgress] = useState('Loading Week 1 campaign data…');
   const [error, setError] = useState<string | null>(null);
   const [imgUrl, setImgUrl] = useState<string | null>(null);
+  const [imgBlob, setImgBlob] = useState<Blob | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const objectUrlRef = useRef<string | null>(null);
   const filenameRef = useRef('Week1_Campaigns.jpg');
@@ -68,6 +70,7 @@ export default function Week1CampaignsClient() {
         const url = URL.createObjectURL(blob);
         objectUrlRef.current = url;
         filenameRef.current = `${formatDownloadDate(new Date())}_Week1_Campaigns.jpg`;
+        setImgBlob(blob);
         setImgUrl(url);
       } catch (err) {
         if (!cancelled) setError(getErrorMessage(err, 'Failed to load Week 1 Campaigns list'));
@@ -102,13 +105,22 @@ export default function Week1CampaignsClient() {
 
         {imgUrl && (
           <div className="mt-4">
-            <a
-              href={imgUrl}
-              download={filenameRef.current}
-              className="inline-block rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 border-2 border-gray-800 dark:border-gray-600"
-            >
-              Download JPEG
-            </a>
+            <div className="flex flex-wrap items-start gap-2">
+              {imgBlob && (
+                <SaveImageButton
+                  blob={imgBlob}
+                  filename={filenameRef.current}
+                  className="rounded-md bg-green-600 px-4 py-2 text-base font-bold text-white hover:bg-green-700 disabled:opacity-50 border-2 border-gray-800 dark:border-gray-600"
+                />
+              )}
+              <a
+                href={imgUrl}
+                download={filenameRef.current}
+                className="inline-block rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 border-2 border-gray-800 dark:border-gray-600"
+              >
+                Download JPEG
+              </a>
+            </div>
             {/* Rendered at 4200×3000; scaled down for on-screen viewing. */}
             {/* eslint-disable-next-line @next/next/no-img-element -- object URL, not an optimizable static/remote asset */}
             <img
