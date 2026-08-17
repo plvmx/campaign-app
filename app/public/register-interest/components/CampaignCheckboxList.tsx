@@ -1,6 +1,6 @@
 'use client';
 
-import type { Campaign } from '@/lib/types';
+import type { AriseCampaign } from '@/lib/ariseLayout';
 import { getSlideStateColor, STATE_CODES, formatSlideDateText } from '@/lib/slideLayout';
 import { formatCampaignTimeDisplay } from '@/lib/campaignUtils';
 import { combinePlaceAndSite } from '@/lib/placeSite';
@@ -9,16 +9,17 @@ const PLACE_COLS  = 32;
 const LEADER_COLS = 12;
 
 interface Props {
-  campaigns: Campaign[];
+  campaigns: AriseCampaign[];
   checkedIds: Set<string>;
   onToggle: (id: string) => void;
 }
 
 /**
  * Same colour key + campaign-line formatting as CampaignSlideView (the
- * "Future Campaigns" view), but with a checkbox in front of each place and
- * the mobile number column dropped — this list is for registering interest,
- * not for contacting leaders directly.
+ * "Future Campaigns" view) and PublicCampaignList (the read-only public
+ * lists), but with a checkbox in front of each place — this list is for
+ * registering interest. Takes AriseCampaign (the public-safe shape, no
+ * mobile) rather than the full Campaign type, since this page is public.
  */
 export default function CampaignCheckboxList({ campaigns, checkedIds, onToggle }: Props) {
   if (campaigns.length === 0) {
@@ -30,7 +31,7 @@ export default function CampaignCheckboxList({ campaigns, checkedIds, onToggle }
   }
 
   // Group by date (campaigns arrive pre-sorted by date/state/place/time)
-  const grouped: Record<string, Campaign[]> = {};
+  const grouped: Record<string, AriseCampaign[]> = {};
   const sortedDates: string[] = [];
   for (const c of campaigns) {
     if (!grouped[c.date]) {
