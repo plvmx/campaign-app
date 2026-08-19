@@ -9,10 +9,11 @@ import { trackEvent } from '@/lib/analytics';
 import { useUser } from '@/contexts/UserContext';
 import { getRecentTWOLCampaignsForLeader } from '@/lib/services/campaignService';
 import { getTrainingCampaigns } from '@/lib/services/trainingInterestService';
+import { getCampaignInterestForLeader } from '@/lib/services/campaignInterestService';
 import { isRecognizedAdminStatus } from '@/lib/campaignFilter';
 import type { Campaign } from '@/lib/types';
 
-type ActionChoice = 'record-past' | 'review-upcoming' | 'create-new' | 'campaign-rules' | 'training-interest';
+type ActionChoice = 'record-past' | 'review-upcoming' | 'create-new' | 'campaign-rules' | 'training-interest' | 'campaign-interest';
 
 const STORAGE_KEYS = { mobile: 'login_mobile', firstName: 'login_firstName' };
 
@@ -46,6 +47,10 @@ export default function LoginPage() {
   // Whether the signed-in leader has any BOTJ/TLT training campaigns — gates
   // the "Manage my Training Interest" button on the action chooser
   const [hasTrainingCampaigns, setHasTrainingCampaigns] = useState(false);
+  // Whether any of the signed-in leader's campaigns have registrations via
+  // the public Register Interest link — gates the "Manage my Campaign
+  // Interest" button on the action chooser
+  const [hasCampaignInterest, setHasCampaignInterest] = useState(false);
 
   // Check if user is already signed in
   useEffect(() => {
@@ -128,23 +133,26 @@ export default function LoginPage() {
     // treated as a regular leader and shown the action chooser.
     if (!isRecognizedAdminStatus(match.admin)) {
       // Regular leader — show the action chooser instead of navigating.
-      // Also check for BOTJ/TLT training campaigns to decide whether to show
-      // the "Manage my Training Interest" button. userId is unused by
-      // getTrainingCampaigns here (its fallback branch only applies when
+      // Also check for BOTJ/TLT training campaigns and campaign-interest
+      // registrations, to decide whether to show the "Manage my Training
+      // Interest" / "Manage my Campaign Interest" buttons. userId is unused
+      // by either call here (their fallback branches only apply when
       // userLeader/userState are missing, and match always has both), so a
-      // placeholder is fine.
-      try {
-        const trainingCampaigns = await getTrainingCampaigns({
-          adminStatus: match.admin,
-          userState: match.state,
-          userLeader: match.leader,
-          userMobile: match.mobile,
-          userId: '',
-        });
-        setHasTrainingCampaigns(trainingCampaigns.length > 0);
-      } catch {
-        // Non-fatal — the button just won't show if this check fails.
-      }
+      // placeholder is fine. Run in parallel — independent checks.
+      const params = {
+        adminStatus: match.admin,
+        userState: match.state,
+        userLeader: match.leader,
+        userMobile: match.mobile,
+        userId: '',
+      };
+      const [trainingResult, campaignInterestResult] = await Promise.allSettled([
+        getTrainingCampaigns(params),
+        getCampaignInterestForLeader(params),
+      ]);
+      // Non-fatal — a button just won't show if its check fails.
+      if (trainingResult.status === 'fulfilled') setHasTrainingCampaigns(trainingResult.value.length > 0);
+      if (campaignInterestResult.status === 'fulfilled') setHasCampaignInterest(campaignInterestResult.value.length > 0);
       setShowActionChooser(true);
       return;
     }
@@ -176,6 +184,9 @@ export default function LoginPage() {
         break;
       case 'training-interest':
         router.push('/training-interest');
+        break;
+      case 'campaign-interest':
+        router.push('/campaign-interest');
         break;
     }
   };
@@ -267,6 +278,14 @@ export default function LoginPage() {
                   className="w-full rounded-md bg-pink-600 px-4 py-3 text-base font-bold text-white hover:bg-pink-700 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
                 >
                   Manage my Training Interest
+                </button>
+              )}
+              {hasCampaignInterest && (
+                <button
+                  onClick={() => handleActionChoice('campaign-interest')}
+                  className="w-full rounded-md bg-teal-600 px-4 py-3 text-base font-bold text-white hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
+                >
+                  Manage my Campaign Interest
                 </button>
               )}
             </div>

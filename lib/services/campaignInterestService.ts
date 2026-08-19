@@ -4,14 +4,16 @@
  * row per (campaign, person) pair. See scripts/create_campaign_interest_table.sql.
  *
  * Note: this module's functions use the browser client, which is RLS-gated
- * to admins for this table — so only the admin-only /admin/registered-interest
- * listing screen (getCampaignInterestList, setCampaignInterestContacted) uses
- * it. The public submission flow can't (anonymous visitors have no RLS
- * access) — it inserts via the service role directly in
- * app/api/public/register-interest/route.ts instead.
+ * to an admin or the campaign's owning/shared leader for this table (see
+ * supabase/rls-policies.sql) — so it's used by both /admin/registered-interest
+ * (getCampaignInterestList, admin-wide) and the leader-facing /campaign-interest
+ * (getCampaignInterestForLeader). The public submission flow can't use it
+ * (anonymous visitors have no RLS access) — it inserts via the service role
+ * directly in app/api/public/register-interest/route.ts instead.
  */
 import { supabase } from '@/lib/supabaseClient';
 import type { Campaign } from '@/lib/types';
+import { getCampaignsForUser, type CampaignsForUserParams } from './campaignService';
 
 export type CampaignInterestType = 'in' | 'more';
 
@@ -63,13 +65,44 @@ export async function getCampaignInterestList(): Promise<CampaignInterestWithCam
 }
 
 /**
+ * Interest registrations for campaigns the given user leads (own, shared, or
+ * — for admins — every campaign) — reuses getCampaignsForUser's role-aware
+ * fetch rather than re-implementing that filtering here, same pattern as
+ * trainingInterestService's getTrainingCampaigns. Unlike getCampaignInterestList
+ * (admin-wide, needs a second campaigns query), the campaign details are
+ * already in hand from getCampaignsForUser's own result.
+ */
+export async function getCampaignInterestForLeader(params: CampaignsForUserParams): Promise<CampaignInterestWithCampaign[]> {
+  const { campaigns } = await getCampaignsForUser(params);
+  if (campaigns.length === 0) return [];
+
+  const campaignIds = campaigns.map(c => c.id);
+  const { data, error } = await supabase
+    .from('campaign_interest')
+    .select('*')
+    .in('campaign_id', campaignIds)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+
+  const campaignsById = new Map(campaigns.map(c => [c.id, c as CampaignInterestCampaignInfo]));
+
+  return ((data || []) as CampaignInterest[]).map(e => ({ ...e, campaign: campaignsById.get(e.campaign_id) ?? null }));
+}
+
+/**
  * Mark a registration as contacted (or un-contacted). `contacted_at` is set
  * to now when marking contacted, and cleared back to null when un-marking.
+ * Returns the updated row's contacted_at so callers can update local state
+ * from the authoritative persisted value rather than re-deriving their own
+ * timestamp with a second `new Date().toISOString()` call.
  */
-export async function setCampaignInterestContacted(id: string, contacted: boolean): Promise<void> {
-  const { error } = await supabase
+export async function setCampaignInterestContacted(id: string, contacted: boolean): Promise<{ contacted_at: string | null }> {
+  const { data, error } = await supabase
     .from('campaign_interest')
     .update({ contacted, contacted_at: contacted ? new Date().toISOString() : null })
-    .eq('id', id);
+    .eq('id', id)
+    .select('contacted_at')
+    .single();
   if (error) throw error;
+  return data as { contacted_at: string | null };
 }
