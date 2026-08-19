@@ -323,6 +323,13 @@ function AppPageContent() {
     [router, dateFilter],
   );
 
+  const handleViewTrainingInterest = useCallback(
+    (campaign: Campaign) => {
+      router.push(`/training-interest/${campaign.id}`);
+    },
+    [router],
+  );
+
   const handleFilterChange = (
     field: 'state' | 'place' | 'leader' | 'mobile',
     value: string,
@@ -555,6 +562,7 @@ function AppPageContent() {
                 onDelete={(campaign) => setDeleteConfirmCampaign(campaign)}
                 onToggleCheckbox={handleToggleCheckbox}
                 onRecordResults={handleRecordResults}
+                onViewTrainingInterest={handleViewTrainingInterest}
               />
             )}
           </div>

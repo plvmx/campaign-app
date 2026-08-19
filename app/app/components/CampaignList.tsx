@@ -23,12 +23,13 @@ interface Props {
   onDelete: (campaign: Campaign) => void;
   onToggleCheckbox: (id: string, field: 'tl_ok' | 'sr_ok', currentValue: boolean) => void;
   onRecordResults: (campaign: Campaign) => void;
+  onViewTrainingInterest: (campaign: Campaign) => void;
 }
 
 export default function CampaignList({
   campaigns, editingId, dateFilter, isAdmin, adminStatus, userState, userMobileAndLeader,
   sharedWithMeOwners, savedCheckboxId, categories,
-  onEditStart, onCancelEdit, onSaveEdit, onDelete, onToggleCheckbox, onRecordResults,
+  onEditStart, onCancelEdit, onSaveEdit, onDelete, onToggleCheckbox, onRecordResults, onViewTrainingInterest,
 }: Props) {
   if (campaigns.length === 0) {
     return (
@@ -103,6 +104,7 @@ export default function CampaignList({
                 onDelete={() => onDelete(campaign)}
                 onToggleCheckbox={(field, val) => onToggleCheckbox(campaign.id, field, val)}
                 onRecordResults={() => onRecordResults(campaign)}
+                onViewTrainingInterest={() => onViewTrainingInterest(campaign)}
               />,
             );
           }
