@@ -8,10 +8,11 @@ import { getErrorMessage } from '@/lib/errorUtils';
 import { trackEvent } from '@/lib/analytics';
 import { useUser } from '@/contexts/UserContext';
 import { getRecentTWOLCampaignsForLeader } from '@/lib/services/campaignService';
+import { getTrainingCampaigns } from '@/lib/services/trainingInterestService';
 import { isRecognizedAdminStatus } from '@/lib/campaignFilter';
 import type { Campaign } from '@/lib/types';
 
-type ActionChoice = 'record-past' | 'review-upcoming' | 'create-new' | 'campaign-rules';
+type ActionChoice = 'record-past' | 'review-upcoming' | 'create-new' | 'campaign-rules' | 'training-interest';
 
 const STORAGE_KEYS = { mobile: 'login_mobile', firstName: 'login_firstName' };
 
@@ -42,6 +43,9 @@ export default function LoginPage() {
   const [recentCampaigns, setRecentCampaigns] = useState<Pick<Campaign, 'id' | 'date' | 'state' | 'place' | 'time' | 'leader'>[] | null>(null);
   // Whether to show the post-sign-in action chooser (regular leaders only)
   const [showActionChooser, setShowActionChooser] = useState(false);
+  // Whether the signed-in leader has any BOTJ/TLT training campaigns — gates
+  // the "Manage my Training Interest" button on the action chooser
+  const [hasTrainingCampaigns, setHasTrainingCampaigns] = useState(false);
 
   // Check if user is already signed in
   useEffect(() => {
@@ -123,7 +127,24 @@ export default function LoginPage() {
     // Any other value (including stray legacy data like a recruiter's name) is
     // treated as a regular leader and shown the action chooser.
     if (!isRecognizedAdminStatus(match.admin)) {
-      // Regular leader — show the action chooser instead of navigating
+      // Regular leader — show the action chooser instead of navigating.
+      // Also check for BOTJ/TLT training campaigns to decide whether to show
+      // the "Manage my Training Interest" button. userId is unused by
+      // getTrainingCampaigns here (its fallback branch only applies when
+      // userLeader/userState are missing, and match always has both), so a
+      // placeholder is fine.
+      try {
+        const trainingCampaigns = await getTrainingCampaigns({
+          adminStatus: match.admin,
+          userState: match.state,
+          userLeader: match.leader,
+          userMobile: match.mobile,
+          userId: '',
+        });
+        setHasTrainingCampaigns(trainingCampaigns.length > 0);
+      } catch {
+        // Non-fatal — the button just won't show if this check fails.
+      }
       setShowActionChooser(true);
       return;
     }
@@ -152,6 +173,9 @@ export default function LoginPage() {
         break;
       case 'campaign-rules':
         router.push('/admin/campaign-rules');
+        break;
+      case 'training-interest':
+        router.push('/training-interest');
         break;
     }
   };
@@ -237,6 +261,14 @@ export default function LoginPage() {
               >
                 Create or Update a Campaign Rule
               </button>
+              {hasTrainingCampaigns && (
+                <button
+                  onClick={() => handleActionChoice('training-interest')}
+                  className="w-full rounded-md bg-pink-600 px-4 py-3 text-base font-bold text-white hover:bg-pink-700 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
+                >
+                  Manage my Training Interest
+                </button>
+              )}
             </div>
           </div>
         </div>
