@@ -16,7 +16,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 
-const PROTECTED_PREFIXES = ['/app', '/admin', '/capture', '/record-results', '/results', '/view-slides', '/training-interest'];
+const PROTECTED_PREFIXES = ['/app', '/admin', '/capture', '/record-results', '/results', '/view-slides', '/training-interest', '/campaign-interest'];
 const LOGIN_PATH = '/login';
 
 // Note: `/public/*` (and its `/api/public/*` data routes) is intentionally

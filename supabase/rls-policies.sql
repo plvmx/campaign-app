@@ -211,17 +211,65 @@ CREATE POLICY "campaign_messages: only admin can write"
 
 -- =============================================================================
 -- campaign_interest
--- Holds registrants' names + mobile numbers (PII, via /admin/register-interest)
--- — admin-only in both directions, unlike campaign_messages/campaign_rules
--- above which only restrict writes. See scripts/create_campaign_interest_table.sql
--- for the table definition.
+-- Holds registrants' names + mobile numbers (PII, via the public
+-- /public/register-interest link). Readable/updatable by an admin, or by the
+-- leader who owns (or is shared) the referenced campaign — mirrors
+-- training_interest's policy below (and, in turn, the campaigns table's own
+-- SELECT/UPDATE policy) via a join through campaigns. See
+-- scripts/create_campaign_interest_table.sql for the table definition. No
+-- INSERT/DELETE policy for authenticated: public submissions go through the
+-- service role (anonymous visitors have no RLS access), same as
+-- training_interest.
 -- =============================================================================
 ALTER TABLE campaign_interest ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "campaign_interest: only admin can access" ON campaign_interest;
-CREATE POLICY "campaign_interest: only admin can access"
-  ON campaign_interest FOR ALL TO authenticated
-  USING (public.is_admin()) WITH CHECK (public.is_admin());
+
+DROP POLICY IF EXISTS "campaign_interest: owner or shared leader or admin can read" ON campaign_interest;
+CREATE POLICY "campaign_interest: owner or shared leader or admin can read"
+  ON campaign_interest FOR SELECT TO authenticated
+  USING (
+    public.is_admin()
+    OR EXISTS (
+      SELECT 1 FROM campaigns c
+      JOIN user_profiles up ON up.user_id = auth.uid()
+      WHERE c.id = campaign_interest.campaign_id
+        AND up.state = c.state
+        AND lower(trim(up.name)) = lower(trim(c.leader))
+    )
+    OR EXISTS (
+      SELECT 1 FROM campaigns c
+      JOIN leader_shares ls ON ls.owner_state = c.state
+        AND lower(trim(ls.owner_leader)) = lower(trim(c.leader))
+      JOIN user_profiles up ON up.user_id = auth.uid()
+        AND ls.shared_with_state = up.state
+        AND lower(trim(ls.shared_with_leader)) = lower(trim(up.name))
+      WHERE c.id = campaign_interest.campaign_id
+    )
+  );
+
+DROP POLICY IF EXISTS "campaign_interest: owner or shared leader or admin can update" ON campaign_interest;
+CREATE POLICY "campaign_interest: owner or shared leader or admin can update"
+  ON campaign_interest FOR UPDATE TO authenticated
+  USING (
+    public.is_admin()
+    OR EXISTS (
+      SELECT 1 FROM campaigns c
+      JOIN user_profiles up ON up.user_id = auth.uid()
+      WHERE c.id = campaign_interest.campaign_id
+        AND up.state = c.state
+        AND lower(trim(up.name)) = lower(trim(c.leader))
+    )
+    OR EXISTS (
+      SELECT 1 FROM campaigns c
+      JOIN leader_shares ls ON ls.owner_state = c.state
+        AND lower(trim(ls.owner_leader)) = lower(trim(c.leader))
+      JOIN user_profiles up ON up.user_id = auth.uid()
+        AND ls.shared_with_state = up.state
+        AND lower(trim(ls.shared_with_leader)) = lower(trim(up.name))
+      WHERE c.id = campaign_interest.campaign_id
+    )
+  );
 
 
 -- =============================================================================
