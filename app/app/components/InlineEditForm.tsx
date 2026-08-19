@@ -1,6 +1,8 @@
 'use client';
+import { useState } from 'react';
 import { AUSTRALIAN_STATES } from '@/lib/constants';
 import { combinePlaceAndSite } from '@/lib/placeSite';
+import { isTrainingCategory } from '@/lib/services/trainingInterestService';
 import type { Campaign } from '@/lib/types';
 import type { EditUpdates } from './types';
 import { useCampaignForm } from './useCampaignForm';
@@ -18,6 +20,7 @@ const inputClass =
   'w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white';
 
 export default function InlineEditForm({ campaign, isAdmin, categories, onSave, onCancel }: Props) {
+  const [linkCopied, setLinkCopied] = useState(false);
   const {
     values, setValue,
     isOtherPlace, customPlace, setCustomPlace,
@@ -46,6 +49,18 @@ export default function InlineEditForm({ campaign, isAdmin, categories, onSave, 
       // Component unmounts on success — parent clears editingId
     },
   });
+
+  const handleCopyTrainingLink = async () => {
+    const url = `${window.location.origin}/public/training/${campaign.id}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    } catch {
+      // Clipboard access can fail (e.g. insecure context, permission denied)
+      // — silently ignored, the button label just won't flip to "Copied!".
+    }
+  };
 
   return (
     <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border-b-2 border-gray-800 dark:border-gray-600">
@@ -124,6 +139,22 @@ export default function InlineEditForm({ campaign, isAdmin, categories, onSave, 
             {categories.map((c) => <option key={c.code} value={c.code}>{c.name}</option>)}
           </select>
         </div>
+        {/* Gated on the campaign's currently-*saved* category, not the live
+            (possibly unsaved) `values.category` — the copied link points at
+            campaign.id and only works once the DB row's category is BOTJ/TLT,
+            so basing this on the unsaved form value could hand out a link
+            that 404s until the form is saved. */}
+        {isTrainingCategory(campaign.category) && (
+          <div>
+            <button type="button" onClick={handleCopyTrainingLink}
+              className="w-full rounded-md bg-blue-100 px-3 py-2 text-sm font-bold text-blue-700 hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50 border-2 border-gray-800 dark:border-gray-600">
+              {linkCopied ? 'Copied!' : 'Copy Public Training Link'}
+            </button>
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              Share this link by email or WhatsApp so people can register interest in joining this training.
+            </p>
+          </div>
+        )}
         <div className="flex gap-3 pt-2">
           <button onClick={handleSubmit} disabled={isSubmitting}
             className="flex-1 rounded-md bg-green-600 px-3 py-3 text-base font-bold text-white hover:bg-green-700 disabled:opacity-50 border-2 border-gray-800 dark:border-gray-600">

@@ -50,6 +50,7 @@ function renderCard(adminStatus: string | null) {
       onDelete={() => {}}
       onToggleCheckbox={() => {}}
       onRecordResults={() => {}}
+      onViewTrainingInterest={() => {}}
     />,
   );
 }

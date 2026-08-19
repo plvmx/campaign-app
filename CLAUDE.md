@@ -94,6 +94,7 @@ All database access goes through service modules in `lib/services/`. Pages and c
 - **`lib/services/statePlacesService.ts`** — CRUD for the `state_places` table: `getStatePlaces`, `createStatePlace`, `updateStatePlace`, `deleteStatePlace`. Exports the `StatePlace` interface (includes `site`; the table's uniqueness key is `state`+`place`+`site`).
 - **`lib/services/backupService.ts`** — `exportBackup`/`restoreBackup` for `/admin/backup`. `BACKUP_TABLE_CONFIG` is the single source of truth for which tables are backed up and in what order — listed FK-safe (a table only ever appears after every table it references), since "replace" mode restore inserts top-to-bottom but deletes bottom-to-top.
 - **`lib/services/campaignInterestService.ts`** — CRUD for the `campaign_interest` table: `registerCampaignInterest` (bulk insert, one row per ticked campaign), `getCampaignInterestList` (all rows newest-first, paired with each campaign's key details via a second query), `setCampaignInterestContacted`. Exports the `CampaignInterest`/`CampaignInterestWithCampaign` interfaces.
+- **`lib/services/trainingInterestService.ts`** — CRUD for the `training_interest` table: `getTrainingCampaigns` (training-category campaigns visible to the current user, built on `campaignService.getCampaignsForUser` rather than re-implementing role/shared-leader filtering), `getTrainingInterestCounts`, `getTrainingInterestForCampaign`, `setTrainingInterestContacted`. Also exports `TRAINING_CATEGORIES`/`isTrainingCategory()` — the single source of truth for which campaign category codes (`BOTJ`, `TLT`) count as a training session, used by both this service and the UI (`CampaignCard`, `InlineEditForm`) to decide when to show training-interest actions.
 - **`lib/placeSite.ts`** — `splitPlaceAndSite()`/`combinePlaceAndSite()`. The single source of truth for parsing/joining the numeric site suffix (e.g. "Orange 1" ⇄ `{ place: "Orange", site: "1" }`); used by the migration script and every place selector/display.
 - **`lib/campaignLog.ts`** — fire-and-forget audit logging to `campaign_changes_log`. Skips automatically on admin routes and when logging is toggled off via `lib/appSettings.ts`. `fetchCampaignData` returns `Campaign | null`.
 
@@ -144,9 +145,13 @@ All database access goes through service modules in `lib/services/`. Pages and c
 | `/admin/results-metrics` | Results dashboard — names recorded per category (TM/P/F/SP), by state, place, and campaign, for a date range |
 | `/admin/campaign-categories` | Manage campaign categories (TWOL, BOTJ, TLT, …) |
 | `/admin/backup` | Export/restore a JSON snapshot of every admin-curated table (see `lib/services/backupService.ts`'s `BACKUP_TABLE_CONFIG` for the full, current list and restore ordering) |
+| `/training-interest` | Leader-facing dashboard of the signed-in user's BOTJ/TLT training campaigns (own, shared, or — for admins — all), each with its public-link interest count and a Copy Link action. Visibility relies on `campaigns` RLS via `getTrainingCampaigns`, not an app-level admin check |
+| `/training-interest/[campaignId]` | Full list of who registered interest in one training campaign via its public link, with a Contacted checkbox per registration. Access relies on `getCampaignById` returning `null` for a campaign the signed-in user isn't the owning/shared leader (or admin) of — same RLS-gated fetch the main feed uses |
 
 ### Public links (`/public/*`)
 No-login pages, each registered in `lib/publicLinks.ts` (single source of truth for slug/title/description/path — drives both the page's own `<title>`/Open Graph metadata and the admin-managed list at `/admin/public-links`, where an admin can override a link's title/description without a redeploy). `middleware.ts`'s `PROTECTED_PREFIXES` doesn't include `/public`, so these pages are open by default; each is backed by a matching `/api/public/*` route using `supabaseAdmin` (service role) rather than the browser client, since anonymous visitors have no RLS access. Every `/api/public/*` route calls `enforceOrigin()` and a per-IP `createRateLimiter()` (`lib/corsUtils.ts` / `lib/rateLimit.ts`), and GETs are briefly in-memory cached since the response is identical for every caller.
+
+`/public/training/[campaignId]` (below) is dynamic per-campaign, so it is deliberately **not** in `lib/publicLinks.ts` — that registry is for the fixed, enumerable links listed on `/admin/public-links`, not one entry per campaign. Its title/description are computed from the campaign record in its own `generateMetadata()` instead. Its GET is also not in-memory cached like the others, since each request is a single indexed-row lookup by campaign id rather than a table scan.
 
 | Path | Description |
 |------|-------------|
@@ -154,6 +159,7 @@ No-login pages, each registered in `lib/publicLinks.ts` (single source of truth 
 | `/public/temporary-upcoming-campaigns` | Leader-facing fortnight list — check/edit-redirect/download, distinct from Register Interest |
 | `/public/campaign-results` | Latest campaign results, all states, with per-page JPEG downloads |
 | `/public/register-interest` | Tick upcoming campaigns and register interest ("Yes I'm In" / "Tell Me More"), capturing first name + mobile number into `campaign_interest`. The only `/public/*` route with a POST (write) as well as a GET — see `app/api/public/register-interest/route.ts` |
+| `/public/training/[campaignId]` | One training session's (campaign category BOTJ/TLT) details, with a form to register interest (name + mobile or email) into `training_interest`. Linked from the campaign's edit screen (`InlineEditForm`, category BOTJ/TLT) and from `/training-interest` via a Copy Link button. GET+POST both live in `app/api/public/training-interest/[campaignId]/route.ts` |
 
 ### Database tables (key ones)
 - `campaigns` — core records; `category` column is the campaign category flag (e.g. `TWOL`, `BOTJ`, `TLT`); `place`+`site` together identify the location
@@ -164,6 +170,7 @@ No-login pages, each registered in `lib/publicLinks.ts` (single source of truth 
 - `campaign_changes_log` — audit trail
 - `results` — recorded result names per campaign; `category_code` is `'TM' | 'P' | 'F' | 'SP' | 'IR'` (Team Member / Partial Presentation / Full Presentation / Full Presentation + Sinner's Prayer / Information Request); `first_name` is free text, not a foreign key to `state_leaders`
 - `campaign_interest` — members registering interest via the public `/public/register-interest` link; one row per (campaign, person). `interest_type` is `'in' | 'more'` ("Yes I'm In" / "Tell Me More"); `contacted` + `contacted_at` track admin/leader follow-up. RLS is admin-only (`public.is_admin()`, see `supabase/rls-policies.sql`) — the public page inserts via the service role in its API route, not the browser client. See `scripts/create_campaign_interest_table.sql`
+- `training_interest` — members registering interest in a training session via its per-campaign public link (`/public/training/[campaignId]`); one row per (campaign, person), with `mobile` and/or `email` (at least one required — DB `CHECK` constraint, see `scripts/create_training_interest_table.sql`). `contacted` + `contacted_at` track follow-up, same as `campaign_interest`. Unlike `campaign_interest`, RLS also lets the campaign's owning/shared leader (not just admins) read/update rows, via a join through `campaigns` mirroring that table's own SELECT/UPDATE policy — see `supabase/rls-policies.sql`
 
 ### Slide generation
 The arise (Week 1 Campaigns) list generator is split across three modules:

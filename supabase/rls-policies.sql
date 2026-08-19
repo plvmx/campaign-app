@@ -345,4 +345,64 @@ CREATE POLICY "weekly_refresh_log: admin can read"
   ON weekly_refresh_log FOR SELECT TO authenticated
   USING (public.is_admin());
 
+
+-- =============================================================================
+-- training_interest
+-- Holds registrants' names + mobile/email (PII, via a training campaign's
+-- public link at /public/training/[campaignId]). Readable/updatable by an
+-- admin, or by the leader who owns (or is shared) the referenced training
+-- campaign — mirrors the campaigns table's own SELECT/UPDATE policy above via
+-- a join through campaigns. See scripts/create_training_interest_table.sql
+-- for the table definition. No INSERT/DELETE policy for authenticated: public
+-- submissions go through the service role (anonymous visitors have no RLS
+-- access), same as campaign_interest.
+-- =============================================================================
+ALTER TABLE training_interest ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "training_interest: owner or shared leader or admin can read" ON training_interest;
+CREATE POLICY "training_interest: owner or shared leader or admin can read"
+  ON training_interest FOR SELECT TO authenticated
+  USING (
+    public.is_admin()
+    OR EXISTS (
+      SELECT 1 FROM campaigns c
+      JOIN user_profiles up ON up.user_id = auth.uid()
+      WHERE c.id = training_interest.campaign_id
+        AND up.state = c.state
+        AND lower(trim(up.name)) = lower(trim(c.leader))
+    )
+    OR EXISTS (
+      SELECT 1 FROM campaigns c
+      JOIN leader_shares ls ON ls.owner_state = c.state
+        AND lower(trim(ls.owner_leader)) = lower(trim(c.leader))
+      JOIN user_profiles up ON up.user_id = auth.uid()
+        AND ls.shared_with_state = up.state
+        AND lower(trim(ls.shared_with_leader)) = lower(trim(up.name))
+      WHERE c.id = training_interest.campaign_id
+    )
+  );
+
+DROP POLICY IF EXISTS "training_interest: owner or shared leader or admin can update" ON training_interest;
+CREATE POLICY "training_interest: owner or shared leader or admin can update"
+  ON training_interest FOR UPDATE TO authenticated
+  USING (
+    public.is_admin()
+    OR EXISTS (
+      SELECT 1 FROM campaigns c
+      JOIN user_profiles up ON up.user_id = auth.uid()
+      WHERE c.id = training_interest.campaign_id
+        AND up.state = c.state
+        AND lower(trim(up.name)) = lower(trim(c.leader))
+    )
+    OR EXISTS (
+      SELECT 1 FROM campaigns c
+      JOIN leader_shares ls ON ls.owner_state = c.state
+        AND lower(trim(ls.owner_leader)) = lower(trim(c.leader))
+      JOIN user_profiles up ON up.user_id = auth.uid()
+        AND ls.shared_with_state = up.state
+        AND lower(trim(ls.shared_with_leader)) = lower(trim(up.name))
+      WHERE c.id = training_interest.campaign_id
+    )
+  );
+
 -- No authenticated write policy — managed by service role only.

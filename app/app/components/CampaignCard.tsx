@@ -6,6 +6,7 @@ import { formatCampaignTimeDisplay, isCampaignPast } from '@/lib/campaignUtils';
 import { normalizeName, normalizeMobile } from '@/lib/auth';
 import { isRecognizedAdminStatus } from '@/lib/campaignFilter';
 import { combinePlaceAndSite } from '@/lib/placeSite';
+import { isTrainingCategory } from '@/lib/services/trainingInterestService';
 
 const SOURCE_LABEL: Record<string, string> = {
   MAN: 'Manual',
@@ -53,17 +54,20 @@ interface Props {
   onDelete: () => void;
   onToggleCheckbox: (field: 'tl_ok' | 'sr_ok', currentValue: boolean) => void;
   onRecordResults: () => void;
+  onViewTrainingInterest: () => void;
 }
 
 export default function CampaignCard({
   campaign, dateFilter, isAdmin, adminStatus, userState, userMobileAndLeader,
   sharedWithMeOwners, savedCheckboxId, onEdit, onDelete, onToggleCheckbox, onRecordResults,
+  onViewTrainingInterest,
 }: Props) {
   const stateColor = getStateColor(campaign.state);
   const displayTime = formatCampaignTimeDisplay(campaign.time);
   const campaignCat = campaign.category ?? 'TWOL';
   const showCategoryBadge = campaignCat !== 'TWOL';
   const showRecordResults = canRecordResults(campaign, adminStatus, userState, userMobileAndLeader, sharedWithMeOwners);
+  const showTrainingInterest = isTrainingCategory(campaignCat);
 
   return (
     <div className={`p-4 sm:p-5 ${stateColor.bg} border-b-2 border-gray-800 dark:border-gray-600`}>
@@ -110,7 +114,18 @@ export default function CampaignCard({
             </div>
           )}
         </div>
-        <div className="flex flex-row gap-2 sm:ml-4 w-full sm:w-auto">
+        {/* flex-wrap: a training campaign that also qualifies for Record
+            Results can stack up to 4 flex-1 buttons here — wrap onto a
+            second line on narrow screens instead of squeezing/truncating. */}
+        <div className="flex flex-row flex-wrap gap-2 sm:ml-4 w-full sm:w-auto">
+          {showTrainingInterest && (
+            <button
+              onClick={onViewTrainingInterest}
+              className="flex-1 rounded-md bg-purple-100 px-2 sm:px-4 py-2 text-base font-bold text-purple-700 hover:bg-purple-200 dark:bg-purple-900/30 dark:text-purple-300 dark:hover:bg-purple-900/50 border-2 border-gray-800 dark:border-gray-600"
+            >
+              Training Interest
+            </button>
+          )}
           {showRecordResults && (
             <button
               onClick={onRecordResults}
