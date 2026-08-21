@@ -358,19 +358,19 @@ export default function AdminPage() {
             </button>
           </div>
 
-          {/* Campaign Slides */}
+          {/* Campaign Lists */}
           <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-              Campaign Slides
+              Campaign Lists
             </h2>
             <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-              Generate campaign slides in JPEG format for upcoming campaigns
+              Generate campaign lists in JPEG format for upcoming campaigns
             </p>
             <button
               onClick={() => router.push('/admin/generate-slides')}
               className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
             >
-              Generate Slides
+              Generate Lists
             </button>
           </div>
 

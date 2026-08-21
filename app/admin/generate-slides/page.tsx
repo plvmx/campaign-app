@@ -5,33 +5,24 @@ import { useRouter } from 'next/navigation';
 import MobileLayout from '@/components/MobileLayout';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import { useUser } from '@/contexts/UserContext';
+import { useCampaignDates } from '@/contexts/CampaignDatesContext';
 import { supabase } from '@/lib/supabaseClient';
+import { formatDateForDb } from '@/lib/campaignDates';
 import { generateAndDownloadSlides } from '@/lib/slideGenerator';
 import { getErrorMessage } from '@/lib/errorUtils';
 import { AUSTRALIAN_STATES, type AustralianState } from '@/lib/constants';
 
-/** Returns the default upcoming-campaign Monday based on today's date. */
-function calculateDefaultStartDate(): Date {
-  const today = new Date();
-  const dow   = today.getDay(); // 0=Sun … 6=Sat
-  // Mon–Sat (1–6): this week's Monday.  Sun (0): next Monday.
-  const pythonDow = dow === 0 ? 6 : dow - 1;
-  const offset    = pythonDow <= 5 ? -pythonDow : 7 - pythonDow;
-  const d = new Date(today);
-  d.setDate(d.getDate() + offset);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
 export default function GenerateSlidesPage() {
   const router = useRouter();
+  const { dates: campaignDates } = useCampaignDates();
   const { user, isAdmin, adminStatus, userState, isLoading: isUserLoading } = useUser();
   const [hasAccess, setHasAccess]     = useState(false);
   const [error, setError]             = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress]       = useState('');
-  const [customStartDate, setCustomStartDate] = useState<string>('');
-  const [customEndDate, setCustomEndDate] = useState<string>('');
+
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [selectedState, setSelectedState] = useState<AustralianState | ''>('');
 
   useEffect(() => {
@@ -44,6 +35,18 @@ export default function GenerateSlidesPage() {
     setHasAccess(true);
   }, [isUserLoading, user, isAdmin, adminStatus, router]);
 
+  // Default to the upcoming two-week campaign period, matching the Campaign
+  // Results Report's default range (see app/admin/generate-report/page.tsx)
+  useEffect(() => {
+    if (campaignDates && !startDate && !endDate) {
+      const twoWeekEnd = new Date(campaignDates.upcomingCampaignStart);
+      twoWeekEnd.setDate(twoWeekEnd.getDate() + 13);
+
+      setStartDate(formatDateForDb(campaignDates.upcomingCampaignStart));
+      setEndDate(formatDateForDb(twoWeekEnd));
+    }
+  }, [campaignDates, startDate, endDate]);
+
   const parseDateInput = (value: string): Date => {
     const [y, m, d] = value.split('-').map(Number);
     const date = new Date(y, m - 1, d);
@@ -51,36 +54,33 @@ export default function GenerateSlidesPage() {
     return date;
   };
 
-  const getEffectiveStartDate = (): Date => {
-    if (customStartDate) return parseDateInput(customStartDate);
-    return calculateDefaultStartDate();
-  };
-
-  const getEffectiveEndDate = (): Date | undefined => {
-    return customEndDate ? parseDateInput(customEndDate) : undefined;
-  };
-
   const handleGenerate = async () => {
-    const effectiveEnd = getEffectiveEndDate();
-    if (effectiveEnd && effectiveEnd < getEffectiveStartDate()) {
+    if (!startDate || !endDate) {
+      setError('Please select both a start and end date');
+      return;
+    }
+    const start = parseDateInput(startDate);
+    const end = parseDateInput(endDate);
+    if (end < start) {
       setError('End date must be on or after the start date');
       return;
     }
+
     setIsGenerating(true);
     setError(null);
-    setProgress('Starting slide generation…');
+    setProgress('Starting list generation…');
     try {
       await generateAndDownloadSlides({
         supabase,
-        startDate:   getEffectiveStartDate(),
-        endDate:     effectiveEnd,
+        startDate:   start,
+        endDate:     end,
         adminStatus,
         userState,
         stateFilter: isAdmin ? (selectedState || undefined) : undefined,
         onProgress:  setProgress,
       });
     } catch (err: unknown) {
-      setError(getErrorMessage(err, 'Failed to generate slides'));
+      setError(getErrorMessage(err, 'Failed to generate lists'));
     } finally {
       setIsGenerating(false);
     }
@@ -117,9 +117,6 @@ export default function GenerateSlidesPage() {
     );
   }
 
-  const effectiveStart = getEffectiveStartDate();
-  const effectiveEnd = getEffectiveEndDate();
-
   return (
     <MobileLayout>
       <div className="p-4">
@@ -131,10 +128,10 @@ export default function GenerateSlidesPage() {
             ← {adminStatus === 'SR' ? 'Back to Home' : 'Back to Admin Panel'}
           </button>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-            Generate Campaign Slides
+            Generate Campaign Lists
           </h1>
           <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-            Generate JPEG slides for upcoming campaigns in the standard format
+            Generate JPEG campaign lists for upcoming campaigns in the standard format
           </p>
         </div>
 
@@ -152,87 +149,43 @@ export default function GenerateSlidesPage() {
 
         <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
           <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-gray-100">
-            Generate Slides
+            Select Date Range
           </h2>
 
           <div className="space-y-4">
-            <div className="rounded-md bg-blue-50 p-3 dark:bg-blue-900/20">
-              <p className="text-sm text-blue-800 dark:text-blue-200">
-                {effectiveEnd
-                  ? <>This will generate slides for campaigns from{' '}
-                      {effectiveStart.toLocaleDateString('en-AU', {
-                        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-                      })}{' '}
-                      to{' '}
-                      {effectiveEnd.toLocaleDateString('en-AU', {
-                        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-                      })}
-                    </>
-                  : <>This will generate slides for the upcoming two-week campaign period, starting from{' '}
-                      {effectiveStart.toLocaleDateString('en-AU', {
-                        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-                      })}
-                    </>
-                }
-                {isAdmin && selectedState ? `, for ${selectedState} only` : ''}.
-              </p>
-              <p className="mt-2 text-sm text-blue-800 dark:text-blue-200">
-                Slides will be generated in portrait format (7.5&quot; × 10&quot;) at 300 DPI and
-                downloaded as a ZIP file.
-              </p>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Start Date
+              </label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+              />
             </div>
 
             <div>
-              <label
-                htmlFor="startDate"
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-              >
-                Start Date (optional)
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                End Date
               </label>
               <input
-                id="startDate"
                 type="date"
-                value={customStartDate}
-                onChange={e => setCustomStartDate(e.target.value)}
-                className="w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
               />
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                Leave empty to use the default &quot;Upcoming Campaign Start&quot; date
-              </p>
-            </div>
-
-            <div>
-              <label
-                htmlFor="endDate"
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-              >
-                End Date (optional)
-              </label>
-              <input
-                id="endDate"
-                type="date"
-                value={customEndDate}
-                onChange={e => setCustomEndDate(e.target.value)}
-                className="w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
-              />
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                Leave empty to use the default two-week fortnight window
-              </p>
             </div>
 
             {isAdmin && (
               <div>
-                <label
-                  htmlFor="state"
-                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-                >
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   State (optional)
                 </label>
                 <select
-                  id="state"
                   value={selectedState}
-                  onChange={e => setSelectedState(e.target.value as AustralianState | '')}
-                  className="w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
+                  onChange={(e) => setSelectedState(e.target.value as AustralianState | '')}
+                  className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
                 >
                   <option value="">All states</option>
                   {AUSTRALIAN_STATES.map(state => (
@@ -240,7 +193,7 @@ export default function GenerateSlidesPage() {
                   ))}
                 </select>
                 <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  Leave empty to generate slides for all states
+                  Leave empty to include all states
                 </p>
               </div>
             )}
@@ -250,7 +203,7 @@ export default function GenerateSlidesPage() {
               disabled={isGenerating}
               className="w-full rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:bg-gray-400 disabled:cursor-not-allowed border-2 border-gray-800 dark:border-gray-600"
             >
-              {isGenerating ? 'Generating Slides…' : 'Generate Campaign Slides'}
+              {isGenerating ? 'Generating Lists…' : 'Generate Campaign Lists'}
             </button>
           </div>
         </div>
