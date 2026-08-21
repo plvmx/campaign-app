@@ -60,6 +60,11 @@ export default function TrainingInterestPage() {
     return () => { cancelled = true; };
   }, [isUserLoading, user, adminStatus, userState, userLeader, userMobile, router]);
 
+  // Sum of counts.values() — total registrations across all listed training
+  // campaigns, shown after the title for consistency with the Campaign
+  // Interest screens (e.g. "Campaign Interest (2)").
+  const totalInterest = Array.from(counts.values()).reduce((sum, n) => sum + n, 0);
+
   const handleCopyLink = async (campaignId: string) => {
     const url = `${window.location.origin}/public/training/${campaignId}`;
     try {
@@ -91,7 +96,7 @@ export default function TrainingInterestPage() {
           >
             Back
           </button>
-          <h1 className="pr-14 text-2xl font-bold text-gray-900 dark:text-gray-100">Training Interest</h1>
+          <h1 className="pr-14 text-2xl font-bold text-gray-900 dark:text-gray-100">Training Interest ({totalInterest})</h1>
           <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
             Your BOTJ and TLT training campaigns, each with a public link people can use to register interest in joining.
           </p>
