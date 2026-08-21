@@ -26,6 +26,21 @@ export interface PublicLink {
   path: string;
 }
 
+/**
+ * Open Graph image for public-link preview cards. Deliberately the *small*
+ * 192x192 app icon, with explicit width/height, rather than the 512x512
+ * icon used for the PWA manifest: WhatsApp's link-preview crawler fetches
+ * og:image and — for a large, undeclared image — renders a big banner-style
+ * card that can fill two-thirds of a phone screen. A small, explicitly-sized
+ * image keeps it as a compact thumbnail beside the title/description.
+ */
+export const PUBLIC_LINK_OG_IMAGE = {
+  url: '/icons/icon-192x192.png',
+  width: 192,
+  height: 192,
+  alt: 'AFJ Campaign App',
+};
+
 export const PUBLIC_LINKS: PublicLink[] = [
   {
     slug: 'week1-campaigns',
