@@ -85,12 +85,12 @@ export default function GenerateReportPage() {
     if (campaignDates && !startDate && !endDate) {
       // Start date: Past Campaign Start
       const pastStart = formatDateForDb(campaignDates.pastCampaignStart);
-      
-      // End date: Sunday of that week (Past Campaign Start + 6 days)
-      const pastWeekEnd = new Date(campaignDates.pastCampaignStart);
-      pastWeekEnd.setDate(pastWeekEnd.getDate() + 6);
-      const pastEnd = formatDateForDb(pastWeekEnd);
-      
+
+      // End date: Sunday of the second week (Past Campaign Start + 13 days) — a full two-week period
+      const twoWeekEnd = new Date(campaignDates.pastCampaignStart);
+      twoWeekEnd.setDate(twoWeekEnd.getDate() + 13);
+      const pastEnd = formatDateForDb(twoWeekEnd);
+
       setStartDate(pastStart);
       setEndDate(pastEnd);
     }
