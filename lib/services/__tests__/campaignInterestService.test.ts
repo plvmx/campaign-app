@@ -13,6 +13,7 @@ import { getCampaignsForUser } from '../campaignService';
 import {
   getCampaignInterestList,
   getCampaignInterestForLeader,
+  getCampaignInterestCounts,
   setCampaignInterestContacted,
 } from '../campaignInterestService';
 import type { Campaign } from '@/lib/types';
@@ -142,6 +143,34 @@ describe('getCampaignInterestForLeader', () => {
     const error = { code: '500', message: 'boom' };
     mockFrom.mockReturnValueOnce(makeQueryBuilder({ data: null, error }));
     await expect(getCampaignInterestForLeader(baseParams)).rejects.toEqual(error);
+  });
+});
+
+describe('getCampaignInterestCounts', () => {
+  it('returns an empty map without querying when there are no campaign ids', async () => {
+    const result = await getCampaignInterestCounts([]);
+    expect(result).toEqual(new Map());
+    expect(mockFrom).not.toHaveBeenCalled();
+  });
+
+  it('counts rows per campaign id', async () => {
+    const builder = makeQueryBuilder({
+      data: [{ campaign_id: 'c1' }, { campaign_id: 'c1' }, { campaign_id: 'c2' }],
+      error: null,
+    });
+    mockFrom.mockReturnValueOnce(builder);
+
+    const result = await getCampaignInterestCounts(['c1', 'c2']);
+
+    expect(builder.in).toHaveBeenCalledWith('campaign_id', ['c1', 'c2']);
+    expect(result.get('c1')).toBe(2);
+    expect(result.get('c2')).toBe(1);
+  });
+
+  it('throws on error', async () => {
+    const error = { code: '500', message: 'boom' };
+    mockFrom.mockReturnValueOnce(makeQueryBuilder({ data: null, error }));
+    await expect(getCampaignInterestCounts(['c1'])).rejects.toEqual(error);
   });
 });
 

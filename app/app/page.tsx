@@ -9,6 +9,7 @@ import { fetchCampaignData } from '@/lib/campaignLog';
 import { getErrorMessage } from '@/lib/errorUtils';
 import type { Campaign, LeaderShareOwner } from '@/lib/types';
 import { deleteCampaign, updateCampaign, getCampaignsForUser } from '@/lib/services/campaignService';
+import { getCampaignInterestCounts } from '@/lib/services/campaignInterestService';
 import { trackEvent } from '@/lib/analytics';
 import { getCampaignCategories } from '@/lib/services/dropdownService';
 import { getUserStateCode } from '@/lib/location';
@@ -53,6 +54,12 @@ function AppPageContent() {
   const [viewMode, setViewMode] = useState<'view' | 'edit'>('view');
   const [slideViewEnabled, setSlideViewEnabled] = useState(false);
   const [allCampaigns, setAllCampaigns] = useState<Campaign[]>([]);
+  // Campaign id -> number of campaign_interest registrations, for the "N
+  // people interested" callout on each card. Fetched in its own effect
+  // (below) keyed on allCampaigns, rather than inline in each of the two
+  // places that set it, so both refetchCampaigns and the initial load pick
+  // it up without duplicating the fetch call.
+  const [campaignInterestCounts, setCampaignInterestCounts] = useState<Map<string, number>>(new Map());
   const [campaignCategories, setCampaignCategories] = useState<{ code: string; name: string }[]>([
     { code: 'TWOL', name: 'Two Weekly' },
     { code: 'BOTJ', name: 'Book of the Judgement' },
@@ -255,6 +262,15 @@ function AppPageContent() {
     }
   }, [adminStatus]);
 
+  useEffect(() => {
+    if (allCampaigns.length === 0) { setCampaignInterestCounts(new Map()); return; }
+    let cancelled = false;
+    getCampaignInterestCounts(allCampaigns.map((c) => c.id))
+      .then((counts) => { if (!cancelled) setCampaignInterestCounts(counts); })
+      .catch(() => { /* non-fatal — the callout just won't show if this fails */ });
+    return () => { cancelled = true; };
+  }, [allCampaigns]);
+
   // -------------------------------------------------------------------------
   // Handlers
   // -------------------------------------------------------------------------
@@ -326,6 +342,13 @@ function AppPageContent() {
   const handleViewTrainingInterest = useCallback(
     (campaign: Campaign) => {
       router.push(`/training-interest/${campaign.id}`);
+    },
+    [router],
+  );
+
+  const handleViewCampaignInterest = useCallback(
+    (campaign: Campaign) => {
+      router.push(`/campaign-interest?campaignId=${campaign.id}`);
     },
     [router],
   );
@@ -556,6 +579,7 @@ function AppPageContent() {
                 sharedWithMeOwners={sharedWithMeOwners}
                 savedCheckboxId={savedCheckboxId}
                 categories={campaignCategories}
+                campaignInterestCounts={campaignInterestCounts}
                 onEditStart={(id) => setEditingId(id)}
                 onCancelEdit={() => setEditingId(null)}
                 onSaveEdit={handleSaveEdit}
@@ -563,6 +587,7 @@ function AppPageContent() {
                 onToggleCheckbox={handleToggleCheckbox}
                 onRecordResults={handleRecordResults}
                 onViewTrainingInterest={handleViewTrainingInterest}
+                onViewCampaignInterest={handleViewCampaignInterest}
               />
             )}
           </div>

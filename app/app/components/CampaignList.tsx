@@ -17,6 +17,8 @@ interface Props {
   sharedWithMeOwners: LeaderShareOwner[];
   savedCheckboxId: string | null;
   categories: { code: string; name: string }[];
+  /** Campaign id -> number of campaign_interest registrations, for the "N people interested" callout. */
+  campaignInterestCounts: Map<string, number>;
   onEditStart: (id: string) => void;
   onCancelEdit: () => void;
   onSaveEdit: (id: string, updates: EditUpdates) => Promise<void>;
@@ -24,12 +26,14 @@ interface Props {
   onToggleCheckbox: (id: string, field: 'tl_ok' | 'sr_ok', currentValue: boolean) => void;
   onRecordResults: (campaign: Campaign) => void;
   onViewTrainingInterest: (campaign: Campaign) => void;
+  onViewCampaignInterest: (campaign: Campaign) => void;
 }
 
 export default function CampaignList({
   campaigns, editingId, dateFilter, isAdmin, adminStatus, userState, userMobileAndLeader,
-  sharedWithMeOwners, savedCheckboxId, categories,
+  sharedWithMeOwners, savedCheckboxId, categories, campaignInterestCounts,
   onEditStart, onCancelEdit, onSaveEdit, onDelete, onToggleCheckbox, onRecordResults, onViewTrainingInterest,
+  onViewCampaignInterest,
 }: Props) {
   if (campaigns.length === 0) {
     return (
@@ -100,11 +104,13 @@ export default function CampaignList({
                 userMobileAndLeader={userMobileAndLeader}
                 sharedWithMeOwners={sharedWithMeOwners}
                 savedCheckboxId={savedCheckboxId}
+                campaignInterestCount={campaignInterestCounts.get(campaign.id)}
                 onEdit={() => onEditStart(campaign.id)}
                 onDelete={() => onDelete(campaign)}
                 onToggleCheckbox={(field, val) => onToggleCheckbox(campaign.id, field, val)}
                 onRecordResults={() => onRecordResults(campaign)}
                 onViewTrainingInterest={() => onViewTrainingInterest(campaign)}
+                onViewCampaignInterest={() => onViewCampaignInterest(campaign)}
               />,
             );
           }
