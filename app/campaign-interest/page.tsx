@@ -5,7 +5,10 @@
  * public /public/register-interest link) in campaigns the signed-in user
  * leads (own, shared, or — for admins — every campaign). Reached from the
  * "Manage my Campaign Interest" button on the post-login action chooser
- * (app/login/page.tsx), shown only when this list is non-empty.
+ * (app/login/page.tsx), shown only when this list is non-empty. Also reached
+ * from the "N people interested" callout on a campaign's card in the main
+ * feed (app/app/components/CampaignCard.tsx), via an optional ?campaignId=
+ * query param that filters this list down to just that campaign.
  *
  * Unlike /training-interest (which drills into one campaign at a time, since
  * each training campaign has its own public link), campaign interest is
@@ -15,8 +18,8 @@
  * campaigns via campaign_interest's RLS (see supabase/rls-policies.sql) and
  * getCampaignInterestForLeader.
  */
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useState, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import MobileLayout from '@/components/MobileLayout';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import CampaignInterestEntryList from '@/components/CampaignInterestEntryList';
@@ -28,8 +31,10 @@ import {
 } from '@/lib/services/campaignInterestService';
 import { getErrorMessage } from '@/lib/errorUtils';
 
-export default function CampaignInterestPage() {
+function CampaignInterestPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const campaignIdFilter = searchParams.get('campaignId');
   const { user, adminStatus, userState, userLeader, userMobile, isLoading: isUserLoading } = useUser();
 
   const [entries, setEntries] = useState<CampaignInterestWithCampaign[]>([]);
@@ -79,6 +84,10 @@ export default function CampaignInterestPage() {
     }
   };
 
+  const displayedEntries = campaignIdFilter
+    ? entries.filter((e) => e.campaign_id === campaignIdFilter)
+    : entries;
+
   if (isUserLoading || isLoading) {
     return (
       <MobileLayout>
@@ -99,9 +108,18 @@ export default function CampaignInterestPage() {
           >
             Back
           </button>
-          <h1 className="pr-14 text-2xl font-bold text-gray-900 dark:text-gray-100">Campaign Interest ({entries.length})</h1>
+          <h1 className="pr-14 text-2xl font-bold text-gray-900 dark:text-gray-100">Campaign Interest ({displayedEntries.length})</h1>
           <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-            Members who have registered interest in your campaigns via the public Register Interest link. Tick Contacted once you&apos;ve followed up with them.
+            {campaignIdFilter ? (
+              <>
+                Showing registrations for this campaign only.{' '}
+                <button type="button" onClick={() => router.push('/campaign-interest')} className="font-semibold text-blue-700 underline dark:text-blue-300">
+                  View all my campaigns
+                </button>
+              </>
+            ) : (
+              <>Members who have registered interest in your campaigns via the public Register Interest link. Tick Contacted once you&apos;ve followed up with them.</>
+            )}
           </p>
         </div>
 
@@ -118,10 +136,26 @@ export default function CampaignInterestPage() {
 
         <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white shadow-sm dark:bg-gray-800">
           <div className="divide-y divide-gray-200 dark:divide-gray-700">
-            <CampaignInterestEntryList entries={entries} updatingIds={updatingIds} onToggleContacted={handleToggleContacted} />
+            <CampaignInterestEntryList entries={displayedEntries} updatingIds={updatingIds} onToggleContacted={handleToggleContacted} />
           </div>
         </div>
       </div>
     </MobileLayout>
+  );
+}
+
+export default function CampaignInterestPage() {
+  return (
+    <Suspense
+      fallback={
+        <MobileLayout>
+          <div className="flex min-h-screen items-center justify-center">
+            <LoadingSpinner />
+          </div>
+        </MobileLayout>
+      }
+    >
+      <CampaignInterestPageContent />
+    </Suspense>
   );
 }

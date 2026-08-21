@@ -50,17 +50,20 @@ interface Props {
   userMobileAndLeader: { mobile: string | null; leader: string | null } | null;
   sharedWithMeOwners: LeaderShareOwner[];
   savedCheckboxId: string | null;
+  /** Number of campaign_interest registrations for this campaign — 0/undefined hides the callout entirely. */
+  campaignInterestCount?: number;
   onEdit: () => void;
   onDelete: () => void;
   onToggleCheckbox: (field: 'tl_ok' | 'sr_ok', currentValue: boolean) => void;
   onRecordResults: () => void;
   onViewTrainingInterest: () => void;
+  onViewCampaignInterest: () => void;
 }
 
 export default function CampaignCard({
   campaign, dateFilter, isAdmin, adminStatus, userState, userMobileAndLeader,
-  sharedWithMeOwners, savedCheckboxId, onEdit, onDelete, onToggleCheckbox, onRecordResults,
-  onViewTrainingInterest,
+  sharedWithMeOwners, savedCheckboxId, campaignInterestCount, onEdit, onDelete, onToggleCheckbox, onRecordResults,
+  onViewTrainingInterest, onViewCampaignInterest,
 }: Props) {
   const stateColor = getStateColor(campaign.state);
   const displayTime = formatCampaignTimeDisplay(campaign.time);
@@ -92,6 +95,15 @@ export default function CampaignCard({
               </span>
             )}
           </div>
+          {!!campaignInterestCount && (
+            <button
+              type="button"
+              onClick={onViewCampaignInterest}
+              className="mb-1 inline-flex items-center gap-1.5 rounded-full border-2 border-amber-600 bg-amber-400 px-3 py-1 text-sm font-extrabold text-amber-950 shadow-sm hover:bg-amber-300 dark:border-amber-500 dark:bg-amber-500 dark:text-amber-950 dark:hover:bg-amber-400"
+            >
+              🔔 {campaignInterestCount} {campaignInterestCount === 1 ? 'person' : 'people'} interested — Manage →
+            </button>
+          )}
           {dateFilter === 'future' && (
             <div className="flex items-center gap-3 justify-center text-sm sm:text-base mt-2 mb-2">
               <div

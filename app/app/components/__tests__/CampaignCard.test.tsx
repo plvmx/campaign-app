@@ -35,7 +35,7 @@ const baseCampaign: Campaign = {
   created_at: '2020-01-01T00:00:00.000Z',
 };
 
-function renderCard(adminStatus: string | null) {
+function renderCard(adminStatus: string | null, campaignInterestCount?: number) {
   return render(
     <CampaignCard
       campaign={baseCampaign}
@@ -46,11 +46,13 @@ function renderCard(adminStatus: string | null) {
       userMobileAndLeader={null}
       sharedWithMeOwners={[]}
       savedCheckboxId={null}
+      campaignInterestCount={campaignInterestCount}
       onEdit={() => {}}
       onDelete={() => {}}
       onToggleCheckbox={() => {}}
       onRecordResults={() => {}}
       onViewTrainingInterest={() => {}}
+      onViewCampaignInterest={() => {}}
     />,
   );
 }
@@ -69,5 +71,24 @@ describe('CampaignCard — mobile number visibility', () => {
   it('shows the mobile number to a state reporter', () => {
     renderCard('SR');
     expect(screen.getByText('0400 123 456')).toBeInTheDocument();
+  });
+});
+
+describe('CampaignCard — campaign interest callout', () => {
+  it('is hidden when there is no registered interest', () => {
+    renderCard(null, 0);
+    expect(screen.queryByText(/interested/)).not.toBeInTheDocument();
+    renderCard(null, undefined);
+    expect(screen.queryByText(/interested/)).not.toBeInTheDocument();
+  });
+
+  it('shows a singular callout for exactly one registration', () => {
+    renderCard(null, 1);
+    expect(screen.getByText(/1 person interested/)).toBeInTheDocument();
+  });
+
+  it('shows a plural callout for more than one registration', () => {
+    renderCard(null, 3);
+    expect(screen.getByText(/3 people interested/)).toBeInTheDocument();
   });
 });

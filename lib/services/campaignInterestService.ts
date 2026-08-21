@@ -89,6 +89,23 @@ export async function getCampaignInterestForLeader(params: CampaignsForUserParam
   return ((data || []) as CampaignInterest[]).map(e => ({ ...e, campaign: campaignsById.get(e.campaign_id) ?? null }));
 }
 
+/** Count of campaign_interest rows per campaign id, for the given campaign ids. */
+export async function getCampaignInterestCounts(campaignIds: string[]): Promise<Map<string, number>> {
+  if (campaignIds.length === 0) return new Map();
+
+  const { data, error } = await supabase
+    .from('campaign_interest')
+    .select('campaign_id')
+    .in('campaign_id', campaignIds);
+  if (error) throw error;
+
+  const counts = new Map<string, number>();
+  for (const row of (data || []) as { campaign_id: string }[]) {
+    counts.set(row.campaign_id, (counts.get(row.campaign_id) ?? 0) + 1);
+  }
+  return counts;
+}
+
 /**
  * Mark a registration as contacted (or un-contacted). `contacted_at` is set
  * to now when marking contacted, and cleared back to null when un-marking.
