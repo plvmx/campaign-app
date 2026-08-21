@@ -13,6 +13,7 @@ import { getErrorMessage } from '@/lib/errorUtils';
 import { formatDownloadDate } from '@/lib/slideLayout';
 import { getStateColor } from '@/lib/stateColors';
 import { combinePlaceAndSite } from '@/lib/placeSite';
+import { AUSTRALIAN_STATES, type AustralianState } from '@/lib/constants';
 
 interface Campaign {
   id: string;
@@ -58,10 +59,15 @@ export default function GenerateReportPage() {
 
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [selectedState, setSelectedState] = useState<AustralianState | ''>('');
   const [reportData, setReportData] = useState<ReportRow[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [showReport, setShowReport] = useState(false);
+  // The state the currently-displayed reportData was actually fetched for —
+  // captured at generate time so a later change to `selectedState` (before
+  // downloading) can't mislabel the download filename with data it doesn't match.
+  const [generatedState, setGeneratedState] = useState<string | null>(null);
   const [editingCell, setEditingCell] = useState<{ rowIndex: number; field: keyof ReportRow } | null>(null);
 
   useEffect(() => {
@@ -90,6 +96,11 @@ export default function GenerateReportPage() {
     }
   }, [campaignDates, startDate, endDate]);
 
+  // Explicit state chosen by an admin takes priority; SR is always scoped to their own state
+  const effectiveState = isAdmin && selectedState
+    ? selectedState.toUpperCase().trim()
+    : (adminStatus === 'SR' && userState ? userState.toUpperCase().trim() : null);
+
   const fetchReportData = async () => {
     if (!startDate || !endDate) {
       alert('Please select both start and end dates');
@@ -100,7 +111,7 @@ export default function GenerateReportPage() {
     setError(null);
 
     try {
-      // Fetch campaigns in the date range (SR: filter by their state)
+      // Fetch campaigns in the date range, scoped to effectiveState if set
       let campaignsQuery = supabase
         .from('campaigns')
         .select('*')
@@ -109,8 +120,8 @@ export default function GenerateReportPage() {
         .order('date', { ascending: true })
         .order('state', { ascending: true })
         .order('place', { ascending: true });
-      if (adminStatus === 'SR' && userState) {
-        campaignsQuery = campaignsQuery.eq('state', userState.toUpperCase().trim());
+      if (effectiveState) {
+        campaignsQuery = campaignsQuery.eq('state', effectiveState);
       }
       const { data: campaigns, error: campaignsError } = await campaignsQuery;
 
@@ -186,6 +197,7 @@ export default function GenerateReportPage() {
       );
 
       setReportData(rows);
+      setGeneratedState(effectiveState);
       setShowReport(true);
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Error generating report'));
@@ -200,7 +212,7 @@ export default function GenerateReportPage() {
     if (reportData.length === 0) return;
     setIsDownloading(true);
     try {
-      await downloadReportRows(reportData);
+      await downloadReportRows(reportData, generatedState);
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Error downloading report'));
     } finally {
@@ -300,7 +312,7 @@ export default function GenerateReportPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `${formatDownloadDate(new Date())}_Campaign_Results.doc`;
+    link.download = `${formatDownloadDate(new Date())}_Campaign_Results${generatedState ? `_${generatedState}` : ''}.doc`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -394,7 +406,28 @@ export default function GenerateReportPage() {
                 className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
               />
             </div>
-            
+
+            {isAdmin && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  State (optional)
+                </label>
+                <select
+                  value={selectedState}
+                  onChange={(e) => setSelectedState(e.target.value as AustralianState | '')}
+                  className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+                >
+                  <option value="">All states</option>
+                  {AUSTRALIAN_STATES.map(state => (
+                    <option key={state} value={state}>{state}</option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  Leave empty to include all states
+                </p>
+              </div>
+            )}
+
             <button
               type="button"
               onClick={() => fetchReportData()}

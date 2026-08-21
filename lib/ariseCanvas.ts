@@ -175,6 +175,15 @@ export async function renderAriseCanvas(
   allCampaigns: AriseCampaign[][],
   dates: Date[],
   onProgress?: (msg: string) => void,
+  /**
+   * Draws the red "****" separator before day index 7 (the boundary between
+   * week-1 and the week-2 Monday). Only meaningful for the fixed 8-day
+   * "Week 1 Campaigns" window — callers rendering an arbitrary explicit date
+   * range (e.g. a custom Single Week Campaigns window) should pass `false`
+   * so an unrelated 8th day doesn't get a misleading week boundary drawn
+   * across it.
+   */
+  showWeekSeparator: boolean = true,
 ): Promise<HTMLCanvasElement> {
   // Measure font to compute dynamic side margin, matching the margin used
   // inside drawCampaignLine so columns and content line up.
@@ -207,7 +216,7 @@ export async function renderAriseCanvas(
   for (let dayIndex = 0; dayIndex < dates.length; dayIndex++) {
     const date = dates[dayIndex];
 
-    if (dayIndex === 7) {
+    if (showWeekSeparator && dayIndex === 7) {
       const topM   = firstInCol ? 0 : DATE_TOP_MARGIN;
       const needed = topM + SEP_H;
       if (currentY + needed > CONTENT_BOTTOM && colIdx < colXs.length - 1) {

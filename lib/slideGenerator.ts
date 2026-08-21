@@ -22,7 +22,7 @@ import {
 } from '@/lib/slideLayout';
 import { formatCampaignTimeDisplay } from '@/lib/campaignUtils';
 import { combinePlaceAndSite } from '@/lib/placeSite';
-import { formatDateForDb, getFortnightDateRange } from '@/lib/campaignDates';
+import { formatDateForDb, getFortnightDateRange, getDateRangeInclusive } from '@/lib/campaignDates';
 
 // ---------------------------------------------------------------------------
 // Canvas constants  (match generate-slides/page.tsx exactly)
@@ -60,8 +60,13 @@ export interface SlideCampaign {
 
 export interface GenerateSlidesOptions {
   supabase: SupabaseClient;
-  /** First date of the two-week window to render. */
+  /** First date of the window to render. */
   startDate: Date;
+  /**
+   * Last date of the window to render, inclusive. When omitted, falls back
+   * to the fixed two-week fortnight starting at `startDate`.
+   */
+  endDate?: Date;
   adminStatus?: string | null;
   userState?: string | null;
   /** Explicit state to filter to, chosen by a full admin. Overrides the SR role-based filter. */
@@ -459,13 +464,13 @@ async function zipAndDownloadSlides(
  * own data live via the (authenticated, RLS-scoped) Supabase client.
  */
 export async function generateAndDownloadSlides(options: GenerateSlidesOptions): Promise<void> {
-  const { supabase: client, startDate, adminStatus, userState, stateFilter, onProgress, hideMobile = false } = options;
+  const { supabase: client, startDate, endDate, adminStatus, userState, stateFilter, onProgress, hideMobile = false } = options;
 
   const explicitState = stateFilter && stateFilter.trim() ? stateFilter.toUpperCase().trim() : null;
   const roleState = adminStatus === 'SR' && userState ? userState.toUpperCase().trim() : null;
   const filterState = explicitState || roleState;
 
-  const dateHeadings = getFortnightDateRange(startDate);
+  const dateHeadings = endDate ? getDateRangeInclusive(startDate, endDate) : getFortnightDateRange(startDate);
   const dataSource = supabaseSlideDataSource(client, filterState);
   const slides = await buildSlideBlobs(dataSource, dateHeadings, hideMobile, onProgress);
 
