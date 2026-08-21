@@ -31,6 +31,7 @@ export default function GenerateSlidesPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress]       = useState('');
   const [customStartDate, setCustomStartDate] = useState<string>('');
+  const [customEndDate, setCustomEndDate] = useState<string>('');
   const [selectedState, setSelectedState] = useState<AustralianState | ''>('');
 
   useEffect(() => {
@@ -43,17 +44,28 @@ export default function GenerateSlidesPage() {
     setHasAccess(true);
   }, [isUserLoading, user, isAdmin, adminStatus, router]);
 
+  const parseDateInput = (value: string): Date => {
+    const [y, m, d] = value.split('-').map(Number);
+    const date = new Date(y, m - 1, d);
+    date.setHours(0, 0, 0, 0);
+    return date;
+  };
+
   const getEffectiveStartDate = (): Date => {
-    if (customStartDate) {
-      const [y, m, d] = customStartDate.split('-').map(Number);
-      const date = new Date(y, m - 1, d);
-      date.setHours(0, 0, 0, 0);
-      return date;
-    }
+    if (customStartDate) return parseDateInput(customStartDate);
     return calculateDefaultStartDate();
   };
 
+  const getEffectiveEndDate = (): Date | undefined => {
+    return customEndDate ? parseDateInput(customEndDate) : undefined;
+  };
+
   const handleGenerate = async () => {
+    const effectiveEnd = getEffectiveEndDate();
+    if (effectiveEnd && effectiveEnd < getEffectiveStartDate()) {
+      setError('End date must be on or after the start date');
+      return;
+    }
     setIsGenerating(true);
     setError(null);
     setProgress('Starting slide generation…');
@@ -61,6 +73,7 @@ export default function GenerateSlidesPage() {
       await generateAndDownloadSlides({
         supabase,
         startDate:   getEffectiveStartDate(),
+        endDate:     effectiveEnd,
         adminStatus,
         userState,
         stateFilter: isAdmin ? (selectedState || undefined) : undefined,
@@ -105,6 +118,7 @@ export default function GenerateSlidesPage() {
   }
 
   const effectiveStart = getEffectiveStartDate();
+  const effectiveEnd = getEffectiveEndDate();
 
   return (
     <MobileLayout>
@@ -144,10 +158,22 @@ export default function GenerateSlidesPage() {
           <div className="space-y-4">
             <div className="rounded-md bg-blue-50 p-3 dark:bg-blue-900/20">
               <p className="text-sm text-blue-800 dark:text-blue-200">
-                This will generate slides for the upcoming two-week campaign period, starting from{' '}
-                {effectiveStart.toLocaleDateString('en-AU', {
-                  weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-                })}
+                {effectiveEnd
+                  ? <>This will generate slides for campaigns from{' '}
+                      {effectiveStart.toLocaleDateString('en-AU', {
+                        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+                      })}{' '}
+                      to{' '}
+                      {effectiveEnd.toLocaleDateString('en-AU', {
+                        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+                      })}
+                    </>
+                  : <>This will generate slides for the upcoming two-week campaign period, starting from{' '}
+                      {effectiveStart.toLocaleDateString('en-AU', {
+                        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+                      })}
+                    </>
+                }
                 {isAdmin && selectedState ? `, for ${selectedState} only` : ''}.
               </p>
               <p className="mt-2 text-sm text-blue-800 dark:text-blue-200">
@@ -172,6 +198,25 @@ export default function GenerateSlidesPage() {
               />
               <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                 Leave empty to use the default &quot;Upcoming Campaign Start&quot; date
+              </p>
+            </div>
+
+            <div>
+              <label
+                htmlFor="endDate"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+              >
+                End Date (optional)
+              </label>
+              <input
+                id="endDate"
+                type="date"
+                value={customEndDate}
+                onChange={e => setCustomEndDate(e.target.value)}
+                className="w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
+              />
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                Leave empty to use the default two-week fortnight window
               </p>
             </div>
 

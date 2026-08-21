@@ -7,6 +7,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { formatDownloadDate } from '@/lib/slideLayout';
 import { renderAriseCanvas } from '@/lib/ariseCanvas';
 import { getAriseDateRange, type AriseCampaign } from '@/lib/ariseLayout';
+import { getDateRangeInclusive } from '@/lib/campaignDates';
 
 // ---------------------------------------------------------------------------
 // Data fetching
@@ -43,8 +44,14 @@ async function fetchCampaignsForDate(
 
 export interface GenerateAriseOptions {
   supabase: SupabaseClient;
-  /** First Monday of the two-week window. */
+  /** First date of the window. */
   startDate: Date;
+  /**
+   * Last date of the window, inclusive. When omitted, falls back to the
+   * fixed 8-day "week-1 + week-2 Monday" window used by the Week 1
+   * Campaigns quick action.
+   */
+  endDate?: Date;
   adminStatus?: string | null;
   userState?: string | null;
   /** Explicit state to filter to, chosen by a full admin. Overrides the SR role-based filter. */
@@ -57,22 +64,28 @@ export interface GenerateAriseOptions {
  * JPEG, and triggers a browser download.
  */
 export async function generateAndDownloadAriseList(options: GenerateAriseOptions): Promise<void> {
-  const { supabase: client, startDate, adminStatus, userState, stateFilter, onProgress } = options;
+  const { supabase: client, startDate, endDate, adminStatus, userState, stateFilter, onProgress } = options;
 
   const explicitState = stateFilter && stateFilter.trim() ? stateFilter.toUpperCase().trim() : null;
   const roleState = adminStatus === 'SR' && userState ? userState.toUpperCase().trim() : null;
   const filterState = explicitState || roleState;
 
-  const dates = getAriseDateRange(startDate);
+  const dates = endDate ? getDateRangeInclusive(startDate, endDate) : getAriseDateRange(startDate);
+  if (dates.length === 0) {
+    throw new Error('End date must be on or after the start date.');
+  }
 
-  onProgress?.('Fetching Week 1 campaign data…');
+  onProgress?.('Fetching campaign data…');
   const allCampaigns: AriseCampaign[][] = [];
   for (let i = 0; i < dates.length; i++) {
     onProgress?.(`Fetching day ${i + 1} of ${dates.length}…`);
     allCampaigns.push(await fetchCampaignsForDate(client, dates[i], filterState));
   }
 
-  const canvas = await renderAriseCanvas(allCampaigns, dates, onProgress);
+  // The week-1/week-2 separator only makes sense for the fixed 8-day
+  // "Week 1 Campaigns" window — an explicit endDate means an arbitrary range
+  // (e.g. Single Week Campaigns), which has no such boundary to mark.
+  const canvas = await renderAriseCanvas(allCampaigns, dates, onProgress, !endDate);
 
   onProgress?.('Creating JPEG…');
   const blob = await new Promise<Blob>((resolve, reject) => {
@@ -83,14 +96,15 @@ export async function generateAndDownloadAriseList(options: GenerateAriseOptions
     );
   });
 
+  const listLabel = endDate ? 'Week_Campaigns' : 'Week1_Campaigns';
   const url  = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href     = url;
-  link.download = `${formatDownloadDate(new Date())}_Week1_Campaigns${explicitState ? `_${explicitState}` : ''}.jpg`;
+  link.download = `${formatDownloadDate(new Date())}_${listLabel}${explicitState ? `_${explicitState}` : ''}.jpg`;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
 
-  onProgress?.('Done — Week 1 Campaigns list downloaded.');
+  onProgress?.('Done — campaign list downloaded.');
 }

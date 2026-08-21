@@ -115,6 +115,26 @@ export function getFortnightDateRange(startDate: Date): Date[] {
 }
 
 /**
+ * Builds every date from `startDate` to `endDate`, inclusive. Used wherever
+ * a screen lets the user pick an explicit Start Date + End Date instead of
+ * relying on a fixed-length window (e.g. `getFortnightDateRange`,
+ * `getAriseDateRange`). Returns an empty array if `endDate` precedes
+ * `startDate`.
+ */
+export function getDateRangeInclusive(startDate: Date, endDate: Date): Date[] {
+  const dates: Date[] = [];
+  const cursor = new Date(startDate);
+  cursor.setHours(0, 0, 0, 0);
+  const last = new Date(endDate);
+  last.setHours(0, 0, 0, 0);
+  while (cursor <= last) {
+    dates.push(new Date(cursor));
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return dates;
+}
+
+/**
  * Format a date as a readable string (e.g., "Mon, Jan 15, 2026")
  */
 export function formatDateReadable(date: Date): string {

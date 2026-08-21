@@ -134,8 +134,8 @@ All database access goes through service modules in `lib/services/`. Pages and c
 | `/admin/campaign-rules` | Manage recurring campaign rules |
 | `/admin/campaign-messages` | Manage per-date banner messages |
 | `/admin/campaign-logs` | View audit log (paginated) |
-| `/admin/generate-slides` | Generate JPEG slide ZIP |
-| `/admin/generate-report` | Generate campaign report |
+| `/admin/generate-slides` | Generate JPEG slide ZIP for a Start/End Date + State range (defaults to the upcoming fortnight, all states) |
+| `/admin/generate-report` | Generate campaign report for a Start/End Date + State range; also hosts a "Single Week Campaigns" panel whose "Generate Week Campaigns" button produces the same landscape JPEG as the "Week 1 Campaigns" Admin Quick Action, for an explicit Start/End Date + State instead of the quick action's fixed fortnight window |
 | `/admin/leader-shares` | Leader share links |
 | `/admin/campaign-map` | Interactive map of upcoming campaigns, filterable by date range and state |
 | `/admin/campaigns-near-me` | Upcoming campaigns near the admin's current location |

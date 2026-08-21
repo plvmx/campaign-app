@@ -9,10 +9,12 @@ import { supabase } from '@/lib/supabaseClient';
 import { useCampaignDates } from '@/contexts/CampaignDatesContext';
 import { formatDateForDb } from '@/lib/campaignDates';
 import { downloadReportRows } from '@/lib/reportGenerator';
+import { generateAndDownloadAriseList } from '@/lib/ariseGenerator';
 import { getErrorMessage } from '@/lib/errorUtils';
 import { formatDownloadDate } from '@/lib/slideLayout';
 import { getStateColor } from '@/lib/stateColors';
 import { combinePlaceAndSite } from '@/lib/placeSite';
+import { AUSTRALIAN_STATES, type AustralianState } from '@/lib/constants';
 
 interface Campaign {
   id: string;
@@ -58,11 +60,25 @@ export default function GenerateReportPage() {
 
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [selectedState, setSelectedState] = useState<AustralianState | ''>('');
   const [reportData, setReportData] = useState<ReportRow[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [showReport, setShowReport] = useState(false);
+  // The state the currently-displayed reportData was actually fetched for —
+  // captured at generate time so a later change to `selectedState` (before
+  // downloading) can't mislabel the download filename with data it doesn't match.
+  const [generatedState, setGeneratedState] = useState<string | null>(null);
   const [editingCell, setEditingCell] = useState<{ rowIndex: number; field: keyof ReportRow } | null>(null);
+
+  // "Single Week Campaigns" panel — generates the same landscape JPEG as the
+  // "Week 1 Campaigns" Admin Quick Action, but for an explicit date range.
+  const [weekStartDate, setWeekStartDate] = useState('');
+  const [weekEndDate, setWeekEndDate] = useState('');
+  const [weekSelectedState, setWeekSelectedState] = useState<AustralianState | ''>('');
+  const [isGeneratingWeek, setIsGeneratingWeek] = useState(false);
+  const [weekError, setWeekError] = useState<string | null>(null);
+  const [weekProgress, setWeekProgress] = useState('');
 
   useEffect(() => {
     if (isUserLoading) return;
@@ -90,6 +106,24 @@ export default function GenerateReportPage() {
     }
   }, [campaignDates, startDate, endDate]);
 
+  // Set default single-week range (the upcoming Monday–Sunday) once campaign dates are available
+  useEffect(() => {
+    if (campaignDates && !weekStartDate && !weekEndDate) {
+      const weekStart = formatDateForDb(campaignDates.upcomingCampaignStart);
+
+      const weekEnd = new Date(campaignDates.upcomingCampaignStart);
+      weekEnd.setDate(weekEnd.getDate() + 6);
+
+      setWeekStartDate(weekStart);
+      setWeekEndDate(formatDateForDb(weekEnd));
+    }
+  }, [campaignDates, weekStartDate, weekEndDate]);
+
+  // Explicit state chosen by an admin takes priority; SR is always scoped to their own state
+  const effectiveState = isAdmin && selectedState
+    ? selectedState.toUpperCase().trim()
+    : (adminStatus === 'SR' && userState ? userState.toUpperCase().trim() : null);
+
   const fetchReportData = async () => {
     if (!startDate || !endDate) {
       alert('Please select both start and end dates');
@@ -100,7 +134,7 @@ export default function GenerateReportPage() {
     setError(null);
 
     try {
-      // Fetch campaigns in the date range (SR: filter by their state)
+      // Fetch campaigns in the date range, scoped to effectiveState if set
       let campaignsQuery = supabase
         .from('campaigns')
         .select('*')
@@ -109,8 +143,8 @@ export default function GenerateReportPage() {
         .order('date', { ascending: true })
         .order('state', { ascending: true })
         .order('place', { ascending: true });
-      if (adminStatus === 'SR' && userState) {
-        campaignsQuery = campaignsQuery.eq('state', userState.toUpperCase().trim());
+      if (effectiveState) {
+        campaignsQuery = campaignsQuery.eq('state', effectiveState);
       }
       const { data: campaigns, error: campaignsError } = await campaignsQuery;
 
@@ -186,6 +220,7 @@ export default function GenerateReportPage() {
       );
 
       setReportData(rows);
+      setGeneratedState(effectiveState);
       setShowReport(true);
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Error generating report'));
@@ -200,7 +235,7 @@ export default function GenerateReportPage() {
     if (reportData.length === 0) return;
     setIsDownloading(true);
     try {
-      await downloadReportRows(reportData);
+      await downloadReportRows(reportData, generatedState);
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Error downloading report'));
     } finally {
@@ -300,11 +335,53 @@ export default function GenerateReportPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `${formatDownloadDate(new Date())}_Campaign_Results.doc`;
+    link.download = `${formatDownloadDate(new Date())}_Campaign_Results${generatedState ? `_${generatedState}` : ''}.doc`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+  };
+
+  const parseDateInput = (value: string): Date => {
+    const [y, m, d] = value.split('-').map(Number);
+    const date = new Date(y, m - 1, d);
+    date.setHours(0, 0, 0, 0);
+    return date;
+  };
+
+  // Generates the same landscape "A.F.J UPCOMING CAMPAIGNS" JPEG as the
+  // "Week 1 Campaigns" Admin Quick Action, but for the explicit date range
+  // and state chosen in the Single Week Campaigns panel below.
+  const handleGenerateWeekCampaigns = async () => {
+    if (!weekStartDate || !weekEndDate) {
+      setWeekError('Please select both a start and end date');
+      return;
+    }
+    const weekStart = parseDateInput(weekStartDate);
+    const weekEnd = parseDateInput(weekEndDate);
+    if (weekEnd < weekStart) {
+      setWeekError('End date must be on or after the start date');
+      return;
+    }
+
+    setIsGeneratingWeek(true);
+    setWeekError(null);
+    setWeekProgress('Starting…');
+    try {
+      await generateAndDownloadAriseList({
+        supabase,
+        startDate: weekStart,
+        endDate: weekEnd,
+        adminStatus,
+        userState,
+        stateFilter: isAdmin ? (weekSelectedState || undefined) : undefined,
+        onProgress: setWeekProgress,
+      });
+    } catch (err: unknown) {
+      setWeekError(getErrorMessage(err, 'Failed to generate week campaigns'));
+    } finally {
+      setIsGeneratingWeek(false);
+    }
   };
 
   if (isUserLoading) {
@@ -394,7 +471,28 @@ export default function GenerateReportPage() {
                 className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
               />
             </div>
-            
+
+            {isAdmin && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  State (optional)
+                </label>
+                <select
+                  value={selectedState}
+                  onChange={(e) => setSelectedState(e.target.value as AustralianState | '')}
+                  className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+                >
+                  <option value="">All states</option>
+                  {AUSTRALIAN_STATES.map(state => (
+                    <option key={state} value={state}>{state}</option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  Leave empty to include all states
+                </p>
+              </div>
+            )}
+
             <button
               type="button"
               onClick={() => fetchReportData()}
@@ -422,6 +520,84 @@ export default function GenerateReportPage() {
                 </button>
               </div>
             )}
+          </div>
+        </div>
+
+        {/* Single Week Campaigns */}
+        <div className="mb-6 rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+          <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-gray-100">
+            Single Week Campaigns
+          </h2>
+          <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">
+            Generates the same landscape campaign list as the &quot;Week 1 Campaigns&quot; Admin Quick Action, for the date range and state chosen below.
+          </p>
+
+          {weekError && (
+            <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 dark:border-red-800 dark:bg-red-900/20">
+              <p className="text-sm text-red-600 dark:text-red-300">{weekError}</p>
+            </div>
+          )}
+
+          {weekProgress && !weekError && (
+            <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-800 dark:bg-blue-900/20">
+              <p className="text-sm text-blue-800 dark:text-blue-200">{weekProgress}</p>
+            </div>
+          )}
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Start Date
+              </label>
+              <input
+                type="date"
+                value={weekStartDate}
+                onChange={(e) => setWeekStartDate(e.target.value)}
+                className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                End Date
+              </label>
+              <input
+                type="date"
+                value={weekEndDate}
+                onChange={(e) => setWeekEndDate(e.target.value)}
+                className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+              />
+            </div>
+
+            {isAdmin && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  State (optional)
+                </label>
+                <select
+                  value={weekSelectedState}
+                  onChange={(e) => setWeekSelectedState(e.target.value as AustralianState | '')}
+                  className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+                >
+                  <option value="">All states</option>
+                  {AUSTRALIAN_STATES.map(state => (
+                    <option key={state} value={state}>{state}</option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  Leave empty to include all states
+                </p>
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={handleGenerateWeekCampaigns}
+              disabled={isGeneratingWeek}
+              className="w-full rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:bg-gray-400 disabled:cursor-not-allowed border-2 border-gray-800 dark:border-gray-600"
+            >
+              {isGeneratingWeek ? 'Generating…' : 'Generate Week Campaigns'}
+            </button>
           </div>
         </div>
 

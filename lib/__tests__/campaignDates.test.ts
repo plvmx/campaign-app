@@ -3,7 +3,7 @@
  * Run with: npm test or jest
  */
 
-import { calculateCampaignDates, formatDateForDb, formatWeekRangeLabel, formatWeekDateRangeString, formatFortnightDateRangeString, formatShortDateWithOrdinal, getFortnightDateRange } from '../campaignDates';
+import { calculateCampaignDates, formatDateForDb, formatWeekRangeLabel, formatWeekDateRangeString, formatFortnightDateRangeString, formatShortDateWithOrdinal, getFortnightDateRange, getDateRangeInclusive } from '../campaignDates';
 
 describe('Campaign Dates Calculations', () => {
   // Helper to create a date
@@ -212,6 +212,48 @@ describe('Campaign Dates Calculations', () => {
       const startCopy = new Date(start);
       getFortnightDateRange(start);
       expect(start.getTime()).toBe(startCopy.getTime());
+    });
+  });
+
+  describe('getDateRangeInclusive', () => {
+    it('returns every date from startDate to endDate, inclusive', () => {
+      const start = createDate(2026, 8, 10); // Mon 10 Aug 2026
+      const end = createDate(2026, 8, 13);   // Thu 13 Aug 2026
+      const dates = getDateRangeInclusive(start, end);
+      expect(dates.map((d) => formatDateForDb(d))).toEqual([
+        '2026-08-10', '2026-08-11', '2026-08-12', '2026-08-13',
+      ]);
+    });
+
+    it('returns a single date when startDate equals endDate', () => {
+      const day = createDate(2026, 8, 10);
+      const dates = getDateRangeInclusive(day, day);
+      expect(dates.map((d) => formatDateForDb(d))).toEqual(['2026-08-10']);
+    });
+
+    it('rolls over a month boundary correctly', () => {
+      const start = createDate(2026, 8, 30);
+      const end = createDate(2026, 9, 2);
+      const dates = getDateRangeInclusive(start, end);
+      expect(dates.map((d) => formatDateForDb(d))).toEqual([
+        '2026-08-30', '2026-08-31', '2026-09-01', '2026-09-02',
+      ]);
+    });
+
+    it('returns an empty array when endDate precedes startDate', () => {
+      const start = createDate(2026, 8, 10);
+      const end = createDate(2026, 8, 9);
+      expect(getDateRangeInclusive(start, end)).toEqual([]);
+    });
+
+    it('does not mutate the startDate or endDate arguments', () => {
+      const start = createDate(2026, 8, 10);
+      const end = createDate(2026, 8, 13);
+      const startCopy = new Date(start);
+      const endCopy = new Date(end);
+      getDateRangeInclusive(start, end);
+      expect(start.getTime()).toBe(startCopy.getTime());
+      expect(end.getTime()).toBe(endCopy.getTime());
     });
   });
 });
