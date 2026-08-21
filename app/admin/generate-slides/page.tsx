@@ -8,6 +8,7 @@ import { useUser } from '@/contexts/UserContext';
 import { supabase } from '@/lib/supabaseClient';
 import { generateAndDownloadSlides } from '@/lib/slideGenerator';
 import { getErrorMessage } from '@/lib/errorUtils';
+import { AUSTRALIAN_STATES, type AustralianState } from '@/lib/constants';
 
 /** Returns the default upcoming-campaign Monday based on today's date. */
 function calculateDefaultStartDate(): Date {
@@ -30,6 +31,7 @@ export default function GenerateSlidesPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress]       = useState('');
   const [customStartDate, setCustomStartDate] = useState<string>('');
+  const [selectedState, setSelectedState] = useState<AustralianState | ''>('');
 
   useEffect(() => {
     if (isUserLoading) return;
@@ -61,6 +63,7 @@ export default function GenerateSlidesPage() {
         startDate:   getEffectiveStartDate(),
         adminStatus,
         userState,
+        stateFilter: isAdmin ? (selectedState || undefined) : undefined,
         onProgress:  setProgress,
       });
     } catch (err: unknown) {
@@ -144,7 +147,8 @@ export default function GenerateSlidesPage() {
                 This will generate slides for the upcoming two-week campaign period, starting from{' '}
                 {effectiveStart.toLocaleDateString('en-AU', {
                   weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-                })}.
+                })}
+                {isAdmin && selectedState ? `, for ${selectedState} only` : ''}.
               </p>
               <p className="mt-2 text-sm text-blue-800 dark:text-blue-200">
                 Slides will be generated in portrait format (7.5&quot; × 10&quot;) at 300 DPI and
@@ -170,6 +174,31 @@ export default function GenerateSlidesPage() {
                 Leave empty to use the default &quot;Upcoming Campaign Start&quot; date
               </p>
             </div>
+
+            {isAdmin && (
+              <div>
+                <label
+                  htmlFor="state"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+                >
+                  State (optional)
+                </label>
+                <select
+                  id="state"
+                  value={selectedState}
+                  onChange={e => setSelectedState(e.target.value as AustralianState | '')}
+                  className="w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
+                >
+                  <option value="">All states</option>
+                  {AUSTRALIAN_STATES.map(state => (
+                    <option key={state} value={state}>{state}</option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  Leave empty to generate slides for all states
+                </p>
+              </div>
+            )}
 
             <button
               onClick={handleGenerate}
