@@ -99,7 +99,7 @@ export default function CampaignInterestPage() {
           >
             Back
           </button>
-          <h1 className="pr-14 text-2xl font-bold text-gray-900 dark:text-gray-100">Campaign Interest</h1>
+          <h1 className="pr-14 text-2xl font-bold text-gray-900 dark:text-gray-100">Campaign Interest ({entries.length})</h1>
           <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
             Members who have registered interest in your campaigns via the public Register Interest link. Tick Contacted once you&apos;ve followed up with them.
           </p>
@@ -117,11 +117,6 @@ export default function CampaignInterestPage() {
         )}
 
         <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white shadow-sm dark:bg-gray-800">
-          <div className="p-4">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-              Registrations ({entries.length})
-            </h2>
-          </div>
           <div className="divide-y divide-gray-200 dark:divide-gray-700">
             <CampaignInterestEntryList entries={entries} updatingIds={updatingIds} onToggleContacted={handleToggleContacted} />
           </div>
