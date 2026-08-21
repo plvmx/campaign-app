@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import TrainingInterestClient from './TrainingInterestClient';
 import { loadTrainingCampaign } from '@/app/api/public/training-interest/[campaignId]/route';
 import { combinePlaceAndSite } from '@/lib/placeSite';
+import { PUBLIC_LINK_OG_IMAGE } from '@/lib/publicLinks';
 
 // Per-campaign page, so — unlike the static entries in lib/publicLinks.ts —
 // title/description are computed from the campaign record rather than a
@@ -36,13 +37,13 @@ export async function generateMetadata({ params }: { params: Promise<{ campaignI
       url: `/public/training/${campaignId}`,
       type: 'website',
       siteName: 'AFJ Campaign App',
-      images: ['/icons/icon-512x512.png'],
+      images: [PUBLIC_LINK_OG_IMAGE],
     },
     twitter: {
       card: 'summary',
       title,
       description,
-      images: ['/icons/icon-512x512.png'],
+      images: [PUBLIC_LINK_OG_IMAGE.url],
     },
   };
 }

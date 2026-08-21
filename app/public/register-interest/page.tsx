@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import RegisterInterestClient from './RegisterInterestClient';
-import { PUBLIC_LINKS, publicLinkTitleSettingKey, publicLinkDescriptionSettingKey } from '@/lib/publicLinks';
+import { PUBLIC_LINKS, PUBLIC_LINK_OG_IMAGE, publicLinkTitleSettingKey, publicLinkDescriptionSettingKey } from '@/lib/publicLinks';
 import { getSettingServer } from '@/lib/appSettings';
 
 const LINK = PUBLIC_LINKS.find((l) => l.slug === 'register-interest')!;
@@ -37,13 +37,13 @@ export async function generateMetadata(): Promise<Metadata> {
       url: LINK.path,
       type: 'website',
       siteName: 'AFJ Campaign App',
-      images: ['/icons/icon-512x512.png'],
+      images: [PUBLIC_LINK_OG_IMAGE],
     },
     twitter: {
       card: 'summary',
       title,
       description,
-      images: ['/icons/icon-512x512.png'],
+      images: [PUBLIC_LINK_OG_IMAGE.url],
     },
   };
 }

@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Week1CampaignsClient from './Week1CampaignsClient';
-import { PUBLIC_LINKS, publicLinkTitleSettingKey, publicLinkDescriptionSettingKey } from '@/lib/publicLinks';
+import { PUBLIC_LINKS, PUBLIC_LINK_OG_IMAGE, publicLinkTitleSettingKey, publicLinkDescriptionSettingKey } from '@/lib/publicLinks';
 import { getSettingServer } from '@/lib/appSettings';
 
 const LINK = PUBLIC_LINKS.find((l) => l.slug === 'week1-campaigns')!;
@@ -43,14 +43,17 @@ export async function generateMetadata(): Promise<Metadata> {
       // Branded app icon. Without an explicit image, some clients (iMessage
       // link previews on macOS) fall back to a generic placeholder — in this
       // case a default Vercel image — rather than no image at all, which
-      // reads worse than just showing our own icon.
-      images: ['/icons/icon-512x512.png'],
+      // reads worse than just showing our own icon. Deliberately the small
+      // 192x192 icon (see PUBLIC_LINK_OG_IMAGE) — a large, undeclared image
+      // makes WhatsApp render a big banner-style card instead of a compact
+      // thumbnail beside the text.
+      images: [PUBLIC_LINK_OG_IMAGE],
     },
     twitter: {
       card: 'summary',
       title,
       description,
-      images: ['/icons/icon-512x512.png'],
+      images: [PUBLIC_LINK_OG_IMAGE.url],
     },
   };
 }
