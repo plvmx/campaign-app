@@ -107,6 +107,7 @@ All database access goes through service modules in `lib/services/`. Pages and c
 | `lib/campaignRules.ts` | Rules engine — evaluates recurring campaign scheduling rules |
 | `lib/campaignFilter.ts` | `getUserAdminStatusAndMobile()` — resolves the current user's admin level and state from `state_leaders` |
 | `lib/errorUtils.ts` | `getErrorMessage()` — safe error-to-string coercion |
+| `lib/validation.ts` | `isValidMobile()`/`isValidEmail()` — loose format validators for public-facing contact-detail forms (currently `/public/register-interest`) |
 | `lib/ariseLayout.ts` | Canvas dimension constants (WIDTH=4200 px, HEIGHT=3000 px), font sizes, spacing constants, `AriseCampaign` interface, `apx()` helper, `simulateColumnCount()`, `computeColLayout()` |
 | `lib/ariseCanvas.ts` | Canvas draw helpers (`drawBannerAndKey`, `drawDateHeader`, `drawCampaignLine`, `drawWeekSeparator`) and `renderAriseCanvas()` — the main rendering function |
 | `lib/ariseGenerator.ts` | Public API only: `fetchCampaignsForDate()` (data fetching) + `generateAndDownloadAriseList()` (orchestrates render + JPEG download). Delegates drawing to `ariseCanvas.ts` |
@@ -160,7 +161,7 @@ No-login pages, each registered in `lib/publicLinks.ts` (single source of truth 
 | `/public/week1-campaigns` | Always-current Week 1 Campaigns list, all states |
 | `/public/temporary-upcoming-campaigns` | Leader-facing fortnight list — check/edit-redirect/download, distinct from Register Interest |
 | `/public/campaign-results` | Latest campaign results, all states, with per-page JPEG downloads |
-| `/public/register-interest` | Tick upcoming campaigns and register interest ("Yes I'm In" / "Tell Me More"), capturing first name + mobile number into `campaign_interest`. The only `/public/*` route with a POST (write) as well as a GET — see `app/api/public/register-interest/route.ts` |
+| `/public/register-interest` | Tick upcoming campaigns and register interest ("Yes I'm In" / "Tell Me More"), capturing first name + a validated mobile number and/or email into `campaign_interest`. The only `/public/*` route with a POST (write) as well as a GET — see `app/api/public/register-interest/route.ts` |
 | `/public/training/[campaignId]` | One training session's (campaign category BOTJ/TLT) details, with a form to register interest (name + mobile or email) into `training_interest`. Linked from the campaign's edit screen (`InlineEditForm`, category BOTJ/TLT) and from `/training-interest` via a Copy Link button. GET+POST both live in `app/api/public/training-interest/[campaignId]/route.ts` |
 
 ### Database tables (key ones)
@@ -171,7 +172,7 @@ No-login pages, each registered in `lib/publicLinks.ts` (single source of truth 
 - `campaign_messages` — per-date banner messages
 - `campaign_changes_log` — audit trail
 - `results` — recorded result names per campaign; `category_code` is `'TM' | 'P' | 'F' | 'SP' | 'IR'` (Team Member / Partial Presentation / Full Presentation / Full Presentation + Sinner's Prayer / Information Request); `first_name` is free text, not a foreign key to `state_leaders`
-- `campaign_interest` — members registering interest via the public `/public/register-interest` link; one row per (campaign, person). `interest_type` is `'in' | 'more'` ("Yes I'm In" / "Tell Me More"); `contacted` + `contacted_at` track admin/leader follow-up. RLS lets an admin, or the campaign's owning/shared leader, read/update rows, via a join through `campaigns` mirroring that table's own SELECT/UPDATE policy — see `supabase/rls-policies.sql`. The public page inserts via the service role in its API route instead (anonymous visitors have no RLS access). See `scripts/create_campaign_interest_table.sql`
+- `campaign_interest` — members registering interest via the public `/public/register-interest` link; one row per (campaign, person), with `mobile` and/or `email` (at least one required — DB `CHECK` constraint, see `scripts/create_campaign_interest_table.sql` and `scripts/add_email_to_campaign_interest.sql`). `interest_type` is `'in' | 'more'` ("Yes I'm In" / "Tell Me More"); `contacted` + `contacted_at` track admin/leader follow-up. RLS lets an admin, or the campaign's owning/shared leader, read/update rows, via a join through `campaigns` mirroring that table's own SELECT/UPDATE policy — see `supabase/rls-policies.sql`. The public page inserts via the service role in its API route instead (anonymous visitors have no RLS access)
 - `training_interest` — members registering interest in a training session via its per-campaign public link (`/public/training/[campaignId]`); one row per (campaign, person), with `mobile` and/or `email` (at least one required — DB `CHECK` constraint, see `scripts/create_training_interest_table.sql`). `contacted` + `contacted_at` track follow-up, same as `campaign_interest`, and RLS follows the identical owning/shared-leader-or-admin pattern — see `supabase/rls-policies.sql`
 
 ### Slide generation

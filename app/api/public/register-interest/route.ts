@@ -17,6 +17,7 @@ import { enforceOrigin } from '@/lib/corsUtils';
 import { createRateLimiter, getClientIp } from '@/lib/rateLimit';
 import { calculateCampaignDates, formatDateForDb, getFortnightDateRange } from '@/lib/campaignDates';
 import { isCampaignPast } from '@/lib/campaignUtils';
+import { isValidMobile, isValidEmail } from '@/lib/validation';
 import type { AriseCampaign } from '@/lib/ariseLayout';
 
 const getRateLimiter = createRateLimiter({ windowMs: 60 * 1000, maxAttempts: 30 });
@@ -27,6 +28,7 @@ const postRateLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, maxAttempt
 
 const MAX_FIRST_NAME_LENGTH = 100;
 const MAX_MOBILE_LENGTH = 20;
+const MAX_EMAIL_LENGTH = 200;
 const MAX_CAMPAIGN_IDS = 50;
 
 export interface RegisterInterestGetResponse {
@@ -110,14 +112,21 @@ export async function POST(request: NextRequest) {
     const bodyObj = (body && typeof body === 'object' ? body : {}) as Record<string, unknown>;
     const firstName = typeof bodyObj.firstName === 'string' ? bodyObj.firstName.trim() : '';
     const mobile = typeof bodyObj.mobile === 'string' ? bodyObj.mobile.trim() : '';
+    const email = typeof bodyObj.email === 'string' ? bodyObj.email.trim() : '';
     const interestType = bodyObj.interestType;
     const rawCampaignIds: unknown[] = Array.isArray(bodyObj.campaignIds) ? bodyObj.campaignIds : [];
 
     if (!firstName || firstName.length > MAX_FIRST_NAME_LENGTH) {
       return NextResponse.json({ error: 'Please enter your first name' }, { status: 400 });
     }
-    if (!mobile || mobile.length > MAX_MOBILE_LENGTH) {
-      return NextResponse.json({ error: 'Please enter your mobile number' }, { status: 400 });
+    if (mobile.length > MAX_MOBILE_LENGTH || email.length > MAX_EMAIL_LENGTH) {
+      return NextResponse.json({ error: 'Please check your mobile number or email address' }, { status: 400 });
+    }
+    // A visitor is asked for a *valid* mobile or email (not merely a
+    // non-empty one) — stricter than training_interest's presence-only check,
+    // since this is the field the leader will actually follow up on.
+    if (!isValidMobile(mobile) && !isValidEmail(email)) {
+      return NextResponse.json({ error: 'Please enter a valid mobile number or email address' }, { status: 400 });
     }
     if (interestType !== 'in' && interestType !== 'more') {
       return NextResponse.json({ error: 'Invalid interest type' }, { status: 400 });
@@ -135,7 +144,8 @@ export async function POST(request: NextRequest) {
     const rows = campaignIds.map(campaignId => ({
       campaign_id: campaignId,
       first_name: firstName,
-      mobile,
+      mobile: mobile || null,
+      email: email || null,
       interest_type: interestType,
     }));
 
