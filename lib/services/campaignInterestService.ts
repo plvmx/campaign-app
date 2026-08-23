@@ -1,7 +1,9 @@
 /**
  * campaign_interest — members registering interest in joining a campaign via
  * the public Register Interest screen (app/public/register-interest). One
- * row per (campaign, person) pair. See scripts/create_campaign_interest_table.sql.
+ * row per (campaign, person) pair, with mobile and/or email (at least one
+ * required — DB CHECK constraint, see scripts/create_campaign_interest_table.sql
+ * and scripts/add_email_to_campaign_interest.sql).
  *
  * Note: this module's functions use the browser client, which is RLS-gated
  * to an admin or the campaign's owning/shared leader for this table (see
@@ -21,7 +23,9 @@ export interface CampaignInterest {
   id: string;
   campaign_id: string;
   first_name: string;
-  mobile: string;
+  /** At least one of mobile/email is present — enforced by a DB CHECK constraint, see scripts/add_email_to_campaign_interest.sql. */
+  mobile: string | null;
+  email: string | null;
   interest_type: CampaignInterestType;
   contacted: boolean;
   contacted_at: string | null;

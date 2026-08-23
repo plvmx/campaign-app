@@ -57,7 +57,7 @@ export default function CampaignInterestEntryList({ entries, updatingIds, onTogg
                   </div>
                 )}
                 <div className="mt-2 text-base text-gray-900 dark:text-gray-100">
-                  {entry.first_name} — {entry.mobile}
+                  {entry.first_name} — {[entry.mobile, entry.email].filter(Boolean).join(' · ')}
                 </div>
                 <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
                   <span

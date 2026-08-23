@@ -15,12 +15,10 @@
  * Split out of page.tsx (a Server Component, for its `metadata` export —
  * a 'use client' page can't export metadata) — see page.tsx.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import LoadingSpinner from '@/components/LoadingSpinner';
-import { useCampaignDates } from '@/contexts/CampaignDatesContext';
-import { AUSTRALIAN_STATES, type AustralianState } from '@/lib/constants';
-import { formatFortnightDateRangeString } from '@/lib/campaignDates';
 import { getErrorMessage } from '@/lib/errorUtils';
+import { isValidMobile, isValidEmail } from '@/lib/validation';
 import type { AriseCampaign } from '@/lib/ariseLayout';
 import type { RegisterInterestGetResponse } from '@/app/api/public/register-interest/route';
 import CampaignCheckboxList from './components/CampaignCheckboxList';
@@ -29,20 +27,9 @@ import InterestSummaryModal from './components/InterestSummaryModal';
 type CampaignInterestType = 'in' | 'more';
 
 export default function RegisterInterestClient() {
-  const { dates: campaignDates } = useCampaignDates();
-
-  // Display-only — the GET response always covers the current fortnight
-  // regardless of any params, so this just formats the same range for the
-  // header text.
-  const rangeText = useMemo(() => {
-    if (!campaignDates) return null;
-    return formatFortnightDateRangeString(campaignDates.upcomingCampaignStart);
-  }, [campaignDates]);
-
-  const [selectedState, setSelectedState] = useState<AustralianState | ''>('');
-
   const [firstName, setFirstName] = useState('');
   const [mobileNumber, setMobileNumber] = useState('');
+  const [email, setEmail] = useState('');
 
   const [allCampaigns, setAllCampaigns] = useState<AriseCampaign[]>([]);
   const [isLoadingCampaigns, setIsLoadingCampaigns] = useState(true);
@@ -68,10 +55,6 @@ export default function RegisterInterestClient() {
     return () => { cancelled = true; };
   }, []);
 
-  const campaigns = selectedState
-    ? allCampaigns.filter(c => c.state === selectedState)
-    : allCampaigns;
-
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const toggleChecked = (id: string) => {
     setCheckedIds(prev => {
@@ -82,34 +65,7 @@ export default function RegisterInterestClient() {
   };
   // Preserves the campaigns' existing date/state/place/time sort order for
   // the confirmation popup's list.
-  const checkedCampaigns = campaigns.filter(c => checkedIds.has(c.id));
-
-  // Ticked campaigns can go stale (e.g. a place drops out of view when the
-  // state filter changes) — drop any checked id no longer in view.
-  // setState is deferred through a resolved Promise to avoid synchronous setState
-  // inside the effect body, matching the pattern used elsewhere in the app.
-  useEffect(() => {
-    Promise.resolve().then(() => {
-      setCheckedIds(prev => {
-        // Recomputed from the underlying sources (rather than closing over
-        // the outer `campaigns` variable) so this effect's dependency array
-        // can name the actual sources instead of a value that's a new
-        // reference every render.
-        const visible = selectedState ? allCampaigns.filter(c => c.state === selectedState) : allCampaigns;
-        const visibleIds = new Set(visible.map(c => c.id));
-        let changed = false;
-        const next = new Set<string>();
-        for (const id of prev) {
-          if (visibleIds.has(id)) {
-            next.add(id);
-          } else {
-            changed = true;
-          }
-        }
-        return changed ? next : prev;
-      });
-    });
-  }, [allCampaigns, selectedState]);
+  const checkedCampaigns = allCampaigns.filter(c => checkedIds.has(c.id));
 
   const [popupAction, setPopupAction] = useState<CampaignInterestType | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -126,8 +82,14 @@ export default function RegisterInterestClient() {
       setValidationError('Please enter your first name.');
       return;
     }
-    if (!mobileNumber.trim()) {
-      setValidationError('Please enter your mobile number.');
+    const mobileTrimmed = mobileNumber.trim();
+    const emailTrimmed = email.trim();
+    if (!mobileTrimmed && !emailTrimmed) {
+      setValidationError('Please enter your mobile number or email address.');
+      return;
+    }
+    if (!isValidMobile(mobileTrimmed) && !isValidEmail(emailTrimmed)) {
+      setValidationError('Please enter a valid mobile number or email address.');
       return;
     }
     setPopupAction(action);
@@ -155,6 +117,7 @@ export default function RegisterInterestClient() {
         body: JSON.stringify({
           firstName: firstName.trim(),
           mobile: mobileNumber.trim(),
+          email: email.trim(),
           interestType: popupAction,
           campaignIds: checkedCampaigns.map(c => c.id),
         }),
@@ -173,9 +136,9 @@ export default function RegisterInterestClient() {
   return (
     <div className="flex h-[calc(100dvh-var(--pwa-banner-height,0px))] flex-col p-4">
       <div className="mb-3">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Upcoming AFJ Campaigns</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Register my Campaign Interest</h1>
         <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-          All upcoming campaigns for this fortnight are listed below. To <strong className="font-bold">join a campaign</strong>, or to <strong className="font-bold">get more information</strong> please enter your first name and mobile phone number here, click on the campaign that you are interested in and then click on the green or orange button at the bottom of the page.
+          All Upcoming AFJ Campaigns for this fortnight are listed below. To <strong className="font-bold">join a campaign</strong>, or to <strong className="font-bold">get more information</strong> please enter your first name and either a mobile number or email address below, click on the campaign that you are interested in and then click on the green or orange button at the bottom of the page.
         </p>
       </div>
 
@@ -203,21 +166,16 @@ export default function RegisterInterestClient() {
       </div>
 
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <select
-          value={selectedState}
-          onChange={e => setSelectedState(e.target.value as AustralianState | '')}
-          className="rounded-md border-2 border-gray-800 bg-white px-3 py-2 text-sm font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
-        >
-          <option value="">All states</option>
-          {AUSTRALIAN_STATES.map(state => (
-            <option key={state} value={state}>{state}</option>
-          ))}
-        </select>
-        {rangeText && (
-          <span className="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-            {rangeText}
-          </span>
-        )}
+        <label className="flex-1 min-w-[8rem]">
+          <span className="sr-only">Email address</span>
+          <input
+            type="email"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            placeholder="Email address"
+            className="w-full rounded-md border-2 border-gray-800 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:placeholder:text-gray-500"
+          />
+        </label>
       </div>
 
       {loadError && (
@@ -240,7 +198,7 @@ export default function RegisterInterestClient() {
           </div>
         )}
         <div className="h-full overflow-y-auto">
-          <CampaignCheckboxList campaigns={campaigns} checkedIds={checkedIds} onToggle={toggleChecked} />
+          <CampaignCheckboxList campaigns={allCampaigns} checkedIds={checkedIds} onToggle={toggleChecked} />
         </div>
       </div>
 
