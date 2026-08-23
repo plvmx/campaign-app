@@ -1,19 +1,28 @@
 'use client';
 
 /**
- * Public, unauthenticated Register Interest page — tick campaigns for the
- * current fortnight and register interest ("Yes I'm In" / "Tell Me More").
- * Not listed in middleware's PROTECTED_PREFIXES, so it's open by default
- * (see middleware.ts). Data comes from GET /api/public/register-interest;
- * submissions go through POST on the same route (service role — see that
- * route for why campaign_interest can't be written via the browser client
- * here, unlike the admin-only /admin/registered-interest listing screen).
+ * Register Interest screen — tick campaigns for a fortnight and register
+ * interest ("Yes I'm In" / "Tell Me More"). Two entry points render this
+ * exact component:
+ *  - app/public/register-interest/page.tsx — the public, unauthenticated
+ *    page for the *current* fortnight. Not listed in middleware's
+ *    PROTECTED_PREFIXES, so it's open by default (see middleware.ts).
+ *  - app/admin/register-interest/page.tsx — an admin-only preview of the
+ *    *next* fortnight (the two weeks starting right after the current
+ *    period ends), passing `nextPeriod`. Everything else — copy, layout,
+ *    validation, submission — is identical; only the fetched date window
+ *    differs (see the `period=next` handling in the API route below).
+ *
+ * Data comes from GET /api/public/register-interest; submissions go
+ * through POST on the same route (service role — see that route for why
+ * campaign_interest can't be written via the browser client here, unlike
+ * the admin-only /admin/registered-interest listing screen).
  *
  * Deliberately does NOT use MobileLayout — that component resolves the
- * signed-in user's admin status and assumes a logged-in session.
- *
- * Split out of page.tsx (a Server Component, for its `metadata` export —
- * a 'use client' page can't export metadata) — see page.tsx.
+ * signed-in user's admin status and assumes a logged-in session, which the
+ * public entry point doesn't have. The admin entry point wraps this in its
+ * own access-gated MobileLayout shell around this component instead of
+ * baking that into this component, so both callers render identical content.
  */
 import { useEffect, useState } from 'react';
 import LoadingSpinner from '@/components/LoadingSpinner';
@@ -21,12 +30,17 @@ import { getErrorMessage } from '@/lib/errorUtils';
 import { isValidMobile, isValidEmail } from '@/lib/validation';
 import type { AriseCampaign } from '@/lib/ariseLayout';
 import type { RegisterInterestGetResponse } from '@/app/api/public/register-interest/route';
-import CampaignCheckboxList from './components/CampaignCheckboxList';
-import InterestSummaryModal from './components/InterestSummaryModal';
+import CampaignCheckboxList from './CampaignCheckboxList';
+import InterestSummaryModal from './InterestSummaryModal';
 
 type CampaignInterestType = 'in' | 'more';
 
-export default function RegisterInterestClient() {
+interface Props {
+  /** When true, fetches the fortnight starting right after the current one instead of the current fortnight. */
+  nextPeriod?: boolean;
+}
+
+export default function RegisterInterestClient({ nextPeriod = false }: Props = {}) {
   const [firstName, setFirstName] = useState('');
   const [mobileNumber, setMobileNumber] = useState('');
   const [email, setEmail] = useState('');
@@ -40,7 +54,8 @@ export default function RegisterInterestClient() {
 
     (async () => {
       try {
-        const res = await fetch('/api/public/register-interest');
+        const url = nextPeriod ? '/api/public/register-interest?period=next' : '/api/public/register-interest';
+        const res = await fetch(url);
         const json = await res.json();
         if (!res.ok) throw new Error(json?.error || 'Failed to load campaign data');
         if (cancelled) return;
@@ -53,7 +68,7 @@ export default function RegisterInterestClient() {
     })();
 
     return () => { cancelled = true; };
-  }, []);
+  }, [nextPeriod]);
 
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const toggleChecked = (id: string) => {

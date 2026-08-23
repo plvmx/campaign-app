@@ -1,15 +1,22 @@
 /**
  * Public, unauthenticated data source + submission endpoint for the
- * Register Interest page (/public/register-interest).
+ * Register Interest screen (app/public/register-interest, and the
+ * admin-only next-fortnight preview at app/admin/register-interest).
  *
- * GET  — public-safe campaigns for the current fortnight (all states; the
- *        client filters by state itself, same as the other /public/* GET
- *        routes — one cached response serves every caller).
+ * GET  — public-safe campaigns for a fortnight (all states; the client
+ *        filters by state itself, same as the other /public/* GET routes —
+ *        one cached response per window serves every caller). Defaults to
+ *        the current fortnight; `?period=next` shifts the window to the
+ *        fortnight starting right after the current one ends, for the
+ *        admin preview screen. This data is already fully public regardless
+ *        of who's asking (no PII, same shape as the other public campaign
+ *        lists), so the extra window isn't gated — only the admin *button*
+ *        that links to it is.
  * POST — records interest against one or more campaigns. This is the
  *        first *write* on a /public/* route: anonymous visitors have no
- *        RLS access to campaign_interest (its policy is admin-only, see
- *        supabase/rls-policies.sql), so this uses the service role and
- *        does its own input validation in place of the RLS check.
+ *        RLS access to campaign_interest (its policy is admin/owning-leader
+ *        only, see supabase/rls-policies.sql), so this uses the service
+ *        role and does its own input validation in place of the RLS check.
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
@@ -35,10 +42,12 @@ export interface RegisterInterestGetResponse {
   campaigns: AriseCampaign[];
 }
 
-// Short-lived in-memory cache — one entry, since the GET response is
-// identical for every caller (all states, current fortnight).
+// Short-lived in-memory cache — the GET response is identical for every
+// caller asking for the same window (all states), but there are now two
+// possible windows (current / next), so this is keyed per-window rather
+// than a single slot to avoid the two constantly evicting each other.
 const CACHE_TTL_MS = 60 * 1000;
-let cache: { key: string; expiresAt: number; response: RegisterInterestGetResponse } | null = null;
+const cache = new Map<string, { expiresAt: number; response: RegisterInterestGetResponse }>();
 
 export async function GET(request: NextRequest) {
   const corsBlock = enforceOrigin(request);
@@ -55,13 +64,20 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
 
+    const isNextPeriod = request.nextUrl.searchParams.get('period') === 'next';
     const { upcomingCampaignStart } = calculateCampaignDates();
-    const dates = getFortnightDateRange(upcomingCampaignStart);
+    let periodStart = upcomingCampaignStart;
+    if (isNextPeriod) {
+      periodStart = new Date(upcomingCampaignStart);
+      periodStart.setDate(periodStart.getDate() + 14);
+    }
+    const dates = getFortnightDateRange(periodStart);
     const dateStrings = dates.map(formatDateForDb);
-    const cacheKey = dateStrings[0];
+    const cacheKey = `${isNextPeriod ? 'next' : 'current'}:${dateStrings[0]}`;
 
-    if (cache && cache.key === cacheKey && cache.expiresAt > Date.now()) {
-      return NextResponse.json(cache.response);
+    const cached = cache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return NextResponse.json(cached.response);
     }
 
     const { data, error } = await supabaseAdmin
@@ -84,7 +100,7 @@ export async function GET(request: NextRequest) {
     const campaigns = ((data ?? []) as AriseCampaign[]).filter(c => !isCampaignPast(c.date, c.time));
 
     const response: RegisterInterestGetResponse = { campaigns };
-    cache = { key: cacheKey, expiresAt: Date.now() + CACHE_TTL_MS, response };
+    cache.set(cacheKey, { expiresAt: Date.now() + CACHE_TTL_MS, response });
 
     return NextResponse.json(response);
   } catch (err) {
