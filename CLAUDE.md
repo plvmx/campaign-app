@@ -116,6 +116,8 @@ All database access goes through service modules in `lib/services/`. Pages and c
 - `components/MobileLayout.tsx` — shared shell (header, bottom nav) wrapping every page. Resolves admin status via `getUserAdminStatusAndMobile()`.
 - `components/CampaignForm.tsx` — reusable add/edit form used by the admin panel; `CampaignData` interface includes a `category` field (e.g. `TWOL`, `BOTJ`, `TLT`).
 - `components/ErrorBoundary.tsx` — global React error boundary.
+- `components/registerInterest/` — `RegisterInterestClient.tsx` (+ `CampaignCheckboxList.tsx`, `InterestSummaryModal.tsx`), the Register Interest screen shared by `/public/register-interest` (current fortnight) and `/admin/register-interest` (admin-only, `nextPeriod` prop — the fortnight after). Moved out of `app/public/register-interest/` once a second route needed it.
+- `components/CampaignInterestEntryList.tsx` — the registration-row list (campaign info, interest-type badge, Contacted checkbox) shared by `/admin/registered-interest` (admin-wide) and `/campaign-interest` (leader-scoped).
 - `contexts/CampaignDatesContext.tsx` — shared date-range state for campaign views.
 - `app/app/components/useCampaignForm.ts` — unified form hook shared by `CampaignCreateForm` and `InlineEditForm`. Owns all form state (date, state, place, time, leader, mobile, category, tl_ok, sr_ok), place creation, leader mobile auto-fill, and submit orchestration. `handleSubmit` accepts both `FormEvent` and `MouseEvent`.
 - `app/app/components/useStateDropdowns.ts` — fetches and caches state-scoped place and leader lists. All `setState` calls are routed through Promise chains to satisfy the `react-hooks/set-state-in-effect` rule.
@@ -141,6 +143,7 @@ All database access goes through service modules in `lib/services/`. Pages and c
 | `/admin/leader-shares` | Leader share links |
 | `/admin/campaign-map` | Interactive map of upcoming campaigns, filterable by date range and state |
 | `/admin/campaigns-near-me` | Upcoming campaigns near the admin's current location |
+| `/admin/register-interest` | Admin-only preview of the public Register Interest screen for the *next* fortnight (the two weeks starting right after the current period ends) — otherwise identical to `/public/register-interest`. Renders the same `RegisterInterestClient` with `nextPeriod`, which fetches `/api/public/register-interest?period=next` |
 | `/admin/registered-interest` | List everyone who has registered interest via the public Register Interest link (per campaign), with a Contacted checkbox per registration. Not yet wired to leader-specific login/filtering — admin-only for now |
 | `/admin/member-activity` | Active member counts (leader + team) by total, state, place, or campaign |
 | `/admin/metrics` | Usage analytics, active users, and database row counts |

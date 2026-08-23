@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import RegisterInterestClient from './RegisterInterestClient';
+import RegisterInterestClient from '@/components/registerInterest/RegisterInterestClient';
 import { PUBLIC_LINKS, PUBLIC_LINK_OG_IMAGE, publicLinkTitleSettingKey, publicLinkDescriptionSettingKey } from '@/lib/publicLinks';
 import { getSettingServer } from '@/lib/appSettings';
 
