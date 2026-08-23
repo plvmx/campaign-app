@@ -1,17 +1,10 @@
 /**
- * Public, unauthenticated data source for the "Temporary Upcoming Campaigns"
- * page (/public/temporary-upcoming-campaigns). Same shape of route as
- * /api/public/week1-campaigns, but:
- *  - covers the full fortnight (14 days), matching the authenticated
- *    Register Interest screen and the "Leader Campaign Lists" download
- *  - also returns each day's campaign_messages banner text, since the
- *    response doubles as the input to generateAndDownloadSlidesFromData
- *    (lib/slideGenerator.ts) for the page's Download button — one fetch
- *    powers both the on-screen list and the ZIP
- *
- * The actual query lives in lib/services/publicCampaignListService.ts,
- * shared with /api/public/final-campaign-lists (same fortnight, same data —
- * the two pages differ only in copy/actions).
+ * Public, unauthenticated data source for the "Final AFJ Campaign Lists"
+ * page (/public/final-campaign-lists). Same fortnight, same all-states data
+ * as /api/public/temporary-upcoming-campaigns — the query itself lives in
+ * lib/services/publicCampaignListService.ts and is shared between the two
+ * routes. This page is the "final" read-only list (Download only, no Edit),
+ * shown once leaders have finished making changes on the temporary list.
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { enforceOrigin } from '@/lib/corsUtils';
@@ -21,14 +14,14 @@ import type { PublicSlideDay } from '@/lib/slideGenerator';
 
 const rateLimiter = createRateLimiter({ windowMs: 60 * 1000, maxAttempts: 30 });
 
-export interface TemporaryUpcomingCampaignsResponse {
+export interface FinalCampaignListsResponse {
   days: PublicSlideDay[];
 }
 
 // Short-lived in-memory cache — one entry, since the response is identical
 // for every caller (all states, current fortnight).
 const CACHE_TTL_MS = 60 * 1000;
-let cache: { key: string; expiresAt: number; response: TemporaryUpcomingCampaignsResponse } | null = null;
+let cache: { key: string; expiresAt: number; response: FinalCampaignListsResponse } | null = null;
 
 export async function GET(request: NextRequest) {
   const corsBlock = enforceOrigin(request);
@@ -53,12 +46,12 @@ export async function GET(request: NextRequest) {
     }
 
     const days = await fetchFortnightCampaignDays(dateStrings);
-    const response: TemporaryUpcomingCampaignsResponse = { days };
+    const response: FinalCampaignListsResponse = { days };
     cache = { key: cacheKey, expiresAt: Date.now() + CACHE_TTL_MS, response };
 
     return NextResponse.json(response);
   } catch (err) {
-    console.error('public temporary-upcoming-campaigns API exception:', err);
+    console.error('public final-campaign-lists API exception:', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

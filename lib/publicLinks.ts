@@ -55,6 +55,12 @@ export const PUBLIC_LINKS: PublicLink[] = [
     path: '/public/temporary-upcoming-campaigns',
   },
   {
+    slug: 'final-campaign-lists',
+    title: 'Final AFJ Campaign Lists',
+    description: 'Here are the final campaign lists for this fortnight',
+    path: '/public/final-campaign-lists',
+  },
+  {
     slug: 'campaign-results',
     title: 'Campaign Results',
     description: 'Latest campaign results, all states — no login required.',
