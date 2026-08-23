@@ -50,9 +50,15 @@ export const PUBLIC_LINKS: PublicLink[] = [
   },
   {
     slug: 'temporary-upcoming-campaigns',
-    title: 'Temporary Upcoming Campaigns',
+    title: 'Temporary AFJ Campaign Lists',
     description: 'Check your upcoming campaign details for this fortnight — no login required.',
     path: '/public/temporary-upcoming-campaigns',
+  },
+  {
+    slug: 'final-campaign-lists',
+    title: 'Final AFJ Campaign Lists',
+    description: 'Here are the final campaign lists for this fortnight',
+    path: '/public/final-campaign-lists',
   },
   {
     slug: 'campaign-results',
