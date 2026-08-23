@@ -21,6 +21,7 @@ import { generateAndDownloadSlidesFromData, type PublicSlideDay } from '@/lib/sl
 import type { AriseCampaign } from '@/lib/ariseLayout';
 import type { TemporaryUpcomingCampaignsResponse } from '@/app/api/public/temporary-upcoming-campaigns/route';
 
+const TITLE = 'Temporary AFJ Campaign Lists';
 const INTRO_TEXT = 'Here is the temporary upcoming campaign list for this fortnight.';
 
 /** Each bullet as [before, bold word, after] so the bold word can be styled inline. */
@@ -79,7 +80,7 @@ export default function TemporaryUpcomingCampaignsClient() {
   return (
     <div className="flex h-[calc(100dvh-var(--pwa-banner-height,0px))] flex-col p-4">
       <div className="mb-3">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">AFJ Temporary Campaign List</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{TITLE}</h1>
         <p className="mt-1 text-base text-gray-600 dark:text-gray-400">{INTRO_TEXT}</p>
         <p className="mt-2 text-base text-gray-600 dark:text-gray-400">ALL LEADERS please:</p>
         <ul className="mt-1 list-disc space-y-1 pl-5 text-base text-gray-600 dark:text-gray-400">
