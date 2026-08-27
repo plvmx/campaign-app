@@ -6,12 +6,12 @@
 // and upserts into registry.registrants / registry.registration_events —
 // via the injected DbPort, so this has no direct database dependency.
 
-import { getErrorMessage } from '../errorUtils';
-import { mapAcFields } from './fieldMap';
-import { isActiveListStatus } from './listFilter';
-import { normalizePhone } from './phone';
-import type { DbPort } from './ports';
-import { matchSourceTag } from './sourceAttribution';
+import { getErrorMessage } from '../errorUtils.ts';
+import { mapAcFields } from './fieldMap.ts';
+import { isActiveListStatus } from './listFilter.ts';
+import { normalizePhone } from './phone.ts';
+import type { DbPort } from './ports.ts';
+import { matchSourceTag } from './sourceAttribution.ts';
 
 export interface TransformResult {
   recordsUpserted: number;

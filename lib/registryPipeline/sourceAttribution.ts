@@ -7,7 +7,7 @@
 // never against a naming pattern (tag prefixes like 'ACTION:'/'CAMPAIGN:'/
 // 'FORM:' are inconsistent across pages).
 
-import type { AcContactTag, KnownSourceTag } from './types';
+import type { AcContactTag, KnownSourceTag } from './types.ts';
 
 /**
  * Finds the first of a contact's tags that matches a known source tag.

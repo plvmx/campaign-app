@@ -15,10 +15,10 @@
 // List-3 query (never issued), rather than needing to pick apart a merged
 // multi-list payload.
 
-import { getErrorMessage } from '../errorUtils';
-import { REQUEST_PACING_MS, sleep } from './rateLimiter';
-import type { AcPort, DbPort } from './ports';
-import { transformPendingStagingEvents } from './transform';
+import { getErrorMessage } from '../errorUtils.ts';
+import { REQUEST_PACING_MS, sleep } from './rateLimiter.ts';
+import type { AcPort, DbPort } from './ports.ts';
+import { transformPendingStagingEvents } from './transform.ts';
 
 /** AC lists that are ever polled. Lists 3 and 5 are never queried — see plan Section 3.6/6.1. */
 const SYNCED_LIST_IDS = ['1', '2'] as const;

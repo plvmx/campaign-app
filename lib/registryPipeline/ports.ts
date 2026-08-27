@@ -12,7 +12,7 @@ import type {
   AcFieldValue,
   KnownSourceTag,
   RawAcContactPayload,
-} from './types';
+} from './types.ts';
 
 /** Read-only access to ActiveCampaign — implemented by ac-sync/acClient.ts. */
 export interface AcPort {

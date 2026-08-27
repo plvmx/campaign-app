@@ -9,7 +9,7 @@
 // or someone extending this file carelessly) can't silently reintroduce
 // a sensitive field into the registry without a deliberate edit here.
 
-import type { AcFieldValue, MappedRegistrantFields, RawAcContactPayload } from './types';
+import type { AcFieldValue, MappedRegistrantFields, RawAcContactPayload } from './types.ts';
 
 /**
  * AC custom-field IDs this pipeline is allowed to read (plan Section 3.4).
