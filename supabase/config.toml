@@ -1,0 +1,18 @@
+# Supabase CLI config for this project's Edge Functions. Only used for the
+# registry pipeline (docs/registry-pipeline/) — the rest of this app talks
+# to Supabase directly from Next.js and has no other CLI-managed pieces.
+#
+# `project_id` is intentionally left blank here — fill it in locally (do not
+# commit the real value if it's ever treated as sensitive; in practice it's
+# just the project ref visible in the dashboard URL) or pass it via
+# `supabase link --project-ref <ref>`, which writes to .supabase/ (gitignored)
+# rather than this file.
+project_id = ""
+
+[functions.ac-sync]
+# JWT verification stays on (the default): the caller (pg_cron via pg_net,
+# or a manual `supabase functions invoke`) must present a valid bearer
+# token. See scripts/schedule_ac_sync_cron.sql for how the scheduled call
+# authenticates, and docs/registry-pipeline/OPERATIONS.md for manual
+# invocation.
+verify_jwt = true

@@ -1,0 +1,81 @@
+// Dependency-injection ports for the registry pipeline's orchestration
+// logic (sync.ts / transform.ts). Defining these as plain interfaces (no
+// supabase-js, no Deno, no fetch) is what lets runSync/transformPendingStagingEvents
+// be unit tested with simple fakes, and lets the concrete implementations
+// (supabase/functions/ac-sync/acClient.ts, db.ts) live entirely in the Deno
+// Edge Function without this module needing to know or care.
+
+import type {
+  AcContactCore,
+  AcContactListMembership,
+  AcContactTag,
+  AcFieldValue,
+  KnownSourceTag,
+  RawAcContactPayload,
+} from './types';
+
+/** Read-only access to ActiveCampaign — implemented by ac-sync/acClient.ts. */
+export interface AcPort {
+  /**
+   * One page of contact-list membership rows for a single AC list, filtered
+   * to those updated since `updatedSince` (null on the very first/backfill
+   * run — AC then returns everything). Paginated by `limit`/`offset`;
+   * an empty array means the caller has reached the end.
+   */
+  getContactListPage(params: {
+    listId: string;
+    updatedSince: string | null;
+    limit: number;
+    offset: number;
+  }): Promise<AcContactListMembership[]>;
+
+  /** Core fields + custom fieldValues + tags for one contact, by AC contact ID. */
+  getContactDetail(contactId: string): Promise<{
+    core: AcContactCore;
+    fieldValues: AcFieldValue[];
+    tags: AcContactTag[];
+  }>;
+}
+
+export interface StagingEventRow {
+  id: number;
+  raw_payload: RawAcContactPayload;
+}
+
+/** Read/write access to staging.* / registry.* — implemented by ac-sync/db.ts. */
+export interface DbPort {
+  /** Inserts a registry.sync_log row with run_type='sync', returns its id. */
+  startSyncLog(): Promise<number>;
+  /** max(completed_at) from registry.sync_log where run_type='sync' — null on the first-ever run. */
+  getLastCompletedSyncTimestamp(): Promise<string | null>;
+  insertStagingEvent(input: {
+    sourceListId: string;
+    acContactId: string;
+    eventType: 'backfill' | 'sync';
+    rawPayload: RawAcContactPayload;
+  }): Promise<void>;
+  completeSyncLog(id: number, result: { recordsIn: number; recordsUpserted: number; errors: number }): Promise<void>;
+  failSyncLog(id: number, error: string): Promise<void>;
+
+  getPendingStagingEvents(): Promise<StagingEventRow[]>;
+  /** registry.known_source_tags, fetched fresh once per transform run (plan 6.2: "cached, refreshed periodically"). */
+  getKnownSourceTags(): Promise<KnownSourceTag[]>;
+  upsertRegistrant(input: {
+    acContactId: string;
+    fullName: string | null;
+    email: string | null;
+    phone: string | null;
+    phoneRaw: string | null;
+    state: string | null;
+  }): Promise<{ id: string }>;
+  insertRegistrationEvent(input: {
+    registrantId: string;
+    sourceListId: string;
+    sourceTag: string | null;
+    eventType: 'new_registration';
+    rawStagingId: number;
+  }): Promise<void>;
+  /** Marks a staging row done. Pass a reason (e.g. 'skipped: list status not active') to record a non-error skip, or null for a clean success. */
+  markStagingProcessed(id: number, skipReason: string | null): Promise<void>;
+  markStagingError(id: number, error: string): Promise<void>;
+}

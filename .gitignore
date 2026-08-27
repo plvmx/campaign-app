@@ -57,3 +57,6 @@ next-env.d.ts
 # generated documentation PDF (regenerate locally with Chrome --print-to-pdf)
 TECHNICAL_DOCS.pdf
 TECHNICAL_DOCS.html
+
+# Supabase CLI local link/session state (registry pipeline — see docs/registry-pipeline/OPERATIONS.md)
+.supabase
