@@ -5,6 +5,17 @@
 // whitelist and phone normalization, resolves source attribution by tag,
 // and upserts into registry.registrants / registry.registration_events —
 // via the injected DbPort, so this has no direct database dependency.
+//
+// Time-budgeted like sync.ts's AC-pull loop, for the same reason: a real
+// invocation against a ~180-row backlog hit Supabase's hard per-invocation
+// resource limit (WORKER_RESOURCE_LIMIT / HTTP 546) processing this loop
+// alone, each row costing a couple of sequential DB round-trips. Unlike
+// the AC-pull loop, this needs no separate persisted resume cursor: a row
+// is only ever marked done (markStagingProcessed/markStagingError) once
+// its own work has actually completed, so stopping partway through simply
+// leaves the rest with processed_at still null — getPendingStagingEvents()
+// naturally picks them back up next time, in whatever order the query
+// returns them.
 
 import { getErrorMessage } from '../errorUtils.ts';
 import { mapAcFields } from './fieldMap.ts';
@@ -13,18 +24,42 @@ import { normalizePhone } from './phone.ts';
 import type { DbPort } from './ports.ts';
 import { matchSourceTag } from './sourceAttribution.ts';
 
+/** Caps the initial query too, so a large backlog is never pulled into memory in one go. */
+export const TRANSFORM_BATCH_LIMIT = 200;
+
 export interface TransformResult {
   recordsUpserted: number;
   errors: number;
+  /** True if the time budget ran out before every pending row was processed — call again to continue. */
+  partial: boolean;
 }
 
-export async function transformPendingStagingEvents(db: DbPort): Promise<TransformResult> {
-  const [events, knownTags] = await Promise.all([db.getPendingStagingEvents(), db.getKnownSourceTags()]);
+export interface TransformOptions {
+  /** Epoch ms after which this call stops processing further rows, leaving them pending. Defaults to no limit. */
+  deadline?: number;
+  /** Injectable clock, defaulting to Date.now — lets tests control elapsed time deterministically without real timers. */
+  now?: () => number;
+}
+
+export async function transformPendingStagingEvents(db: DbPort, options: TransformOptions = {}): Promise<TransformResult> {
+  const now = options.now ?? Date.now;
+  const deadline = options.deadline ?? Infinity;
+
+  const [events, knownTags] = await Promise.all([
+    db.getPendingStagingEvents(TRANSFORM_BATCH_LIMIT),
+    db.getKnownSourceTags(),
+  ]);
 
   let recordsUpserted = 0;
   let errors = 0;
+  let partial = false;
 
   for (const event of events) {
+    if (now() >= deadline) {
+      partial = true;
+      break;
+    }
+
     try {
       const payload = event.raw_payload;
 
@@ -70,5 +105,12 @@ export async function transformPendingStagingEvents(db: DbPort): Promise<Transfo
     }
   }
 
-  return { recordsUpserted, errors };
+  // Even if we didn't run out of time ourselves, a full batch means there
+  // may be more pending rows beyond TRANSFORM_BATCH_LIMIT we never fetched —
+  // report partial so the caller doesn't mark the overall sync complete.
+  if (!partial && events.length === TRANSFORM_BATCH_LIMIT) {
+    partial = true;
+  }
+
+  return { recordsUpserted, errors, partial };
 }

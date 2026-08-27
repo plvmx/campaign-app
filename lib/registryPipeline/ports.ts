@@ -57,7 +57,8 @@ export interface DbPort {
   completeSyncLog(id: number, result: { recordsIn: number; recordsUpserted: number; errors: number }): Promise<void>;
   failSyncLog(id: number, error: string): Promise<void>;
 
-  getPendingStagingEvents(): Promise<StagingEventRow[]>;
+  /** At most `limit` rows with processed_at IS NULL — caps how much a single transform call ever loads into memory. */
+  getPendingStagingEvents(limit: number): Promise<StagingEventRow[]>;
   /** registry.known_source_tags, fetched fresh once per transform run (plan 6.2: "cached, refreshed periodically"). */
   getKnownSourceTags(): Promise<KnownSourceTag[]>;
   upsertRegistrant(input: {
@@ -78,4 +79,24 @@ export interface DbPort {
   /** Marks a staging row done. Pass a reason (e.g. 'skipped: list status not active') to record a non-error skip, or null for a clean success. */
   markStagingProcessed(id: number, skipReason: string | null): Promise<void>;
   markStagingError(id: number, error: string): Promise<void>;
+
+  /**
+   * Records progress made against one list's pagination *within a single
+   * logical sync pass* (which may now span multiple invocations — see
+   * sync.ts's time-budget note). `null` means "fully drained": either
+   * nothing has been pulled yet this pass, or the previous invocation
+   * reached an empty page for this list. A non-null offset means "resume
+   * here" — a prior invocation ran out of time partway through this list.
+   */
+  getSyncProgress(listId: string): Promise<number | null>;
+  saveSyncProgress(listId: string, nextOffset: number): Promise<void>;
+  /** Called once a list's pagination hits an empty page — resets it to start-from-0 for the next logical pass. */
+  clearSyncProgress(listId: string): Promise<void>;
+  /**
+   * Updates records_in/records_upserted/errors on an in-progress sync_log
+   * row WITHOUT setting completed_at — used when a run is cut short by its
+   * time budget, so getLastCompletedSyncTimestamp() correctly keeps
+   * ignoring it (a partial pass must never advance the incremental cursor).
+   */
+  recordPartialSync(id: number, counts: { recordsIn: number; recordsUpserted: number; errors: number }): Promise<void>;
 }

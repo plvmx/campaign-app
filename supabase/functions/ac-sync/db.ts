@@ -84,12 +84,14 @@ export function createDb(client: SupabaseClient = createServiceClient()): DbPort
       assertNoError(error, 'failSyncLog');
     },
 
-    async getPendingStagingEvents() {
+    async getPendingStagingEvents(limit) {
       const { data, error } = await client
         .schema('staging')
         .from('ac_events')
         .select('id, raw_payload')
-        .is('processed_at', null);
+        .is('processed_at', null)
+        .order('id', { ascending: true })
+        .limit(limit);
       assertNoError(error, 'getPendingStagingEvents');
       return (data ?? []) as StagingEventRow[];
     },
@@ -149,6 +151,44 @@ export function createDb(client: SupabaseClient = createServiceClient()): DbPort
         .update({ processing_error: errorMessage })
         .eq('id', id);
       assertNoError(error, 'markStagingError');
+    },
+
+    async getSyncProgress(listId) {
+      const { data, error } = await client
+        .schema('registry')
+        .from('sync_progress')
+        .select('next_offset')
+        .eq('list_id', listId)
+        .maybeSingle();
+      assertNoError(error, 'getSyncProgress');
+      return (data as { next_offset: number } | null)?.next_offset ?? null;
+    },
+
+    async saveSyncProgress(listId, nextOffset) {
+      const { error } = await client
+        .schema('registry')
+        .from('sync_progress')
+        .upsert({ list_id: listId, next_offset: nextOffset, updated_at: new Date().toISOString() }, { onConflict: 'list_id' });
+      assertNoError(error, 'saveSyncProgress');
+    },
+
+    async clearSyncProgress(listId) {
+      const { error } = await client.schema('registry').from('sync_progress').delete().eq('list_id', listId);
+      assertNoError(error, 'clearSyncProgress');
+    },
+
+    async recordPartialSync(id, counts) {
+      const { error } = await client
+        .schema('registry')
+        .from('sync_log')
+        .update({
+          records_in: counts.recordsIn,
+          records_upserted: counts.recordsUpserted,
+          errors: counts.errors,
+          notes: 'partial: time budget reached, resuming next invocation',
+        })
+        .eq('id', id);
+      assertNoError(error, 'recordPartialSync');
     },
   };
 }
