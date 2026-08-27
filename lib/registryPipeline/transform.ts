@@ -24,8 +24,14 @@ import { normalizePhone } from './phone.ts';
 import type { DbPort } from './ports.ts';
 import { matchSourceTag } from './sourceAttribution.ts';
 
-/** Caps the initial query too, so a large backlog is never pulled into memory in one go. */
-export const TRANSFORM_BATCH_LIMIT = 200;
+/**
+ * Caps the initial query too, so a large backlog is never pulled into
+ * memory in one go. Halved from 200 to 100 alongside the tighter time
+ * budgets in sync.ts, after a real invocation hit a hard
+ * WORKER_RESOURCE_LIMIT kill on roughly 1 in 20 attempts at the looser
+ * settings.
+ */
+export const TRANSFORM_BATCH_LIMIT = 100;
 
 export interface TransformResult {
   recordsUpserted: number;

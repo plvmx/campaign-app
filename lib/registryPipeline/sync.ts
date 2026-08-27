@@ -44,15 +44,18 @@ const PAGE_SIZE = 100; // AC paginates at 100/request max (plan Section 6.1)
 
 /**
  * How long the AC-pulling phase and the transform phase are each allowed to
- * run before stopping and leaving the rest for the next invocation. Chosen
- * so the two phases' worst-case combined wall time stays comfortably under
- * both platform ceilings observed against a real invocation (a ~150s
- * gateway idle timeout, and a separate hard WORKER_RESOURCE_LIMIT).
- * Overridable per-call for tuning without a code change once real contact
- * volume is known.
+ * run before stopping and leaving the rest for the next invocation.
+ *
+ * 60s/60s (120s nominal) still hit a hard WORKER_RESOURCE_LIMIT kill on
+ * about 1 in 20 real invocations against live AC data — the per-phase
+ * deadline check only happens between pages/rows, not preemptively inside
+ * a single slow network call, so actual wall time can occasionally run
+ * past the nominal budget. Tightened to 40s/40s (80s nominal) for more
+ * headroom under whatever Supabase's real ceiling turns out to be.
+ * Overridable per-call for further tuning without a code change.
  */
-export const DEFAULT_AC_BUDGET_MS = 60_000;
-export const DEFAULT_TRANSFORM_BUDGET_MS = 60_000;
+export const DEFAULT_AC_BUDGET_MS = 40_000;
+export const DEFAULT_TRANSFORM_BUDGET_MS = 40_000;
 
 export interface SyncResult {
   recordsIn: number;
