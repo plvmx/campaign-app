@@ -111,3 +111,30 @@ enforced by this repo's four CI jobs.
 Plan Section 10 flags `staging.ac_events` retention as an open decision
 (e.g. purge processed rows after 30 days). Not built in this session —
 revisit once real data volume is known.
+
+## Incident: List 3/5 contamination (2026-08-28)
+
+AC's `/contactLists` list filter (`acClient.ts`) did not actually filter —
+confirmed via reconciliation against a real ground-truth spreadsheet.
+Every List 1/2 query returned an unfiltered mix of every list, including
+Lists 3 (Business Life) and 5 (Tony Mclennan), which are supposed to be
+permanently excluded (plan Section 3.6) — List 5 specifically because it
+carries sensitive financial-intent data. 347 rows landed in
+`staging.ac_events` with the wrong list; 114 reached
+`registry.registration_events` before this was caught.
+
+Fixed in `lib/registryPipeline/sync.ts`/`acClient.ts` (see that file's
+"Fourth deliberate deviation" comment) — corrected AC's filter parameter,
+plus an application-level check that discards any returned row whose list
+doesn't match what was actually requested, regardless of what AC's own
+filter does. `scripts/cleanup_list3_5_contamination.sql` removes the
+already-landed contamination from `registry.*` (staging rows are marked
+excluded, not deleted, since `staging.ac_events` is meant to stay an
+append-only audit trail).
+
+**Before trusting this pipeline for ongoing sync**, redo the reconciliation
+against the ground-truth spreadsheets split by list (File2's "main AFJ
+page" sheet for List 1, "Responders at 1 Nov 2025" for List 2 — note the
+latter is stale, so expect genuine new List-2 registrations beyond it) —
+the first reconciliation pass was run before this bug was found and isn't
+trustworthy on its own.
