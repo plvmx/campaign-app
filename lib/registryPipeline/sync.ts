@@ -31,6 +31,17 @@
 // transform.ts). The incremental timestamp cursor (sync_log.completed_at)
 // only advances once BOTH phases fully drain in the same invocation,
 // never on a partial run — see recordPartialSync's doc comment in ports.ts.
+//
+// Third deliberate deviation, found via real invocation data: List 1
+// turned out to hold ~14,000 distinct contacts (a large historical
+// catch-all list — see plan Section 3.3), so it never once finished
+// within its slice of the AC-pull budget across ~200 real invocations.
+// The original loop broke out of BOTH lists the moment ANY list ran out
+// of time, so List 2 — a completely different, much smaller list — was
+// starved entirely: it was never revisited again after the very first
+// invocation. Each list now gets its own fair slice of acBudgetMs (split
+// evenly across SYNCED_LIST_IDS) within a single invocation, so a large
+// List 1 can no longer prevent List 2 from ever being touched.
 
 import { getErrorMessage } from '../errorUtils.ts';
 import { REQUEST_PACING_MS, sleep } from './rateLimiter.ts';
@@ -66,6 +77,7 @@ export interface SyncResult {
 }
 
 export interface RunSyncOptions {
+  /** Total AC-pull budget for this invocation, split evenly across every synced list — not a shared pool one list can exhaust for the others. */
   acBudgetMs?: number;
   transformBudgetMs?: number;
   /** Injectable clock, defaulting to Date.now — lets tests control elapsed time deterministically without real timers. */
@@ -83,16 +95,20 @@ export async function runSync(ac: AcPort, db: DbPort, options: RunSyncOptions = 
     const lastSync = await db.getLastCompletedSyncTimestamp();
     const eventType: 'backfill' | 'sync' = lastSync === null ? 'backfill' : 'sync';
     let recordsIn = 0;
-    let acTimedOut = false;
+    let anyListTimedOut = false;
 
-    const acDeadline = now() + acBudgetMs;
+    // Each list gets its own fair slice of the AC budget, measured from
+    // when THAT list's turn starts — not one shared deadline a large list
+    // could consume entirely, starving the others (see file header).
+    const perListBudgetMs = acBudgetMs / SYNCED_LIST_IDS.length;
 
     for (const listId of SYNCED_LIST_IDS) {
       let offset = (await db.getSyncProgress(listId)) ?? 0;
+      const listDeadline = now() + perListBudgetMs;
 
       for (;;) {
-        if (now() >= acDeadline) {
-          acTimedOut = true;
+        if (now() >= listDeadline) {
+          anyListTimedOut = true;
           break;
         }
 
@@ -124,8 +140,8 @@ export async function runSync(ac: AcPort, db: DbPort, options: RunSyncOptions = 
         await db.saveSyncProgress(listId, offset);
         await sleep(REQUEST_PACING_MS);
       }
-
-      if (acTimedOut) break;
+      // Deliberately no early exit here — every list gets its turn every
+      // invocation, regardless of whether an earlier one timed out.
     }
 
     // Transform whatever has landed so far regardless of whether the
@@ -139,7 +155,7 @@ export async function runSync(ac: AcPort, db: DbPort, options: RunSyncOptions = 
       now,
     });
 
-    const partial = acTimedOut || transformPartial;
+    const partial = anyListTimedOut || transformPartial;
 
     if (partial) {
       await db.recordPartialSync(logId, { recordsIn, recordsUpserted, errors });

@@ -136,13 +136,19 @@ describe('runSync', () => {
     expect(list1Call?.[0].offset).toBe(200);
   });
 
-  it('stops once the time budget is exhausted, saves progress, and reports partial rather than completing the pass', async () => {
+  it('stops a list once its own budget slice is exhausted, but still gives every other list its turn', async () => {
     const m1: AcContactListMembership = { contact: 'ac-1', list: '1', status: '1' };
     const m2: AcContactListMembership = { contact: 'ac-2', list: '1', status: '1' };
-    // Second page would exist, but the clock trips the budget before it's ever fetched.
+    // A second page for list 1 would exist, but the clock trips list 1's
+    // slice before it's ever fetched. List 2 (a separate, empty list here)
+    // must still get its own turn regardless — this is the fix for the
+    // real starvation bug found via live data (list 1 never finished
+    // across ~200 real invocations, and list 2 was never touched again).
     const ac = makeAc({ '1': [[m1, m2], [{ contact: 'ac-3', list: '1', status: '1' }]], '2': [[]] });
     const db = makeDb();
-    const now = makeClock([0, 0, 2000]); // AC deadline computed as 0 + acBudgetMs; first loop check passes, second trips it
+    // Calls in order: list1 deadline calc, list1 check#1 (passes), list1
+    // check#2 (trips list1's slice), list2 deadline calc, list2 check#1 (passes, list2 then hits an empty page and stops on its own).
+    const now = makeClock([0, 0, 2000, 2000, 2000]);
 
     const result = await runSync(ac, db, { acBudgetMs: 1000, now });
 
@@ -150,11 +156,12 @@ describe('runSync', () => {
     expect(db.saveSyncProgress).toHaveBeenCalledWith('1', 2);
     expect(db.recordPartialSync).toHaveBeenCalledWith(1, { recordsIn: 2, recordsUpserted: 0, errors: 0 });
     expect(db.completeSyncLog).not.toHaveBeenCalled();
-    // List 2 must never be touched once list 1's budget runs out mid-list.
+    // List 2 must still be queried even though list 1's slice ran out.
     const queriedLists = (ac.getContactListPage as ReturnType<typeof vi.fn>).mock.calls.map(
       ([params]) => params.listId
     );
-    expect(queriedLists).toEqual(['1']);
+    expect(queriedLists).toEqual(['1', '2']);
+    expect(db.clearSyncProgress).toHaveBeenCalledWith('2');
   });
 
   it('still runs the transform step on whatever landed before a partial timeout', async () => {
@@ -186,11 +193,12 @@ describe('runSync', () => {
       upsertRegistrant: vi.fn().mockResolvedValue({ id: 'registrant-x' }),
       insertRegistrationEvent: vi.fn().mockResolvedValue(undefined),
     });
-    // now() sequence: acDeadline calc, one AC-loop check per list (2 empty
-    // pages -> 2 checks), transformDeadline calc, then one check per
-    // pending event inside transform (3 events) — the last of which trips,
-    // leaving the 3rd event unprocessed.
-    const now = makeClock([0, 0, 0, 0, 0, 0, 5000]);
+    // now() sequence: per-list deadline calc + one loop check per list (2
+    // lists, both hitting an empty page immediately -> 4 calls), then
+    // transformDeadline calc, then one check per pending event inside
+    // transform (3 events) — the last of which trips, leaving the 3rd
+    // event unprocessed.
+    const now = makeClock([0, 0, 0, 0, 0, 0, 0, 5000]);
 
     const result = await runSync(ac, db, { acBudgetMs: 1000, transformBudgetMs: 1000, now });
 
