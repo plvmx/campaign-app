@@ -6,14 +6,19 @@
 // plan itself flags it as an open question (Section 6.1's last note): the
 // plan's `AC.getContacts()` pulls a single global contact stream and skips
 // `contact.list_id not in ['1','2']` client-side. This implementation
-// instead queries List 1 and List 2 *separately* via `AcPort.getContactListPage`
-// (each call already scoped to one list by AC's own `listid` filter), so a
-// List-3/5 contact's data is never fetched or seen in the first place —
-// not filtered out after the fact. This directly answers the plan's open
-// question about multi-list contacts: a contact on both List 1 and List 3
-// simply appears once from the List-1 query (wanted) and never from a
-// List-3 query (never issued), rather than needing to pick apart a merged
-// multi-list payload.
+// instead queries List 1 and List 2 *separately* via `AcPort.getContactListPage`,
+// intended to be scoped to one list by AC's own list filter. This directly
+// answers the plan's open question about multi-list contacts: a contact on
+// both List 1 and List 3 is meant to appear once from the List-1 query
+// (wanted) and never from a List-3 query (never issued).
+//
+// UPDATE — that intent held up until real invocation data proved AC's
+// server-side filter wasn't actually being honored (see the fourth
+// deviation below): a List-3/5 contact's data WAS fetched and landed in
+// staging, and some of it reached the registry, before this was caught.
+// "Never fetched in the first place" is therefore no longer a safe claim
+// to rely on by itself — the defense-in-depth filter below is now load-
+// bearing, not merely a nice-to-have.
 //
 // Second deliberate deviation, added after two real manual invocations
 // against live AC data each hit a different platform ceiling mid-run
@@ -42,6 +47,24 @@
 // invocation. Each list now gets its own fair slice of acBudgetMs (split
 // evenly across SYNCED_LIST_IDS) within a single invocation, so a large
 // List 1 can no longer prevent List 2 from ever being touched.
+//
+// Fourth deliberate deviation — a real data-governance incident, not just
+// a tuning issue: reconciling landed data against a ground-truth
+// spreadsheet surfaced that AC's `/contactLists` filter (`filters[list]`,
+// acClient.ts) was not filtering at all. Across ~200 real invocations,
+// 342 List-3 and 5 List-5 memberships landed in staging.ac_events despite
+// every query being for List 1 or List 2 — Lists 3/5 are supposed to be
+// permanently excluded (plan Section 3.6), List 5 specifically because it
+// contains sensitive financial-intent data that "should never be one
+// accidental query away from entering the registry" (plan Section 6.1).
+// 114 of those had already reached registry.registrants/registration_events
+// via transform before this was caught. acClient.ts's filter parameter was
+// corrected, AND — since that alone depends on trusting AC's API to behave
+// as documented, exactly the assumption that just failed — every returned
+// membership row is now checked against the listId actually requested
+// before it's allowed anywhere near staging (see the `rawPage.filter(...)`
+// below). See docs/registry-pipeline/OPERATIONS.md for the cleanup this
+// required for data already landed before the fix.
 
 import { getErrorMessage } from '../errorUtils.ts';
 import { REQUEST_PACING_MS, sleep } from './rateLimiter.ts';
@@ -112,11 +135,21 @@ export async function runSync(ac: AcPort, db: DbPort, options: RunSyncOptions = 
           break;
         }
 
-        const page = await ac.getContactListPage({ listId, updatedSince: lastSync, limit: PAGE_SIZE, offset });
-        if (page.length === 0) {
+        const rawPage = await ac.getContactListPage({ listId, updatedSince: lastSync, limit: PAGE_SIZE, offset });
+        if (rawPage.length === 0) {
           await db.clearSyncProgress(listId);
           break;
         }
+
+        // Defense-in-depth against a broken AC-side list filter — confirmed
+        // via real data to have happened (acClient.ts's header comment has
+        // the full story): AC returned List 3/5 memberships while we were
+        // querying List 1/2. Never trust a returned row's own `.list`
+        // blindly; discard anything that doesn't match what was actually
+        // requested, exactly as plan Section 6.1 calls for. Pagination
+        // still advances by the raw page length (AC's own result-set
+        // position), not the filtered count.
+        const page = rawPage.filter((membership) => membership.list === listId);
 
         for (const membership of page) {
           const detail = await ac.getContactDetail(membership.contact);
@@ -136,7 +169,7 @@ export async function runSync(ac: AcPort, db: DbPort, options: RunSyncOptions = 
           recordsIn++;
         }
 
-        offset += page.length;
+        offset += rawPage.length;
         await db.saveSyncProgress(listId, offset);
         await sleep(REQUEST_PACING_MS);
       }

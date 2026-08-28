@@ -100,6 +100,28 @@ describe('runSync', () => {
     expect(db.clearSyncProgress).toHaveBeenCalledWith('2');
   });
 
+  it('discards a returned membership whose own list does not match what was requested (defense-in-depth against a broken AC filter)', async () => {
+    // Confirmed via real invocation data: AC's list filter did not
+    // actually filter, and returned List 3/5 memberships while List 1 was
+    // being queried. A page mixing genuine List-1 rows with contamination
+    // must only land the genuine ones — regardless of what AC's own
+    // filter parameter claims to have already done.
+    const wanted: AcContactListMembership = { contact: 'ac-1', list: '1', status: '1' };
+    const contaminated1: AcContactListMembership = { contact: 'ac-2', list: '3', status: '1' };
+    const contaminated2: AcContactListMembership = { contact: 'ac-3', list: '5', status: '1' };
+    const ac = makeAc({ '1': [[wanted, contaminated1, contaminated2], []], '2': [[]] });
+    const db = makeDb();
+
+    const result = await runSync(ac, db);
+
+    expect(result.recordsIn).toBe(1);
+    expect(db.insertStagingEvent).toHaveBeenCalledTimes(1);
+    expect(db.insertStagingEvent).toHaveBeenCalledWith(expect.objectContaining({ acContactId: 'ac-1' }));
+    // Pagination still advances by the RAW page size (3), not the
+    // filtered count (1) — offset tracks AC's own result-set position.
+    expect(db.saveSyncProgress).toHaveBeenCalledWith('1', 3);
+  });
+
   it('completes the sync log with counts from the transform step when a pass fully drains', async () => {
     const ac = makeAc({ '1': [[]], '2': [[]] });
     const db = makeDb();
