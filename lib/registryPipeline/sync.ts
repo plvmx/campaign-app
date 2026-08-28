@@ -84,12 +84,18 @@ const PAGE_SIZE = 100; // AC paginates at 100/request max (plan Section 6.1)
  * about 1 in 20 real invocations against live AC data — the per-phase
  * deadline check only happens between pages/rows, not preemptively inside
  * a single slow network call, so actual wall time can occasionally run
- * past the nominal budget. Tightened to 40s/40s (80s nominal) for more
- * headroom under whatever Supabase's real ceiling turns out to be.
+ * past the nominal budget.
+ *
+ * Tightened again after the per-list fair-slicing fix: since every list
+ * now genuinely gets its turn every invocation (rather than a stuck list
+ * sometimes causing the other to be skipped entirely), a real invocation
+ * saw 5 consecutive resource-limit/idle-timeout failures at 40s/40s —
+ * more total AC-pull work is now reliably happening per invocation than
+ * before that fix. Down to 25s/25s (50s nominal) for more headroom.
  * Overridable per-call for further tuning without a code change.
  */
-export const DEFAULT_AC_BUDGET_MS = 40_000;
-export const DEFAULT_TRANSFORM_BUDGET_MS = 40_000;
+export const DEFAULT_AC_BUDGET_MS = 25_000;
+export const DEFAULT_TRANSFORM_BUDGET_MS = 25_000;
 
 export interface SyncResult {
   recordsIn: number;
