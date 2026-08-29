@@ -168,9 +168,13 @@ describe('runSync', () => {
     // across ~200 real invocations, and list 2 was never touched again).
     const ac = makeAc({ '1': [[m1, m2], [{ contact: 'ac-3', list: '1', status: '1' }]], '2': [[]] });
     const db = makeDb();
-    // Calls in order: list1 deadline calc, list1 check#1 (passes), list1
-    // check#2 (trips list1's slice), list2 deadline calc, list2 check#1 (passes, list2 then hits an empty page and stops on its own).
-    const now = makeClock([0, 0, 2000, 2000, 2000]);
+    // Calls in order: list1 deadline calc, list1 page-loop check (passes),
+    // per-contact check before m1 (passes), per-contact check before m2
+    // (passes) — page finishes fully — list1 page-loop check again (trips
+    // list1's slice before a second page is ever fetched), list2 deadline
+    // calc, list2 page-loop check (passes, list2 then hits an empty page
+    // and stops on its own).
+    const now = makeClock([0, 0, 0, 0, 2000, 2000, 2000]);
 
     const result = await runSync(ac, db, { acBudgetMs: 1000, now });
 
@@ -184,6 +188,32 @@ describe('runSync', () => {
     );
     expect(queriedLists).toEqual(['1', '2']);
     expect(db.clearSyncProgress).toHaveBeenCalledWith('2');
+  });
+
+  it('times out mid-page (not just between pages) and leaves the offset unadvanced for a clean resume', async () => {
+    // Real invocation data showed wall-clock time running far past the
+    // nominal budget — traced to this loop having no deadline check once a
+    // page of up to 100 contacts started processing. This proves the fix:
+    // a 3-contact page, clock trips after the first contact.
+    const m1: AcContactListMembership = { contact: 'ac-1', list: '1', status: '1' };
+    const m2: AcContactListMembership = { contact: 'ac-2', list: '1', status: '1' };
+    const m3: AcContactListMembership = { contact: 'ac-3', list: '1', status: '1' };
+    const ac = makeAc({ '1': [[m1, m2, m3]], '2': [[]] });
+    const db = makeDb();
+    // Calls: list1 deadline calc, list1 page-loop check (passes),
+    // per-contact check before m1 (passes), per-contact check before m2
+    // (trips mid-page — m2 and m3 never touched).
+    const now = makeClock([0, 0, 0, 2000]);
+
+    const result = await runSync(ac, db, { acBudgetMs: 1000, now });
+
+    expect(result.recordsIn).toBe(1);
+    expect(db.insertStagingEvent).toHaveBeenCalledTimes(1);
+    expect(db.insertStagingEvent).toHaveBeenCalledWith(expect.objectContaining({ acContactId: 'ac-1' }));
+    // Offset must never advance for a page that didn't finish — the next
+    // invocation needs to re-fetch this exact page, not skip past it.
+    expect(db.saveSyncProgress).not.toHaveBeenCalledWith('1', expect.anything());
+    expect(result.partial).toBe(true);
   });
 
   it('still runs the transform step on whatever landed before a partial timeout', async () => {

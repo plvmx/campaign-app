@@ -157,7 +157,25 @@ export async function runSync(ac: AcPort, db: DbPort, options: RunSyncOptions = 
         // position), not the filtered count.
         const page = rawPage.filter((membership) => membership.list === listId);
 
+        // Checked per-contact, not just once per page: real invocation data
+        // showed wall-clock time running far past the nominal budget (e.g.
+        // ~150s against a 50s budget) — this loop used to have NO deadline
+        // check at all once a page started, so a single slow page (up to
+        // PAGE_SIZE contacts, each its own network round-trip) could run
+        // arbitrarily long before the next check. Cheap and always correct
+        // if it trips mid-page: offset is simply left unadvanced, so the
+        // next invocation re-fetches this same page from AC and starts
+        // over — some redundant re-processing of already-handled contacts
+        // in that one page, the same accepted minor side effect already
+        // documented elsewhere in this pipeline, never a skipped contact.
+        let timedOutMidPage = false;
         for (const membership of page) {
+          if (now() >= listDeadline) {
+            timedOutMidPage = true;
+            anyListTimedOut = true;
+            break;
+          }
+
           const detail = await ac.getContactDetail(membership.contact);
           await sleep(REQUEST_PACING_MS);
 
@@ -174,6 +192,8 @@ export async function runSync(ac: AcPort, db: DbPort, options: RunSyncOptions = 
           });
           recordsIn++;
         }
+
+        if (timedOutMidPage) break;
 
         offset += rawPage.length;
         await db.saveSyncProgress(listId, offset);
