@@ -94,4 +94,14 @@ describe('mapAcFields', () => {
     expect(result.email).toBeNull();
     expect(result.phoneRaw).toBeNull();
   });
+
+  it('reads postcode from field [30] when populated', () => {
+    const result = mapAcFields(makePayload({ fieldValues: [{ field: '30', value: '3080' }] }));
+    expect(result.postcode).toBe('3080');
+  });
+
+  it('returns null postcode when field [30] is absent — expected for any registrant predating the field', () => {
+    const result = mapAcFields(makePayload({ fieldValues: [] }));
+    expect(result.postcode).toBeNull();
+  });
 });

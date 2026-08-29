@@ -114,6 +114,7 @@ export function createDb(client: SupabaseClient = createServiceClient()): DbPort
             phone: input.phone,
             phone_raw: input.phoneRaw,
             state: input.state,
+            postcode: input.postcode,
             last_updated_at: new Date().toISOString(),
           },
           { onConflict: 'ac_contact_id' }

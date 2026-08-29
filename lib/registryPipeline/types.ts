@@ -57,4 +57,6 @@ export interface MappedRegistrantFields {
   email: string | null;
   phoneRaw: string | null;
   state: string | null;
+  /** [30] Post Code — only present on registrations from ~2026-08-26 onward; null for historical registrants is expected, not missing data. */
+  postcode: string | null;
 }

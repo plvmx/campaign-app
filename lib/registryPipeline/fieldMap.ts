@@ -32,6 +32,19 @@ export const ALLOWED_CUSTOM_FIELD_IDS = {
   /** [25] AU State (dropdown) — fallback only; never populated on any tested submission. */
   AU_STATE_FALLBACK: '25',
   /**
+   * [30] Post Code. Reverses the original plan Section 3.4/3.5 exclusion
+   * ("not currently capturable — data loss identified") — that was a
+   * landing-page bug (postcode never reached AC at all, for any
+   * submission), not a pipeline decision. Confirmed fixed upstream and
+   * live-tested by Peter (two real test registrations, real postcode
+   * values landed on field [30], created 2026-08-26 per ac_discovery.js —
+   * i.e. the field itself is brand new). Historical registrants will NOT
+   * be retroactively backfilled with postcode by AC — this only appears
+   * on registrations from ~2026-08-26 onward, so `postcode` being null is
+   * expected and normal for anyone registered before then.
+   */
+  POSTCODE: '30',
+  /**
    * Confirmed live/populated and included per plan 3.4, but registry.registrants
    * (plan Section 5) has no column for these yet — they're preserved untouched
    * in staging.ac_events.raw_payload and simply not promoted to the canonical
@@ -71,5 +84,6 @@ export function mapAcFields(payload: RawAcContactPayload): MappedRegistrantField
     email: contact.email?.trim() || null,
     phoneRaw: contact.phone?.trim() || null,
     state,
+    postcode: findFieldValue(fieldValues, ALLOWED_CUSTOM_FIELD_IDS.POSTCODE),
   };
 }

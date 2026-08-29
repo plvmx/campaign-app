@@ -3,8 +3,11 @@
 //
 // Reads pending rows from staging.ac_events, applies the field-inclusion
 // whitelist and phone normalization, resolves source attribution by tag,
-// and upserts into registry.registrants / registry.registration_events —
-// via the injected DbPort, so this has no direct database dependency.
+// excludes anyone whose only signal is an excluded source tag
+// (tagExclusion.ts — a contact with no genuine registration-funnel
+// attribution, e.g. a historical bulk import), and upserts everyone else
+// into registry.registrants / registry.registration_events — via the
+// injected DbPort, so this has no direct database dependency.
 //
 // Time-budgeted like sync.ts's AC-pull loop, for the same reason: a real
 // invocation against a ~180-row backlog hit Supabase's hard per-invocation
@@ -23,6 +26,7 @@ import { isActiveListStatus } from './listFilter.ts';
 import { normalizePhone } from './phone.ts';
 import type { DbPort } from './ports.ts';
 import { matchSourceTag } from './sourceAttribution.ts';
+import { isExcludedSourceOnly } from './tagExclusion.ts';
 
 /**
  * Caps the initial query too, so a large backlog is never pulled into
@@ -78,6 +82,21 @@ export async function transformPendingStagingEvents(db: DbPort, options: Transfo
         continue;
       }
 
+      // Source attribution: match tags against known_source_tags, NOT
+      // source_list_id — List 1 is a catch-all and cannot distinguish
+      // sources on its own (plan Section 3.3/6.2).
+      const matchedTag = matchSourceTag(payload.tags, knownTags);
+
+      // Tag-based exclusion (tagExclusion.ts): a contact whose only signal
+      // is an excluded source tag (e.g. a MailChimp bulk import) never
+      // becomes a registrant at all — checked before upsertRegistrant, not
+      // after, so no registrant row is ever created for them in the first
+      // place.
+      if (isExcludedSourceOnly(payload.tags, matchedTag !== null)) {
+        await db.markStagingProcessed(event.id, 'skipped: excluded source tag only (no recognized registration funnel)');
+        continue;
+      }
+
       const fields = mapAcFields(payload);
       const phoneNormalized = normalizePhone(fields.phoneRaw);
 
@@ -88,12 +107,8 @@ export async function transformPendingStagingEvents(db: DbPort, options: Transfo
         phone: phoneNormalized,
         phoneRaw: fields.phoneRaw,
         state: fields.state,
+        postcode: fields.postcode,
       });
-
-      // Source attribution: match tags against known_source_tags, NOT
-      // source_list_id — List 1 is a catch-all and cannot distinguish
-      // sources on its own (plan Section 3.3/6.2).
-      const matchedTag = matchSourceTag(payload.tags, knownTags);
 
       await db.insertRegistrationEvent({
         registrantId: registrant.id,

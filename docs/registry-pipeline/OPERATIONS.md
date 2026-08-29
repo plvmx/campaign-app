@@ -138,3 +138,57 @@ page" sheet for List 1, "Responders at 1 Nov 2025" for List 2 — note the
 latter is stale, so expect genuine new List-2 registrations beyond it) —
 the first reconciliation pass was run before this bug was found and isn't
 trustworthy on its own.
+
+## Decision: Postcode field mapping added (2026-08-29)
+
+Reverses the original plan Section 3.4/3.5 exclusion. That exclusion was
+because postcode never reached AC at all (a landing-page bug, not a
+pipeline decision) — confirmed fixed upstream and live-tested by Peter
+(two real test registrations landed real postcode values). AC custom field
+`[30] Post Code` was created 2026-08-26 — brand new. Implemented in
+`fieldMap.ts`/`types.ts`/`ports.ts`/`db.ts`, plus
+`scripts/add_postcode_to_registrants.sql` for the new column.
+
+**Historical registrants will NOT be retroactively backfilled with
+postcode by AC** — `registrants.postcode IS NULL` is expected and normal
+for anyone registered before ~2026-08-26, not a data-quality problem.
+
+**Follow-up, not yet built:** Lorraine's manually-compiled spreadsheet has
+postcode for many more historical registrants than AC ever will (she
+collected it some other way over the years) and she's providing a more
+complete "final" version in the next few days. Once that lands, this needs
+a one-off import (matched by email, only filling `postcode` where it's
+currently null — never overwriting a value AC already supplied) — deliberately
+not built against the current, known-incomplete version of her spreadsheet.
+
+## Decision: MailChimp-import population excluded (2026-08-29)
+
+Investigating why List-1 registrants didn't match Lorraine's ground-truth
+spreadsheet surfaced AC tag `[11] SOURCE: Mail Chimp Upload` — a historical
+bulk import, not an organic registration through any tracked funnel. It
+accounted for 683 of ~791 unexplained "extra" registrants. Lorraine, who
+manually curated the registrant list for years (see `Consolidate.docx`),
+never included this population — confirmed by Peter: "if the MailChimp-
+import group are not in Lorraine's spreadsheet then we don't want them -
+she was very careful to get all necessary contacts."
+
+Implemented in `lib/registryPipeline/tagExclusion.ts` — excludes a contact
+from ever becoming a registrant when the excluded tag is their *only*
+signal (no genuine registration-funnel tag also matched). A contact who
+was originally MailChimp-imported but later genuinely registered through a
+tracked funnel keeps that legitimate attribution.
+
+**Not yet built:** cleanup of the ~683 already-landed MailChimp-only
+registrants from before this exclusion existed — same pattern as the List
+3/5 cleanup (a script for Peter to review and run himself), not yet
+written since the reconciliation work that surfaces the exact current
+count is still in progress.
+
+Also surfaced from the same tag list, not yet acted on — worth AFJ
+leadership's judgment, not a pipeline decision: tag `[40]/[41]` "Mobilise -
+Make a Donation" (94 contacts, financial-intent fields populated — same
+sensitivity category that got List 5 excluded), and additional legitimate-
+looking funnels `known_source_tags` doesn't cover yet (`[50]` "Pray for the
+lost Oct 2019", `[52]` "New Zealand For Jesus Commitment" — NZ, not AU;
+worth deciding if it belongs in an AU-states registry at all — `[6]`/`[8]`
+TWOL video-request funnels).

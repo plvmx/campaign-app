@@ -53,6 +53,7 @@ describe('transformPendingStagingEvents', () => {
       phone: '+61438438438',
       phoneRaw: '0438438438',
       state: 'NSW',
+      postcode: null,
     });
     expect(db.insertRegistrationEvent).toHaveBeenCalledWith({
       registrantId: 'registrant-1',
@@ -73,6 +74,23 @@ describe('transformPendingStagingEvents', () => {
     expect(db.markStagingProcessed).toHaveBeenCalledWith(2, 'skipped: list status not active');
   });
 
+  it('skips a contact whose only signal is the excluded MailChimp-import tag, without creating a registrant', async () => {
+    const db = makeDb([makeEvent(9, { tags: [{ id: '11' }] })]);
+    const result = await transformPendingStagingEvents(db);
+
+    expect(result).toEqual({ recordsUpserted: 0, errors: 0, partial: false });
+    expect(db.upsertRegistrant).not.toHaveBeenCalled();
+    expect(db.markStagingProcessed).toHaveBeenCalledWith(9, 'skipped: excluded source tag only (no recognized registration funnel)');
+  });
+
+  it('still creates a registrant when the excluded tag is present alongside a genuine recognized tag', async () => {
+    const db = makeDb([makeEvent(10, { tags: [{ id: '11' }, { id: '48' }] })]);
+    const result = await transformPendingStagingEvents(db);
+
+    expect(result).toEqual({ recordsUpserted: 1, errors: 0, partial: false });
+    expect(db.upsertRegistrant).toHaveBeenCalled();
+  });
+
   it('records a null source_tag when no known tag matches', async () => {
     const db = makeDb([makeEvent(3, { tags: [{ id: '999' }] })]);
     await transformPendingStagingEvents(db);
@@ -91,6 +109,15 @@ describe('transformPendingStagingEvents', () => {
     expect(result).toEqual({ recordsUpserted: 1, errors: 1, partial: false });
     expect(db.markStagingError).toHaveBeenCalledWith(4, 'db unavailable');
     expect(db.markStagingProcessed).toHaveBeenCalledWith(5, null);
+  });
+
+  it('passes through a populated postcode', async () => {
+    const db = makeDb([
+      makeEvent(6, { fieldValues: [{ field: '6', value: 'NSW' }, { field: '30', value: '3080' }] }),
+    ]);
+    await transformPendingStagingEvents(db);
+
+    expect(db.upsertRegistrant).toHaveBeenCalledWith(expect.objectContaining({ postcode: '3080' }));
   });
 
   it('passes the batch limit through to getPendingStagingEvents', async () => {

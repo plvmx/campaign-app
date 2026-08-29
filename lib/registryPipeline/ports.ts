@@ -68,6 +68,7 @@ export interface DbPort {
     phone: string | null;
     phoneRaw: string | null;
     state: string | null;
+    postcode: string | null;
   }): Promise<{ id: string }>;
   insertRegistrationEvent(input: {
     registrantId: string;
