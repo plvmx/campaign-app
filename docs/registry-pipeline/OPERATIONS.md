@@ -238,3 +238,37 @@ reasonable trade for reliability while still on the Free plan.
 **Until the Monday upgrade**, expect batches to need more, smaller rounds
 rather than fewer, larger ones — this is now the stable, working mode on
 the current plan tier, not a symptom of something still broken.
+
+## Investigated and closed: Campaign Report data is not in AC (2026-08-30)
+
+Jordan's raw AC export (`AFJ Tracking Export 20260827.xlsx`) includes a
+"campaign report" sheet — aggregate per-campaign tallies (partial/full
+presentations, sinner's prayer, information requests), submitted via
+`www.australiaforjesus/campaignreport`. Confirmed **not** an AC-native
+source: `ac_discovery.js`'s own Forms enumeration finds exactly 2 forms
+in the account (the real `/register/` page and a leftover "Test" form) —
+`campaignreport` isn't one of them.
+
+Ruled out definitively with `ac_recent_activity.js` (new tool, see
+`~/Development/ac-discovery/` — not part of this repo): swept every AC
+contact created/updated on 2026-08-29, a day with ~18 campaigns run and a
+standing requirement that leaders submit a report after each one. All 8
+contacts touched that day showed only the two already-known patterns
+(List 1 new registrations, List 2 individual wayoflife-responder
+outcomes) — nothing in fieldValues, tags, Notes, or Deep Data
+(`contactData`, which turned out to just be AC's own automatic geo-IP/
+marketing-analytics tracking) resembling campaign-tally data. Zero trace,
+despite a full day's worth of expected submissions.
+
+Peter then confirmed directly (re-reading earlier correspondence with
+Jordan, no need to re-contact him): Campaign Report submissions have
+actually been going into a **Google Sheet**, not AC — Jordan's spreadsheet
+tab is a literal dump of that. This pipeline was never the right place for
+it; it's a completely separate data source.
+
+**Follow-up (separate project, own thread):** giving this data a proper
+structured home in this app, alongside/using its existing `results`/
+record-results feature — initial load from Jordan's spreadsheet, then an
+incremental catch-up dump once he provides one, then a replacement screen
+before switching AFJ off the Google Sheets form entirely. Not part of the
+registry pipeline's scope — no registry.* schema involvement.
