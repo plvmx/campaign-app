@@ -192,3 +192,49 @@ looking funnels `known_source_tags` doesn't cover yet (`[50]` "Pray for the
 lost Oct 2019", `[52]` "New Zealand For Jesus Commitment" — NZ, not AU;
 worth deciding if it belongs in an AU-states registry at all — `[6]`/`[8]`
 TWOL video-request funnels).
+
+## Reference: authoritative AC list sizes (2026-08-29, via ac_discovery.js)
+
+Straight from AC, not inferred from our own (at-the-time-buggy) pull:
+
+- List `[1]` Australia For Jesus Master: **10,454** contacts
+- List `[2]` Way of Life Master: **4,204** contacts
+- List `[3]` Business Life: 173 contacts (permanently excluded, plan 3.6)
+- List `[5]` Tony Mclennan: 5 contacts (permanently excluded, plan 3.6)
+
+Useful ceiling to sanity-check backfill completeness against — our own
+distinct-contact counts should converge on these (roughly; some churn is
+expected as the backfill catches up), not run indefinitely past them the
+way they appeared to before the list-filter fix.
+
+## Incident: wall-clock ceiling, not compute — and a real budget-check gap (2026-08-30)
+
+After the list-filter fix, `ac-sync` kept hitting `WORKER_RESOURCE_LIMIT` /
+`IDLE_TIMEOUT` at an increasing rate even with tightened time budgets
+(60s/60s → 40s/40s → 25s/25s), eventually failing 100% of attempts right
+after a clean deploy. Checked Supabase's own dashboard logs directly
+(Functions → ac-sync → Logs → click an invocation for `cpu_time_used`):
+a failed invocation ran boot-to-shutdown for **~150 seconds of wall clock
+time** but used only **441ms of actual CPU time**. That's decisive: these
+kills are a wall-clock execution ceiling (short on the Free plan — Peter
+is upgrading Monday 2026-09-01, confirmed org-scoped via Supabase's own
+billing docs, so it won't affect his other organization), not memory or
+CPU exhaustion — the function is mostly idle, waiting on network I/O.
+
+That also exposed a genuine gap independent of plan tier: the AC-pull
+loop's deadline was only checked once per *page* (up to `PAGE_SIZE=100`
+contacts, each its own network round-trip) — never between individual
+contacts within a page. A single slow page could run arbitrarily long
+past the nominal budget before the next check ever fired, which is likely
+why real wall-clock time (~150s) was so much larger than the nominal
+budget (~50s). Fixed in `lib/registryPipeline/sync.ts` — the deadline is
+now checked before every contact, not just before every page. Confirmed
+via a live invocation afterward: completed cleanly and fast, and a
+subsequent batch ran 42 consecutive rounds with zero failures (down from
+clusters of failures within the first 10-30 rounds beforehand) — though
+at smaller throughput per round (~25-30 records vs ~100 before), a
+reasonable trade for reliability while still on the Free plan.
+
+**Until the Monday upgrade**, expect batches to need more, smaller rounds
+rather than fewer, larger ones — this is now the stable, working mode on
+the current plan tier, not a symptom of something still broken.
