@@ -454,3 +454,22 @@ CREATE POLICY "training_interest: owner or shared leader or admin can update"
   );
 
 -- No authenticated write policy — managed by service role only.
+
+
+-- =============================================================================
+-- campaign_reports  (Campaign Report project — see docs/campaign-report/BRIEF.md)
+-- Admin-only for now, same pattern as campaign_changes_log. The initial load
+-- and incremental catch-up import write via the service role (bypasses RLS);
+-- no authenticated insert/update policy exists yet because there's no real
+-- leader identity behind a submission until the phase 3 replacement screen
+-- ships, at which point this needs an owner-or-admin write policy like
+-- campaign_interest's.
+-- =============================================================================
+ALTER TABLE campaign_reports ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "campaign_reports: admin can read" ON campaign_reports;
+CREATE POLICY "campaign_reports: admin can read"
+  ON campaign_reports FOR SELECT TO authenticated
+  USING (public.is_admin());
+
+-- No authenticated write policy — managed by service role only, for now.
