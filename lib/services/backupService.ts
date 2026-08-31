@@ -17,6 +17,7 @@ export type BackupTableKey =
   | 'campaign_categories'
   | 'campaigns'
   | 'results'
+  | 'campaign_reports'
   | 'campaign_interest'
   | 'training_interest'
   | 'campaign_rules'
@@ -47,6 +48,7 @@ export const BACKUP_TABLE_CONFIG: BackupTableConfig[] = [
   { key: 'campaign_categories',    table: 'campaign_categories',    label: 'Campaign Categories',    keyField: 'id',          orderBy: [['code', true]] },
   { key: 'campaigns',              table: 'campaigns',              label: 'Campaigns',              keyField: 'id',          orderBy: [['date', true]] },
   { key: 'results',                table: 'results',                label: 'Results',                keyField: 'id',          orderBy: [['created_at', true]] },
+  { key: 'campaign_reports',       table: 'campaign_reports',       label: 'Campaign Reports',       keyField: 'id',          orderBy: [['submitted_at', true]] },
   { key: 'campaign_interest',      table: 'campaign_interest',      label: 'Campaign Interest',      keyField: 'id',          orderBy: [['created_at', true]] },
   { key: 'training_interest',      table: 'training_interest',      label: 'Training Interest',      keyField: 'id',          orderBy: [['created_at', true]] },
   { key: 'campaign_rules',         table: 'campaign_rules',         label: 'Campaign Rules',         keyField: 'id',          orderBy: [['state', true], ['name', true]] },
@@ -64,7 +66,7 @@ export type BackupData = {
 } & Partial<Record<BackupTableKey, BackupTableData>>;
 
 /** Current export format version. Bump when the set of backed-up tables changes. */
-export const BACKUP_FORMAT_VERSION = '4';
+export const BACKUP_FORMAT_VERSION = '5';
 
 export function isValidBackupFile(parsed: unknown): parsed is BackupData {
   return (
