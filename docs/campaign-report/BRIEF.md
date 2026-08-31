@@ -1,5 +1,18 @@
 # Campaign Report project — brief
 
+## ⚠️ ON HOLD (2026-09-01)
+
+New information has come to light suggesting this project may not be
+required anymore. Phase 1 (initial load + the date-plausibility bug fix,
+below) is complete and correct as it stands — the `campaign_reports` table
+holds a fully-loaded, verified-accurate snapshot of the historical data.
+**Phases 2 (incremental catch-up dump) and 3 (in-app replacement screen)
+are paused and were never started.** Nothing further should be built here
+without checking in first. If the project is confirmed dead, decommission
+is a small job (drop the table, remove it from `CLAUDE.md` and
+`BACKUP_TABLE_CONFIG`) — not done yet, since "may not be required" isn't
+"confirmed cancelled."
+
 ## Goal
 
 Give AFJ's "Campaign Report" data a proper structured home in this app, and
@@ -114,9 +127,9 @@ held a narrative note rather than a count.
   `needs_review`, independently re-verified against the live table
   (submitted_at range 2021-09-02 → 2026-08-26, matching the source sheet).
   Phase 1 is complete.
-- **Not started**: phase 2 (incremental catch-up dump — script already
-  supports this, just needs a fresh export from Jordan when the time comes)
-  and phase 3 (the in-app replacement screen).
+- **Not started, on hold**: phase 2 (incremental catch-up dump) and phase 3
+  (the in-app replacement screen) — see the ON HOLD note at the top of this
+  file. Don't start either without checking in first.
 
 ## Bug found in production (2026-09-01): implausible dates not flagged
 
@@ -172,3 +185,9 @@ key), and updates only the 51 rows that differ — dry-run by default,
 `--apply` to write, same conventions as the import script. Dry run against
 production confirms exactly 51 updates, all in the expected direction
 (date → null, false → true), 0 unmatched rows.
+
+**Applied (2026-09-01)**: Peter ran `reconcile_campaign_report_dates.ts --apply`.
+Independently re-verified live: `needs_review` count is 467 (matches),
+zero rows have a `campaign_date` past 2026-12-31, and the specific `"14.6.35"`
+row correctly reads `campaign_date: null, needs_review: true`. PR
+[#169](https://github.com/plvmx/campaign-app/pull/169) merged to `main`.
