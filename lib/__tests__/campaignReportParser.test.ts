@@ -144,6 +144,59 @@ describe('parseCampaignDate', () => {
       needsReview: false,
     });
   });
+
+  // Real production bug (found 2026-09-01, after the initial 6,203-row load):
+  // a plausible-looking parse with an explicit — but wrong — year sailed
+  // through untouched because the only submission-date sanity check applied
+  // to the *year-missing* code path, not to dates that already carried an
+  // explicit (if mistyped) year. Reproduced here from the exact rows Peter
+  // flagged in production. See BRIEF.md for the full investigation.
+  describe('implausible dates relative to the submission timestamp (regression)', () => {
+    it('rejects a native Excel date a leader fat-fingered a year into the future', () => {
+      // Real row: submitted 2026-08-07, campaign_date came out 2027-08-08.
+      const result = parseCampaignDate(new Date(2027, 7, 8), submittedAt('2026-08-07T21:12:59Z'));
+      expect(result.date).toBeNull();
+      expect(result.needsReview).toBe(true);
+      expect(result.raw).toBe('2027-08-08'); // no original text for a native Date cell — falls back to the parsed ISO value
+    });
+
+    it('rejects a dot-format date with a typo\'d year a decade off', () => {
+      // Real row: "14.6.35" submitted 2025-06-13 — the leader meant "14.6.25".
+      const result = parseCampaignDate('14.6.35', submittedAt('2025-06-13T22:21:39Z'));
+      expect(result.date).toBeNull();
+      expect(result.needsReview).toBe(true);
+      expect(result.raw).toBe('14.6.35');
+    });
+
+    it('rejects a "D Month YYYY" date exactly a year ahead of submission', () => {
+      // Real row: "27th Feb 2028" submitted 2025-02-26.
+      const result = parseCampaignDate('27th Feb 2028', submittedAt('2025-02-26T20:13:02Z'));
+      expect(result.date).toBeNull();
+      expect(result.needsReview).toBe(true);
+      expect(result.raw).toBe('27th Feb 2028');
+    });
+
+    it('rejects a native Excel date several years in the past', () => {
+      // Real row: submitted 2026-06-27, campaign_date came out 2020-06-26.
+      const result = parseCampaignDate(new Date(2020, 5, 26), submittedAt('2026-06-27T01:43:20Z'));
+      expect(result.date).toBeNull();
+      expect(result.needsReview).toBe(true);
+    });
+
+    it('still accepts a genuinely late backlog report (~1 year late, correct date)', () => {
+      // Real pattern seen in production: several leaders (e.g. "Sunshine")
+      // batch-submitted a full year of backlogged reports at once — the
+      // campaign_date is correct, just very late. Must not be flagged.
+      const result = parseCampaignDate('10th May 2024', submittedAt('2025-05-09T20:13:15Z'));
+      expect(result).toEqual({ date: '2024-05-10', raw: '10th May 2024', needsReview: false });
+    });
+
+    it('rejects a past date multiple years further back than any genuine backlog pattern', () => {
+      const result = parseCampaignDate(new Date(2020, 5, 23), submittedAt('2026-05-23T04:54:16Z'));
+      expect(result.date).toBeNull();
+      expect(result.needsReview).toBe(true);
+    });
+  });
 });
 
 describe('normalizeCampaignReportRow', () => {

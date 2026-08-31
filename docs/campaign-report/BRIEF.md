@@ -117,3 +117,58 @@ held a narrative note rather than a count.
 - **Not started**: phase 2 (incremental catch-up dump — script already
   supports this, just needs a fresh export from Jordan when the time comes)
   and phase 3 (the in-app replacement screen).
+
+## Bug found in production (2026-09-01): implausible dates not flagged
+
+Peter spotted `campaign_date` values from 2035 and 2027 in the loaded data.
+Root cause: `parseCampaignDate()`'s only submission-date sanity check
+(`resolveYearlessDate`'s "more than 45 days future → try last year" logic)
+applied solely to dates with no year given. A date that already carried an
+**explicit but mistyped** year — a leader's typo, or a fat-fingered year on
+a native Excel date-picker cell — sailed straight through untouched. Real
+examples: `"14.6.35"` submitted 2025-06-13 (meant `14.6.25`), a native date
+cell of 2027-08-08 submitted 2026-08-07, `"27th Feb 2028"` submitted
+2025-02-26, a native date cell of 2020-06-26 submitted 2026-06-27 (~6 years
+off).
+
+Querying the full loaded table found the true shape of the problem: 47 rows
+more than 45 days *after* their own submission (up to 4,018 days — 11
+years), and 51 rows more than 270 days *before* it (down to -2,192 days).
+Critically, the near-year-exactly-late rows (-365 to -368 days, ~32 of the
+51) turned out to be **genuine, correct** dates — several leaders had
+batch-submitted a full year of backlogged reports at once (e.g. multiple
+"Sunshine" rows, each with a distinct, correct 2024 date, all submitted
+together in mid-2025). Only the rows further back than that — multi-year
+jumps — were actual errors. This is why the fix uses an **asymmetric**
+window rather than a single tolerance: `MAX_FUTURE_DAYS = 45` (a report can
+never legitimately describe a campaign that hasn't happened) and
+`MAX_PAST_DAYS = 400` (comfortably past the genuine ~365-368-day backlog
+cluster, safely short of the multi-year error outliers).
+
+**Fix**: `lib/campaignReportParser.ts`'s `parseCampaignDate()` now runs
+*every* successfully parsed date — regardless of source (native Date,
+8-digit number, or any text pattern, with or without an explicit year) —
+through `isPlausibleRelativeToSubmission()` before accepting it. A date
+outside the window is rejected the same way any other unparseable date is:
+`campaign_date = null`, original value preserved in `campaign_date_raw`,
+`needs_review = true` — never auto-corrected, since guessing which year a
+leader *meant* isn't something this parser should do. 6 regression tests in
+`lib/__tests__/campaignReportParser.test.ts` reproduce the exact production
+rows (proven red against the pre-fix parser, green after).
+
+Because the fix only *adds* a rejection gate — it never changes how an
+accepted date's value is computed — its only possible effect on any given
+row is a flip from `(some date, needs_review: false)` to
+`(null, needs_review: true)`. Re-running the full sheet through the fixed
+parser confirms exactly that: `needs_review` count goes from 416 to 467 (+51,
+matching the count above), with every other field byte-for-byte unchanged.
+
+**Reconciliation**: since the initial load already ran with the buggy
+parser, fixing the code doesn't fix the 6,203 already-loaded rows.
+`scripts/reconcile_campaign_report_dates.ts` re-normalizes every sheet row
+with the fixed parser, compares `campaign_date`/`campaign_date_raw`/
+`needs_review` against what's live (matched on the `submitted_at` unique
+key), and updates only the 51 rows that differ — dry-run by default,
+`--apply` to write, same conventions as the import script. Dry run against
+production confirms exactly 51 updates, all in the expected direction
+(date → null, false → true), 0 unmatched rows.

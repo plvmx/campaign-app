@@ -104,11 +104,29 @@ function expandYear(y: number): number {
   return y < 100 ? 2000 + y : y;
 }
 
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+// A "Campaign Report" is filed after the campaign it describes, so a future
+// campaign_date is never legitimate — 45 days of slack covers any reporting
+// delay. Past dates, though, genuinely run much later in this data: several
+// leaders batch-submitted a full year of backlogged reports at once (real
+// examples cluster at ~365-368 days late, correct date, just very late).
+// Real *errors* on the past side are multiple years off (see BRIEF.md's
+// 2026-09-01 investigation) — 400 days comfortably separates the two.
+const MAX_FUTURE_DAYS = 45;
+const MAX_PAST_DAYS = 400;
+
+/** True if `iso` sits within a plausible reporting window of the submission timestamp. */
+function isPlausibleRelativeToSubmission(iso: string, submittedAt: Date): boolean {
+  const diffDays = (new Date(`${iso}T00:00:00Z`).getTime() - submittedAt.getTime()) / MS_PER_DAY;
+  return diffDays <= MAX_FUTURE_DAYS && diffDays >= -MAX_PAST_DAYS;
+}
+
 /** Resolves a missing year against the submission date, correcting for a Dec-campaign/Jan-report crossing. */
 function resolveYearlessDate(month: number, day: number, submittedAt: Date): string | null {
   const submittedYear = submittedAt.getFullYear();
   let iso = toIsoDate(submittedYear, month, day);
-  if (iso && new Date(iso) .getTime() - submittedAt.getTime() > 45 * 24 * 60 * 60 * 1000) {
+  if (iso && new Date(iso).getTime() - submittedAt.getTime() > MAX_FUTURE_DAYS * MS_PER_DAY) {
     // Resulting date is more than 45 days after the submission — almost
     // certainly a report filed after the new year for a prior-year campaign.
     iso = toIsoDate(submittedYear - 1, month, day);
@@ -134,15 +152,24 @@ function preprocessDateText(text: string): string {
 
 /**
  * Parses the "Dates" (campaign date) cell. `submittedAt` (the sheet's own
- * "Date" submission-timestamp column, always present and clean) is used to
- * resolve dates with no year.
+ * "Date" submission-timestamp column, always present and clean) is used
+ * both to resolve dates with no year and — for every successful parse,
+ * regardless of source — as a plausibility check: a Campaign Report always
+ * describes a campaign that already happened, so a candidate date wildly
+ * far from its own submission timestamp (in either direction) is far more
+ * likely a mistyped year than a real date, and is flagged instead of
+ * trusted. See the MAX_FUTURE_DAYS/MAX_PAST_DAYS comment above and
+ * BRIEF.md's 2026-09-01 investigation for the real examples that drove this.
  */
 export function parseCampaignDate(cell: unknown, submittedAt: Date): ParsedCampaignDate {
+  const accept = (iso: string, raw: string | null): ParsedCampaignDate =>
+    isPlausibleRelativeToSubmission(iso, submittedAt)
+      ? { date: iso, raw, needsReview: false }
+      : { date: null, raw: raw ?? iso, needsReview: true };
+
   if (cell instanceof Date && !isNaN(cell.getTime())) {
-    const year = cell.getFullYear();
-    if (year >= MIN_YEAR && year <= MAX_YEAR) {
-      return { date: toIsoDate(year, cell.getMonth() + 1, cell.getDate()), raw: null, needsReview: false };
-    }
+    const iso = toIsoDate(cell.getFullYear(), cell.getMonth() + 1, cell.getDate());
+    if (iso) return accept(iso, null);
     return { date: null, raw: cell.toString(), needsReview: true };
   }
 
@@ -159,7 +186,7 @@ export function parseCampaignDate(cell: unknown, submittedAt: Date): ParsedCampa
       const month = parseInt(digits.slice(4, 6), 10);
       const day = parseInt(digits.slice(6, 8), 10);
       const iso = toIsoDate(year, month, day);
-      if (iso) return { date: iso, raw: digits, needsReview: false };
+      if (iso) return accept(iso, digits);
     }
     return { date: null, raw: String(cell), needsReview: true };
   }
@@ -178,7 +205,7 @@ export function parseCampaignDate(cell: unknown, submittedAt: Date): ParsedCampa
     const iso = a.length === 4
       ? toIsoDate(parseInt(a, 10), parseInt(month, 10), parseInt(c, 10)) // Y.M.D
       : toIsoDate(expandYear(parseInt(c, 10)), parseInt(month, 10), parseInt(a, 10)); // D.M.Y
-    if (iso) return { date: iso, raw: original, needsReview: false };
+    if (iso) return accept(iso, original);
   }
 
   // D/M/Y or Y/M/D (slash-separated numeric)
@@ -188,7 +215,7 @@ export function parseCampaignDate(cell: unknown, submittedAt: Date): ParsedCampa
     const iso = a.length === 4
       ? toIsoDate(parseInt(a, 10), parseInt(month, 10), parseInt(c, 10))
       : toIsoDate(expandYear(parseInt(c, 10)), parseInt(month, 10), parseInt(a, 10));
-    if (iso) return { date: iso, raw: original, needsReview: false };
+    if (iso) return accept(iso, original);
   }
 
   // "D Month[, Y]"
@@ -198,7 +225,7 @@ export function parseCampaignDate(cell: unknown, submittedAt: Date): ParsedCampa
     if (month) {
       const day = parseInt(m[1], 10);
       const iso = m[3] ? toIsoDate(expandYear(parseInt(m[3], 10)), month, day) : resolveYearlessDate(month, day, submittedAt);
-      if (iso) return { date: iso, raw: original, needsReview: false };
+      if (iso) return accept(iso, original);
     }
   }
 
@@ -209,7 +236,7 @@ export function parseCampaignDate(cell: unknown, submittedAt: Date): ParsedCampa
     if (month) {
       const day = parseInt(m[2], 10);
       const iso = m[3] ? toIsoDate(expandYear(parseInt(m[3], 10)), month, day) : resolveYearlessDate(month, day, submittedAt);
-      if (iso) return { date: iso, raw: original, needsReview: false };
+      if (iso) return accept(iso, original);
     }
   }
 
