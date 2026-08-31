@@ -88,15 +88,19 @@ const PAGE_SIZE = 100; // AC paginates at 100/request max (plan Section 6.1)
  * zero across a ~150s invocation) that this was a wall-clock execution
  * ceiling, not compute exhaustion, and specific to the Free plan.
  *
- * Raised to 100s/100s (200s nominal) after upgrading to Pro (2026-08-31),
- * for real throughput now that the ceiling is much higher. The per-contact
- * deadline check (added alongside the 25s/25s tightening) remains the real
- * safety net regardless of this nominal value — re-tighten here if Pro
- * turns out to have its own, less generous ceiling than expected.
- * Overridable per-call for further tuning without a code change.
+ * Tried 100s/100s (200s nominal) right after upgrading to Pro (2026-08-31)
+ * — still hit `IDLE_TIMEOUT` at exactly 150s. That's decisive: the ~150s
+ * limit is a separate, fixed gateway/HTTP idle-connection timeout, not the
+ * compute ceiling Pro raised (`WORKER_RESOURCE_LIMIT`) — the two are
+ * independent, and Pro doesn't appear to change this one. Settled at
+ * 65s/65s (130s nominal) — comfortably under 150s with real margin, while
+ * still meaningfully higher than the Free-plan-safe 25s/25s. The
+ * per-contact deadline check (added alongside the original 25s/25s
+ * tightening) remains the real safety net regardless of this nominal
+ * value. Overridable per-call for further tuning without a code change.
  */
-export const DEFAULT_AC_BUDGET_MS = 100_000;
-export const DEFAULT_TRANSFORM_BUDGET_MS = 100_000;
+export const DEFAULT_AC_BUDGET_MS = 65_000;
+export const DEFAULT_TRANSFORM_BUDGET_MS = 65_000;
 
 export interface SyncResult {
   recordsIn: number;
