@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { runSync } from '../sync';
+import { computePageSize, runSync } from '../sync';
 import type { AcPort, DbPort } from '../ports';
 import type { AcContactListMembership } from '../types';
 
@@ -258,5 +258,41 @@ describe('runSync', () => {
     expect(result.recordsUpserted).toBe(2);
     expect(db.recordPartialSync).toHaveBeenCalledWith(1, { recordsIn: 0, recordsUpserted: 2, errors: 0 });
     expect(db.completeSyncLog).not.toHaveBeenCalled();
+  });
+
+  it('requests a page size scaled to the actual budget, not the fixed AC maximum', async () => {
+    // Real incident (2026-08-31): a fixed page size of 100 could never
+    // finish within a tightened budget, so the pagination offset could
+    // never advance — a silent, permanent stall. Every invocation must
+    // request a page it can actually finish.
+    const ac = makeAc({ '1': [[]], '2': [[]] });
+    const db = makeDb();
+
+    await runSync(ac, db, { acBudgetMs: 2000 }); // 1000ms per list -> pageSize = floor(500/1000) = 0, clamped to 1
+
+    const list1Call = (ac.getContactListPage as ReturnType<typeof vi.fn>).mock.calls.find(
+      ([params]) => params.listId === '1'
+    );
+    expect(list1Call?.[0].limit).toBe(1);
+  });
+});
+
+describe('computePageSize', () => {
+  it('never exceeds the AC maximum of 100, even with a huge budget', () => {
+    expect(computePageSize(10_000_000)).toBe(100);
+  });
+
+  it('scales down with a smaller per-list budget', () => {
+    // 32_500ms per list (the 65s/65s Pro-tier default), at the 1000ms/contact estimate.
+    expect(computePageSize(32_500)).toBe(16);
+  });
+
+  it('never returns less than 1, even with a near-zero budget', () => {
+    expect(computePageSize(1)).toBe(1);
+    expect(computePageSize(0)).toBe(1);
+  });
+
+  it('scales up with a larger per-list budget, up to the AC maximum', () => {
+    expect(computePageSize(60_000)).toBe(30);
   });
 });

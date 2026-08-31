@@ -74,7 +74,46 @@ import { transformPendingStagingEvents } from './transform.ts';
 /** AC lists that are ever polled. Lists 3 and 5 are never queried — see plan Section 3.6/6.1. */
 const SYNCED_LIST_IDS = ['1', '2'] as const;
 
-const PAGE_SIZE = 100; // AC paginates at 100/request max (plan Section 6.1)
+const MAX_PAGE_SIZE = 100; // AC paginates at 100/request max (plan Section 6.1)
+
+/**
+ * Conservative estimate of wall-clock cost per contact within a page (one
+ * getContactDetail call + its pacing sleep + one staging insert). Rounded
+ * up from ~850-900ms observed against real AC data. Used only to size
+ * pages safely — see computePageSize below.
+ */
+const ESTIMATED_MS_PER_CONTACT = 1000;
+
+/**
+ * How many contacts to request per page, sized so a FULL page can actually
+ * finish within budget — not just capped at AC's own 100/request maximum.
+ *
+ * Real incident (2026-08-31): PAGE_SIZE was a fixed 100 while the AC-pull
+ * budget was tightened to 25s, then 65s, per list. A full 100-contact page
+ * takes ~85-100s to process (confirmed from real timestamps) — MORE than
+ * either budget. Since a page that times out mid-way leaves the pagination
+ * offset unadvanced by design (so the next invocation resumes rather than
+ * skipping unprocessed contacts — the correct behavior in isolation), a
+ * page that can never fully complete within budget means the offset can
+ * NEVER advance: a self-inflicted infinite loop on the very first page
+ * that needs close to a full traversal. It ran for two days, silently,
+ * because every individual invocation still reported apparent success
+ * (nonzero recordsIn, no errors) — only the count of *distinct* contacts
+ * actually landing gave it away (one contact ID reappeared 71 times in
+ * staging.ac_events, spanning the entire supposedly-productive Pro-tier
+ * batch run).
+ *
+ * Sizing the page to the budget, not the other way around, makes this
+ * whole class of bug structurally impossible regardless of future budget
+ * tuning: half of one list's budget is allotted to fully processing one
+ * page, leaving the other half as margin for the page-listing call itself,
+ * network/DB latency variance, and the next page's deadline check.
+ */
+export function computePageSize(perListBudgetMs: number): number {
+  const budgetForOnePage = perListBudgetMs * 0.5;
+  const size = Math.floor(budgetForOnePage / ESTIMATED_MS_PER_CONTACT);
+  return Math.max(1, Math.min(MAX_PAGE_SIZE, size));
+}
 
 /**
  * How long the AC-pulling phase and the transform phase are each allowed to
@@ -135,6 +174,10 @@ export async function runSync(ac: AcPort, db: DbPort, options: RunSyncOptions = 
     // when THAT list's turn starts — not one shared deadline a large list
     // could consume entirely, starving the others (see file header).
     const perListBudgetMs = acBudgetMs / SYNCED_LIST_IDS.length;
+    // Sized to that same budget — see computePageSize's doc comment for
+    // why a page that can never finish within budget is a real bug, not
+    // just an inefficiency.
+    const pageSize = computePageSize(perListBudgetMs);
 
     for (const listId of SYNCED_LIST_IDS) {
       let offset = (await db.getSyncProgress(listId)) ?? 0;
@@ -146,7 +189,7 @@ export async function runSync(ac: AcPort, db: DbPort, options: RunSyncOptions = 
           break;
         }
 
-        const rawPage = await ac.getContactListPage({ listId, updatedSince: lastSync, limit: PAGE_SIZE, offset });
+        const rawPage = await ac.getContactListPage({ listId, updatedSince: lastSync, limit: pageSize, offset });
         if (rawPage.length === 0) {
           await db.clearSyncProgress(listId);
           break;
@@ -166,13 +209,14 @@ export async function runSync(ac: AcPort, db: DbPort, options: RunSyncOptions = 
         // showed wall-clock time running far past the nominal budget (e.g.
         // ~150s against a 50s budget) — this loop used to have NO deadline
         // check at all once a page started, so a single slow page (up to
-        // PAGE_SIZE contacts, each its own network round-trip) could run
-        // arbitrarily long before the next check. Cheap and always correct
-        // if it trips mid-page: offset is simply left unadvanced, so the
-        // next invocation re-fetches this same page from AC and starts
-        // over — some redundant re-processing of already-handled contacts
-        // in that one page, the same accepted minor side effect already
-        // documented elsewhere in this pipeline, never a skipped contact.
+        // pageSize contacts, each its own network round-trip) could run
+        // arbitrarily long before the next check. If it trips mid-page,
+        // offset is left unadvanced, so the next invocation re-fetches
+        // this same page and starts over — safe ONLY because pageSize is
+        // now itself sized to reliably finish within budget (see
+        // computePageSize's doc comment for the real incident where a page
+        // that could never finish meant the offset could never advance at
+        // all: not "some redundant re-processing," a permanent stall).
         let timedOutMidPage = false;
         for (const membership of page) {
           if (now() >= listDeadline) {
