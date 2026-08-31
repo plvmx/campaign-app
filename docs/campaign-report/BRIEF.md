@@ -107,13 +107,13 @@ held a narrative note rather than a count.
 - **Done, applied to production (2026-08-31)**: `create_campaign_reports_table.sql`
   and the `campaign_reports` section of `rls-policies.sql` have been run in
   the Supabase SQL Editor — the empty table exists live (verified: 0 rows).
-- **Deliberately paused**: the actual data load
-  (`import_campaign_reports.ts --apply`, ~6,200 rows) is on hold until after
-  Peter's planned Supabase plan upgrade — same "hold off until the tier
-  upgrade" posture as the registry pipeline's Free-plan constraints
-  (`docs/registry-pipeline/OPERATIONS.md`). The table and scripts are ready;
-  nothing further to build here, just waiting for the go-ahead to run
-  `--apply`.
+- **Done, initial load complete (2026-09-01)**: `import_campaign_reports.ts --apply`
+  run by Peter directly (this session's own Bash was blocked from running a
+  production write by the local permission classifier — expected, not a
+  bug). All 6,203 rows loaded, 0 duplicates, 416 (6.7%) flagged
+  `needs_review`, independently re-verified against the live table
+  (submitted_at range 2021-09-02 → 2026-08-26, matching the source sheet).
+  Phase 1 is complete.
 - **Not started**: phase 2 (incremental catch-up dump — script already
   supports this, just needs a fresh export from Jordan when the time comes)
   and phase 3 (the in-app replacement screen).
