@@ -272,3 +272,27 @@ record-results feature — initial load from Jordan's spreadsheet, then an
 incremental catch-up dump once he provides one, then a replacement screen
 before switching AFJ off the Google Sheets form entirely. Not part of the
 registry pipeline's scope — no registry.* schema involvement.
+
+## Known gap: registered_at/interested_in_training null for pre-2026-09-01 registrants
+
+`acClient.ts` only started fetching AC's `contact.cdate` (used for
+`registrants.registered_at`) and reading field `[9]` (`interested_in_training`)
+from 2026-09-01 onward. Anyone already synced before that fix has staging
+rows with no `cdate` key at all — confirmed directly (Aaron James,
+ac_contact_id 3838: three staging rows spanning 2026-08-27/28, none with a
+`cdate` key). Since the AC-pull backfill only moves forward through each
+list's pagination, already-synced people won't naturally get a fresh pull
+that would pick this up — `registered_at`/`interested_in_training` will
+likely stay null for them indefinitely unless AC happens to re-touch their
+record later (triggering a fresh incremental pull via `updated_since`).
+
+Not urgent — nothing reads this data yet — but if it needs to be complete
+rather than partial, a one-time script re-fetching just `cdate`/field `[9]`
+for existing `registrants` rows where `registered_at IS NULL` (via
+`GET /contacts/{id}` + `GET /contacts/{id}/fieldValues`, keyed on
+`ac_contact_id`) would close the gap cheaply, without needing a full
+re-backfill. `postcode` has the same *symptom* for pre-2026-08-26
+registrants, but a different cause — AC itself never captured postcode
+for them at all (see the postcode decision above), so no backfill script
+can fix that one; this one, being purely a gap on this pipeline's side,
+can.
