@@ -80,22 +80,23 @@ const PAGE_SIZE = 100; // AC paginates at 100/request max (plan Section 6.1)
  * How long the AC-pulling phase and the transform phase are each allowed to
  * run before stopping and leaving the rest for the next invocation.
  *
- * 60s/60s (120s nominal) still hit a hard WORKER_RESOURCE_LIMIT kill on
- * about 1 in 20 real invocations against live AC data — the per-phase
- * deadline check only happens between pages/rows, not preemptively inside
- * a single slow network call, so actual wall time can occasionally run
- * past the nominal budget.
+ * History on the Free plan: 60s/60s hit occasional resource-limit kills;
+ * 40s/40s hit them more consistently once the per-list fair-slicing fix
+ * meant every invocation reliably does more total work; settled at 25s/25s
+ * for real stability, confirmed by 100+ consecutive clean invocations —
+ * but confirmed via Supabase's own dashboard logs (cpu_time_used near
+ * zero across a ~150s invocation) that this was a wall-clock execution
+ * ceiling, not compute exhaustion, and specific to the Free plan.
  *
- * Tightened again after the per-list fair-slicing fix: since every list
- * now genuinely gets its turn every invocation (rather than a stuck list
- * sometimes causing the other to be skipped entirely), a real invocation
- * saw 5 consecutive resource-limit/idle-timeout failures at 40s/40s —
- * more total AC-pull work is now reliably happening per invocation than
- * before that fix. Down to 25s/25s (50s nominal) for more headroom.
+ * Raised to 100s/100s (200s nominal) after upgrading to Pro (2026-08-31),
+ * for real throughput now that the ceiling is much higher. The per-contact
+ * deadline check (added alongside the 25s/25s tightening) remains the real
+ * safety net regardless of this nominal value — re-tighten here if Pro
+ * turns out to have its own, less generous ceiling than expected.
  * Overridable per-call for further tuning without a code change.
  */
-export const DEFAULT_AC_BUDGET_MS = 25_000;
-export const DEFAULT_TRANSFORM_BUDGET_MS = 25_000;
+export const DEFAULT_AC_BUDGET_MS = 100_000;
+export const DEFAULT_TRANSFORM_BUDGET_MS = 100_000;
 
 export interface SyncResult {
   recordsIn: number;

@@ -30,12 +30,15 @@ import { isExcludedSourceOnly } from './tagExclusion.ts';
 
 /**
  * Caps the initial query too, so a large backlog is never pulled into
- * memory in one go. Halved from 200 to 100 alongside the tighter time
- * budgets in sync.ts, after a real invocation hit a hard
+ * memory in one go. Halved from 200 to 100 on the Free plan, alongside the
+ * tighter time budgets in sync.ts, after a real invocation hit a hard
  * WORKER_RESOURCE_LIMIT kill on roughly 1 in 20 attempts at the looser
- * settings.
+ * settings. Raised to 300 after upgrading to Pro (2026-08-31) and raising
+ * DEFAULT_TRANSFORM_BUDGET_MS to 100s — at ~1 row/second, the batch limit
+ * would otherwise become the binding constraint before the time budget
+ * ever did, capping throughput for no reason on the new plan.
  */
-export const TRANSFORM_BATCH_LIMIT = 100;
+export const TRANSFORM_BATCH_LIMIT = 300;
 
 export interface TransformResult {
   recordsUpserted: number;
