@@ -30,6 +30,8 @@ export interface AcContactCore {
   firstName: string | null;
   lastName: string | null;
   phone: string | null;
+  /** When AC created this contact — i.e. when they actually registered, not when this pipeline happened to sync them. */
+  cdate: string | null;
 }
 
 /**
@@ -53,10 +55,15 @@ export interface KnownSourceTag {
 
 /** Output of map_ac_fields() — only ever the included fields (plan Section 3.4). */
 export interface MappedRegistrantFields {
-  fullName: string | null;
+  firstName: string | null;
+  lastName: string | null;
   email: string | null;
   phoneRaw: string | null;
   state: string | null;
   /** [30] Post Code — only present on registrations from ~2026-08-26 onward; null for historical registrants is expected, not missing data. */
   postcode: string | null;
+  /** AC's own contact.cdate — when they actually registered, not when this pipeline synced them. */
+  registeredAt: string | null;
+  /** [9] Interested in training? — raw AC value (e.g. "Yes"/"No"), stored as-is rather than coerced, matching state/postcode's approach elsewhere in this file. */
+  interestedInTraining: string | null;
 }

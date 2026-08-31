@@ -109,12 +109,15 @@ export function createDb(client: SupabaseClient = createServiceClient()): DbPort
         .upsert(
           {
             ac_contact_id: input.acContactId,
-            full_name: input.fullName,
+            first_name: input.firstName,
+            last_name: input.lastName,
             email: input.email,
             phone: input.phone,
             phone_raw: input.phoneRaw,
             state: input.state,
             postcode: input.postcode,
+            registered_at: input.registeredAt,
+            interested_in_training: input.interestedInTraining,
             last_updated_at: new Date().toISOString(),
           },
           { onConflict: 'ac_contact_id' }

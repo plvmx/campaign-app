@@ -10,6 +10,7 @@ function makePayload(overrides: Partial<RawAcContactPayload> = {}): RawAcContact
       firstName: 'Jane',
       lastName: 'Doe',
       phone: '0438438438',
+      cdate: '2026-01-15T10:00:00Z',
     },
     fieldValues: [],
     tags: [],
@@ -21,9 +22,25 @@ function makePayload(overrides: Partial<RawAcContactPayload> = {}): RawAcContact
 describe('mapAcFields', () => {
   it('maps standard contact fields (name, email, phone)', () => {
     const result = mapAcFields(makePayload());
-    expect(result.fullName).toBe('Jane Doe');
+    expect(result.firstName).toBe('Jane');
+    expect(result.lastName).toBe('Doe');
     expect(result.email).toBe('jane@example.com');
     expect(result.phoneRaw).toBe('0438438438');
+  });
+
+  it('maps registeredAt from contact.cdate', () => {
+    const result = mapAcFields(makePayload());
+    expect(result.registeredAt).toBe('2026-01-15T10:00:00Z');
+  });
+
+  it('reads interestedInTraining from field [9] when populated', () => {
+    const result = mapAcFields(makePayload({ fieldValues: [{ field: '9', value: 'Yes' }] }));
+    expect(result.interestedInTraining).toBe('Yes');
+  });
+
+  it('returns null interestedInTraining when field [9] is absent', () => {
+    const result = mapAcFields(makePayload({ fieldValues: [] }));
+    expect(result.interestedInTraining).toBeNull();
   });
 
   it('reads state from field [6] when populated', () => {
@@ -86,13 +103,15 @@ describe('mapAcFields', () => {
     expect(Object.values(result)).not.toContain('$100');
   });
 
-  it('returns null fullName when both name parts are blank', () => {
+  it('returns null firstName/lastName when both name parts are blank', () => {
     const result = mapAcFields(
-      makePayload({ contact: { id: '1', email: null, firstName: '  ', lastName: null, phone: null } })
+      makePayload({ contact: { id: '1', email: null, firstName: '  ', lastName: null, phone: null, cdate: null } })
     );
-    expect(result.fullName).toBeNull();
+    expect(result.firstName).toBeNull();
+    expect(result.lastName).toBeNull();
     expect(result.email).toBeNull();
     expect(result.phoneRaw).toBeNull();
+    expect(result.registeredAt).toBeNull();
   });
 
   it('reads postcode from field [30] when populated', () => {

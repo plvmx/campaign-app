@@ -12,7 +12,7 @@ function makeAc(pagesByList: Record<string, AcContactListMembership[][]>): AcPor
       return pages[calls[listId] - 1] ?? [];
     }),
     getContactDetail: vi.fn(async (contactId: string) => ({
-      core: { id: contactId, email: null, firstName: null, lastName: null, phone: null },
+      core: { id: contactId, email: null, firstName: null, lastName: null, phone: null, cdate: null },
       fieldValues: [],
       tags: [],
     })),
@@ -235,7 +235,7 @@ describe('runSync', () => {
         Array.from({ length: 3 }, (_, i) => ({
           id: i + 1,
           raw_payload: {
-            contact: { id: `ac-${i}`, email: null, firstName: null, lastName: null, phone: null },
+            contact: { id: `ac-${i}`, email: null, firstName: null, lastName: null, phone: null, cdate: null },
             fieldValues: [],
             tags: [],
             listMembership: { contact: `ac-${i}`, list: '1', status: '1' },

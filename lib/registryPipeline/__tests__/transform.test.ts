@@ -11,7 +11,7 @@ function makeEvent(id: number, overrides: Partial<RawAcContactPayload> = {}): St
   return {
     id,
     raw_payload: {
-      contact: { id: `ac-${id}`, email: 'jane@example.com', firstName: 'Jane', lastName: 'Doe', phone: '0438438438' },
+      contact: { id: `ac-${id}`, email: 'jane@example.com', firstName: 'Jane', lastName: 'Doe', phone: '0438438438', cdate: '2026-01-15T10:00:00Z' },
       fieldValues: [{ field: '6', value: 'NSW' }],
       tags: [{ id: '48' }],
       listMembership: { contact: `ac-${id}`, list: '1', status: '1' },
@@ -48,12 +48,15 @@ describe('transformPendingStagingEvents', () => {
     expect(result).toEqual({ recordsUpserted: 1, errors: 0, partial: false });
     expect(db.upsertRegistrant).toHaveBeenCalledWith({
       acContactId: 'ac-1',
-      fullName: 'Jane Doe',
+      firstName: 'Jane',
+      lastName: 'Doe',
       email: 'jane@example.com',
       phone: '+61438438438',
       phoneRaw: '0438438438',
       state: 'NSW',
       postcode: null,
+      registeredAt: '2026-01-15T10:00:00Z',
+      interestedInTraining: null,
     });
     expect(db.insertRegistrationEvent).toHaveBeenCalledWith({
       registrantId: 'registrant-1',
@@ -118,6 +121,15 @@ describe('transformPendingStagingEvents', () => {
     await transformPendingStagingEvents(db);
 
     expect(db.upsertRegistrant).toHaveBeenCalledWith(expect.objectContaining({ postcode: '3080' }));
+  });
+
+  it('passes through a populated interestedInTraining', async () => {
+    const db = makeDb([
+      makeEvent(7, { fieldValues: [{ field: '6', value: 'NSW' }, { field: '9', value: 'Yes' }] }),
+    ]);
+    await transformPendingStagingEvents(db);
+
+    expect(db.upsertRegistrant).toHaveBeenCalledWith(expect.objectContaining({ interestedInTraining: 'Yes' }));
   });
 
   it('passes the batch limit through to getPendingStagingEvents', async () => {

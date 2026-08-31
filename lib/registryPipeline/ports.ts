@@ -63,12 +63,15 @@ export interface DbPort {
   getKnownSourceTags(): Promise<KnownSourceTag[]>;
   upsertRegistrant(input: {
     acContactId: string;
-    fullName: string | null;
+    firstName: string | null;
+    lastName: string | null;
     email: string | null;
     phone: string | null;
     phoneRaw: string | null;
     state: string | null;
     postcode: string | null;
+    registeredAt: string | null;
+    interestedInTraining: string | null;
   }): Promise<{ id: string }>;
   insertRegistrationEvent(input: {
     registrantId: string;

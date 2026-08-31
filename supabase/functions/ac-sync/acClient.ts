@@ -95,7 +95,7 @@ export function createAcClient(): AcPort {
     async getContactDetail(contactId) {
       const [contactBody, fieldValuesBody, tagsBody] = await Promise.all([
         acFetch(`/contacts/${contactId}`, {}) as Promise<{
-          contact?: { id: string; email: string | null; firstName: string | null; lastName: string | null; phone: string | null };
+          contact?: { id: string; email: string | null; firstName: string | null; lastName: string | null; phone: string | null; cdate: string | null };
         }>,
         acFetch(`/contacts/${contactId}/fieldValues`, {}) as Promise<{ fieldValues?: Array<{ field: string; value: string }> }>,
         acFetch(`/contacts/${contactId}/contactTags`, {}) as Promise<{ contactTags?: Array<{ tag: string }> }>,
@@ -108,6 +108,7 @@ export function createAcClient(): AcPort {
         firstName: c?.firstName ?? null,
         lastName: c?.lastName ?? null,
         phone: c?.phone ?? null,
+        cdate: c?.cdate ?? null,
       };
       const fieldValues: AcFieldValue[] = (fieldValuesBody.fieldValues ?? []).map((fv) => ({
         field: fv.field,

@@ -105,12 +105,15 @@ export async function transformPendingStagingEvents(db: DbPort, options: Transfo
 
       const registrant = await db.upsertRegistrant({
         acContactId: payload.contact.id,
-        fullName: fields.fullName,
+        firstName: fields.firstName,
+        lastName: fields.lastName,
         email: fields.email,
         phone: phoneNormalized,
         phoneRaw: fields.phoneRaw,
         state: fields.state,
         postcode: fields.postcode,
+        registeredAt: fields.registeredAt,
+        interestedInTraining: fields.interestedInTraining,
       });
 
       await db.insertRegistrationEvent({

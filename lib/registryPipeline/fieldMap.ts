@@ -44,6 +44,8 @@ export const ALLOWED_CUSTOM_FIELD_IDS = {
    * expected and normal for anyone registered before then.
    */
   POSTCODE: '30',
+  /** [9] Interested in training? — confirmed live/populated per plan 3.4. Promoted to registry.registrants.interested_in_training (2026-09-01, per Peter). */
+  INTERESTED_IN_TRAINING: '9',
   /**
    * Confirmed live/populated and included per plan 3.4, but registry.registrants
    * (plan Section 5) has no column for these yet — they're preserved untouched
@@ -52,7 +54,6 @@ export const ALLOWED_CUSTOM_FIELD_IDS = {
    * operational need for them emerges; do not read them further than that
    * without doing so (there's nowhere to put the mapped value yet).
    */
-  INTERESTED_IN_TRAINING: '9',
   BOTJ_WEBINAR_REGO_DATE: '23',
   BOTJ_WEBINAR_SESSION: '24',
 } as const;
@@ -72,18 +73,18 @@ function findFieldValue(fieldValues: readonly AcFieldValue[], fieldId: string): 
 export function mapAcFields(payload: RawAcContactPayload): MappedRegistrantFields {
   const { contact, fieldValues } = payload;
 
-  const nameParts = [contact.firstName, contact.lastName].filter((p): p is string => Boolean(p?.trim()));
-  const fullName = nameParts.length > 0 ? nameParts.join(' ') : null;
-
   const state =
     findFieldValue(fieldValues, ALLOWED_CUSTOM_FIELD_IDS.STATE) ??
     findFieldValue(fieldValues, ALLOWED_CUSTOM_FIELD_IDS.AU_STATE_FALLBACK);
 
   return {
-    fullName,
+    firstName: contact.firstName?.trim() || null,
+    lastName: contact.lastName?.trim() || null,
     email: contact.email?.trim() || null,
     phoneRaw: contact.phone?.trim() || null,
     state,
     postcode: findFieldValue(fieldValues, ALLOWED_CUSTOM_FIELD_IDS.POSTCODE),
+    registeredAt: contact.cdate?.trim() || null,
+    interestedInTraining: findFieldValue(fieldValues, ALLOWED_CUSTOM_FIELD_IDS.INTERESTED_IN_TRAINING),
   };
 }
