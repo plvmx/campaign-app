@@ -103,11 +103,17 @@ held a narrative note rather than a count.
   `scripts/import_campaign_reports.ts`), backup config
   (`lib/services/backupService.ts`, format version bumped to `5`). Dry-run
   verified end-to-end against the real spreadsheet. All four CI checks
-  (lint/type-check/tests/build) pass locally.
-- **Blocked on Peter**: run `scripts/create_campaign_reports_table.sql` (and
-  the `campaign_reports` section of `supabase/rls-policies.sql`) in the
-  Supabase SQL Editor, then approve running `import_campaign_reports.ts
-  --apply` against production.
+  (lint/type-check/tests/build) pass locally. PR #168.
+- **Done, applied to production (2026-08-31)**: `create_campaign_reports_table.sql`
+  and the `campaign_reports` section of `rls-policies.sql` have been run in
+  the Supabase SQL Editor — the empty table exists live (verified: 0 rows).
+- **Deliberately paused**: the actual data load
+  (`import_campaign_reports.ts --apply`, ~6,200 rows) is on hold until after
+  Peter's planned Supabase plan upgrade — same "hold off until the tier
+  upgrade" posture as the registry pipeline's Free-plan constraints
+  (`docs/registry-pipeline/OPERATIONS.md`). The table and scripts are ready;
+  nothing further to build here, just waiting for the go-ahead to run
+  `--apply`.
 - **Not started**: phase 2 (incremental catch-up dump — script already
   supports this, just needs a fresh export from Jordan when the time comes)
   and phase 3 (the in-app replacement screen).
