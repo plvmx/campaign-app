@@ -1,6 +1,7 @@
 /**
  * One-off backfill: populate campaigns.team_size/pp_cnt/fp_cnt/fpsp_cnt/ir_cnt
- * for the week of 2026-08-24 to 2026-08-30, derived from the `results` table
+ * for 2026-08-24 through 2026-09-01 (the week the bug was found, through the
+ * day it was fixed), derived from the `results` table
  * (count of rows per category_code: TM->team_size, P->pp_cnt, F->fp_cnt,
  * SP->fpsp_cnt, IR->ir_cnt).
  *
@@ -39,7 +40,7 @@ fs.readFileSync(envPath, 'utf-8').split('\n').forEach((line) => {
 
 const args = process.argv.slice(2).filter((a) => a !== '--apply');
 const apply = process.argv.includes('--apply');
-const [start, end] = args.length >= 2 ? args : ['2026-08-24', '2026-08-30'];
+const [start, end] = args.length >= 2 ? args : ['2026-08-24', '2026-09-01'];
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
