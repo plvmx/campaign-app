@@ -514,3 +514,38 @@ changes `AcPort`'s contract in `acClient.ts`, for a smaller per-contact
 saving (cuts 1 of 3 calls, not all 3, since the tags call is still
 needed either way). Deferred as a separate, deliberate piece of work if
 it's ever worth it, not folded into the in-progress backfill.
+
+## Reconciliation against Lorraine's spreadsheet — first pass (2026-09-01)
+
+Compared `registry.registrants` (9,134 rows) against Lorraine's "main AFJ
+page" sheet (`AFJ Soulwinners to14 Aug 2026 16th.xlsx`, 9,208 rows),
+matching on normalized email and normalized phone (same `normalizePhone()`
+logic as `lib/registryPipeline/phone.ts`, reimplemented in Python for the
+comparison — see `~/…/scratchpad/reconcile/` for the working
+files, kept out of the repo since they hold PII).
+
+Raw result: only ~5,234 matched (~57%) — 3,974 in Lorraine's sheet with no
+match in the registry, 3,837 in the registry with no match in her sheet.
+Ruled out normalization bugs as the cause before reporting this: email and
+phone overlap independently land at nearly the same rate (~55%/~58%), and
+both sheets have near-identical email domain distributions — a formatting
+bug would show one field matching fine while the other looked broken; it
+doesn't.
+
+**Critical context from Peter, changes how to read the above:** "main AFJ
+page" is explicitly **not** meant to be a 1:1 mirror of AC List 1. Lorraine
+built it from Jordan's earlier live-updating spreadsheet via her own
+documented process (not a direct AC export) — so a large non-overlap may
+be entirely expected from that different lineage, not a pipeline defect.
+Peter has asked Lorraine to confirm whether she's ever folded in
+registrations from another source; **holding off on drawing any
+conclusion from this reconciliation, or making any pipeline change because
+of it, until that answer comes back.**
+
+Independent of the lineage question, one real, separate data-quality issue
+surfaced while checking this and is worth a follow-up regardless of the
+outcome above: a minority of `registry.registrants.phone` values
+normalize to implausible lengths (as short as 4 characters, one as long
+as 29) — not the majority (93% are a clean, normal 12-character E.164
+value), but worth a targeted query + spot-check once there's time,
+independent of the reconciliation.
