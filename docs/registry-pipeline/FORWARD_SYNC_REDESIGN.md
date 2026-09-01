@@ -149,10 +149,15 @@ Two real options, not a default to just pick:
   be recognized), which BRIEF.md currently scopes as a separate, larger
   piece of work.
 
-**Recommend (b)** given Peter's own framing (MFA "especially for admins",
-and this is precisely an admin-only PII-resolution surface) — but this is
-Peter's call given the real cost difference, not a default I should just
-build. **Not building either until this is confirmed.**
+**Decided (2026-09-01): option (b)** — Peter confirmed. This screen will
+be gated on `registry.leader_roles` + Supabase Auth, not the old
+mobile+name admin check, as the first real consumer of that scaffolding.
+Sequencing: needs at least a minimal slice of the magic-link login flow
+working end-to-end for Lorraine specifically (one `national_admin` able
+to log in and be recognized) before this screen's API routes can be
+built — that slice hasn't been scoped/built yet. Proposal 2 (the
+discovery redesign) doesn't depend on this and proceeded first; this
+screen is next once the minimal auth slice is in place.
 
 - `GET /api/admin/registry-duplicates?status=pending` — list flagged
   pairs, each with both registrants' key fields joined (name, email,

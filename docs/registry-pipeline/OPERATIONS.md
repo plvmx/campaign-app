@@ -575,11 +575,47 @@ against live AC data:
   contacts only) — not a recommendation anymore, the only viable option,
   since (b) (rely on an embedded list array) isn't available at all.
 
-**Not yet tested: `filters[updated_after]`.** `created_after` only catches
-contacts new to AC — it wouldn't catch an existing AC contact who joins
-List 1/2 later (e.g. was already a contact via some unrelated list, then
-submits the AFJ form) since their `cdate` stays unchanged. That needs
-`udate`, a different underlying field on the same endpoint — must not be
-assumed to work just because `created_after` did (same "different param,
-verify independently" discipline that caught every other broken filter
-this session). Extended the probe script to test it too; rerun pending.
+**Update — `filters[updated_after]` also confirmed working** (rerun,
+2026-09-01): future-dated filter correctly returned zero rows against the
+same 20-row control. Every assumption Proposal 2 depends on is now
+confirmed against live data: stable pagination, `orders[id]=ASC`,
+`filters[created_after]`, `filters[updated_after]`, and no embedded list
+membership (settling the list-membership tradeoff in favor of option (a)).
+Proceeding to implementation.
+
+## Proposal 2 implemented and deployed (2026-09-01)
+
+Replaced per-list `/contactLists` offset pagination with the single
+account-wide `/contacts` id-cursor sweep from
+[FORWARD_SYNC_REDESIGN.md](./FORWARD_SYNC_REDESIGN.md). Changes:
+`AcPort.getContactListPage` → `getContactsPage` + `getContactListMemberships`;
+`sync.ts`'s main loop rewritten around a single sweep (no more per-list
+fair-slicing); dead code removed (`MAX_CONSECUTIVE_EMPTY_MATCH_PAGES`,
+`MAX_OFFSET_MULTIPLIER`, `KNOWN_LIST_SIZES` — all safety nets built for
+the now-removed offset/broken-filter combination); `registry.sync_progress`
+reused as-is with a new sentinel key (`'contacts'`) rather than a schema
+migration — the old `list_id='1'`/`'2'` rows are now orphaned and
+harmless, never queried again.
+
+All 4 CI gates pass (tsc, lint, 550 tests — sync.test.ts fully rewritten
+for the new interface, 20 tests including 5 new ones covering the
+redesign's specific guarantees: no detail fetch for a non-qualifying
+contact, excluded-list memberships ignored alongside a genuine one,
+defense-in-depth against an unverified `filters[contact]`, one detail
+fetch reused for a contact on both lists). Deployed via `supabase
+functions deploy ac-sync` — no Deno-side type-checker available locally
+(`deno` not installed in this environment), consistent with this file's
+existing precedent for `acClient.ts`/`db.ts` — verified live instead.
+
+**Live verification:** first test invocation succeeded cleanly
+(`recordsIn: 2, errors: 0`), `sync_progress` correctly created a new
+`'contacts'` row (the old `'1'`/`'2'` rows untouched, as expected). Ran a
+short follow-up batch — offset advanced steadily (0 → 64 → 128 → 160 →
+192...), staging rows landed with the correct shape and processed cleanly
+through the *unchanged* transform step (`source_list_id` populated,
+`processed_at` set, no `processing_error`). Registrant growth not yet
+re-confirmed at a meaningful scale — this backfill just restarted from
+offset 0 under the new sweep order (a different traversal order than the
+old per-list one), so it will take a number of invocations before it
+reaches contacts genuinely new to `registry.registrants`. Will report
+back with real growth numbers once the batch has run for longer.

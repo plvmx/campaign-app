@@ -2,14 +2,19 @@
 // using AC's REST API v3 directly (fetch, no SDK). Deno-only file: uses
 // Deno-native fetch and is deployed as part of the ac-sync Edge Function.
 //
-// VERIFY BEFORE SCHEDULING (brief build order step 2 — "tested against a
-// manual invocation before scheduling"): the exact endpoint paths/response
-// shapes below are written against AC API v3's documented, stable
-// endpoints from memory, not against a live call in this session (no AC
-// credentials are available here). Run a manual invocation against a real
-// test contact (the same kind of test AC accounts already used to confirm
-// Sections 3.3-3.5 of the technical plan) and adjust this file — and only
-// this file — if any shape differs. The pure transform/mapping logic in
+// VERIFY BEFORE TRUSTING A NEW ENDPOINT/PARAM (this has bitten this
+// pipeline repeatedly — see sync.ts's numbered deviations): every
+// `filters[...]` param tried on `/contactLists` (`list`, `listid`,
+// `updated_since`) turned out to be a silent no-op, only caught by
+// testing a future-dated filter against real data and checking it
+// actually returned nothing. `/contacts`' `orders[id]=ASC`,
+// `filters[updated_after]`, and its pagination stability have all since
+// been confirmed the same way (docs/registry-pipeline/OPERATIONS.md,
+// 2026-09-01) — but `getContactListMemberships`'s `filters[contact]`
+// below has NOT, and correctness deliberately does not depend on it (see
+// its own comment). Adjust this file — and only this file — if any AC
+// response shape or filter behavior turns out to differ from what's
+// documented here; the pure transform/mapping logic in
 // lib/registryPipeline does not need to change either way.
 //
 // Rate limiting: AC enforces 5 req/sec account-wide, shared with other
@@ -66,24 +71,49 @@ async function acFetch(path: string, params: Record<string, string | number>): P
 
 export function createAcClient(): AcPort {
   return {
-    async getContactListPage({ listId, updatedSince, limit, offset }) {
-      // AC v3: GET /contactLists?filters[listid]=<id>&filters[updated_since]=<iso>&limit=&offset=
+    async getContactsPage({ updatedSince, limit, offset }) {
+      // AC v3: GET /contacts?orders[id]=ASC&limit=&offset=[&filters[updated_after]=<iso>]
       //
-      // CONFIRMED BROKEN, then fixed: `filters[list]` (the original param
-      // name here) does NOT filter — a real invocation against live AC
-      // data landed a mix of every list (1, 2, 3, 5) regardless of which
-      // listId was requested, including 342+5 records from Lists 3/5,
-      // which are supposed to be permanently excluded (plan Section 3.6).
-      // Renamed to `filters[listid]`, AC's documented contactLists filter
-      // name. Even so, do not rely on this alone — sync.ts's caller now
-      // also discards any returned row whose own `.list` doesn't match
-      // the requested listId, as defense-in-depth against exactly this
-      // class of bug (matches the plan's explicit intent in Section 6.1:
-      // "List exclusion is enforced here, not just as a policy decision").
-      const params: Record<string, string | number> = { 'filters[listid]': listId, limit, offset };
-      if (updatedSince) params['filters[updated_since]'] = updatedSince;
+      // Replaces the old /contactLists-based discovery entirely (see
+      // sync.ts's "Sixth deliberate deviation") after every filters[...]
+      // param tried on that endpoint (list, listid, updated_since) was
+      // confirmed broken, and its pagination re-fetched some contacts
+      // 300+ times because its result-set ordering couldn't be trusted
+      // either. CONFIRMED via a live probe (ac_contacts_pagination_probe.js,
+      // docs/registry-pipeline/OPERATIONS.md 2026-09-01) before this
+      // replaced the old design, not assumed: orders[id]=ASC sorts
+      // correctly; the same page (offset=100, limit=20) fetched twice, 8s
+      // apart, returned identical contact IDs in identical order — genuine
+      // pagination stability, not just a documented claim; and
+      // filters[updated_after] correctly returned zero rows for a
+      // future-dated filter, unlike every /contactLists filter tried
+      // before it.
+      const params: Record<string, string | number> = { 'orders[id]': 'ASC', limit, offset };
+      if (updatedSince) params['filters[updated_after]'] = updatedSince;
 
-      const body = (await acFetch('/contactLists', params)) as {
+      const body = (await acFetch('/contacts', params)) as {
+        contacts?: Array<{ id: string }>;
+      };
+      const rows = body.contacts ?? [];
+      return rows.map((r) => ({ id: r.id }));
+    },
+
+    async getContactListMemberships(contactId) {
+      // AC v3: GET /contactLists?filters[contact]=<id>
+      //
+      // `filters[contact]` (scoping by contact rather than by list) has
+      // NOT been live-verified the way filters[updated_after] etc. were
+      // above — every other filters[...] param tried on THIS SPECIFIC
+      // endpoint turned out broken (list, listid, updated_since), so this
+      // one is not assumed to work either just because it's a different
+      // parameter name on the same broken endpoint. Correctness does not
+      // depend on it: sync.ts's caller discards any returned row whose
+      // own `.contact` doesn't match what was actually requested, exactly
+      // the same defense-in-depth already applied to this endpoint's list
+      // scoping (see the Fourth deviation). If this filter turns out to
+      // also be a no-op, the only cost is efficiency (a larger unfiltered
+      // page to filter client-side), not correctness.
+      const body = (await acFetch('/contactLists', { 'filters[contact]': contactId })) as {
         contactLists?: Array<{ contact: string; list: string; status: string }>;
       };
       const rows = body.contactLists ?? [];

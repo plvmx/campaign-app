@@ -14,20 +14,50 @@ import type {
   RawAcContactPayload,
 } from './types.ts';
 
-/** Read-only access to ActiveCampaign — implemented by ac-sync/acClient.ts. */
+/**
+ * Read-only access to ActiveCampaign — implemented by ac-sync/acClient.ts.
+ *
+ * Discovery is a single account-wide `/contacts` sweep, ordered by the
+ * contact's own immutable id — not a per-list `/contactLists` pagination
+ * loop. See docs/registry-pipeline/FORWARD_SYNC_REDESIGN.md and
+ * OPERATIONS.md's 2026-09-01 probe results for why: every `filters[...]`
+ * param tried on `/contactLists` (`list`, `listid`, `updated_since`) was
+ * confirmed broken, and its pagination re-fetched some contacts 300+
+ * times while registrant discovery stalled for four days. `/contacts`
+ * ordered by id was confirmed genuinely stable (identical page fetched
+ * twice, 8s apart, identical order) and its own `filters[created_after]`/
+ * `filters[updated_after]` were confirmed to actually filter — the first
+ * AC filters of any kind in this project to pass a live future-dated
+ * test.
+ */
 export interface AcPort {
   /**
-   * One page of contact-list membership rows for a single AC list, filtered
-   * to those updated since `updatedSince` (null on the very first/backfill
-   * run — AC then returns everything). Paginated by `limit`/`offset`;
-   * an empty array means the caller has reached the end.
+   * One page of AC contacts, ordered ascending by contact id (confirmed
+   * stable — see above). When `updatedSince` is set, scoped server-side
+   * to contacts created OR updated on or after that timestamp
+   * (`filters[updated_after]`, confirmed working) — every incremental run
+   * after the first. `null` (the first-ever backfill run) returns the
+   * whole account, unfiltered — same `backfill` vs `sync` distinction as
+   * before. Paginated by `limit`/`offset` — safe to resume from a saved
+   * offset now that ordering is confirmed stable, unlike `/contactLists`.
+   * An empty array means the caller has reached the end.
    */
-  getContactListPage(params: {
-    listId: string;
+  getContactsPage(params: {
     updatedSince: string | null;
     limit: number;
     offset: number;
-  }): Promise<AcContactListMembership[]>;
+  }): Promise<{ id: string }[]>;
+
+  /**
+   * Every list-membership row for ONE contact — not scoped to a specific
+   * list server-side. `filters[listid]` on this endpoint is confirmed
+   * broken (see sync.ts's file header); a per-contact filter param is
+   * unverified either way, so the caller must still check each returned
+   * row's own `.contact` against `contactId` before trusting it (same
+   * defense-in-depth this pipeline already applies everywhere else on
+   * this endpoint).
+   */
+  getContactListMemberships(contactId: string): Promise<AcContactListMembership[]>;
 
   /** Core fields + custom fieldValues + tags for one contact, by AC contact ID. */
   getContactDetail(contactId: string): Promise<{
@@ -95,17 +125,20 @@ export interface DbPort {
   markStagingError(id: number, error: string): Promise<void>;
 
   /**
-   * Records progress made against one list's pagination *within a single
-   * logical sync pass* (which may now span multiple invocations — see
-   * sync.ts's time-budget note). `null` means "fully drained": either
-   * nothing has been pulled yet this pass, or the previous invocation
-   * reached an empty page for this list. A non-null offset means "resume
-   * here" — a prior invocation ran out of time partway through this list.
+   * Records progress made against the `/contacts` sweep's pagination
+   * *within a single logical sync pass* (which may now span multiple
+   * invocations — see sync.ts's time-budget note). Keyed by a fixed
+   * sentinel (`'contacts'` — see sync.ts), not a per-list key, since
+   * discovery is now one account-wide sweep, not one pass per list (see
+   * ports.ts's `AcPort` doc comment for why). `null` means "fully
+   * drained": either nothing has been pulled yet this pass, or the
+   * previous invocation reached an empty page. A non-null offset means
+   * "resume here" — a prior invocation ran out of time partway through.
    */
-  getSyncProgress(listId: string): Promise<number | null>;
-  saveSyncProgress(listId: string, nextOffset: number): Promise<void>;
-  /** Called once a list's pagination hits an empty page — resets it to start-from-0 for the next logical pass. */
-  clearSyncProgress(listId: string): Promise<void>;
+  getSyncProgress(key: string): Promise<number | null>;
+  saveSyncProgress(key: string, nextOffset: number): Promise<void>;
+  /** Called once the sweep's pagination hits an empty page — resets it to start-from-0 for the next logical pass. */
+  clearSyncProgress(key: string): Promise<void>;
   /**
    * Updates records_in/records_upserted/errors on an in-progress sync_log
    * row WITHOUT setting completed_at — used when a run is cut short by its

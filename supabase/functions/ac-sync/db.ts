@@ -166,27 +166,27 @@ export function createDb(client: SupabaseClient = createServiceClient()): DbPort
       assertNoError(error, 'markStagingError');
     },
 
-    async getSyncProgress(listId) {
+    async getSyncProgress(key) {
       const { data, error } = await client
         .schema('registry')
         .from('sync_progress')
         .select('next_offset')
-        .eq('list_id', listId)
+        .eq('list_id', key)
         .maybeSingle();
       assertNoError(error, 'getSyncProgress');
       return (data as { next_offset: number } | null)?.next_offset ?? null;
     },
 
-    async saveSyncProgress(listId, nextOffset) {
+    async saveSyncProgress(key, nextOffset) {
       const { error } = await client
         .schema('registry')
         .from('sync_progress')
-        .upsert({ list_id: listId, next_offset: nextOffset, updated_at: new Date().toISOString() }, { onConflict: 'list_id' });
+        .upsert({ list_id: key, next_offset: nextOffset, updated_at: new Date().toISOString() }, { onConflict: 'list_id' });
       assertNoError(error, 'saveSyncProgress');
     },
 
-    async clearSyncProgress(listId) {
-      const { error } = await client.schema('registry').from('sync_progress').delete().eq('list_id', listId);
+    async clearSyncProgress(key) {
+      const { error } = await client.schema('registry').from('sync_progress').delete().eq('list_id', key);
       assertNoError(error, 'clearSyncProgress');
     },
 
