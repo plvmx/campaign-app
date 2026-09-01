@@ -46,7 +46,15 @@ export interface StagingEventRow {
 export interface DbPort {
   /** Inserts a registry.sync_log row with run_type='sync', returns its id. */
   startSyncLog(): Promise<number>;
-  /** max(completed_at) from registry.sync_log where run_type='sync' — null on the first-ever run. */
+  /**
+   * max(completed_at) from registry.sync_log where run_type='sync' AND
+   * status='success' — null on the first-ever run. Must filter on
+   * status='success', not merely `completed_at IS NOT NULL`: failSyncLog
+   * also sets completed_at (on any thrown error), so that alone let a
+   * failed run's timestamp masquerade as a trustworthy incremental cursor.
+   * Confirmed via live data 2026-09-01 — see
+   * scripts/add_status_to_sync_log.sql and docs/registry-pipeline/OPERATIONS.md.
+   */
   getLastCompletedSyncTimestamp(): Promise<string | null>;
   insertStagingEvent(input: {
     sourceListId: string;

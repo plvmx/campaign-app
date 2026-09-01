@@ -38,12 +38,18 @@ export function createDb(client: SupabaseClient = createServiceClient()): DbPort
     },
 
     async getLastCompletedSyncTimestamp() {
+      // status = 'success' only, NOT `completed_at IS NOT NULL` — failSyncLog
+      // also sets completed_at (on any thrown error), so that check alone
+      // let a failed run's timestamp masquerade as a trustworthy incremental
+      // cursor. Confirmed via live data 2026-09-01: the cursor was silently
+      // stuck on a 2026-08-27 failure this whole backfill. See
+      // scripts/add_status_to_sync_log.sql and docs/registry-pipeline/OPERATIONS.md.
       const { data, error } = await client
         .schema('registry')
         .from('sync_log')
         .select('completed_at')
         .eq('run_type', 'sync')
-        .not('completed_at', 'is', null)
+        .eq('status', 'success')
         .order('completed_at', { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -70,6 +76,7 @@ export function createDb(client: SupabaseClient = createServiceClient()): DbPort
           records_in: result.recordsIn,
           records_upserted: result.recordsUpserted,
           errors: result.errors,
+          status: 'success',
         })
         .eq('id', id);
       assertNoError(error, 'completeSyncLog');
@@ -79,7 +86,7 @@ export function createDb(client: SupabaseClient = createServiceClient()): DbPort
       const { error } = await client
         .schema('registry')
         .from('sync_log')
-        .update({ completed_at: new Date().toISOString(), errors: 1, notes: errorMessage })
+        .update({ completed_at: new Date().toISOString(), errors: 1, notes: errorMessage, status: 'failed' })
         .eq('id', id);
       assertNoError(error, 'failSyncLog');
     },
@@ -192,6 +199,7 @@ export function createDb(client: SupabaseClient = createServiceClient()): DbPort
           records_upserted: counts.recordsUpserted,
           errors: counts.errors,
           notes: 'partial: time budget reached, resuming next invocation',
+          status: 'partial',
         })
         .eq('id', id);
       assertNoError(error, 'recordPartialSync');

@@ -329,3 +329,120 @@ Not yet re-verified against live data post-fix (deploying now) — check
 `sync_progress` after a few invocations: List 2 should clear/reset rather
 than keep climbing, and List 1 should start getting a fairer share of
 budget, resuming real registrant growth.
+
+**Update — the consecutive-empty-page heuristic alone was not enough.**
+List 2's offset kept climbing well past 4,204 even with
+`MAX_CONSECUTIVE_EMPTY_MATCH_PAGES` deployed, because sparse *genuine*
+matches (contacts already discovered many times before, but still
+correctly on List 2) kept resetting the streak counter to 0 just before it
+reached the threshold — "genuine match" only means the row's own `.list`
+equals what was requested, not that it represents new content. Added a
+second, independent safety net: `KNOWN_LIST_SIZES` (from the 2026-08-29
+`ac_discovery.js` run: List 1 = 10,454, List 2 = 4,204) and
+`MAX_OFFSET_MULTIPLIER = 3` — once a list's offset exceeds 3x its known
+true size, treat it as exhausted unconditionally, regardless of recent
+match activity. Deployed and confirmed via live data: a single test
+invocation afterward showed List 2 no longer present in `sync_progress`
+(cleared), while List 1 advanced further in that same invocation than it
+had in several prior ones (7,156 → 7,188) — direct evidence it's now
+getting the full AC-pull budget instead of splitting it with a futile
+List 2 scan.
+
+## Incident: incremental sync cursor could be silently corrupted by a failed run (2026-09-01)
+
+Prompted by Peter's request to double-check for other unverified
+assumptions like the list-filter one above. Traced
+`getLastCompletedSyncTimestamp()` (`supabase/functions/ac-sync/db.ts`),
+which supplies `filters[updated_since]` for every AC query — it used
+`completed_at IS NOT NULL` as its proxy for "this run is a trustworthy
+cursor source". But `failSyncLog()` *also* sets `completed_at` (on any
+thrown error, e.g. an AC 502/503) — only `recordPartialSync()` (the normal
+time-budget stop during this backfill) leaves it null. A failed run was
+therefore indistinguishable from a genuinely completed one.
+
+Confirmed via live data: the most recent non-null `completed_at` in
+`registry.sync_log` belonged to id 83, a **failed** run from
+2026-08-27T10:57:46 ("AC API error 503 calling
+/contacts/7379/contactTags") — no genuine full sync has ever completed
+during this backfill (every run since has been `partial`), so the cursor
+has been silently stuck on that failure's timestamp the entire time. No
+data loss has resulted yet, for two independent reasons: (1) the backfill
+has never advanced far enough for a real `completeSyncLog` to occur, and
+(2) `filters[updated_since]` itself is unverified against live AC data —
+see the open question below — so it may not even be doing anything today.
+But this would have silently and permanently corrupted every future
+scheduled/incremental sync's window the moment either of those two things
+stopped being true, with no error or warning of any kind.
+
+Fixed by adding an explicit `status` column (`'success' | 'partial' |
+'failed' | 'crashed'`) to `registry.sync_log`, set explicitly by each of
+`completeSyncLog`/`recordPartialSync`/`failSyncLog`, and changing
+`getLastCompletedSyncTimestamp()` to filter on `status = 'success'`
+instead of `completed_at IS NOT NULL`. See
+`scripts/add_status_to_sync_log.sql` (includes a backfill of historical
+rows). While auditing, also found 46 orphaned rows (`completed_at` AND
+`notes` both null — the invocation was killed by the platform before any
+of the three log-writer functions ran, i.e. `WORKER_RESOURCE_LIMIT`/
+`IDLE_TIMEOUT`), all dated 2026-08-30/31, none since the 65s/65s budget
+settled; backfilled to `status = 'crashed'` so they're never mistaken for
+a real success. `db.ts` is a Deno-only adapter with no Vitest coverage by
+design (same as `acClient.ts` — see its header comment); this fix is
+verified via live data above and a fresh live re-check after deploying,
+not a new unit test, consistent with that existing precedent. The doc
+comments on `DbPort.getLastCompletedSyncTimestamp`/`recordPartialSync`
+(`lib/registryPipeline/ports.ts`) were updated to match.
+
+## Open question, not yet resolved: does `filters[updated_since]` actually filter?
+
+Same `/contactLists` endpoint and `filters[X]` convention as `filters[list]`
+and `filters[listid]` — both now confirmed broken (see the two incidents
+above). The technical plan itself flagged this as unverified in Sections
+6.1 and 10 ("verify against real data early... before relying on it for
+incremental sync"), and it has never been tested against live AC data,
+because `lastSync` has effectively been null/meaningless throughout this
+backfill (see the incident above). If it's ALSO broken, every future
+"incremental" scheduled sync will silently re-scan the entire account from
+offset 0 again, rather than only pulling what actually changed — the same
+class of bug as the list filter, just not yet observable because we
+haven't reached the point where it would matter.
+
+A definitive test script — `ac_updated_since_probe.js`, alongside the
+existing `ac_discovery.js`/`ac_contact_lookup.js`/`ac_list_sniff.js` — was
+added to `~/Development/ac-discovery/` (outside this repo, run manually by
+Peter with his local AC credentials, same pattern as those other scripts).
+It queries the same list twice with the same limit — once with no filter
+(control) and once with `filters[updated_since]` set a few minutes in the
+future — and reports whether the future-dated query still returns rows
+(no real AC record can have been updated in the future, so any overlap
+with the control set is decisive proof the filter is ignored, mirroring
+exactly how `filters[list]`/`filters[listid]` were caught). **Not yet run**
+— needs Peter to run it locally and share the output, same as
+`ac_discovery.js` earlier. Should be done before cron scheduling
+(`scripts/schedule_ac_sync_cron.sql`) is ever enabled.
+
+## Investigated, no live evidence of a problem: parallel-call burst vs AC's 5 req/sec shared limit
+
+`acClient.ts`'s `getContactDetail()` fires 3 AC calls concurrently
+(`Promise.all` for the contact record, its field values, and its tags),
+followed by one `REQUEST_PACING_MS` (250ms) sleep before the next
+contact — a burst-then-pace pattern rather than a steady one-request
+spacing. Worth flagging because the account's AC key is shared,
+account-wide, with other integrations (plan Section 3.2), so a burst of 3
+has less headroom than the raw 5 req/sec figure suggests, and a resulting
+429 would eat several seconds of `computeBackoffMs` retry delay per
+occurrence — silently, since a successfully-retried 429 never increments
+`sync_log.errors`, it would just show up as fewer `recordsIn` per
+invocation than the budget/page-size math predicts.
+
+Checked the last 15 `sync_log` rows (2026-09-01, current 65s/65s budget):
+`records_in` is consistently 59-69 per invocation, matching what
+`computePageSize`'s `ESTIMATED_MS_PER_CONTACT = 1000` assumption predicts
+for two ~32.5s list slices with no meaningful throttling overhead, and
+`errors = 0` throughout. If 429 backoff were happening at any real
+frequency, per-invocation throughput would be visibly and inconsistently
+depressed below that prediction — it isn't. Conclusion: not causing a
+live problem right now, but it's a structural risk that depends on how
+much of the shared 5 req/sec other integrations are using at any given
+moment, so it's worth keeping in mind rather than closing outright — if
+`records_in` ever drops well below the ~60-70/invocation norm without a
+budget change, this is the first thing to re-check.
