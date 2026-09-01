@@ -392,33 +392,59 @@ not a new unit test, consistent with that existing precedent. The doc
 comments on `DbPort.getLastCompletedSyncTimestamp`/`recordPartialSync`
 (`lib/registryPipeline/ports.ts`) were updated to match.
 
-## Open question, not yet resolved: does `filters[updated_since]` actually filter?
+## Incident: `filters[updated_since]` is also ignored by AC — no working incremental filter exists on this endpoint (2026-09-01)
 
-Same `/contactLists` endpoint and `filters[X]` convention as `filters[list]`
-and `filters[listid]` — both now confirmed broken (see the two incidents
-above). The technical plan itself flagged this as unverified in Sections
-6.1 and 10 ("verify against real data early... before relying on it for
-incremental sync"), and it has never been tested against live AC data,
-because `lastSync` has effectively been null/meaningless throughout this
-backfill (see the incident above). If it's ALSO broken, every future
-"incremental" scheduled sync will silently re-scan the entire account from
-offset 0 again, rather than only pulling what actually changed — the same
-class of bug as the list filter, just not yet observable because we
-haven't reached the point where it would matter.
+Confirmed via `ac_updated_since_probe.js`, run live by Peter against List 2:
+a control query (no filter) and an otherwise-identical query with
+`filters[updated_since]` set several minutes in the *future* both returned
+the same 10 rows, fully overlapping. No real AC record can have been
+updated in the future, so this is decisive: AC is not applying this filter
+server-side, exactly like `filters[list]` and `filters[listid]` before it.
+All three `filters[X]` parameters tried against `/contactLists` in this
+project have now turned out to be no-ops. It's reasonable to assume this
+endpoint's `filters[...]` support is broadly unreliable rather than
+treating any future parameter on it as trustworthy without a live test
+first.
 
-A definitive test script — `ac_updated_since_probe.js`, alongside the
-existing `ac_discovery.js`/`ac_contact_lookup.js`/`ac_list_sniff.js` — was
-added to `~/Development/ac-discovery/` (outside this repo, run manually by
-Peter with his local AC credentials, same pattern as those other scripts).
-It queries the same list twice with the same limit — once with no filter
-(control) and once with `filters[updated_since]` set a few minutes in the
-future — and reports whether the future-dated query still returns rows
-(no real AC record can have been updated in the future, so any overlap
-with the control set is decisive proof the filter is ignored, mirroring
-exactly how `filters[list]`/`filters[listid]` were caught). **Not yet run**
-— needs Peter to run it locally and share the output, same as
-`ac_discovery.js` earlier. Should be done before cron scheduling
-(`scripts/schedule_ac_sync_cron.sql`) is ever enabled.
+**Consequence, once the initial backfill finishes and a genuine
+`completeSyncLog` occurs:** `lastSync` will become non-null, but since AC
+ignores it, every subsequent "incremental" sync will keep receiving the
+FULL unfiltered list from offset 0 again — not a correctness bug (upserts
+are keyed on `ac_contact_id` and idempotent, and `filters[updated_since]`
+being sent-but-ignored is harmless dead weight), but it defeats the entire
+point of incremental sync: every scheduled run would re-walk and
+re-fetch-detail for the whole ~14,700-contact account from scratch, rather
+than only what actually changed. At ~1s/contact that's several hours of
+AC-pull work to re-discover nothing new, repeated on every cron cycle.
+
+**Not fixed yet — needs a design decision, not a quick patch,** unlike the
+list-filter bug (which had a clean client-side substitute: discard rows
+whose `.list` doesn't match). There's no equivalent for `updated_since`
+from this endpoint: `/contactLists` doesn't return a per-membership
+"updated at" timestamp to filter on client-side. Two directions worth
+weighing before building either:
+1. **Accept full re-scans on every incremental run.** Simplest, no code
+   change beyond what's already in place — just size the cron interval
+   and per-run budget around "one full account re-scan takes N
+   invocations," and lean on the fact that it's wasteful but not wrong.
+2. **Re-architect the incremental path around `/contacts?filters[updated_after]=`**
+   instead of `/contactLists` — this is the endpoint `ac_recent_activity.js`
+   used successfully earlier (see "Investigated and closed: Campaign
+   Report data is not in AC" above) to sweep contacts by day window,
+   though that use never specifically stress-tested the filter's
+   reliability the way this incident's probe did for `/contactLists`, so
+   it would need the same kind of live verification before being trusted.
+   Would mean fetching a candidate set of recently-changed contact IDs
+   globally first, then checking list membership only for those — a
+   genuinely different shape from the current per-list pagination loop.
+
+Cron scheduling (`scripts/schedule_ac_sync_cron.sql`) should stay deferred
+until one of these is chosen and built — enabling it today would mean
+every scheduled run silently doing a full, expensive re-scan indefinitely.
+Not urgent while manual batching continues (each invocation already
+behaves like a full-scan step regardless, since `lastSync` has never been
+non-null) — this only becomes live the moment the backfill actually
+completes.
 
 ## Investigated, no live evidence of a problem: parallel-call burst vs AC's 5 req/sec shared limit
 
