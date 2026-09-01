@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { computePageSize, MAX_CONSECUTIVE_EMPTY_MATCH_PAGES, runSync } from '../sync';
+import { computePageSize, KNOWN_LIST_SIZES, MAX_CONSECUTIVE_EMPTY_MATCH_PAGES, MAX_OFFSET_MULTIPLIER, runSync } from '../sync';
 import type { AcPort, DbPort } from '../ports';
 import type { AcContactListMembership } from '../types';
 
@@ -331,6 +331,27 @@ describe('runSync', () => {
     expect(list1Calls.length).toBe(61);
     expect(result.recordsIn).toBe(1);
     expect(db.insertStagingEvent).toHaveBeenCalledWith(expect.objectContaining({ acContactId: 'real-1' }));
+  });
+
+  it('treats a list as exhausted once its offset passes the known-size safety multiplier, even with genuine matches still trickling in', async () => {
+    // Real incident: List 2's offset reached 13,236 against a true size of
+    // ~4,204 — sparse-but-nonzero genuine matches (already-known contacts
+    // resurfacing, not new content) kept resetting the consecutive-empty
+    // streak just before it ever reached the threshold. This is the
+    // second, independent safety net for exactly that case.
+    const genuineMatch: AcContactListMembership[] = [{ contact: 'real-1', list: '2', status: '1' }];
+    const ac = makeAc({ '1': [[]], '2': [genuineMatch, genuineMatch, genuineMatch] });
+    const startingOffset = KNOWN_LIST_SIZES['2'] * MAX_OFFSET_MULTIPLIER;
+    const db = makeDb({ getSyncProgress: vi.fn().mockImplementation(async (listId: string) => (listId === '2' ? startingOffset : null)) });
+
+    const result = await runSync(ac, db);
+
+    const list2Calls = (ac.getContactListPage as ReturnType<typeof vi.fn>).mock.calls.filter(
+      ([params]) => params.listId === '2'
+    );
+    expect(list2Calls.length).toBe(0);
+    expect(db.clearSyncProgress).toHaveBeenCalledWith('2');
+    expect(result.recordsIn).toBe(0);
   });
 });
 

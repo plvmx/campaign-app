@@ -129,6 +129,33 @@ export function computePageSize(perListBudgetMs: number): number {
 export const MAX_CONSECUTIVE_EMPTY_MATCH_PAGES = 50;
 
 /**
+ * Authoritative AC list sizes, from a live ac_discovery.js run
+ * (2026-08-29) — see docs/registry-pipeline/OPERATIONS.md. Used only as a
+ * generous safety-valve cap (MAX_OFFSET_MULTIPLIER below), never to gate
+ * normal operation — these will drift as AFJ's real registrant base
+ * grows, and are deliberately multiplied by a wide margin rather than
+ * treated as exact.
+ */
+export const KNOWN_LIST_SIZES: Readonly<Record<string, number>> = {
+  '1': 10_454,
+  '2': 4_204,
+};
+
+/**
+ * Second, independent safety net alongside MAX_CONSECUTIVE_EMPTY_MATCH_PAGES
+ * — real data showed the consecutive-streak heuristic alone wasn't enough:
+ * List 2 kept climbing past 13,000 (true size ~4,204) because sparse,
+ * already-known genuine matches kept resetting the streak just before it
+ * reached the threshold, without representing any real new content (a
+ * "genuine match" only means the row's own `.list` equals what was
+ * requested — nothing about whether it's a contact already discovered
+ * many times before). Once a list's offset exceeds this many times its
+ * known true size, treat it as exhausted unconditionally, regardless of
+ * recent match activity.
+ */
+export const MAX_OFFSET_MULTIPLIER = 3;
+
+/**
  * How long the AC-pulling phase and the transform phase are each allowed to
  * run before stopping and leaving the rest for the next invocation.
  *
@@ -201,6 +228,12 @@ export async function runSync(ac: AcPort, db: DbPort, options: RunSyncOptions = 
       for (;;) {
         if (now() >= listDeadline) {
           anyListTimedOut = true;
+          break;
+        }
+
+        const knownSize = KNOWN_LIST_SIZES[listId];
+        if (knownSize !== undefined && offset >= knownSize * MAX_OFFSET_MULTIPLIER) {
+          await db.clearSyncProgress(listId);
           break;
         }
 
