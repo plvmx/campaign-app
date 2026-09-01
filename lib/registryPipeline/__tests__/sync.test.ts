@@ -85,6 +85,25 @@ describe('runSync', () => {
     expect(result.partial).toBe(false);
   });
 
+  it('skips the detail fetch and staging insert entirely for a membership whose status is not active', async () => {
+    const inactive: AcContactListMembership = { contact: 'ac-1', list: '1', status: '3' };
+    const active: AcContactListMembership = { contact: 'ac-2', list: '1', status: '1' };
+    const ac = makeAc({ '1': [[inactive, active], []], '2': [[]] });
+    const db = makeDb();
+
+    const result = await runSync(ac, db);
+
+    // The inactive membership never reaches getContactDetail or staging at all —
+    // not just discarded later by transform.ts (the pre-fix behavior: fetched in
+    // full, then discarded — see sync.ts's "Fifth deliberate deviation").
+    expect(ac.getContactDetail).toHaveBeenCalledTimes(1);
+    expect(ac.getContactDetail).toHaveBeenCalledWith('ac-2');
+    expect(ac.getContactDetail).not.toHaveBeenCalledWith('ac-1');
+    expect(db.insertStagingEvent).toHaveBeenCalledTimes(1);
+    expect(db.insertStagingEvent).toHaveBeenCalledWith(expect.objectContaining({ acContactId: 'ac-2' }));
+    expect(result.recordsIn).toBe(1);
+  });
+
   it('tags staging events as sync (not backfill) once a prior completed sync exists', async () => {
     const membership: AcContactListMembership = { contact: 'ac-1', list: '1', status: '1' };
     const ac = makeAc({ '1': [[membership], []], '2': [[]] });

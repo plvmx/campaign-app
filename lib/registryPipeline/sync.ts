@@ -65,8 +65,23 @@
 // before it's allowed anywhere near staging (see the `rawPage.filter(...)`
 // below). See docs/registry-pipeline/OPERATIONS.md for the cleanup this
 // required for data already landed before the fix.
+//
+// Fifth deliberate deviation — an efficiency finding, not a correctness
+// one: transform.ts has always discarded any membership whose own
+// `status` isn't active (isActiveListStatus, plan Section 6.2/10), but
+// only after this loop already paid for a full getContactDetail (3 AC
+// calls) and a staging insert for it. Confirmed via live data
+// (2026-09-01): 987 of 54,385 staging rows to date were fetched in full
+// only to be discarded this way. `membership.status` is already present
+// on the row returned by the cheap list-page call above, before any
+// detail fetch — so that same check now runs here too, skipping the
+// detail fetch and staging insert entirely for an inactive membership,
+// at zero extra AC calls. transform.ts's check is left in place
+// unchanged (harmless — it will simply never see one of these rows,
+// since none is ever created for an inactive membership).
 
 import { getErrorMessage } from '../errorUtils.ts';
+import { isActiveListStatus } from './listFilter.ts';
 import { REQUEST_PACING_MS, sleep } from './rateLimiter.ts';
 import type { AcPort, DbPort } from './ports.ts';
 import { transformPendingStagingEvents } from './transform.ts';
@@ -209,6 +224,9 @@ export async function runSync(ac: AcPort, db: DbPort, options: RunSyncOptions = 
     const eventType: 'backfill' | 'sync' = lastSync === null ? 'backfill' : 'sync';
     let recordsIn = 0;
     let anyListTimedOut = false;
+    // See the isActiveListStatus skip below — logged, not persisted, purely
+    // for visibility into how much detail-fetch work this avoids.
+    let skippedInactive = 0;
 
     // Each list gets its own fair slice of the AC budget, measured from
     // when THAT list's turn starts — not one shared deadline a large list
@@ -298,6 +316,19 @@ export async function runSync(ac: AcPort, db: DbPort, options: RunSyncOptions = 
             break;
           }
 
+          // Skip the expensive detail fetch entirely for a membership we
+          // already know, from this same cheap list-page response, is not
+          // active (e.g. bounced) — transform.ts has always discarded these
+          // anyway (isActiveListStatus, same check), but only after paying
+          // for a full getContactDetail (3 AC calls) and a staging insert.
+          // Confirmed via live data (2026-09-01): 987 of 54,385 staging
+          // rows to date were fetched in full only to be discarded this
+          // way. No AC call, no staging row, no PII touched for these.
+          if (!isActiveListStatus(membership.status)) {
+            skippedInactive++;
+            continue;
+          }
+
           const detail = await ac.getContactDetail(membership.contact);
           await sleep(REQUEST_PACING_MS);
 
@@ -323,6 +354,10 @@ export async function runSync(ac: AcPort, db: DbPort, options: RunSyncOptions = 
       }
       // Deliberately no early exit here — every list gets its turn every
       // invocation, regardless of whether an earlier one timed out.
+    }
+
+    if (skippedInactive > 0) {
+      console.log(`runSync: skipped ${skippedInactive} inactive membership(s) without a detail fetch`);
     }
 
     // Transform whatever has landed so far regardless of whether the

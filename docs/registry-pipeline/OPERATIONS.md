@@ -472,3 +472,45 @@ much of the shared 5 req/sec other integrations are using at any given
 moment, so it's worth keeping in mind rather than closing outright — if
 `records_in` ever drops well below the ~60-70/invocation norm without a
 budget change, this is the first thing to re-check.
+
+## Fixed: known-worthless detail fetches (list-status-inactive) skipped without an AC call (2026-09-01)
+
+Prompted by Peter asking directly: "are we only retrieving the AC records
+we need, or are we retrieving more?" Quantified with live data against
+`staging.ac_events` (54,385 rows total, every one a full 3-call
+`getContactDetail` fetch):
+
+| What | Count | % of all fetches |
+|---|---|---|
+| Fetched in full, then discarded at transform: list status not active | 987 | 1.8% |
+| Fetched in full, then discarded at transform: MailChimp-tag-only (excluded source) | 3,321 | 6.1% |
+
+The list-membership-level over-fetch from the broken `filters[listid]`
+(mixed-in List 3/5 rows) was already handled — those never reach
+`getContactDetail` at all (discarded via `rawPage.filter(...)` before the
+per-contact loop, see the Fourth deviation above); the two rows above are
+a different thing: contacts genuinely on List 1/2, fetched in FULL, then
+discarded at transform time for a reason we already knew *before* the
+detail fetch.
+
+Fixed the cheaper of the two: `membership.status` (active/bounced/etc.)
+is already present on the row returned by the list-page call, before any
+detail fetch — moved `isActiveListStatus()` (already used in
+`transform.ts`) into `sync.ts`'s per-contact loop, skipping
+`getContactDetail`/`insertStagingEvent` entirely for an inactive
+membership. Zero new AC calls, no restructuring, no `DbPort`/schema
+change — `transform.ts`'s existing check is untouched (harmless, since it
+will simply never see one of these rows going forward). Verified
+red→green: the new test
+(`lib/registryPipeline/__tests__/sync.test.ts`, "skips the detail fetch
+and staging insert entirely for a membership whose status is not
+active") fails against pre-fix `sync.ts` (2 `getContactDetail` calls
+instead of 1) and passes against the fix.
+
+**Deliberately not fixed:** the MailChimp-tag-only case (6.1%, larger).
+Excluding it earlier would mean reordering `getContactDetail` to fetch
+`contactTags` first and short-circuit before `contact`/`fieldValues` —
+changes `AcPort`'s contract in `acClient.ts`, for a smaller per-contact
+saving (cuts 1 of 3 calls, not all 3, since the tags call is still
+needed either way). Deferred as a separate, deliberate piece of work if
+it's ever worth it, not folded into the in-progress backfill.
