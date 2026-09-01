@@ -619,3 +619,38 @@ offset 0 under the new sweep order (a different traversal order than the
 old per-list one), so it will take a number of invocations before it
 reaches contacts genuinely new to `registry.registrants`. Will report
 back with real growth numbers once the batch has run for longer.
+
+## Regression found: `filters[contact]` on `/contactLists` is very likely broken (2026-09-01)
+
+Confirmed via live data, not assumed. The batch run after deploying
+Proposal 2 covered AC contact IDs 6–1120 and found only **2** genuine
+List 1/2 matches. Checked against `staging.ac_events`' full historical
+record: IDs 6–1120 include **1,099 already-known genuine List 1/2
+members** — membership is essentially dense/uniform across the whole ID
+range (~1,000 per 1,000-id bucket, all the way to 14,000+), not sparse at
+the low end. Expected roughly 1,099 matches, found 2 — this is a real bug
+in `getContactListMemberships`'s `filters[contact]=<id>` call
+(`acClient.ts`), not a benign "early IDs are pre-registration test
+contacts" explanation.
+
+That param was explicitly flagged as unverified when written (see its own
+code comment) — this is now direct evidence it doesn't work as intended,
+consistent with every other `filters[...]` param tried on this same
+endpoint (`list`, `listid`, `updated_since` — all confirmed broken).
+Unlike those, which returned *too much* unfiltered data, this one appears
+to return close to *nothing* for a genuine member — plausibly because
+`/contactLists` doesn't support a `contact` filter at all (invalid/silently-
+ignored-as-no-match, rather than ignored-as-return-everything), or because
+the correct shape is AC's nested-resource pattern instead
+(`/contacts/{id}/contactLists`, matching `/contacts/{id}/fieldValues` and
+`/contacts/{id}/contactTags`, which this pipeline already uses
+successfully elsewhere).
+
+**Batching paused.** A probe script
+(`ac_contactlists_by_contact_probe.js`, `~/Development/ac-discovery/`)
+was written to test both shapes against contacts already confirmed
+(historically) to be genuine List 1/2 members — e.g. IDs 6, 10–30, all
+confirmed on both lists. Needs Peter to run it before `acClient.ts` is
+fixed. No further batch invocations until this is resolved — continuing
+to run would just keep silently missing nearly everyone, the opposite of
+what Proposal 2 was meant to fix.
