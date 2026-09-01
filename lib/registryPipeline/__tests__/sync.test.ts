@@ -1,7 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
-import { computePageSize, runSync } from '../sync';
+import { computePageSize, MAX_CONSECUTIVE_EMPTY_MATCH_PAGES, runSync } from '../sync';
 import type { AcPort, DbPort } from '../ports';
 import type { AcContactListMembership } from '../types';
+
+// Real pacing delay (rateLimiter.ts's REQUEST_PACING_MS) stubbed to zero —
+// tests here exercise dozens of pages in the empty-match-page tests, which
+// would otherwise take real seconds for no testing value.
+vi.mock('../rateLimiter', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../rateLimiter')>();
+  return { ...actual, sleep: vi.fn().mockResolvedValue(undefined) };
+});
 
 function makeAc(pagesByList: Record<string, AcContactListMembership[][]>): AcPort {
   const calls: Record<string, number> = {};
@@ -274,6 +282,55 @@ describe('runSync', () => {
       ([params]) => params.listId === '1'
     );
     expect(list1Call?.[0].limit).toBe(1);
+  });
+
+  it('treats a list as exhausted after many consecutive pages with zero genuine matches, even without a literal empty page', async () => {
+    // Real incident: List 2's pagination offset reached 12,852 while its
+    // true size was ~4,204 — a literal empty page never occurred, because
+    // AC's list filter doesn't actually filter. Every page here has one
+    // item, but none of them match list '1' — the loop must still stop on
+    // its own rather than scanning forever.
+    const contamination = (n: number): AcContactListMembership[] => [{ contact: `c-${n}`, list: '3', status: '1' }];
+    const pages = Array.from({ length: MAX_CONSECUTIVE_EMPTY_MATCH_PAGES }, (_, i) => contamination(i));
+    const ac = makeAc({ '1': pages, '2': [[]] });
+    const db = makeDb();
+
+    const result = await runSync(ac, db);
+
+    const list1Calls = (ac.getContactListPage as ReturnType<typeof vi.fn>).mock.calls.filter(
+      ([params]) => params.listId === '1'
+    );
+    expect(list1Calls.length).toBe(MAX_CONSECUTIVE_EMPTY_MATCH_PAGES);
+    expect(db.clearSyncProgress).toHaveBeenCalledWith('1');
+    expect(result.recordsIn).toBe(0);
+    expect(result.partial).toBe(false);
+  });
+
+  it('resets the consecutive-empty-match-page count once a genuine match is found, rather than accumulating across it', async () => {
+    const contamination = (n: number): AcContactListMembership[] => [{ contact: `c-${n}`, list: '3', status: '1' }];
+    const genuineMatch: AcContactListMembership[] = [{ contact: 'real-1', list: '1', status: '1' }];
+    // 30 contamination-only pages, one genuine match, then 29 more
+    // contamination-only pages — no single unbroken streak reaches the
+    // 50-page threshold, so the list must NOT be declared exhausted early.
+    const pages = [
+      ...Array.from({ length: 30 }, (_, i) => contamination(i)),
+      genuineMatch,
+      ...Array.from({ length: 29 }, (_, i) => contamination(i + 30)),
+    ];
+    const ac = makeAc({ '1': pages, '2': [[]] });
+    const db = makeDb();
+
+    const result = await runSync(ac, db);
+
+    const list1Calls = (ac.getContactListPage as ReturnType<typeof vi.fn>).mock.calls.filter(
+      ([params]) => params.listId === '1'
+    );
+    // All 60 provided pages consumed, plus one more call that falls
+    // through to an empty array — the ordinary empty-page path is what
+    // actually ends this list, not the consecutive-empty-match heuristic.
+    expect(list1Calls.length).toBe(61);
+    expect(result.recordsIn).toBe(1);
+    expect(db.insertStagingEvent).toHaveBeenCalledWith(expect.objectContaining({ acContactId: 'real-1' }));
   });
 });
 

@@ -296,3 +296,36 @@ registrants, but a different cause — AC itself never captured postcode
 for them at all (see the postcode decision above), so no backfill script
 can fix that one; this one, being purely a gap on this pipeline's side,
 can.
+
+## Incident: AC's list filter still not actually filtering — List 2 stuck scanning past its true size (2026-09-01)
+
+Peter noticed `registry.registrants` hadn't grown in over a day despite
+continuous "successful" batches. Investigated rather than assumed benign:
+no new registrant since 2026-08-30T03:58 — every `registration_events` row
+created since then was for an already-existing registrant. Traced to
+`registry.sync_progress`: List 2's pagination offset had reached 12,852,
+while its true size (via `ac_discovery.js`) is only ~4,204 — a genuinely
+empty raw page from AC never occurred. Confirmed the content itself was
+already fully discovered: distinct genuine List-2 contacts landed in
+`staging.ac_events` across all history = 4,221, essentially the true
+total. So List 2 had nothing left to find, but kept scanning anyway,
+consuming half of every invocation's AC-pull budget that List 1 (which
+still had real content left, offset 6,804 of ~10,454) could have used.
+
+Root cause: `acClient.ts`'s list filter (`filters[listid]`, the earlier
+best-effort correction after `filters[list]` was confirmed broken —
+neither has ever been verified against a live raw API test) still isn't
+filtering. Rather than guess at a third parameter name blind again, fixed
+this at the orchestration level instead, where it's correct regardless of
+what AC's API actually does: `lib/registryPipeline/sync.ts` now treats
+`MAX_CONSECUTIVE_EMPTY_MATCH_PAGES` (50) consecutive pages with zero
+genuine (post-filter) matches as list exhaustion, same as a literal empty
+page — self-adapting, no dependency on ever finding the "true" AC
+parameter name. Deliberately generous (50) since a false-early conclusion
+would silently stop discovering a list's genuine remaining members, a
+correctness regression far worse than some continued wasted scanning.
+
+Not yet re-verified against live data post-fix (deploying now) — check
+`sync_progress` after a few invocations: List 2 should clear/reset rather
+than keep climbing, and List 1 should start getting a fairer share of
+budget, resuming real registrant growth.

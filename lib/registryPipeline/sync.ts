@@ -116,6 +116,19 @@ export function computePageSize(perListBudgetMs: number): number {
 }
 
 /**
+ * How many consecutive pages with zero genuine (post-filter) matches
+ * before a list is treated as exhausted, even without AC ever returning a
+ * literal empty page. See the real incident documented where this check
+ * is applied, in the main loop below. Deliberately generous — a false
+ * "exhausted" conclusion would silently stop discovering a list's
+ * remaining genuine members, a correctness regression; a page with zero
+ * matches costs only one cheap list-listing call (no per-contact detail
+ * fetches), so even 50 in a row comfortably fits within one invocation's
+ * per-list budget once a list really is exhausted.
+ */
+export const MAX_CONSECUTIVE_EMPTY_MATCH_PAGES = 50;
+
+/**
  * How long the AC-pulling phase and the transform phase are each allowed to
  * run before stopping and leaving the rest for the next invocation.
  *
@@ -182,6 +195,8 @@ export async function runSync(ac: AcPort, db: DbPort, options: RunSyncOptions = 
     for (const listId of SYNCED_LIST_IDS) {
       let offset = (await db.getSyncProgress(listId)) ?? 0;
       const listDeadline = now() + perListBudgetMs;
+      // See MAX_CONSECUTIVE_EMPTY_MATCH_PAGES's doc comment below.
+      let consecutiveEmptyMatchPages = 0;
 
       for (;;) {
         if (now() >= listDeadline) {
@@ -204,6 +219,31 @@ export async function runSync(ac: AcPort, db: DbPort, options: RunSyncOptions = 
         // still advances by the raw page length (AC's own result-set
         // position), not the filtered count.
         const page = rawPage.filter((membership) => membership.list === listId);
+
+        // Second real incident involving this same broken filter: List 2's
+        // pagination offset reached 12,852 while its true size is ~4,204
+        // (confirmed via AC's own list-contact-count) — a genuinely empty
+        // RAW page never occurred, because the filter keeps returning a
+        // mix of every list regardless of what's requested, and the
+        // per-row defense-in-depth above only discards the wrong ones
+        // rather than making AC stop sending them. Distinct genuine List-2
+        // contacts landed in staging: 4,221 — essentially the true total —
+        // confirming the list's content was already fully discovered while
+        // its pagination kept scanning uselessly, wasting AC-pull budget
+        // that List 1 (which still had genuine content left to find) could
+        // have used instead. Treat many consecutive pages with zero
+        // genuine matches as exhaustion too, not just a literal empty
+        // page — self-adapting, and correct regardless of whether AC's
+        // filter parameter itself ever gets fixed.
+        if (page.length === 0) {
+          consecutiveEmptyMatchPages++;
+          if (consecutiveEmptyMatchPages >= MAX_CONSECUTIVE_EMPTY_MATCH_PAGES) {
+            await db.clearSyncProgress(listId);
+            break;
+          }
+        } else {
+          consecutiveEmptyMatchPages = 0;
+        }
 
         // Checked per-contact, not just once per page: real invocation data
         // showed wall-clock time running far past the nominal budget (e.g.
