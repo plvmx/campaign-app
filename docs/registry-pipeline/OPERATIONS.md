@@ -549,3 +549,37 @@ normalize to implausible lengths (as short as 4 characters, one as long
 as 29) — not the majority (93% are a clean, normal 12-character E.164
 value), but worth a targeted query + spot-check once there's time,
 independent of the reconciliation.
+
+## `/contacts` probe results — Proposal 2's assumptions substantially confirmed (2026-09-01)
+
+Peter ran `ac_contacts_pagination_probe.js` (see
+[FORWARD_SYNC_REDESIGN.md](./FORWARD_SYNC_REDESIGN.md)'s Proposal 2)
+against live AC data:
+
+- **Pagination is stable**: identical page (offset=100, limit=20) fetched
+  twice, 8 seconds apart, returned identical contact IDs in identical
+  order. Directly answers the open question from the redesign — safe to
+  page through `/contacts` without a reordering risk.
+- **`orders[id]=ASC` works**: returned IDs in clean ascending order
+  (122–141 in the sample) — supports an id-based cursor exactly as
+  proposed.
+- **`filters[created_after]` works**: a future-dated filter correctly
+  returned zero rows against a 20-row control. The *first* AC filter of
+  any kind, on any endpoint, in this whole project to pass the future-date
+  test — every `filters[...]` param tried on `/contactLists`
+  (`list`/`listid`/`updated_since`) failed it.
+- **List membership is NOT embedded** in a `/contacts` response (checked
+  all top-level keys on a real contact — none list-related). Resolves the
+  redesign's open "list-membership tradeoff" question in favor of option
+  (a) (a scoped per-contact `/contactLists` check for newly-discovered
+  contacts only) — not a recommendation anymore, the only viable option,
+  since (b) (rely on an embedded list array) isn't available at all.
+
+**Not yet tested: `filters[updated_after]`.** `created_after` only catches
+contacts new to AC — it wouldn't catch an existing AC contact who joins
+List 1/2 later (e.g. was already a contact via some unrelated list, then
+submits the AFJ form) since their `cdate` stays unchanged. That needs
+`udate`, a different underlying field on the same endpoint — must not be
+assumed to work just because `created_after` did (same "different param,
+verify independently" discipline that caught every other broken filter
+this session). Extended the probe script to test it too; rerun pending.

@@ -228,41 +228,35 @@ cursor of "highest `id` fully processed so far" is correct regardless of
 whatever else is happening concurrently in the shared AC account, with no
 dependency on AC's pagination staying stable between calls.
 
-### Open questions — need live verification before implementation, not assumed
+### Open questions — status after the live probe (2026-09-01)
 
-Every `/contactLists` filter tried so far turned out broken; nothing about
-`/contacts` should be assumed to work differently without the same kind
-of test used to catch the others. Before writing any code:
+Every `/contactLists` filter tried so far turned out broken, so nothing
+about `/contacts` was assumed to work differently without the same kind
+of test used to catch the others. `ac_contacts_pagination_probe.js`
+(`~/Development/ac-discovery/`, same pattern as `ac_updated_since_probe.js`)
+answered these against live AC data — see OPERATIONS.md for the full
+write-up:
 
-1. **Does `/contacts` support `orders[id]=ASC` (or is ascending-by-id
-   already its default)?** Verify the same contact set, fetched twice with
-   a gap, returns pages in identical order both times.
-2. **Does `/contacts` support a genuine `id`-range filter** (e.g.
-   `filters[id_greater]`, or similar — AC v3's documented filter syntax is
-   mostly exact-match, so this may not exist as a first-class param) — if
-   not, the cursor still has to be enforced client-side (fetch a page
-   ordered by id, discard anything `<= last_seen_id`, which is safe as
-   long as ordering is genuinely stable, just not maximally efficient).
-3. **Does `/contacts`' own `filters[created_after]`/`filters[updated_after]`
-   actually filter**, unlike `/contactLists`' `filters[updated_since]`?
-   These are a different endpoint and different underlying AC field
-   (`cdate`/`udate` on the contact record itself, not a list-membership
-   event) — plausibly implemented differently, but this must not be
-   assumed either way. `ac_recent_activity.js` used
-   `filters[created_after]` successfully against this endpoint earlier
-   this session (during the Campaign Report investigation), which is
-   encouraging but was never adversarially tested the way the
-   `updated_since` probe tested `/contactLists` — a same-style probe
-   (future-dated filter, expect zero rows) should confirm it properly
-   before it's load-bearing here.
+1. ~~Does `/contacts` support `orders[id]=ASC`?~~ **Confirmed yes** — and
+   separately, the same page fetched twice 8 seconds apart returned
+   identical contact IDs in identical order: pagination is genuinely
+   stable, not just orderable.
+2. Genuine `id`-range filter (`filters[id_greater]` or similar) — not
+   directly tested; superseded by finding #3 below, which gives a cleaner
+   incremental mechanism than an id-range filter would have anyway.
+3. ~~Does `filters[created_after]`/`filters[updated_after]` actually
+   filter?~~ **`created_after` confirmed working** — a future-dated filter
+   correctly returned zero rows, the first AC filter of any kind in this
+   whole project to pass that test. **`filters[updated_after]` not yet
+   tested** — `created_after` alone would miss an existing AC contact who
+   joins List 1/2 later (their `cdate` doesn't change), so this needs its
+   own independent confirmation before being load-bearing — same
+   discipline that caught the others; the probe script has been extended
+   to test it, rerun pending.
 
-A new probe script (`ac_contacts_pagination_probe.js`, same pattern as
-`ac_updated_since_probe.js` in `~/Development/ac-discovery/`, run locally
-by Peter) should answer all three before implementation starts.
+### List-membership tradeoff — resolved by the probe, not just a recommendation anymore
 
-### List-membership tradeoff — needs a decision, not just a technical answer
-
-Switching the *discovery* loop to `/contacts` raises a real question about
+Switching the *discovery* loop to `/contacts` raised a real question about
 *scope*: does the new design still need to touch every contact in the AC
 account (including Lists 3 and 5, which are permanently excluded — List 5
 specifically because it holds sensitive financial-intent data the plan
@@ -270,29 +264,14 @@ says should "never be one accidental query away" from this pipeline), or
 can list-membership still be checked without ever pulling a List-3/5-only
 contact's field values at all?
 
-Two options:
-
-- **(a) Keep `/contactLists?filters[listid]=X` as a per-contact
-  membership check**, called only for contacts discovered as new via the
-  `/contacts` id-cursor sweep, scoped to that one contact — preserves the
-  current property that a List-3/5-only contact's detail is never fetched
-  at all, at the cost of one extra AC call per newly-discovered contact.
-- **(b) Rely on list membership embedded in the `/contacts` response
-  itself**, if AC's contact payload includes it inline (needs checking —
-  not confirmed) — fewer calls, but means every contact in the account,
-  including List 3/5-only ones, briefly passes through the Edge Function's
-  memory during the id-cursor sweep before being filtered out client-side
-  (never persisted, same as the existing List-3/5 defense-in-depth filter
-  in `sync.ts` today) — a real, if narrow, step back from "never one
-  accidental query away."
-
-**Recommend (a)** — it's the one that doesn't change the pipeline's
-existing privacy posture for Lists 3/5, at a modest efficiency cost (one
-membership-check call per *newly discovered* contact only, not per
-already-known one, so the ongoing steady-state cost is small). Flagging
-(b) because it may turn out to be unavoidable if AC's `/contacts` payload
-doesn't cleanly support (a)'s per-contact scoped call — worth knowing
-which before committing.
+The probe checked a real `/contacts` payload's full top-level key set —
+**no list-membership data is embedded at all.** That settles it: option
+(a), a scoped `/contactLists?filters[listid]=X` check called only for
+contacts discovered as new via the `/contacts` id-cursor sweep, is the
+only viable approach, not a preference — preserves the existing property
+that a List-3/5-only contact's detail is never fetched at all, at the
+cost of one extra AC call per newly-discovered contact (not per
+already-known one, so the ongoing steady-state cost is small).
 
 ### Sketch of the new sync loop
 
