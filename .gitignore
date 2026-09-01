@@ -61,3 +61,4 @@ TECHNICAL_DOCS.html
 # Supabase CLI local link/session state (registry pipeline — see docs/registry-pipeline/OPERATIONS.md)
 .supabase
 supabase/.temp
+scratch_*
