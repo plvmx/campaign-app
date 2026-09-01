@@ -114,6 +114,8 @@ export async function transformPendingStagingEvents(db: DbPort, options: Transfo
         postcode: fields.postcode,
         registeredAt: fields.registeredAt,
         interestedInTraining: fields.interestedInTraining,
+        churchLeader: fields.churchLeader,
+        churchName: fields.churchName,
       });
 
       await db.insertRegistrationEvent({

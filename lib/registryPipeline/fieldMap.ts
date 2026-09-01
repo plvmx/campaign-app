@@ -17,14 +17,16 @@ import type { AcFieldValue, MappedRegistrantFields, RawAcContactPayload } from '
  * are read directly off `contact` — see mapAcFields below.
  *
  * NOT included, deliberately, per plan 3.4 (never add these back without
- * a new AFJ leadership decision): [10]/[28] Church Leader?, [15]
- * Denomination, [4] Did they say the response prayer?, [12] How much would
- * you like to give?, [13] How can you support AFJ?, [14] Church Name /
- * [26] What Church do you attend?, [20] Music Leader, [21] Website
- * (an AC *field* ID — unrelated to AC *tag* [21] used for source
- * attribution, see sourceAttribution.ts), [29] Webinar Replay Link,
- * [8] Church, [11] Country, and the wayoflife-responder response-outcome
- * fields.
+ * a new AFJ leadership decision): [15] Denomination, [4] Did they say the
+ * response prayer?, [12] How much would you like to give?, [13] How can
+ * you support AFJ?, [20] Music Leader, [21] Website (an AC *field* ID —
+ * unrelated to AC *tag* [21] used for source attribution, see
+ * sourceAttribution.ts), [29] Webinar Replay Link, [8] Church, [11]
+ * Country, and the wayoflife-responder response-outcome fields.
+ *
+ * [10]/[28] Church Leader? and [14]/[26] Church Name / What Church do you
+ * attend? were ALSO originally excluded here on the same basis — reversed
+ * 2026-09-01, Peter confirmed both are now needed.
  */
 export const ALLOWED_CUSTOM_FIELD_IDS = {
   /** [6] State (free text) — confirmed canonical, populated on all tested List-1 pages. */
@@ -46,6 +48,23 @@ export const ALLOWED_CUSTOM_FIELD_IDS = {
   POSTCODE: '30',
   /** [9] Interested in training? — confirmed live/populated per plan 3.4. Promoted to registry.registrants.interested_in_training (2026-09-01, per Peter). */
   INTERESTED_IN_TRAINING: '9',
+  /**
+   * [28] Are you a church leader? (dropdown, newer form) / [10] Church
+   * Leader? (hidden, older form) — same old/new pairing already seen for
+   * State [6]/[25] and training [9]/[27]. Reverses the original plan 3.4
+   * exclusion ("Sensitive-adjacent; leadership decision") — confirmed by
+   * Peter 2026-09-01 that this is now needed.
+   */
+  CHURCH_LEADER: '28',
+  CHURCH_LEADER_FALLBACK: '10',
+  /**
+   * [26] What Church do you attend? (newer) / [14] Church Name (older) —
+   * same pairing pattern. Reverses the original plan 3.4 exclusion
+   * ("Confirmed by AFJ leadership") — confirmed by Peter 2026-09-01 that
+   * this is now needed.
+   */
+  CHURCH_NAME: '26',
+  CHURCH_NAME_FALLBACK: '14',
   /**
    * Confirmed live/populated and included per plan 3.4, but registry.registrants
    * (plan Section 5) has no column for these yet — they're preserved untouched
@@ -77,6 +96,14 @@ export function mapAcFields(payload: RawAcContactPayload): MappedRegistrantField
     findFieldValue(fieldValues, ALLOWED_CUSTOM_FIELD_IDS.STATE) ??
     findFieldValue(fieldValues, ALLOWED_CUSTOM_FIELD_IDS.AU_STATE_FALLBACK);
 
+  const churchLeader =
+    findFieldValue(fieldValues, ALLOWED_CUSTOM_FIELD_IDS.CHURCH_LEADER) ??
+    findFieldValue(fieldValues, ALLOWED_CUSTOM_FIELD_IDS.CHURCH_LEADER_FALLBACK);
+
+  const churchName =
+    findFieldValue(fieldValues, ALLOWED_CUSTOM_FIELD_IDS.CHURCH_NAME) ??
+    findFieldValue(fieldValues, ALLOWED_CUSTOM_FIELD_IDS.CHURCH_NAME_FALLBACK);
+
   return {
     firstName: contact.firstName?.trim() || null,
     lastName: contact.lastName?.trim() || null,
@@ -86,5 +113,7 @@ export function mapAcFields(payload: RawAcContactPayload): MappedRegistrantField
     postcode: findFieldValue(fieldValues, ALLOWED_CUSTOM_FIELD_IDS.POSTCODE),
     registeredAt: contact.cdate?.trim() || null,
     interestedInTraining: findFieldValue(fieldValues, ALLOWED_CUSTOM_FIELD_IDS.INTERESTED_IN_TRAINING),
+    churchLeader,
+    churchName,
   };
 }

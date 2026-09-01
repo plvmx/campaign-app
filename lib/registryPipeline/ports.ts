@@ -72,6 +72,8 @@ export interface DbPort {
     postcode: string | null;
     registeredAt: string | null;
     interestedInTraining: string | null;
+    churchLeader: string | null;
+    churchName: string | null;
   }): Promise<{ id: string }>;
   insertRegistrationEvent(input: {
     registrantId: string;

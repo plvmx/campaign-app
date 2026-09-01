@@ -66,4 +66,8 @@ export interface MappedRegistrantFields {
   registeredAt: string | null;
   /** [9] Interested in training? — raw AC value (e.g. "Yes"/"No"), stored as-is rather than coerced, matching state/postcode's approach elsewhere in this file. */
   interestedInTraining: string | null;
+  /** [28]/[10] Are you a church leader? / Church Leader? — raw AC value (e.g. "Yes"/"No"). Reverses the plan's original exclusion, per Peter 2026-09-01. */
+  churchLeader: string | null;
+  /** [26]/[14] What Church do you attend? / Church Name. Reverses the plan's original exclusion, per Peter 2026-09-01. */
+  churchName: string | null;
 }

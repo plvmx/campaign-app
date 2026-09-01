@@ -57,6 +57,8 @@ describe('transformPendingStagingEvents', () => {
       postcode: null,
       registeredAt: '2026-01-15T10:00:00Z',
       interestedInTraining: null,
+      churchLeader: null,
+      churchName: null,
     });
     expect(db.insertRegistrationEvent).toHaveBeenCalledWith({
       registrantId: 'registrant-1',
@@ -130,6 +132,23 @@ describe('transformPendingStagingEvents', () => {
     await transformPendingStagingEvents(db);
 
     expect(db.upsertRegistrant).toHaveBeenCalledWith(expect.objectContaining({ interestedInTraining: 'Yes' }));
+  });
+
+  it('passes through populated churchLeader and churchName', async () => {
+    const db = makeDb([
+      makeEvent(8, {
+        fieldValues: [
+          { field: '6', value: 'NSW' },
+          { field: '28', value: 'Yes' },
+          { field: '26', value: 'Eaton Baptist Church' },
+        ],
+      }),
+    ]);
+    await transformPendingStagingEvents(db);
+
+    expect(db.upsertRegistrant).toHaveBeenCalledWith(
+      expect.objectContaining({ churchLeader: 'Yes', churchName: 'Eaton Baptist Church' })
+    );
   });
 
   it('passes the batch limit through to getPendingStagingEvents', async () => {

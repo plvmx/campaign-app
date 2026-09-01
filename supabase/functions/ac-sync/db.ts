@@ -118,6 +118,8 @@ export function createDb(client: SupabaseClient = createServiceClient()): DbPort
             postcode: input.postcode,
             registered_at: input.registeredAt,
             interested_in_training: input.interestedInTraining,
+            church_leader: input.churchLeader,
+            church_name: input.churchName,
             last_updated_at: new Date().toISOString(),
           },
           { onConflict: 'ac_contact_id' }

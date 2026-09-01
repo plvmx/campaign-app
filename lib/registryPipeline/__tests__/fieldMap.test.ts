@@ -123,4 +123,41 @@ describe('mapAcFields', () => {
     const result = mapAcFields(makePayload({ fieldValues: [] }));
     expect(result.postcode).toBeNull();
   });
+
+  it('reads churchLeader from field [28] when populated', () => {
+    const result = mapAcFields(makePayload({ fieldValues: [{ field: '28', value: 'Yes' }] }));
+    expect(result.churchLeader).toBe('Yes');
+  });
+
+  it('falls back to field [10] Church Leader? only when [28] is absent', () => {
+    const result = mapAcFields(makePayload({ fieldValues: [{ field: '10', value: 'No' }] }));
+    expect(result.churchLeader).toBe('No');
+  });
+
+  it('prefers field [28] over field [10] when both are present', () => {
+    const result = mapAcFields(
+      makePayload({ fieldValues: [{ field: '10', value: 'No' }, { field: '28', value: 'Yes' }] })
+    );
+    expect(result.churchLeader).toBe('Yes');
+  });
+
+  it('returns null churchLeader when neither field is present', () => {
+    const result = mapAcFields(makePayload({ fieldValues: [] }));
+    expect(result.churchLeader).toBeNull();
+  });
+
+  it('reads churchName from field [26] when populated', () => {
+    const result = mapAcFields(makePayload({ fieldValues: [{ field: '26', value: 'Eaton Baptist Church' }] }));
+    expect(result.churchName).toBe('Eaton Baptist Church');
+  });
+
+  it('falls back to field [14] Church Name only when [26] is absent', () => {
+    const result = mapAcFields(makePayload({ fieldValues: [{ field: '14', value: 'Lifesource' }] }));
+    expect(result.churchName).toBe('Lifesource');
+  });
+
+  it('returns null churchName when neither field is present', () => {
+    const result = mapAcFields(makePayload({ fieldValues: [] }));
+    expect(result.churchName).toBeNull();
+  });
 });
