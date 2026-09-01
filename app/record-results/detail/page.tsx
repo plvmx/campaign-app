@@ -101,12 +101,7 @@ function RecordResultsDetailPageContent() {
   const [fullSinnersRows, setFullSinnersRows] = useState<InputRow[]>([]);
   const [informationRows, setInformationRows] = useState<InputRow[]>([]);
   const [campaignId, setCampaignId] = useState<string | null>(null);
-  const [teamSize, setTeamSize] = useState<string>('');
   const [actualLeader, setActualLeader] = useState<string>('');
-  const [ppCnt, setPpCnt] = useState<string>('');
-  const [fpCnt, setFpCnt] = useState<string>('');
-  const [fpspCnt, setFpspCnt] = useState<string>('');
-  const [irCnt, setIrCnt] = useState<string>('');
   // What's currently on the server, keyed by row id. Drives the save diff.
   const [originalEntries, setOriginalEntries] = useState<Map<string, { first_name: string; category_code: ResultsCategory }>>(new Map());
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -121,12 +116,7 @@ function RecordResultsDetailPageContent() {
   const fullRowsRef = useRef(fullRows);
   const fullSinnersRowsRef = useRef(fullSinnersRows);
   const informationRowsRef = useRef(informationRows);
-  const teamSizeRef = useRef(teamSize);
   const actualLeaderRef = useRef(actualLeader);
-  const ppCntRef = useRef(ppCnt);
-  const fpCntRef = useRef(fpCnt);
-  const fpspCntRef = useRef(fpspCnt);
-  const irCntRef = useRef(irCnt);
 
   // Last-saved values for change detection — undefined means not yet initialised
   const lastSavedTeamSizeRef = useRef<number | null | undefined>(undefined);
@@ -149,12 +139,7 @@ function RecordResultsDetailPageContent() {
   useEffect(() => { fullRowsRef.current = fullRows; }, [fullRows]);
   useEffect(() => { fullSinnersRowsRef.current = fullSinnersRows; }, [fullSinnersRows]);
   useEffect(() => { informationRowsRef.current = informationRows; }, [informationRows]);
-  useEffect(() => { teamSizeRef.current = teamSize; }, [teamSize]);
   useEffect(() => { actualLeaderRef.current = actualLeader; }, [actualLeader]);
-  useEffect(() => { ppCntRef.current = ppCnt; }, [ppCnt]);
-  useEffect(() => { fpCntRef.current = fpCnt; }, [fpCnt]);
-  useEffect(() => { fpspCntRef.current = fpspCnt; }, [fpspCnt]);
-  useEffect(() => { irCntRef.current = irCnt; }, [irCnt]);
   useEffect(() => { userIdRef.current = contextUser?.id ?? null; }, [contextUser]);
 
   // Mirror the visible form state to localStorage on every change, so a tab
@@ -186,11 +171,6 @@ function RecordResultsDetailPageContent() {
         IR: collect(informationRows),
       },
       actualLeader,
-      teamSize,
-      ppCnt,
-      fpCnt,
-      fpspCnt,
-      irCnt,
       updatedAt: new Date().toISOString(),
     };
     saveResultsDraft(draft);
@@ -198,7 +178,7 @@ function RecordResultsDetailPageContent() {
   }, [
     campaignId, isLoading,
     membersRows, partialRows, fullRows, fullSinnersRows, informationRows,
-    actualLeader, teamSize, ppCnt, fpCnt, fpspCnt, irCnt,
+    actualLeader,
   ]);
 
   // Find an existing campaign or create one if the user is the owner.
@@ -353,17 +333,7 @@ function RecordResultsDetailPageContent() {
 
         if (campaignResponse) {
           const d = campaignResponse;
-          const ts = d.team_size?.toString() || '';
-          const pp = d.pp_cnt?.toString() || '';
-          const fp = d.fp_cnt?.toString() || '';
-          const fpsp = d.fpsp_cnt?.toString() || '';
-          const ir = d.ir_cnt?.toString() || '';
-          setTeamSize(ts);
           setActualLeader(d.actual_leader ?? leader);
-          setPpCnt(pp);
-          setFpCnt(fp);
-          setFpspCnt(fpsp);
-          setIrCnt(ir);
           // Initialise last-saved refs so the interval skips saves when unchanged
           lastSavedTeamSizeRef.current = d.team_size ?? null;
           lastSavedActualLeaderRef.current = d.actual_leader ?? null;
@@ -399,11 +369,6 @@ function RecordResultsDetailPageContent() {
           setFullSinnersRows(createRowsFromSlots(slotsFromDraft(draft.names.SP)));
           setInformationRows(createRowsFromSlots(slotsFromDraft(draft.names.IR)));
           if (draft.actualLeader) setActualLeader(draft.actualLeader);
-          if (draft.teamSize)     setTeamSize(draft.teamSize);
-          if (draft.ppCnt)        setPpCnt(draft.ppCnt);
-          if (draft.fpCnt)        setFpCnt(draft.fpCnt);
-          if (draft.fpspCnt)      setFpspCnt(draft.fpspCnt);
-          if (draft.irCnt)        setIrCnt(draft.irCnt);
           setDraftRestoredAt(draft.updatedAt);
           setHasUnsavedDraft(true);
         } else {
@@ -435,12 +400,13 @@ function RecordResultsDetailPageContent() {
     return () => { cancelled = true; };
   }, [isUserLoading, contextUser, searchParams, findOrCreateCampaign, router]);
 
-  // Save team size only when the value has changed since last save.
+  // Team size is derived from the Team Members name grid rather than typed in
+  // separately (the numeric input was removed as redundant — see #88407aa).
   // Reads from refs so the 3-second interval always sees the current value.
   const saveTeamSize = async () => {
     const cid = campaignIdRef.current;
     if (!cid) return;
-    const parsed = teamSizeRef.current.trim() ? parseInt(teamSizeRef.current, 10) : null;
+    const parsed = countNames(membersRowsRef.current);
     if (lastSavedTeamSizeRef.current !== undefined && parsed === lastSavedTeamSizeRef.current) return;
     try {
       await withRetry(async () => {
@@ -471,15 +437,18 @@ function RecordResultsDetailPageContent() {
     }
   };
 
-  // Save count fields only when any value has changed since last save.
+  // Count fields (Partial/Full/Full+Sinner's Prayer/Information Request) are
+  // derived from each section's name grid rather than typed in separately —
+  // the standalone numeric inputs were hidden in favour of the name lists
+  // (see #e93bd3c) but never wired back up to save the resulting counts.
   const saveCountFields = async () => {
     const cid = campaignIdRef.current;
     if (!cid) return;
     const current: SavedCounts = {
-      pp: ppCntRef.current.trim() ? parseInt(ppCntRef.current, 10) : 0,
-      fp: fpCntRef.current.trim() ? parseInt(fpCntRef.current, 10) : 0,
-      fpsp: fpspCntRef.current.trim() ? parseInt(fpspCntRef.current, 10) : 0,
-      ir: irCntRef.current.trim() ? parseInt(irCntRef.current, 10) : 0,
+      pp: countNames(partialRowsRef.current),
+      fp: countNames(fullRowsRef.current),
+      fpsp: countNames(fullSinnersRowsRef.current),
+      ir: countNames(informationRowsRef.current),
     };
     const last = lastSavedCountsRef.current;
     if (last !== undefined &&
@@ -663,6 +632,12 @@ function RecordResultsDetailPageContent() {
       clearResultsDraft(currentCampaignId);
       setHasUnsavedDraft(false);
       setDraftRestoredAt(null);
+
+      // team_size/pp_cnt/fp_cnt/fpsp_cnt/ir_cnt are derived from the name
+      // grids above — refresh them now rather than waiting for the next
+      // 3-second autosave tick. Each is a no-op if unchanged since last save.
+      void saveTeamSize();
+      void saveCountFields();
 
       if (!hasTrackedSaveRef.current) {
         hasTrackedSaveRef.current = true;
