@@ -646,11 +646,19 @@ the correct shape is AC's nested-resource pattern instead
 `/contacts/{id}/contactTags`, which this pipeline already uses
 successfully elsewhere).
 
-**Batching paused.** A probe script
-(`ac_contactlists_by_contact_probe.js`, `~/Development/ac-discovery/`)
-was written to test both shapes against contacts already confirmed
-(historically) to be genuine List 1/2 members — e.g. IDs 6, 10–30, all
-confirmed on both lists. Needs Peter to run it before `acClient.ts` is
-fixed. No further batch invocations until this is resolved — continuing
-to run would just keep silently missing nearly everyone, the opposite of
-what Proposal 2 was meant to fix.
+**Resolved.** Peter ran `ac_contactlists_by_contact_probe.js` against
+contacts 6, 10, 11, and 12 — decisive result: `filters[contact]` returned
+the exact same fixed 20-row page for all four (confirming it's a no-op),
+while `/contacts/{id}/contactLists` returned a different, correct,
+contact-specific result for each one. Fixed `acClient.ts` to use the
+nested-resource path.
+
+**Before redeploying, reset `registry.sync_progress`'s `'contacts'`
+cursor back to 0** — it had already advanced to 1,120 under the broken
+code; leaving it in place would have permanently skipped every contact in
+that range once the fix landed, since the cursor only ever moves forward.
+Verified post-fix with a fresh invocation over that same range: 43
+staging events landed from just 32 contacts (matching the known
+multi-list membership density for that range — a complete reversal from
+the pre-fix result of 2 matches across 1,120 contacts). Resuming
+batching.
