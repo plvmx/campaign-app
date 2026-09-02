@@ -662,3 +662,73 @@ staging events landed from just 32 contacts (matching the known
 multi-list membership density for that range — a complete reversal from
 the pre-fix result of 2 matches across 1,120 contacts). Resuming
 batching.
+
+## Strategic pivot: reload from Lorraine's spreadsheet instead of finishing the AC backfill (2026-09-02)
+
+Peter got further input from Lorraine: her "main AFJ page" sheet includes
+registrations she's **added manually from other sources**, and she has
+**more to add this week** before a final version is ready — resolving the
+open question from the earlier reconciliation ("is this meant to be 1:1
+with AC List 1?" — no, confirmed).
+
+**New plan, superseding the "finish the historical backfill" goal:**
+
+1. Wait for Lorraine's final "main AFJ page" spreadsheet.
+2. Do a complete reload of `registry.registrants` from that spreadsheet —
+   it becomes the source of truth for everything up to her cutoff, not
+   AC.
+3. AC sync's job going forward is narrower and clearer: pick up only
+   *new* registrations from **2026-08-22** onward (her sheet's cutoff —
+   or later, if she adds more manually-sourced records after that date).
+4. Everything built and fixed today (the `/contacts` id-cursor sweep, the
+   `getContactListMemberships` fix) remains exactly the right mechanism
+   for that job — Peter explicitly confirmed this work is "critical to
+   ensuring that we can pick up and store new registrations accurately
+   and efficiently" regardless of the pivot.
+
+**Decision: stopped the exhaustive historical backfill batching.**
+Continuing to grind through the full ~14,000+-contact account is now low
+value — that data will be replaced by Lorraine's spreadsheet regardless
+of how thoroughly AC is backfilled, and AC's rate limit is a shared,
+finite resource other integrations also depend on. Replaced with a
+smaller, more targeted goal: prove the **incremental** discovery pathway
+(`filters[updated_after]`) actually works for real, not just the
+future-dated edge case already confirmed. This matters structurally: that
+code path only ever activates once `getLastCompletedSyncTimestamp()`
+returns non-null, which requires a fully-completed pass — and a full pass
+over the whole account was never going to finish naturally before this
+pivot anyway, so the exact capability this pivot now depends on had never
+actually been exercised end-to-end. Extended
+`ac_contacts_pagination_probe.js` (section 4) to test a **past**-dated
+`filters[updated_after]` — checking it genuinely narrows the result (not
+just passing the negative future-date test) and that every returned
+contact's `udate` genuinely postdates the filter. Result pending Peter
+running it.
+
+**Real correctness trap identified and deliberately NOT solved with new
+infrastructure yet:** Peter asked whether new (post-cutoff) registrations
+landing via AC sync between now and the reload should go into a separate
+temporary table, since `registry.registrants` will need to be emptied and
+reloaded once Lorraine's spreadsheet arrives. The underlying risk is
+real: `staging.ac_events` rows get `processed_at` set once
+`transform.ts` has handled them, and `getPendingStagingEvents` only ever
+returns rows where `processed_at IS NULL` — so if `registry.registrants`
+is later truncated and reloaded without special handling, **any
+already-processed post-cutoff registrant would never be picked up again
+by the normal transform flow**, permanently lost from the rebuilt table.
+
+**Decided: don't build a temp table now.** The exact shape of the fix
+needed (a one-time script re-deriving post-cutoff registrants from
+`staging.ac_events` by `registered_at`/date, independent of
+`processed_at`, run right after the reload) depends on details not known
+yet — Lorraine's exact final cutoff date/time, whether `registered_at`
+(AC's `cdate`) is really the right field to filter on, and how to
+de-duplicate against anyone she's also captured manually past that
+cutoff. Building schema/code for this now would mean guessing at
+requirements that will be concretely known once her spreadsheet actually
+arrives. In the meantime, `staging.ac_events` already holds the complete
+raw record regardless (append-only, never purged) — nothing is at risk
+of being lost by waiting; `registry.registrants` keeps being written to
+normally in the meantime, and the reload script (to be written when her
+spreadsheet lands) is responsible for re-deriving anything the truncate
+would otherwise discard.
