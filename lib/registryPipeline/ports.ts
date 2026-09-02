@@ -49,13 +49,16 @@ export interface AcPort {
   }): Promise<{ id: string }[]>;
 
   /**
-   * Every list-membership row for ONE contact — not scoped to a specific
-   * list server-side. `filters[listid]` on this endpoint is confirmed
-   * broken (see sync.ts's file header); a per-contact filter param is
-   * unverified either way, so the caller must still check each returned
-   * row's own `.contact` against `contactId` before trusting it (same
-   * defense-in-depth this pipeline already applies everywhere else on
-   * this endpoint).
+   * Every list-membership row for ONE contact, genuinely scoped to that
+   * contact (implemented via AC's nested `/contacts/{id}/contactLists`
+   * path — confirmed live to work correctly, unlike every `filters[...]`
+   * param tried on the standalone `/contactLists` endpoint, including a
+   * `filters[contact]` attempt that turned out to be yet another no-op —
+   * see acClient.ts's file header). The caller still checks each returned
+   * row's own `.contact` against `contactId` before trusting it, same
+   * defense-in-depth this pipeline applies everywhere else on this
+   * general class of endpoint — cheap insurance, not a sign this specific
+   * call is expected to need it.
    */
   getContactListMemberships(contactId: string): Promise<AcContactListMembership[]>;
 

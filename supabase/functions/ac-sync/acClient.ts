@@ -4,18 +4,23 @@
 //
 // VERIFY BEFORE TRUSTING A NEW ENDPOINT/PARAM (this has bitten this
 // pipeline repeatedly — see sync.ts's numbered deviations): every
-// `filters[...]` param tried on `/contactLists` (`list`, `listid`,
-// `updated_since`) turned out to be a silent no-op, only caught by
-// testing a future-dated filter against real data and checking it
-// actually returned nothing. `/contacts`' `orders[id]=ASC`,
-// `filters[updated_after]`, and its pagination stability have all since
-// been confirmed the same way (docs/registry-pipeline/OPERATIONS.md,
-// 2026-09-01) — but `getContactListMemberships`'s `filters[contact]`
-// below has NOT, and correctness deliberately does not depend on it (see
-// its own comment). Adjust this file — and only this file — if any AC
-// response shape or filter behavior turns out to differ from what's
-// documented here; the pure transform/mapping logic in
-// lib/registryPipeline does not need to change either way.
+// `filters[...]` param tried on the standalone `/contactLists?filters[...]`
+// endpoint (`list`, `listid`, `updated_since`, and — 2026-09-01 —
+// `contact`) turned out to be a silent no-op, each caught a different way
+// (the first three by testing a future-dated filter against real data and
+// checking it actually returned nothing; `filters[contact]` by noticing a
+// real production sweep of 1,120 known contacts found only 2 genuine
+// matches, then confirming live that four different contact IDs all
+// returned the exact same fixed page regardless of which was requested).
+// AC's *nested*-resource paths (`/contacts/{id}/fieldValues`,
+// `/contacts/{id}/contactTags`, `/contacts/{id}/contactLists`) have never
+// failed this way — every one tested live has worked correctly. `/contacts`'
+// own top-level `orders[id]=ASC`, `filters[updated_after]`, and pagination
+// stability have also been confirmed live (docs/registry-pipeline/OPERATIONS.md).
+// Adjust this file — and only this file — if any AC response shape or
+// filter behavior turns out to differ from what's documented here; the
+// pure transform/mapping logic in lib/registryPipeline does not need to
+// change either way.
 //
 // Rate limiting: AC enforces 5 req/sec account-wide, shared with other
 // integrations (plan Section 3.2). Pacing between calls is the caller's
@@ -99,21 +104,33 @@ export function createAcClient(): AcPort {
     },
 
     async getContactListMemberships(contactId) {
-      // AC v3: GET /contactLists?filters[contact]=<id>
+      // AC v3: GET /contacts/<id>/contactLists
       //
-      // `filters[contact]` (scoping by contact rather than by list) has
-      // NOT been live-verified the way filters[updated_after] etc. were
-      // above — every other filters[...] param tried on THIS SPECIFIC
-      // endpoint turned out broken (list, listid, updated_since), so this
-      // one is not assumed to work either just because it's a different
-      // parameter name on the same broken endpoint. Correctness does not
-      // depend on it: sync.ts's caller discards any returned row whose
-      // own `.contact` doesn't match what was actually requested, exactly
-      // the same defense-in-depth already applied to this endpoint's list
-      // scoping (see the Fourth deviation). If this filter turns out to
-      // also be a no-op, the only cost is efficiency (a larger unfiltered
-      // page to filter client-side), not correctness.
-      const body = (await acFetch('/contactLists', { 'filters[contact]': contactId })) as {
+      // CONFIRMED BROKEN, then fixed (2026-09-01): `filters[contact]` on
+      // the standalone `/contactLists?filters[...]` endpoint (the
+      // original approach here) is a FOURTH no-op filter on that
+      // endpoint, joining `list`, `listid`, and `updated_since` — proven
+      // via a live probe (ac_contactlists_by_contact_probe.js) that
+      // requesting contacts 6, 10, 11, and 12 all returned the exact
+      // same fixed 20-row page, completely ignoring which contact was
+      // asked for. Unlike the other three (which returned MORE than
+      // requested), this one effectively returns close to nothing
+      // genuine for most contacts — the defense-in-depth client-side
+      // `.contact` check in sync.ts only ever matched by coincidence,
+      // when a requested id happened to already be one of that fixed
+      // page's ~20 rows. Confirmed via the same probe: a real production
+      // batch swept AC contact IDs 6-1120 (known from history to include
+      // 1,099 genuine List 1/2 members) and found only 2.
+      //
+      // Fixed by switching to AC's nested-resource path instead — the
+      // same pattern already used successfully elsewhere in this file
+      // (`/contacts/{id}/fieldValues`, `/contacts/{id}/contactTags`).
+      // The same probe confirmed this one IS genuinely scoped: contacts
+      // 6, 10, 11, and 12 each returned a different, correct result
+      // specific to that one contact. The defense-in-depth `.contact`
+      // check in sync.ts is kept regardless — cheap insurance, not
+      // something to remove just because this path checked out live.
+      const body = (await acFetch(`/contacts/${contactId}/contactLists`, {})) as {
         contactLists?: Array<{ contact: string; list: string; status: string }>;
       };
       const rows = body.contactLists ?? [];
