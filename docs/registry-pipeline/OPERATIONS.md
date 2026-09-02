@@ -732,3 +732,19 @@ of being lost by waiting; `registry.registrants` keeps being written to
 normally in the meantime, and the reload script (to be written when her
 spreadsheet lands) is responsible for re-deriving anything the truncate
 would otherwise discard.
+
+## Section 4 probe result was inconclusive, not a finding — fixed and reran (2026-09-02)
+
+First run of section 4 (7-day-past `filters[updated_after]`) came back
+"20 rows vs 20 unfiltered" — looked like a non-narrowing filter, but this
+was a flaw in the probe, not a real result: both calls are capped at the
+same `limit=20`, so if more than 20 contacts genuinely matched, both
+would coincidentally show the same count regardless of whether the filter
+works. Rewrote the check to look at what actually matters — every
+returned contact's own `udate`, which must be `>= cutoff` if the filter
+is genuinely working, independent of row count — and narrowed the window
+from 7 days to 6 hours, since `udate` bumps on routine AC bookkeeping
+(opens, scoring, bounces, other shared-account integrations) too, not
+just list-membership changes, so 7 days on an active account can hit
+`limit` on its own for reasons unrelated to what's being tested. Rerun
+pending.
