@@ -1,8 +1,51 @@
 # Campaign Report project — brief
 
-## ⚠️ ON HOLD (2026-09-01)
+## Resumed with narrowed scope (2026-09-02)
 
-New information has come to light suggesting this project may not be
+The "may not be required" hold from 2026-09-01 (below) was resolved: Peter
+confirmed he wants a historical report for Lorraine built from
+`campaign_reports`, kept up to date going forward from the numbers
+[Record Results](../../app/record-results/detail/page.tsx) now correctly
+saves onto `campaigns` (see PR #172 — the `pp_cnt`/`fp_cnt`/`fpsp_cnt`/
+`ir_cnt`/`team_size` autosave bug fix).
+
+Key decisions from that conversation:
+- **No restructure of `campaign_reports` itself, and no new rows written into
+  it by the app.** It stays a frozen historical archive. Duplicating the same
+  per-campaign tallies into a second table (`campaign_reports` rows written
+  by Record Results) alongside `campaigns.*_cnt` would be two sources of
+  truth for the same facts, with no code keeping them in sync — the
+  reporting layer combines the two tables at *read* time instead.
+- **Cutover date: 2026-08-26** (the sheet's own last `campaign_date`).
+  Report queries read `campaign_reports` for dates on/before it and
+  `campaigns` for dates after — each date bucket has exactly one source, so
+  nothing is double-counted. (The Record Results screen's "please still use
+  the external Campaign Report" banner deliberately stays as-is — Peter
+  confirmed those emailed figures don't need to flow into the app, so the
+  parallel submission doesn't affect this report.)
+- **Field mapping is 1:1, no combining**: `partial_presentations` ↔ `pp_cnt`,
+  `full_presentations` ↔ `fp_cnt` ("Full Only"), `sinners_prayer` ↔
+  `fpsp_cnt` ("Full + Sinner's Prayer" — a sinner's prayer implies a full
+  presentation happened), `information_requests` ↔ `ir_cnt`.
+- **Narrowed date scope**: Lorraine's report only needs `campaign_reports`
+  rows submitted on/after **2026-05-06** — full 2020-2026 history is out of
+  scope for now. This mattered for state/place/leader derivation too (below).
+- **`derived_state`/`derived_place`/`derived_leader`** columns added to
+  `campaign_reports` (`scripts/add_derived_fields_to_campaign_reports.sql`),
+  populated only for the in-scope (≥2026-05-06) rows via
+  `lib/campaignReportMatcher.ts` + `scripts/derive_campaign_reports_fields.ts`
+  — matching the sheet's free-text `location_raw`/`leader_raw` against
+  `state_places`/`state_leaders`. This is *not* a re-opening of the
+  full-history matching phase 1 ruled out (1,355/1,693 distinct raw strings
+  across 2020-2026 — still nowhere near clean enough); the narrower, more
+  recent slice is meaningfully cleaner and got ~97% state / ~90% place / ~86%
+  leader match rates with a normalization + small verified-alias pass. Never
+  guesses — unresolvable rows keep all three `null`, same philosophy as
+  `needs_review`.
+
+## ⚠️ Superseded — on hold (2026-09-01)
+
+New information had come to light suggesting this project might not be
 required anymore. Phase 1 (initial load + the date-plausibility bug fix,
 below) is complete and correct as it stands — the `campaign_reports` table
 holds a fully-loaded, verified-accurate snapshot of the historical data.
@@ -12,6 +55,9 @@ without checking in first. If the project is confirmed dead, decommission
 is a small job (drop the table, remove it from `CLAUDE.md` and
 `BACKUP_TABLE_CONFIG`) — not done yet, since "may not be required" isn't
 "confirmed cancelled."
+
+*(Resolved 2026-09-02 — see the section above. The project isn't dead: it's
+resumed with the narrowed scope described above, not the original phase 3.)*
 
 ## Goal
 
