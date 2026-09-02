@@ -390,6 +390,22 @@ export default function AdminPage() {
             </button>
           </div>
 
+          {/* Campaign Report Cleanup */}
+          <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+              Campaign Report Cleanup
+            </h2>
+            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+              Manually fill in State/Place/Leader for Campaign Report records that couldn&apos;t be worked out automatically
+            </p>
+            <button
+              onClick={() => router.push('/admin/campaign-reports-cleanup')}
+              className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
+            >
+              Review Records
+            </button>
+          </div>
+
           {/* Single Week Campaigns */}
           <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
