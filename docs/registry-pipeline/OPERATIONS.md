@@ -753,3 +753,29 @@ pending.
 rows). Made section 4 self-escalating (6h → 24h → 7d → 30d → 90d,
 stopping at the first window with a non-empty sample) so this doesn't
 need another manual rerun to find real data to check. Rerun pending.
+
+**Confirmed working (24-hour window, 2026-09-02).** 4 contacts returned,
+every one's `udate` genuinely postdates the requested cutoff
+(2026-09-01T00:49:03.588Z) — checked precisely, including the `-05:00`
+timezone offset on the returned values (e.g.
+`2026-09-01T04:13:34-05:00` = `09:13:34Z`, well after the cutoff).
+`filters[updated_after]` is now proven with a real positive case, not
+just the future-date edge case — the exact capability this pipeline
+needs for picking up new registrations going forward (the pivot's core
+requirement) is confirmed working end-to-end at the AC API level.
+
+**Status:** registry pipeline work paused here pending Lorraine's final
+spreadsheet. Everything needed for the next phase is in place and
+verified:
+- Discovery mechanism (`/contacts` id-cursor sweep + per-contact
+  `/contacts/{id}/contactLists` membership lookup) — built, fixed, and
+  live-verified.
+- Incremental filtering (`filters[updated_after]`) — now confirmed
+  genuinely working, not just passing the negative future-date test.
+- Duplicate-person handling and the `/admin/registry-duplicates` review
+  screen — designed (FORWARD_SYNC_REDESIGN.md), build gated on a minimal
+  Supabase Auth slice for Lorraine (Peter's decision, 2026-09-01), not
+  yet built.
+- Reload-from-spreadsheet plan and its `processed_at` correctness trap —
+  documented above, script itself deferred until Lorraine's real cutoff
+  details are known.
