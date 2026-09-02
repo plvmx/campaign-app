@@ -748,3 +748,8 @@ from 7 days to 6 hours, since `udate` bumps on routine AC bookkeeping
 just list-membership changes, so 7 days on an active account can hit
 `limit` on its own for reasons unrelated to what's being tested. Rerun
 pending.
+
+6-hour window came back genuinely empty (not limit-capped this time — 0
+rows). Made section 4 self-escalating (6h → 24h → 7d → 30d → 90d,
+stopping at the first window with a non-empty sample) so this doesn't
+need another manual rerun to find real data to check. Rerun pending.
