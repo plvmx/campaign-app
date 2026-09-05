@@ -1,11 +1,31 @@
+/**
+ * Regression test: this page used to manually check window.location.search
+ * for a ?code= param and give up immediately if absent. That's exactly
+ * what broke a real sign-in attempt — this project's actual callback shape
+ * is a #access_token=... hash fragment (supabase-js's default 'implicit'
+ * flow), never a ?code=, so the old logic always treated a genuine
+ * successful sign-in as a failure. The fix relies on
+ * registrySupabaseClient's detectSessionInUrl: true (which handles both
+ * shapes) firing a SIGNED_IN event instead.
+ */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, waitFor, cleanup } from '@testing-library/react';
 
-const mockExchangeCodeForSession = vi.fn();
+type AuthChangeCallback = (event: string, session: unknown) => void;
+
+let authChangeCallback: AuthChangeCallback | null = null;
+const mockUnsubscribe = vi.fn();
+const mockOnAuthStateChange = vi.fn((cb: AuthChangeCallback) => {
+  authChangeCallback = cb;
+  return { data: { subscription: { unsubscribe: mockUnsubscribe } } };
+});
+const mockGetSession = vi.fn();
+
 vi.mock('@/lib/registrySupabaseClient', () => ({
   registrySupabase: {
     auth: {
-      exchangeCodeForSession: (...args: unknown[]) => mockExchangeCodeForSession(...args),
+      onAuthStateChange: (cb: AuthChangeCallback) => mockOnAuthStateChange(cb),
+      getSession: (...args: unknown[]) => mockGetSession(...args),
     },
   },
 }));
@@ -28,13 +48,12 @@ vi.mock('next/navigation', () => ({
 
 import RegistryAuthCallbackPage from '../page';
 
-function setUrl(search: string) {
-  window.history.pushState({}, '', `/registry/auth/callback${search}`);
-}
-
 describe('RegistryAuthCallbackPage', () => {
   beforeEach(() => {
-    mockExchangeCodeForSession.mockReset();
+    authChangeCallback = null;
+    mockOnAuthStateChange.mockClear();
+    mockUnsubscribe.mockReset();
+    mockGetSession.mockReset().mockResolvedValue({ data: { session: null } });
     mockGetRegistryAccessState.mockReset();
     mockSetRegistryAuthCookie.mockReset();
     mockSetRegistrySessionCookie.mockReset();
@@ -44,24 +63,25 @@ describe('RegistryAuthCallbackPage', () => {
 
   afterEach(() => {
     cleanup();
+    vi.useRealTimers();
   });
 
-  it('routes straight to /registry and sets the full session cookie when the gate is already clear', async () => {
-    mockExchangeCodeForSession.mockResolvedValue({ error: null });
+  it('routes to /registry and sets the full session cookie once SIGNED_IN fires (the #hash callback shape)', async () => {
     mockGetRegistryAccessState.mockResolvedValue({ result: 'ok', leaderRole: { role: 'national_admin', mfa_required: true } });
-    setUrl('?code=abc123');
 
     render(<RegistryAuthCallbackPage />);
+    expect(authChangeCallback).not.toBeNull();
+
+    authChangeCallback!('SIGNED_IN', { user: {} });
 
     await waitFor(() => expect(mockSetRegistryAuthCookie).toHaveBeenCalled());
     await waitFor(() => expect(mockSetRegistrySessionCookie).toHaveBeenCalled());
     await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/registry'));
   });
 
-  it('routes to MFA enrollment without setting the full session cookie', async () => {
-    mockExchangeCodeForSession.mockResolvedValue({ error: null });
+  it('handles the race where a session already exists before onAuthStateChange is attached', async () => {
+    mockGetSession.mockResolvedValue({ data: { session: { user: {} } } });
     mockGetRegistryAccessState.mockResolvedValue({ result: 'needs_enrollment', leaderRole: { role: 'national_admin', mfa_required: true } });
-    setUrl('?code=abc123');
 
     render(<RegistryAuthCallbackPage />);
 
@@ -70,32 +90,35 @@ describe('RegistryAuthCallbackPage', () => {
   });
 
   it('signs out and redirects to no-access when the account has no leader_roles row', async () => {
-    mockExchangeCodeForSession.mockResolvedValue({ error: null });
     mockGetRegistryAccessState.mockResolvedValue({ result: 'no_access', leaderRole: null });
-    setUrl('?code=abc123');
 
     render(<RegistryAuthCallbackPage />);
+    authChangeCallback!('SIGNED_IN', { user: {} });
 
     await waitFor(() => expect(mockSignOutOfRegistry).toHaveBeenCalled());
     await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/registry/no-access'));
   });
 
-  it('redirects to login with an error when the exchange fails, without checking access state', async () => {
-    mockExchangeCodeForSession.mockResolvedValue({ error: new Error('invalid code') });
-    setUrl('?code=bad-code');
-
+  it('gives up and redirects to login if no session ever materializes (invalid/expired/reused link)', async () => {
+    vi.useFakeTimers();
     render(<RegistryAuthCallbackPage />);
 
-    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/registry/login?error=auth_failed'));
+    await vi.advanceTimersByTimeAsync(8000);
+
+    expect(mockReplace).toHaveBeenCalledWith('/registry/login?error=auth_failed');
     expect(mockGetRegistryAccessState).not.toHaveBeenCalled();
   });
 
-  it('redirects to login without attempting an exchange when no code is present', async () => {
-    setUrl('');
+  it('does not process a second SIGNED_IN event after already handling one', async () => {
+    mockGetRegistryAccessState.mockResolvedValue({ result: 'ok', leaderRole: { role: 'national_admin', mfa_required: true } });
 
     render(<RegistryAuthCallbackPage />);
+    authChangeCallback!('SIGNED_IN', { user: {} });
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledTimes(1));
 
-    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/registry/login?error=auth_failed'));
-    expect(mockExchangeCodeForSession).not.toHaveBeenCalled();
+    authChangeCallback!('SIGNED_IN', { user: {} });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(mockGetRegistryAccessState).toHaveBeenCalledTimes(1);
   });
 });

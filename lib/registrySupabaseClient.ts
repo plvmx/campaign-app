@@ -9,12 +9,17 @@
  * and vice versa. Giving /registry its own storage key lets both sessions
  * live side by side.
  *
- * `detectSessionInUrl` is off because the magic-link code exchange is done
- * explicitly in app/registry/auth/callback/page.tsx (same reasoning as the
- * fix to app/auth/callback: exchangeCodeForSession() must run in the
- * browser context that will use the resulting session, so we do it
- * ourselves rather than relying on the SDK's automatic URL detection,
- * which behaves differently across supabase-js versions/flow types).
+ * `detectSessionInUrl: true` lets the SDK's own client-side URL detection
+ * pick up the session in app/registry/auth/callback/page.tsx. This matters
+ * more than it might look: supabase-js's default auth flow ('implicit')
+ * delivers a magic-link/invite session as a #access_token=... URL hash
+ * fragment, not a ?code= query param — confirmed live (a generated sign-in
+ * link landed back on /registry/login with no session at all, because the
+ * callback page was only ever looking for ?code=). detectSessionInUrl
+ * handles both the implicit (#hash) and PKCE (?code=) shapes automatically
+ * — see supabase-js's GoTrueClient._initialize() — so the callback page
+ * doesn't need to parse the URL or call exchangeCodeForSession() itself at
+ * all; it just needs to wait for the SDK to finish and fire SIGNED_IN.
  */
 import { createClient } from '@supabase/supabase-js';
 
@@ -30,7 +35,7 @@ export const registrySupabase = createClient(supabaseUrl, supabaseAnonKey, {
     storageKey: 'afj-registry-auth',
     persistSession: true,
     autoRefreshToken: true,
-    detectSessionInUrl: false,
+    detectSessionInUrl: true,
     storage: typeof window !== 'undefined' ? window.localStorage : undefined,
   },
 });
