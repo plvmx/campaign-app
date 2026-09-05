@@ -1,26 +1,34 @@
 /**
- * Regression test: app/auth/callback used to be a Route Handler that ran
- * supabase.auth.exchangeCodeForSession() server-side, using the same
- * browser-oriented `supabase` client the rest of the app uses. That client
- * persists sessions to localStorage, which doesn't exist server-side — the
- * exchange "succeeded" but the resulting session had nowhere to land for
- * the visitor's browser, so the magic-link flow silently produced no
- * session at all.
- *
- * The fix makes this a client component page, so the exchange runs in the
- * same browser context that will use the session. A Route Handler can't be
- * rendered with React Testing Library at all (it's not a component) — the
- * very fact that this file can import and render a default export from
- * './page' is itself part of what pre-fix code could never do.
+ * Regression test, round 2: the first fix to this page (see git history)
+ * correctly moved the code exchange client-side, but still manually
+ * checked window.location.search for a ?code= param and gave up
+ * immediately when absent. That's exactly wrong for this project —
+ * supabase-js's default auth flow ('implicit') delivers a magic-link
+ * session as a #access_token=... hash fragment, never a ?code=, so the
+ * old logic treated every genuine successful sign-in as a failure. This
+ * was confirmed live while building the /registry portal's identical
+ * callback page before this one ever shipped. The fix relies on
+ * lib/supabaseClient's detectSessionInUrl: true (already set, unchanged)
+ * firing a SIGNED_IN event instead of parsing the URL itself.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor, cleanup } from '@testing-library/react';
+import { render, waitFor, cleanup } from '@testing-library/react';
 
-const mockExchangeCodeForSession = vi.fn();
+type AuthChangeCallback = (event: string, session: unknown) => void;
+
+let authChangeCallback: AuthChangeCallback | null = null;
+const mockUnsubscribe = vi.fn();
+const mockOnAuthStateChange = vi.fn((cb: AuthChangeCallback) => {
+  authChangeCallback = cb;
+  return { data: { subscription: { unsubscribe: mockUnsubscribe } } };
+});
+const mockGetSession = vi.fn();
+
 vi.mock('@/lib/supabaseClient', () => ({
   supabase: {
     auth: {
-      exchangeCodeForSession: (...args: unknown[]) => mockExchangeCodeForSession(...args),
+      onAuthStateChange: (cb: AuthChangeCallback) => mockOnAuthStateChange(cb),
+      getSession: (...args: unknown[]) => mockGetSession(...args),
     },
   },
 }));
@@ -38,57 +46,71 @@ function setUrl(search: string) {
 
 describe('AuthCallbackPage', () => {
   beforeEach(() => {
-    mockExchangeCodeForSession.mockReset();
+    authChangeCallback = null;
+    mockOnAuthStateChange.mockClear();
+    mockUnsubscribe.mockReset();
+    mockGetSession.mockReset().mockResolvedValue({ data: { session: null } });
     mockReplace.mockReset();
   });
 
   afterEach(() => {
     cleanup();
+    vi.useRealTimers();
   });
 
-  it('exchanges the code client-side and redirects to the requested next path on success', async () => {
-    mockExchangeCodeForSession.mockResolvedValue({ error: null });
-    setUrl('?code=abc123&next=%2Fregistry');
-
+  it('redirects to the requested next path once SIGNED_IN fires (the #hash callback shape)', async () => {
+    setUrl('?next=%2Fregistry');
     render(<AuthCallbackPage />);
+    expect(authChangeCallback).not.toBeNull();
 
-    await waitFor(() => expect(mockExchangeCodeForSession).toHaveBeenCalledWith('abc123'));
+    authChangeCallback!('SIGNED_IN', { user: {} });
+
     await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/registry'));
   });
 
-  it('redirects to login with an error when the exchange fails', async () => {
-    mockExchangeCodeForSession.mockResolvedValue({ error: new Error('invalid code') });
-    setUrl('?code=bad-code&next=%2Fapp');
-
-    render(<AuthCallbackPage />);
-
-    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/login?error=auth_failed'));
-  });
-
-  it('redirects to login without attempting an exchange when no code is present', async () => {
-    setUrl('');
-
-    render(<AuthCallbackPage />);
-
-    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/login?error=auth_failed'));
-    expect(mockExchangeCodeForSession).not.toHaveBeenCalled();
-  });
-
-  it('falls back to /app when next is a protocol-relative open-redirect attempt', async () => {
-    mockExchangeCodeForSession.mockResolvedValue({ error: null });
-    setUrl('?code=abc123&next=%2F%2Fevil.com');
+  it('handles the race where a session already exists before onAuthStateChange is attached', async () => {
+    setUrl('?next=%2Fapp');
+    mockGetSession.mockResolvedValue({ data: { session: { user: {} } } });
 
     render(<AuthCallbackPage />);
 
     await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/app'));
   });
 
-  it('renders a signing-in placeholder', () => {
-    mockExchangeCodeForSession.mockResolvedValue({ error: null });
-    setUrl('?code=abc123');
-
+  it('falls back to /app when next is a protocol-relative open-redirect attempt', async () => {
+    setUrl('?next=%2F%2Fevil.com');
     render(<AuthCallbackPage />);
 
-    expect(screen.getByText(/signing you in/i)).toBeInTheDocument();
+    authChangeCallback!('SIGNED_IN', { user: {} });
+
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/app'));
+  });
+
+  it('gives up and redirects to login if no session ever materializes (invalid/expired/reused link)', async () => {
+    setUrl('');
+    vi.useFakeTimers();
+    render(<AuthCallbackPage />);
+
+    await vi.advanceTimersByTimeAsync(8000);
+
+    expect(mockReplace).toHaveBeenCalledWith('/login?error=auth_failed');
+  });
+
+  it('does not process a second SIGNED_IN event after already handling one', async () => {
+    setUrl('?next=%2Fapp');
+    render(<AuthCallbackPage />);
+    authChangeCallback!('SIGNED_IN', { user: {} });
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledTimes(1));
+
+    authChangeCallback!('SIGNED_IN', { user: {} });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(mockReplace).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders a signing-in placeholder', () => {
+    setUrl('');
+    render(<AuthCallbackPage />);
+    expect(document.body.textContent).toMatch(/signing you in/i);
   });
 });
