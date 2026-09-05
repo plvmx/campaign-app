@@ -849,11 +849,46 @@ enough on its own, same gap `grant_registry_pipeline_service_role.sql`
 already documented for `service_role` (schema `USAGE` is a separate
 privilege from any per-table grant).
 
-**Not yet verified against a live Supabase project** — no Node.js runtime
-was available in the session that built this, so `npm test`/`lint`/`tsc`
-and an actual magic-link round-trip are still pending. Before trusting
-this for real sign-ins: confirm Dashboard → Authentication → Multi-Factor
-Authentication has TOTP enabled (OPERATIONS.md step 6 above covers
-availability; nothing gated on it until now, so it may not actually be
-turned on yet), run the two SQL scripts above, run the seed script, and
-do one real sign-in end to end.
+**Update (2026-09-05) — live-verified, two real bugs found and fixed
+along the way, before merge to `main`:**
+
+- The magic-link/invite callback shape was wrong: it checked
+  `window.location.search` for a `?code=` param and gave up immediately
+  when absent. Confirmed live that this project's actual default auth
+  flow ('implicit') delivers the session as a `#access_token=...` URL
+  hash fragment, never a `?code=` — every genuine successful sign-in was
+  being treated as a failure. Fixed by setting
+  `detectSessionInUrl: true` on `registrySupabaseClient.ts` (handles both
+  shapes automatically) and having the callback page wait for the
+  resulting `SIGNED_IN` event instead of parsing the URL itself. The
+  identical mistake, caught the same way, was also fixed in the main
+  app's own `app/auth/callback` before it ever shipped (separate PR).
+- `supabase.auth.mfa.enroll()`'s own `totp.qr_code` field — confirmed
+  live to be **362,632 characters** for a 231×231px code (a known
+  upstream inefficiency in how GoTrue's SVG library draws it) — is
+  unusable as an `<img>` `data:` URI regardless of encoding; two
+  encoding attempts (raw concatenation, then `encodeURIComponent`) both
+  rendered blank. Fixed by rendering a compact QR code client-side
+  (`react-qr-code`) from `totp.uri` instead — the actual small
+  `otpauth://totp/...` string the bloated SVG encodes — never touching
+  `qr_code` at all.
+- Found and fixed while diagnosing the above: a second `mfa.enroll()`
+  call (e.g. a page reload, or any retry after a first attempt didn't
+  complete) gets rejected with a 422 "factor name conflict", since every
+  call defaults to the same empty `friendly_name`. Without a fix this
+  would permanently strand anyone who ever retries enrollment. Fixed by
+  unenrolling any stale unverified TOTP factor before enrolling a fresh
+  one, in `app/registry/mfa/enroll/page.tsx`.
+
+Sign-in + MFA (enrollment and challenge) confirmed working end to end on
+production (`campaign.afj.org.au`) for `plvmx01@gmail.com`, after the
+first two fixes above; the QR/conflict fixes came after that, verified
+via `scripts/debug_totp_enroll_response.ts` (a throwaway diagnostic that
+reproduces the enrollment call server-side, no browser needed) rather
+than a further live UI round-trip — worth one real browser test with a
+fresh account (e.g. `lily.viertmann@gmail.com`, already seeded) before
+fully trusting the QR fix.
+
+Confirm Dashboard → Authentication → Multi-Factor Authentication has
+TOTP enabled if it hasn't been checked yet (OPERATIONS.md step 6 above
+covers availability, not enforcement).

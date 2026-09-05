@@ -2,6 +2,7 @@
 
 import { useEffect, useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
+import QRCode from 'react-qr-code';
 import { registrySupabase } from '@/lib/registrySupabaseClient';
 import { setRegistrySessionCookie } from '@/lib/registryAuth';
 import { useRegistryGate } from '@/app/registry/useRegistryGate';
@@ -13,7 +14,7 @@ export default function RegistryMfaEnrollPage() {
   const router = useRouter();
   const gate = useRegistryGate(ALLOW);
   const [factorId, setFactorId] = useState<string | null>(null);
-  const [qrCode, setQrCode] = useState<string | null>(null);
+  const [totpUri, setTotpUri] = useState<string | null>(null);
   const [secret, setSecret] = useState<string | null>(null);
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -21,22 +22,51 @@ export default function RegistryMfaEnrollPage() {
 
   useEffect(() => {
     if (gate.status !== 'ready' || factorId) return;
-    registrySupabase.auth.mfa.enroll({ factorType: 'totp' }).then(({ data, error: enrollError }) => {
+
+    let cancelled = false;
+
+    (async () => {
+      // Clean up any stale unverified TOTP factor from an earlier attempt
+      // first. Confirmed live: Supabase rejects a second enroll() call
+      // with a 422 "factor name conflict" once one unverified factor
+      // already exists (both default to the same empty friendly_name) —
+      // without this, anyone who reloads this page, or whose first
+      // attempt didn't complete for any reason, would be permanently
+      // stuck unable to ever enroll.
+      const { data: factorsData, error: listError } = await registrySupabase.auth.mfa.listFactors();
+      if (cancelled) return;
+      if (listError) {
+        setError(listError.message);
+        return;
+      }
+      const staleFactors = factorsData.all.filter((f) => f.factor_type === 'totp' && f.status !== 'verified');
+      for (const f of staleFactors) {
+        await registrySupabase.auth.mfa.unenroll({ factorId: f.id });
+      }
+      if (cancelled) return;
+
+      const { data, error: enrollError } = await registrySupabase.auth.mfa.enroll({ factorType: 'totp' });
+      if (cancelled) return;
       if (enrollError) {
         setError(enrollError.message);
         return;
       }
       setFactorId(data.id);
-      // qr_code is the raw SVG markup, not a ready-to-use data URI — per
-      // supabase-js's own doc comment, the caller prepends the data:
-      // prefix. Confirmed live: naively concatenating it (no encoding)
-      // renders a blank image, because QR SVGs contain hex-color fills
-      // like fill="#000000" — the unencoded '#' is read as the URI's
-      // fragment delimiter, truncating everything after it. encodeURIComponent
-      // escapes '#' (and anything else that would confuse URI parsing).
-      setQrCode(`data:image/svg+xml,${encodeURIComponent(data.totp.qr_code)}`);
+      // Deliberately NOT using data.totp.qr_code (Supabase's own rendered
+      // SVG) — confirmed live it's absurdly bloated (362,632 characters
+      // for a 231x231px code, a known upstream inefficiency in how
+      // GoTrue's QR library draws it) and effectively unusable as an
+      // <img> data: URI. data.totp.uri is the actual small
+      // otpauth://totp/... string the QR code encodes — rendering our
+      // own compact QR from it client-side (react-qr-code, pure SVG, no
+      // data: URI at all) sidesteps the bloat entirely.
+      setTotpUri(data.totp.uri);
       setSecret(data.totp.secret);
-    });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [gate.status, factorId]);
 
   async function handleVerify(e: FormEvent) {
@@ -60,9 +90,10 @@ export default function RegistryMfaEnrollPage() {
     <div style={{ maxWidth: 400, margin: '4rem auto', padding: '0 1rem' }}>
       <h1>Set up two-factor authentication</h1>
       <p>Your role requires an authenticator app (e.g. Google Authenticator, 1Password, Authy). Scan the code below, then enter the 6-digit code it shows.</p>
-      {qrCode && (
-        // eslint-disable-next-line @next/next/no-img-element -- Supabase returns this as a data: URI SVG, not a static asset next/image can optimize.
-        <img src={qrCode} alt="Scan this QR code with your authenticator app" width={200} height={200} />
+      {totpUri && (
+        <div style={{ padding: '1rem', background: '#fff', width: 'fit-content' }}>
+          <QRCode value={totpUri} size={200} />
+        </div>
       )}
       {secret && (
         <p>
