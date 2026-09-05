@@ -1,23 +1,33 @@
 /**
- * Regression test: confirmed live that the QR code rendered blank. Root
- * cause — the enrollment response's raw SVG markup was concatenated
- * directly after "data:image/svg+xml;utf-8," with no encoding. QR-code
- * SVGs contain hex-color fills like fill="#000000", and an un-encoded '#'
- * inside a data: URI is read as the URI's fragment delimiter, silently
- * truncating everything after the first one — the browser never sees a
- * complete/valid SVG. Fixed by encodeURIComponent-ing the SVG markup
- * before embedding it.
+ * Two regressions confirmed live, both fixed here:
+ *
+ * 1. Supabase's own totp.qr_code SVG is absurdly bloated (362,632
+ *    characters for a 231x231px code, a known upstream inefficiency) —
+ *    rendering it as an <img data:...> source produced a blank image
+ *    regardless of encoding. Fixed by rendering our own compact QR code
+ *    client-side (react-qr-code) from totp.uri instead.
+ * 2. A second enroll() call (e.g. from a page reload, or any retry after
+ *    the first attempt didn't complete) gets rejected with a 422 "factor
+ *    name conflict", since both attempts default to the same empty
+ *    friendly_name — permanently stranding anyone who ever retries. Fixed
+ *    by unenrolling any stale unverified TOTP factor before enrolling.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, waitFor } from '@testing-library/react';
 
-const SVG_WITH_HEX_COLOR = '<svg xmlns="http://www.w3.org/2000/svg"><rect fill="#000000" width="10" height="10"/></svg>';
+vi.mock('react-qr-code', () => ({
+  default: ({ value }: { value: string }) => <div data-testid="qrcode" data-value={value} />,
+}));
 
+const mockListFactors = vi.fn();
+const mockUnenroll = vi.fn();
 const mockEnroll = vi.fn();
 vi.mock('@/lib/registrySupabaseClient', () => ({
   registrySupabase: {
     auth: {
       mfa: {
+        listFactors: (...args: unknown[]) => mockListFactors(...args),
+        unenroll: (...args: unknown[]) => mockUnenroll(...args),
         enroll: (...args: unknown[]) => mockEnroll(...args),
         challengeAndVerify: vi.fn(),
       },
@@ -39,32 +49,56 @@ vi.mock('next/navigation', () => ({
 
 import RegistryMfaEnrollPage from '../page';
 
+const FRESH_ENROLL_RESPONSE = {
+  data: { id: 'factor-1', totp: { uri: 'otpauth://totp/AFJ:test@example.com?secret=SECRETKEY&issuer=AFJ', secret: 'SECRETKEY' } },
+  error: null,
+};
+
 describe('RegistryMfaEnrollPage', () => {
   beforeEach(() => {
-    mockEnroll.mockReset().mockResolvedValue({
-      data: { id: 'factor-1', totp: { qr_code: SVG_WITH_HEX_COLOR, secret: 'SECRETKEY' } },
-      error: null,
-    });
+    mockListFactors.mockReset().mockResolvedValue({ data: { all: [] }, error: null });
+    mockUnenroll.mockReset().mockResolvedValue({ data: {}, error: null });
+    mockEnroll.mockReset().mockResolvedValue(FRESH_ENROLL_RESPONSE);
   });
 
   afterEach(() => {
     cleanup();
   });
 
-  it('percent-encodes the SVG markup so a hex-color # does not truncate the data URI', async () => {
+  it('renders a compact client-side QR code from totp.uri, not the bloated Supabase SVG', async () => {
     render(<RegistryMfaEnrollPage />);
 
-    const img = await screen.findByAltText(/scan this qr code/i);
-    const src = img.getAttribute('src');
-
-    expect(src).toBe(`data:image/svg+xml,${encodeURIComponent(SVG_WITH_HEX_COLOR)}`);
-    // The exact regression: a raw, unencoded '#' would truncate the URI here.
-    expect(src).toContain('%23');
-    expect(src).not.toMatch(/svg\+xml[^,]*,.*#/); // no literal '#' survives past the data: prefix
+    const qr = await screen.findByTestId('qrcode');
+    expect(qr.getAttribute('data-value')).toBe(FRESH_ENROLL_RESPONSE.data.totp.uri);
   });
 
-  it('still shows the manual-entry secret regardless of the QR code', async () => {
+  it('still shows the manual-entry secret', async () => {
     render(<RegistryMfaEnrollPage />);
     expect(await screen.findByText('SECRETKEY')).toBeInTheDocument();
+  });
+
+  it('unenrolls a stale unverified TOTP factor before enrolling a fresh one', async () => {
+    mockListFactors.mockResolvedValue({
+      data: {
+        all: [
+          { id: 'stale-1', factor_type: 'totp', status: 'unverified' },
+          { id: 'verified-1', factor_type: 'totp', status: 'verified' }, // must NOT be touched
+          { id: 'phone-1', factor_type: 'phone', status: 'unverified' }, // different type, must NOT be touched
+        ],
+      },
+      error: null,
+    });
+
+    render(<RegistryMfaEnrollPage />);
+
+    await waitFor(() => expect(mockUnenroll).toHaveBeenCalledTimes(1));
+    expect(mockUnenroll).toHaveBeenCalledWith({ factorId: 'stale-1' });
+    await waitFor(() => expect(mockEnroll).toHaveBeenCalled());
+  });
+
+  it('does not call unenroll when there is nothing stale to clean up', async () => {
+    render(<RegistryMfaEnrollPage />);
+    await waitFor(() => expect(mockEnroll).toHaveBeenCalled());
+    expect(mockUnenroll).not.toHaveBeenCalled();
   });
 });
