@@ -80,7 +80,11 @@ async function ensureUser(email: string): Promise<{ id: string; created: boolean
     // NEXT_PUBLIC_SITE_URL=https://campaign.afj.org.au in .env.local.
     throw new Error('Resolved site URL is localhost — set NEXT_PUBLIC_SITE_URL in .env.local before inviting real people.');
   }
-  const { data, error } = await supabase.auth.admin.inviteUserByEmail(email, { redirectTo: `${siteUrl}/registry/login` });
+  // Must land on /registry/auth/callback, not /registry/login — that's
+  // the page that actually knows how to exchange the invite link's code
+  // for a session (see its own header comment). /registry/login is just
+  // the request-a-magic-link form; it doesn't look at the URL at all.
+  const { data, error } = await supabase.auth.admin.inviteUserByEmail(email, { redirectTo: `${siteUrl}/registry/auth/callback` });
   if (error) throw error;
   return { id: data.user.id, created: true };
 }
