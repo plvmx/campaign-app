@@ -95,7 +95,19 @@ lib/registryPipeline/           Framework-agnostic orchestration + business logi
   sourceAttribution.ts            Tag-based source matching (Section 3.3)
   listFilter.ts                   List 3/5 exclusion + list-status check (Section 3.6/6.1/6.2)
   rateLimiter.ts                  429 backoff + request pacing (Section 3.2/6.1)
+  mfaGate.ts                      evaluateMfaGate() — pure routing decision for the /registry portal below
   __tests__/                      Vitest coverage for everything above (Node-safe; no Deno/Supabase dependency)
+
+app/registry/                   The leader-facing auth portal (magic-link + MFA) — see the dated section below
+  login/page.tsx                   Email -> magic link (shouldCreateUser: false, invite-only)
+  auth/callback/page.tsx           Client-side code exchange (must run in-browser, see the app/auth/callback fix)
+  mfa/enroll/page.tsx              First-time TOTP setup (QR code)
+  mfa/challenge/page.tsx           Returning-user TOTP challenge
+  no-access/page.tsx               Valid sign-in, no registry.leader_roles row
+  page.tsx                         Placeholder landing page once the gate passes
+  useRegistryGate.ts               Shared hook: re-evaluates the gate on mount, redirects if not yet allowed
+lib/registryAuth.ts             SDK glue: reads leader_roles + AAL/factors, sets/clears the registry_auth / registry_session cookies
+lib/registrySupabaseClient.ts   Second supabase-js client, isolated localStorage key — see below for why
 ```
 
 All the actual decision logic lives in `lib/registryPipeline/` and is unit
@@ -779,3 +791,69 @@ verified:
 - Reload-from-spreadsheet plan and its `processed_at` correctness trap —
   documented above, script itself deferred until Lorraine's real cutoff
   details are known.
+
+## `/registry` portal: magic-link + MFA sign-in built (2026-09-05)
+
+Built the "minimal Supabase Auth slice" referenced above — the previously
+out-of-scope item from BRIEF.md ("Supabase Auth (magic-link) rollout for
+leaders" + "MFA enforcement for `national_admin`/`whatsapp_admin`") — as an
+independent `/registry` route namespace, deliberately not nested under the
+main app's `/admin` (which is gated by the mobile+name login and a
+different admin concept, `state_leaders.admin = 'AD'`; a `national_admin`
+here doesn't need to be a state leader at all).
+
+**Session isolation.** `lib/registrySupabaseClient.ts` is a second
+`createClient()` instance (same project URL/anon key as
+`lib/supabaseClient.ts`) with its own `storageKey` (`afj-registry-auth`).
+Without this, both clients would share one `localStorage` session slot —
+signing into `/registry` on a device would silently evict the main app's
+anonymous mobile+name session there, and vice versa. With separate storage
+keys, both sessions coexist on the same browser.
+
+**Flow:** `/registry/login` (email, `shouldCreateUser: false` — invite-only,
+see seeding below) → magic link → `/registry/auth/callback` (client-side
+`exchangeCodeForSession`, same reasoning as the `app/auth/callback` fix
+below) → `lib/registryAuth.ts`'s `getRegistryAccessState()` reads the
+caller's own `registry.leader_roles` row (RLS-scoped) plus their current
+AAL/enrolled factors, and `lib/registryPipeline/mfaGate.ts`'s
+`evaluateMfaGate()` (pure, unit tested) decides the next screen:
+`/registry/mfa/enroll` (first-time TOTP setup + QR code) or
+`/registry/mfa/challenge` (returning user, enter code) or straight to
+`/registry` if the role doesn't require MFA or `aal2` is already current.
+`/registry/no-access` catches a valid sign-in with no `leader_roles` row.
+
+**Route protection** (`middleware.ts`) uses two cookies, not one — a UX
+guard only, same disclaimer as `app_session`, real enforcement is RLS +
+`registry.has_required_mfa()`: `registry_auth` (set right after the code
+exchange, before the MFA outcome is known — needed so `/registry/mfa/*`
+itself is reachable) and `registry_session` (set only once the gate
+returns `ok`, required for everything else under `/registry`).
+
+**Fixed in passing:** `app/auth/callback/route.ts` (the *main* app's
+existing, currently-unused magic-link callback, from PR #44 in May) had
+the same class of bug this portal would otherwise have repeated — it ran
+`exchangeCodeForSession()` in a server Route Handler using the
+browser-oriented client, so the resulting session had no browser
+`localStorage` to persist to. Converted to a client component page. Not a
+registry-pipeline file, so shipped as a separate PR — see main-branch
+history (`fix/auth-callback-client-side-exchange`).
+
+**Seeding access:** `registry.leader_roles.user_id` FKs to `auth.users`,
+and the invite-only login means someone needs an `auth.users` row before
+they can ever request a magic link. `scripts/seed_registry_leader_roles.ts`
+handles both steps — invites (creates `auth.users`, sends the invite email)
+anyone not already present, then upserts their `registry.leader_roles`
+row. Also required: `scripts/grant_registry_authenticated_schema_usage.sql`
+— `registry.leader_roles`' own `GRANT SELECT ... TO authenticated` isn't
+enough on its own, same gap `grant_registry_pipeline_service_role.sql`
+already documented for `service_role` (schema `USAGE` is a separate
+privilege from any per-table grant).
+
+**Not yet verified against a live Supabase project** — no Node.js runtime
+was available in the session that built this, so `npm test`/`lint`/`tsc`
+and an actual magic-link round-trip are still pending. Before trusting
+this for real sign-ins: confirm Dashboard → Authentication → Multi-Factor
+Authentication has TOTP enabled (OPERATIONS.md step 6 above covers
+availability; nothing gated on it until now, so it may not actually be
+turned on yet), run the two SQL scripts above, run the seed script, and
+do one real sign-in end to end.
