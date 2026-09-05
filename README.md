@@ -87,6 +87,10 @@ Full detail in [TECHNICAL_DOCS.md §6–7](./TECHNICAL_DOCS.md#6-authentication-
 
 See [TECHNICAL_DOCS.md §4](./TECHNICAL_DOCS.md#4-folder-structure) for the full file-by-file breakdown, and [§8](./TECHNICAL_DOCS.md#8-page-map--every-route-explained) for every route.
 
+### Registry pipeline
+
+`lib/registryPipeline/` and `supabase/functions/ac-sync/` are a separate subsystem — an ActiveCampaign → Supabase registration data pipeline, isolated in its own `staging`/`registry` schemas in the same Supabase project. It uses the Supabase CLI, Edge Functions, and `pg_cron` rather than this app's usual Next.js API routes + Vercel Cron. See [CLAUDE.md's Registry pipeline section](./CLAUDE.md#registry-pipeline-docsregistry-pipeline) and [`docs/registry-pipeline/OPERATIONS.md`](./docs/registry-pipeline/OPERATIONS.md) for deploy/run steps.
+
 ## Learn More
 
 - [Next.js Documentation](https://nextjs.org/docs) — learn about Next.js features and API.

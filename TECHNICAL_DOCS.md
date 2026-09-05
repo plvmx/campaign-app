@@ -23,6 +23,7 @@
 14. [Environment Variables](#14-environment-variables)
 15. [Running the App Locally](#15-running-the-app-locally)
 16. [Change Management — Git Workflow](#16-change-management--git-workflow)
+17. [Registry Pipeline — Separate Subsystem](#17-registry-pipeline--separate-subsystem)
 
 ---
 
@@ -1529,6 +1530,16 @@ echo "PDF saved to $(pwd)/TECHNICAL_DOCS.pdf"
 ```
 
 The generated PDF is listed in `.gitignore` and should not be committed to the repository.
+
+---
+
+## 17. Registry Pipeline — Separate Subsystem
+
+Everything above this section describes the campaign app proper. `lib/registryPipeline/` and `supabase/functions/ac-sync/` are a deliberately separate subsystem — an ActiveCampaign → Supabase registration data pipeline for AFJ leadership, living in its own `staging`/`registry` Postgres schemas in the same Supabase project, not `public`. It does not share the campaign app's service layer, roles, or page map, and no client (browser) ever queries its tables directly.
+
+It also uses a different toolchain: the Supabase CLI, Edge Functions (Deno), and `pg_cron`/`pg_net`, rather than this app's Next.js API routes + Vercel Cron. `supabase/functions/` is excluded from the root `tsconfig.json` for this reason (Deno-only syntax) and isn't covered by this app's four CI jobs — see `docs/registry-pipeline/OPERATIONS.md`.
+
+Full design: `docs/registry-pipeline/AFJ_PII_Technical_Implementation_Plan.md`. Session scope: `docs/registry-pipeline/BRIEF.md`. Deploy/run steps: `docs/registry-pipeline/OPERATIONS.md`. Architecture summary: `CLAUDE.md`'s "Registry pipeline" section.
 
 ---
 
