@@ -27,10 +27,14 @@ export default function RegistryMfaEnrollPage() {
         return;
       }
       setFactorId(data.id);
-      // qr_code is the raw SVG-encoded value, not a ready-to-use data URI —
-      // per supabase-js's own doc comment on this field, the caller is
-      // responsible for prepending the data: prefix.
-      setQrCode(`data:image/svg+xml;utf-8,${data.totp.qr_code}`);
+      // qr_code is the raw SVG markup, not a ready-to-use data URI — per
+      // supabase-js's own doc comment, the caller prepends the data:
+      // prefix. Confirmed live: naively concatenating it (no encoding)
+      // renders a blank image, because QR SVGs contain hex-color fills
+      // like fill="#000000" — the unencoded '#' is read as the URI's
+      // fragment delimiter, truncating everything after it. encodeURIComponent
+      // escapes '#' (and anything else that would confuse URI parsing).
+      setQrCode(`data:image/svg+xml,${encodeURIComponent(data.totp.qr_code)}`);
       setSecret(data.totp.secret);
     });
   }, [gate.status, factorId]);
