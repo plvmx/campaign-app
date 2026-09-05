@@ -35,11 +35,6 @@ export interface RecordResultsDraft {
   campaignId: string;
   names: Record<ResultsCategory, NameSlotDraft[]>;
   actualLeader: string;
-  teamSize: string;
-  ppCnt: string;
-  fpCnt: string;
-  fpspCnt: string;
-  irCnt: string;
   updatedAt: string; // ISO timestamp
 }
 
@@ -93,16 +88,16 @@ export function clearDraft(campaignId: string): void {
 }
 
 /**
- * True if the draft has any meaningful content (a name, count, or actual
- * leader entry). Used so a draft of pure empty strings doesn't trigger a
- * "restored unsaved names" banner.
+ * True if the draft has any meaningful content (a name or actual leader
+ * entry). Used so a draft of pure empty strings doesn't trigger a "restored
+ * unsaved names" banner. Team size and the Partial/Full/Full+Sinner's
+ * Prayer/Information Request counts are derived from the name grids
+ * themselves rather than drafted separately.
  */
 export function draftHasContent(draft: RecordResultsDraft): boolean {
   const anyName = (Object.values(draft.names) as NameSlotDraft[][])
     .some((arr) => arr.some((s) => s.value.trim().length > 0));
   if (anyName) return true;
   if (draft.actualLeader.trim()) return true;
-  if (draft.teamSize.trim()) return true;
-  if (draft.ppCnt.trim() || draft.fpCnt.trim() || draft.fpspCnt.trim() || draft.irCnt.trim()) return true;
   return false;
 }

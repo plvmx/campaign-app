@@ -17,11 +17,6 @@ function makeDraft(overrides: Partial<RecordResultsDraft> = {}): RecordResultsDr
     campaignId: 'c1',
     names: { TM: emptySlots(), P: emptySlots(), F: emptySlots(), SP: emptySlots(), IR: emptySlots() },
     actualLeader: '',
-    teamSize: '',
-    ppCnt: '',
-    fpCnt: '',
-    fpspCnt: '',
-    irCnt: '',
     updatedAt: '2026-08-13T00:00:00.000Z',
     ...overrides,
   };
@@ -108,16 +103,5 @@ describe('draftHasContent', () => {
 
   it('is true when actualLeader is set', () => {
     expect(draftHasContent(makeDraft({ actualLeader: 'Alice' }))).toBe(true);
-  });
-
-  it('is true when teamSize is set', () => {
-    expect(draftHasContent(makeDraft({ teamSize: '5' }))).toBe(true);
-  });
-
-  it('is true when any count field is set', () => {
-    expect(draftHasContent(makeDraft({ ppCnt: '1' }))).toBe(true);
-    expect(draftHasContent(makeDraft({ fpCnt: '1' }))).toBe(true);
-    expect(draftHasContent(makeDraft({ fpspCnt: '1' }))).toBe(true);
-    expect(draftHasContent(makeDraft({ irCnt: '1' }))).toBe(true);
   });
 });
