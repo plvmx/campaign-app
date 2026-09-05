@@ -29,8 +29,9 @@
  * Edit the SEED list below before running.
  *
  * Usage:
- *   npx tsx scripts/seed_registry_leader_roles.ts          # dry-run summary
- *   npx tsx scripts/seed_registry_leader_roles.ts --apply  # actually write
+ *   npx tsx scripts/seed_registry_leader_roles.ts                          # dry-run summary
+ *   npx tsx scripts/seed_registry_leader_roles.ts --apply                  # actually write, invite links point at production
+ *   npx tsx scripts/seed_registry_leader_roles.ts --apply <site-url>       # invite links point at a Vercel preview URL instead, to test before merging to main
  */
 import fs from 'fs';
 import path from 'path';
@@ -52,10 +53,13 @@ const SEED: { email: string; role: SeedRole }[] = [
   { email: 'plvmx01@gmail.com', role: 'national_admin' },
   { email: 'tony@afj.org.au', role: 'national_admin' },
   { email: 'lorraine@afj.org.au', role: 'national_admin' },
+  { email: 'lily.viertmann@gmail.com', role: 'national_admin' },
 ];
 // -----------------------------------------------
 
-const apply = process.argv.includes('--apply');
+const scriptArgs = process.argv.slice(2);
+const apply = scriptArgs.includes('--apply');
+const siteUrlOverride = scriptArgs.find((a) => a !== '--apply');
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -78,14 +82,15 @@ async function findExistingUser(email: string): Promise<{ id: string; hasSignedI
 }
 
 function requireLiveSiteUrl(): string {
-  const siteUrl = getSiteUrl();
+  const siteUrl = getSiteUrl(siteUrlOverride);
   if (siteUrl.includes('localhost')) {
     // getSiteUrl() falls back to localhost when NEXT_PUBLIC_SITE_URL isn't
-    // set — fine for OG metadata, not fine for a link someone else will
-    // actually click. This script runs on a dev machine, not on Vercel, so
-    // VERCEL_PROJECT_PRODUCTION_URL won't be set either; it needs
-    // NEXT_PUBLIC_SITE_URL=https://campaign.afj.org.au in .env.local.
-    throw new Error('Resolved site URL is localhost — set NEXT_PUBLIC_SITE_URL in .env.local before inviting real people.');
+    // set (and no override was passed) — fine for OG metadata, not fine
+    // for a link someone else will actually click. This script runs on a
+    // dev machine, not on Vercel, so VERCEL_PROJECT_PRODUCTION_URL won't
+    // be set either; it needs NEXT_PUBLIC_SITE_URL=https://campaign.afj.org.au
+    // in .env.local, or an explicit site-url argument.
+    throw new Error('Resolved site URL is localhost — set NEXT_PUBLIC_SITE_URL in .env.local before inviting real people, or pass a site URL as an argument.');
   }
   return siteUrl;
 }

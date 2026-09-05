@@ -39,8 +39,7 @@ if (!email) {
 // NEXT_PUBLIC_SITE_URL production domain) yet. Must also be added to
 // Supabase's Authentication -> URL Configuration -> Redirect URLs, or
 // Supabase will silently ignore it and fall back to the default Site URL.
-const siteUrlOverride = process.argv[3];
-const siteUrl = siteUrlOverride ?? getSiteUrl();
+const siteUrl = getSiteUrl(process.argv[3]);
 if (siteUrl.includes('localhost')) {
   console.error('Resolved site URL is localhost — set NEXT_PUBLIC_SITE_URL=https://campaign.afj.org.au in .env.local first, or pass a site URL as the second argument.');
   process.exit(1);
