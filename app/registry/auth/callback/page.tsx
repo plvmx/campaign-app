@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { registrySupabase } from '@/lib/registrySupabaseClient';
 import { getRegistryAccessState, setRegistryAuthCookie, setRegistrySessionCookie, signOutOfRegistry } from '@/lib/registryAuth';
+import { RegistryAuthLayout, registryBodyTextClass } from '@/components/registry/RegistryAuthLayout';
 
 const ROUTE_FOR_RESULT = {
   unauthenticated: '/registry/login?error=auth_failed',
@@ -84,8 +85,8 @@ export default function RegistryAuthCallbackPage() {
   }, [router]);
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
-      <p>Signing you in…</p>
-    </div>
+    <RegistryAuthLayout title="AFJ Registry">
+      <p className={registryBodyTextClass}>Signing you in…</p>
+    </RegistryAuthLayout>
   );
 }

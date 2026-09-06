@@ -6,6 +6,13 @@ import { registrySupabase } from '@/lib/registrySupabaseClient';
 import { setRegistrySessionCookie } from '@/lib/registryAuth';
 import { useRegistryGate } from '@/app/registry/useRegistryGate';
 import type { MfaGateResult } from '@/lib/registryPipeline/mfaGate';
+import {
+  RegistryAuthLayout,
+  registryInputClass,
+  registryLabelClass,
+  registryPrimaryButtonClass,
+  registryErrorBannerClass,
+} from '@/components/registry/RegistryAuthLayout';
 
 const ALLOW: MfaGateResult[] = ['needs_challenge'];
 
@@ -52,26 +59,27 @@ export default function RegistryMfaChallengePage() {
   if (gate.status === 'loading') return null;
 
   return (
-    <div style={{ maxWidth: 400, margin: '4rem auto', padding: '0 1rem' }}>
-      <h1>Enter your authenticator code</h1>
-      {lookupError && <p role="alert" style={{ color: 'crimson' }}>{lookupError}</p>}
-      <form onSubmit={handleVerify}>
-        <label htmlFor="mfa-code">6-digit code</label>
-        <input
-          id="mfa-code"
-          inputMode="numeric"
-          pattern="[0-9]*"
-          maxLength={6}
-          required
-          value={code}
-          onChange={(e) => setCode(e.target.value)}
-          style={{ display: 'block', width: '100%', marginBottom: '1rem' }}
-        />
-        {error && <p role="alert" style={{ color: 'crimson' }}>{error}</p>}
-        <button type="submit" disabled={isVerifying || !factorId || code.length < 6}>
+    <RegistryAuthLayout title="Enter your authenticator code">
+      {lookupError && <p role="alert" className={registryErrorBannerClass}>{lookupError}</p>}
+      <form onSubmit={handleVerify} className="space-y-4">
+        <div>
+          <label htmlFor="mfa-code" className={registryLabelClass}>6-digit code</label>
+          <input
+            id="mfa-code"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            maxLength={6}
+            required
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            className={registryInputClass}
+          />
+        </div>
+        {error && <p role="alert" className={registryErrorBannerClass}>{error}</p>}
+        <button type="submit" disabled={isVerifying || !factorId || code.length < 6} className={registryPrimaryButtonClass}>
           {isVerifying ? 'Verifying…' : 'Verify'}
         </button>
       </form>
-    </div>
+    </RegistryAuthLayout>
   );
 }

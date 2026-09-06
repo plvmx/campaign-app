@@ -2,6 +2,13 @@
 
 import { useState, FormEvent } from 'react';
 import { registrySupabase } from '@/lib/registrySupabaseClient';
+import {
+  RegistryAuthLayout,
+  registryInputClass,
+  registryLabelClass,
+  registryPrimaryButtonClass,
+  registryBodyTextClass,
+} from '@/components/registry/RegistryAuthLayout';
 
 export default function RegistryLoginPage() {
   const [email, setEmail] = useState('');
@@ -37,27 +44,30 @@ export default function RegistryLoginPage() {
   }
 
   return (
-    <div style={{ maxWidth: 400, margin: '4rem auto', padding: '0 1rem' }}>
-      <h1>AFJ Registry Sign In</h1>
+    <RegistryAuthLayout title="AFJ Registry Sign In">
       {sent ? (
-        <p>If that address has registry access, a sign-in link is on its way — check your email.</p>
+        <p className={registryBodyTextClass}>
+          If that address has registry access, a sign-in link is on its way — check your email.
+        </p>
       ) : (
-        <form onSubmit={handleSubmit}>
-          <label htmlFor="registry-email">Email address</label>
-          <input
-            id="registry-email"
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            autoComplete="email"
-            style={{ display: 'block', width: '100%', marginBottom: '1rem' }}
-          />
-          <button type="submit" disabled={isSubmitting || !email}>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label htmlFor="registry-email" className={registryLabelClass}>Email address</label>
+            <input
+              id="registry-email"
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
+              className={registryInputClass}
+            />
+          </div>
+          <button type="submit" disabled={isSubmitting || !email} className={registryPrimaryButtonClass}>
             {isSubmitting ? 'Sending…' : 'Send magic link'}
           </button>
         </form>
       )}
-    </div>
+    </RegistryAuthLayout>
   );
 }

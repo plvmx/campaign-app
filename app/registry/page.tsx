@@ -7,6 +7,12 @@ import { registrySupabase } from '@/lib/registrySupabaseClient';
 import { signOutOfRegistry } from '@/lib/registryAuth';
 import { useRegistryGate } from '@/app/registry/useRegistryGate';
 import type { MfaGateResult } from '@/lib/registryPipeline/mfaGate';
+import {
+  RegistryAuthLayout,
+  registryPrimaryButtonClass,
+  registrySecondaryButtonClass,
+  registryBodyTextClass,
+} from '@/components/registry/RegistryAuthLayout';
 
 const ALLOW: MfaGateResult[] = ['ok'];
 
@@ -36,14 +42,17 @@ export default function RegistryHomePage() {
   if (gate.status === 'loading') return null;
 
   return (
-    <div style={{ maxWidth: 400, margin: '4rem auto', padding: '0 1rem' }}>
-      <h1>AFJ Registry</h1>
-      <p>Signed in as {email ?? '…'}.</p>
-      <p>Role: {gate.leaderRole?.role ?? 'unknown'}.</p>
-      <p>
-        <Link href="/registry/recent-registrations">Recent Registrations</Link>
+    <RegistryAuthLayout title="AFJ Registry">
+      <p className={registryBodyTextClass}>
+        Signed in as {email ?? '…'}.<br />
+        Role: {gate.leaderRole?.role ?? 'unknown'}.
       </p>
-      <button type="button" onClick={handleSignOut}>Sign out</button>
-    </div>
+      <div className="space-y-3">
+        <Link href="/registry/recent-registrations" className={`${registryPrimaryButtonClass} block text-center`}>
+          Recent Registrations
+        </Link>
+        <button type="button" onClick={handleSignOut} className={registrySecondaryButtonClass}>Sign out</button>
+      </div>
+    </RegistryAuthLayout>
   );
 }
