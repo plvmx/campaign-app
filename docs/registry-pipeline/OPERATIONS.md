@@ -892,3 +892,47 @@ fully trusting the QR fix.
 Confirm Dashboard → Authentication → Multi-Factor Authentication has
 TOTP enabled if it hasn't been checked yet (OPERATIONS.md step 6 above
 covers availability, not enforcement).
+
+## Registrations reload: parked; "Recent Registrations" built as a stand-in (2026-09-05)
+
+Lorraine's spreadsheet ("Peters Interim AFJ Soulwinners List", `/home/peterv/Documents/`)
+arrived. Inspected directly (no `openpyxl`/`pandas` available in this
+session — parsed the raw xlsx XML with Python's stdlib `zipfile` +
+`xml.etree.ElementTree` instead): 8,878 rows on its "main AFJ page" sheet,
+18 real columns. Real max `Regd` date found in the data: **2026-08-22**
+(the filename says "22 Sept 2026" — a typo for Aug).
+
+**The reload itself is parked**, pending answers Peter couldn't get
+quickly: how to handle the 2,089 rows (23.5%!) with "UNSUBSCRIBED"
+embedded in the free-text Church field; 149 rows using non-AU-state
+values (`OS`/`NZ`/`UK`); what a second, identically-named "Training"
+column (distinct from the one that looks like the AC `[9]` field) means;
+whether six workflow-tracking columns (Webinar date, W/Done, WOL Role,
+Resources, Code, Date Agreed, Submit) matter at all; and whether any of
+the workbook's other 10 sheets need to feed in too. Don't restart this
+without those answers — re-derive them from Peter/Lorraine, not by
+guessing from the data alone.
+
+**In the meantime, built `/registry/recent-registrations`** — a live,
+read-only AC lookup (no staging/registry writes, nothing persisted) for
+genuine registrants created on/after the 2026-08-22 cutoff, so Lorraine
+can see who's registered since her list without waiting on the reload.
+Reuses the real pipeline's own filtering (`listFilter.ts`'s List 3/5
+exclusion + active-membership check, `tagExclusion.ts`'s MailChimp-import
+exclusion, `fieldMap.ts`'s field mapping) via a new Node-runtime AC
+adapter, `lib/registryPipeline/acReadOnlyClient.ts` — deliberately a
+separate interface (`AcReadOnlyPort`) from the sync pipeline's `AcPort`,
+since this one filters on `filters[created_after]` ("who registered since
+X"), not `AcPort.getContactsPage`'s documented `filters[updated_after]`
+("what changed since the last run") — a different filter and a different
+meaning that would be confusing to blur under one shared interface.
+Server-side authorization (`lib/registryServerAuth.ts`) mirrors the
+client-side MFA gate for a Bearer-token API route, same pattern as
+`app/api/admin/settings`.
+
+**Requires `AC_API_BASE_URL`/`AC_API_KEY` as Vercel environment
+variables** — until now, this credential only existed as a Supabase Edge
+Function secret (`ac-sync`'s runtime); this is the first place the main
+Next.js app itself needs to call AC directly, so the same values need
+adding a second place. Explicitly temporary — expect this whole route to
+be retired once the real reload + ongoing reconciliation ships.
