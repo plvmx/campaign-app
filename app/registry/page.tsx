@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { registrySupabase } from '@/lib/registrySupabaseClient';
 import { signOutOfRegistry } from '@/lib/registryAuth';
 import { useRegistryGate } from '@/app/registry/useRegistryGate';
@@ -10,10 +11,12 @@ import type { MfaGateResult } from '@/lib/registryPipeline/mfaGate';
 const ALLOW: MfaGateResult[] = ['ok'];
 
 /**
- * Placeholder landing page — proves the magic-link + MFA pipeline works
- * end to end. The actual registry data screens (duplicate review, etc.)
- * are still blocked pending Lorraine's spreadsheet reload; see
- * docs/registry-pipeline/OPERATIONS.md's "Status" section.
+ * Landing page — proves the magic-link + MFA pipeline works end to end,
+ * and links to whatever registry data screens exist so far. The full
+ * registrations reload + reconciliation isn't built yet (paused pending
+ * decisions on Lorraine's spreadsheet — see
+ * docs/registry-pipeline/OPERATIONS.md's "Status" section); "Recent
+ * Registrations" is a temporary stand-in for that in the meantime.
  */
 export default function RegistryHomePage() {
   const router = useRouter();
@@ -37,7 +40,9 @@ export default function RegistryHomePage() {
       <h1>AFJ Registry</h1>
       <p>Signed in as {email ?? '…'}.</p>
       <p>Role: {gate.leaderRole?.role ?? 'unknown'}.</p>
-      <p>Registry data screens aren&apos;t built yet — this confirms sign-in and MFA are working.</p>
+      <p>
+        <Link href="/registry/recent-registrations">Recent Registrations</Link>
+      </p>
       <button type="button" onClick={handleSignOut}>Sign out</button>
     </div>
   );
