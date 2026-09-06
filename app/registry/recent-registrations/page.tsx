@@ -5,6 +5,16 @@ import { registrySupabase } from '@/lib/registrySupabaseClient';
 import { useRegistryGate } from '@/app/registry/useRegistryGate';
 import type { MfaGateResult } from '@/lib/registryPipeline/mfaGate';
 import type { RecentRegistration } from '@/lib/registryPipeline/recentRegistrationTypes';
+import { getSlideStateColor } from '@/lib/slideLayout';
+
+/** Same per-state colors as the campaign results slides (lib/slideLayout.ts), lightened into a row-shading tint rather than used at full strength (which is text-color-saturated, not meant as a background). */
+function stateRowShade(state: string | null): string {
+  if (!state) return 'transparent';
+  const rgb = getSlideStateColor(state).match(/\d+/g);
+  if (!rgb) return 'transparent';
+  const [r, g, b] = rgb;
+  return `rgba(${r}, ${g}, ${b}, 0.14)`;
+}
 
 const ALLOW: MfaGateResult[] = ['ok'];
 
@@ -157,7 +167,7 @@ export default function RecentRegistrationsPage() {
             </thead>
             <tbody>
               {visibleRows.map((r, i) => (
-                <tr key={i} style={{ borderBottom: '1px solid #eee' }}>
+                <tr key={i} style={{ borderBottom: '1px solid #eee', backgroundColor: stateRowShade(r.state) }}>
                   <td style={{ padding: '0.5rem' }}>{r.firstName ?? '—'}</td>
                   <td style={{ padding: '0.5rem' }}>{r.lastName ?? '—'}</td>
                   <td style={{ padding: '0.5rem' }}>{r.email ?? '—'}</td>
