@@ -7,6 +7,14 @@ import { registrySupabase } from '@/lib/registrySupabaseClient';
 import { setRegistrySessionCookie } from '@/lib/registryAuth';
 import { useRegistryGate } from '@/app/registry/useRegistryGate';
 import type { MfaGateResult } from '@/lib/registryPipeline/mfaGate';
+import {
+  RegistryAuthLayout,
+  registryInputClass,
+  registryLabelClass,
+  registryPrimaryButtonClass,
+  registryErrorBannerClass,
+  registryBodyTextClass,
+} from '@/components/registry/RegistryAuthLayout';
 
 const ALLOW: MfaGateResult[] = ['needs_enrollment'];
 
@@ -87,36 +95,40 @@ export default function RegistryMfaEnrollPage() {
   if (gate.status === 'loading') return null;
 
   return (
-    <div style={{ maxWidth: 400, margin: '4rem auto', padding: '0 1rem' }}>
-      <h1>Set up two-factor authentication</h1>
-      <p>Your role requires an authenticator app (e.g. Google Authenticator, 1Password, Authy). Scan the code below, then enter the 6-digit code it shows.</p>
+    <RegistryAuthLayout title="Set up two-factor authentication">
+      <p className={registryBodyTextClass}>
+        Your role requires an authenticator app (e.g. Google Authenticator, 1Password, Authy). Scan the code below, then enter the 6-digit code it shows.
+      </p>
       {totpUri && (
-        <div style={{ padding: '1rem', background: '#fff', width: 'fit-content' }}>
+        <div className="mx-auto w-fit rounded-md border-2 border-gray-800 bg-white p-4 dark:border-gray-600">
           <QRCode value={totpUri} size={200} />
         </div>
       )}
       {secret && (
-        <p>
-          Can&apos;t scan it? Enter this key manually: <code>{secret}</code>
+        <p className={registryBodyTextClass}>
+          Can&apos;t scan it? Enter this key manually:<br />
+          <code className="mt-1 inline-block rounded bg-gray-200 px-2 py-1 text-gray-900 dark:bg-gray-800 dark:text-gray-100">{secret}</code>
         </p>
       )}
-      <form onSubmit={handleVerify}>
-        <label htmlFor="mfa-code">6-digit code</label>
-        <input
-          id="mfa-code"
-          inputMode="numeric"
-          pattern="[0-9]*"
-          maxLength={6}
-          required
-          value={code}
-          onChange={(e) => setCode(e.target.value)}
-          style={{ display: 'block', width: '100%', marginBottom: '1rem' }}
-        />
-        {error && <p role="alert" style={{ color: 'crimson' }}>{error}</p>}
-        <button type="submit" disabled={isVerifying || !factorId || code.length < 6}>
+      <form onSubmit={handleVerify} className="space-y-4">
+        <div>
+          <label htmlFor="mfa-code" className={registryLabelClass}>6-digit code</label>
+          <input
+            id="mfa-code"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            maxLength={6}
+            required
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            className={registryInputClass}
+          />
+        </div>
+        {error && <p role="alert" className={registryErrorBannerClass}>{error}</p>}
+        <button type="submit" disabled={isVerifying || !factorId || code.length < 6} className={registryPrimaryButtonClass}>
           {isVerifying ? 'Verifying…' : 'Verify and continue'}
         </button>
       </form>
-    </div>
+    </RegistryAuthLayout>
   );
 }
