@@ -82,6 +82,16 @@ describe('RecentRegistrationsPage', () => {
     expect(rowsFirstNames()).toEqual(['Bob', 'Alice']);
   });
 
+  it('shades each row with the same per-state color used on the campaign results slides', async () => {
+    render(<RecentRegistrationsPage />);
+    const bobRow = (await screen.findByText('bob@example.com')).closest('tr');
+    const aliceRow = screen.getByText('alice@example.com').closest('tr');
+
+    // NSW's slide color is rgb(0, 0, 0); VIC's is rgb(234, 107, 20) — see lib/slideLayout.ts.
+    expect(bobRow).toHaveStyle({ backgroundColor: 'rgba(0, 0, 0, 0.14)' });
+    expect(aliceRow).toHaveStyle({ backgroundColor: 'rgba(234, 107, 20, 0.14)' });
+  });
+
   it('shows an error message when the API call fails', async () => {
     global.fetch = vi.fn().mockResolvedValue({ ok: false, json: async () => ({ error: 'Failed to fetch recent registrations from ActiveCampaign' }) }) as unknown as typeof fetch;
     render(<RecentRegistrationsPage />);
