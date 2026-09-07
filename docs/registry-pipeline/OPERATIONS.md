@@ -974,10 +974,13 @@ above left open:**
    otherwise when this is built.
 5. The second "Training" column (distinct from the one resembling AC
    field `[9]`) is ignored — not loaded, no column added for it.
-6. **New columns** for the six previously-undecided workflow-tracking
-   fields: Webinar (date), W/Done, WOL Role, Resources, Code, Date
-   Agreed, Submit — all get a home in `registry.registrants`, not left
-   out as the 2026-09-05 entry defaulted to assuming.
+6. **Revised 2026-09-07 (same day, before this was built):** the six
+   previously-undecided workflow-tracking fields (Webinar date, W/Done,
+   WOL Role, Resources, Code, Date Agreed, Submit) are **ignored** —
+   Peter's first answer was to add columns for all six; reversed to "no
+   new columns, revisit later if a real need for them shows up" before
+   any migration was written against the original answer. Matches the
+   2026-09-05 entry's original default.
 
 **Still an open, unconfirmed assumption** (not one of Peter's six
 answers — flag before building): 418 rows have a **blank** `state` (not
