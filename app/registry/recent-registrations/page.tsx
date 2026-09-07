@@ -57,8 +57,16 @@ export default function RecentRegistrationsPage() {
       }
       setRows(json.registrations);
       setCutoff(json.cutoff ?? null);
-    } catch {
-      setError('Failed to load recent registrations.');
+    } catch (err) {
+      // The server can return 200 and still have the browser fail here —
+      // e.g. the connection dropping partway through a large response
+      // body, which surfaces as a JSON parse error, not a fetch()
+      // rejection. Logging the real error (never shown to the user,
+      // nothing sensitive in it — just a fetch/JSON failure) is the only
+      // way to tell that apart from a genuine network failure without
+      // guessing from a generic message alone.
+      console.error('[recent-registrations] load failed:', err);
+      setError('Failed to load recent registrations — check the browser console for detail, or try again on a stable connection.');
     } finally {
       setIsLoading(false);
     }

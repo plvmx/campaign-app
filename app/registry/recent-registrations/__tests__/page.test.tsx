@@ -97,4 +97,15 @@ describe('RecentRegistrationsPage', () => {
     render(<RecentRegistrationsPage />);
     expect(await screen.findByRole('alert')).toHaveTextContent(/failed to fetch recent registrations/i);
   });
+
+  it('logs the real error and shows a distinct message when the server responds 200 but the response body itself fails (e.g. a dropped connection)', async () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const bodyError = new SyntaxError('Unexpected end of JSON input');
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.reject(bodyError) }) as unknown as typeof fetch;
+
+    render(<RecentRegistrationsPage />);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/check the browser console/i);
+    expect(consoleErrorSpy).toHaveBeenCalledWith('[recent-registrations] load failed:', bodyError);
+  });
 });
