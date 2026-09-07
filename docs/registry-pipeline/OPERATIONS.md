@@ -936,3 +936,61 @@ Function secret (`ac-sync`'s runtime); this is the first place the main
 Next.js app itself needs to call AC directly, so the same values need
 adding a second place. Explicitly temporary — expect this whole route to
 be retired once the real reload + ongoing reconciliation ships.
+
+## Registrations reload: source file replaced, blocking decisions resolved (2026-09-07)
+
+**New source file:** `/home/peterv/Documents/AFJ Registrations.csv` —
+**confirmed by Peter to replace** the 2026-09-05 xlsx entirely (not a
+postcode-only revision of it, despite what "she may provide another
+version with some missing postcodes" implied at the time). Inspected
+directly (plain CSV, Python stdlib `csv` module): 9,299 rows, same 18
+columns as the xlsx (including the duplicate "Training" column), max
+`Regd` date **2026-09-06** — two weeks later than the xlsx's cutoff, and
+421 more rows. Also surfaced a new data-quality issue the xlsx didn't
+show this clearly: 1,896 rows (20%) have a non-numeric postcode
+placeholder — mostly `?`-masked (`5???`, `2???`) but also a recurring
+literal `9NFC` whose meaning is still unconfirmed.
+
+**Decisions from Peter, resolving every question the 2026-09-05 entry
+above left open:**
+
+1. This CSV is the sole source for the reload — the earlier xlsx is
+   superseded, not merged in alongside it.
+2. A postcode that isn't valid becomes `NULL`, not the placeholder text
+   (`5???`, `9NFC`, etc. all map to null postcode, same treatment as a
+   genuinely blank cell).
+3. Rows with a non-AU `state` (`OS`, `NZ`, `UK` — 149 rows in the earlier
+   xlsx count, likely a similar figure here) are excluded from the
+   reload entirely — not loaded with a null/placeholder state, skipped.
+4. **New column**: `registry.registrants.unsubscribed`. Any Church-field
+   value containing "UNSUBSCRIBED" (anywhere in the string, case as
+   found in source) sets this to `'Yes'` **and** the literal
+   "UNSUBSCRIBED" text is stripped back out of the stored `church_name`
+   value (so the cleaned name, not the marker, is what's kept there).
+   Not yet decided: whether this column is a real boolean or a `'Yes'`/
+   null text column matching how `interested_in_training`/`church_leader`
+   already store raw Yes/No strings elsewhere in this schema
+   (`fieldMap.ts`) — default to the latter for consistency unless told
+   otherwise when this is built.
+5. The second "Training" column (distinct from the one resembling AC
+   field `[9]`) is ignored — not loaded, no column added for it.
+6. **Revised 2026-09-07 (same day, before this was built):** the six
+   previously-undecided workflow-tracking fields (Webinar date, W/Done,
+   WOL Role, Resources, Code, Date Agreed, Submit) are **ignored** —
+   Peter's first answer was to add columns for all six; reversed to "no
+   new columns, revisit later if a real need for them shows up" before
+   any migration was written against the original answer. Matches the
+   2026-09-05 entry's original default.
+
+**Still an open, unconfirmed assumption** (not one of Peter's six
+answers — flag before building): 418 rows have a **blank** `state` (not
+one of the excluded non-AU codes) — decision 3 only covers non-AU
+values, so the working assumption is these load with `state = NULL`
+rather than being excluded like the `OS`/`NZ`/`UK` rows. Confirm before
+relying on it.
+
+**Not yet done:** the actual migration (new columns above) and reload
+script. This entry only records the decisions once they were available
+"quickly," per Peter's own framing of why the 2026-09-05 attempt
+stalled — building against them is the next session's work, not done
+here yet.
