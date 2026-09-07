@@ -967,8 +967,11 @@ above left open:**
    found in source) sets this to `'Yes'` **and** the literal
    "UNSUBSCRIBED" text is stripped back out of the stored `church_name`
    value (so the cleaned name, not the marker, is what's kept there).
-   Not yet decided: whether this column is a real boolean or a `'Yes'`/
-   null text column matching how `interested_in_training`/`church_leader`
+   **Revised 2026-09-07 (same day, before this was built):** when
+   `unsubscribed` is set, the row's `email` is also cleared (`NULL`) —
+   don't retain contact details for someone who's unsubscribed. Not yet
+   decided: whether `unsubscribed` is a real boolean or a `'Yes'`/null
+   text column matching how `interested_in_training`/`church_leader`
    already store raw Yes/No strings elsewhere in this schema
    (`fieldMap.ts`) — default to the latter for consistency unless told
    otherwise when this is built.
