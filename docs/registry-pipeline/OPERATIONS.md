@@ -1072,11 +1072,11 @@ every decision below.
      `steve.i.walker@icloud.com` has 3 rows — the third is a completely
      different name, "Cilla Geldenhuys," sharing Stephen Walker's email.
      Almost certainly a data-entry error (wrong email pasted into her
-     row). **Still open** — Peter hasn't yet picked one of: (a) drop
-     Cilla's row as a Walker-household typo, (b) keep her as her own
-     registrant with no email (matchable only by phone going forward),
-     or (c) something else, e.g. if her real email is recoverable from
-     elsewhere. Don't build against a guess here.
+     row). **Resolved**: option (b) — Cilla is loaded as her own
+     registrant with no email at all (not Stephen's), matchable only by
+     phone going forward per decision 3's fallback. Stephen Walker's own
+     two rows (the first two of the three) are handled by the ordinary
+     Pattern-A rule above, unaffected by this.
 
 **Not yet done:** the actual migration (new columns above) and reload
 script. This entry only records the decisions once they were available
