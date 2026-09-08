@@ -10,12 +10,18 @@
 -- 36,498 registration_events. This deletes all of it. There is no undo
 -- other than restoring from the backup above.
 --
--- registration_events first (FK-safe order — it references registrants.id),
--- so registrants can be truncated afterward with no CASCADE needed.
+-- Both tables MUST be named in the same TRUNCATE statement — confirmed
+-- live: Postgres refuses to truncate registrants on its own even as a
+-- separate, later statement in the same script, because
+-- registration_events.registrant_id still has a live FK constraint
+-- pointing at it (the constraint's existence is what's checked, not
+-- whether the referencing table currently has any rows). This is
+-- exactly what TRUNCATE's own multi-table form is for — no CASCADE
+-- needed once both are listed together.
+--
 -- RESTART IDENTITY only actually resets registration_events.id (a real
 -- identity column) — registrants.id is a UUID default
 -- (gen_random_uuid()), so the same clause there is a harmless no-op, kept
 -- for symmetry.
 
-TRUNCATE registry.registration_events RESTART IDENTITY;
-TRUNCATE registry.registrants RESTART IDENTITY;
+TRUNCATE registry.registration_events, registry.registrants RESTART IDENTITY;
