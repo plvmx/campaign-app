@@ -966,15 +966,17 @@ above left open:**
    value containing "UNSUBSCRIBED" (anywhere in the string, case as
    found in source) sets this to `'Yes'` **and** the literal
    "UNSUBSCRIBED" text is stripped back out of the stored `church_name`
-   value (so the cleaned name, not the marker, is what's kept there).
-   **Revised 2026-09-07 (same day, before this was built):** when
-   `unsubscribed` is set, the row's `email` is also cleared (`NULL`) —
-   don't retain contact details for someone who's unsubscribed. Not yet
-   decided: whether `unsubscribed` is a real boolean or a `'Yes'`/null
-   text column matching how `interested_in_training`/`church_leader`
+   value (so the cleaned name, not the marker, is what's kept there). Not
+   yet decided: whether `unsubscribed` is a real boolean or a `'Yes'`/
+   null text column matching how `interested_in_training`/`church_leader`
    already store raw Yes/No strings elsewhere in this schema
    (`fieldMap.ts`) — default to the latter for consistency unless told
    otherwise when this is built.
+   **Revised twice, same day, before this was built** — see the
+   2026-09-07 (identity redesign) entry below for both: the
+   clear-email-on-unsubscribe sub-decision was added then reversed
+   within the same round of discussion, once email became the
+   canonical dedup key.
 5. The second "Training" column (distinct from the one resembling AC
    field `[9]`) is ignored — not loaded, no column added for it.
 6. **Revised 2026-09-07 (same day, before this was built):** the six
@@ -991,6 +993,90 @@ one of the excluded non-AU codes) — decision 3 only covers non-AU
 values, so the working assumption is these load with `state = NULL`
 rather than being excluded like the `OS`/`NZ`/`UK` rows. Confirm before
 relying on it.
+
+## Registrations reload: identity/dedup key redesigned, NFC column added (2026-09-07, same day)
+
+Peter raised a real structural problem before any code was written
+against the plan above: `registry.registrants.ac_contact_id` is
+`UNIQUE NOT NULL` today, but CSV-sourced rows have no AC contact ID at
+all — a schema conflict, not just a data-loading detail. Separately,
+he flagged that `ac_contact_id` was never a reliable "one row per real
+person" guarantee to begin with, since AC can plausibly give the same
+person more than one contact ID across different registration forms.
+
+**Confirmed current state before any of this was touched** (checked
+live): `registry.registrants` has 9,134 rows, `registry.registration_events`
+has 36,498 — both entirely AC-sourced, both about to be truncated and
+replaced. Neither table has any existing backup coverage (`registry.*`
+is not part of `lib/services/backupService.ts`'s `BACKUP_TABLE_CONFIG`)
+— a manual backup is required before touching anything, independent of
+every decision below.
+
+**Decisions:**
+
+1. **Full replace, confirmed**: truncate `registry.registrants` and
+   `registry.registration_events` (the latter FKs to the former) and
+   reload entirely from the CSV — not a merge alongside the existing
+   9,134 AC-sourced rows.
+2. `ac_contact_id` becomes **nullable** (was `NOT NULL`) — required for
+   CSV rows to load at all. Uniqueness constraint dropped too; no
+   longer the row's identity, just "the last AC contact ID this
+   registrant was seen under," per decision 3.
+3. **Identity/dedup key redesigned**: normalized (lowercased, trimmed)
+   **email is the canonical identity**, not `ac_contact_id`. Phone is a
+   narrower fallback *only* for the minority of rows with no email — not
+   an additional required-match field, and deliberately not the
+   6-field composite (first/last/email/mobile/state/postcode) Peter
+   first proposed: an exact match across that many fields tends to
+   *under*-match (a blank state or updated postcode on a second
+   submission would wrongly look like a different person), which is
+   the opposite of the goal. This is a bigger change than the reload
+   script alone — **`supabase/functions/ac-sync/db.ts`'s ongoing
+   `upsertRegistrant()` must also key on email**, not `ac_contact_id`,
+   or a future AC-sync run could still create a duplicate for someone
+   already loaded from the CSV. In scope for this work, not deferred.
+4. **Reversed**: decision 4 above's "clear email when unsubscribed" is
+   dropped. Once email is the durable identity key, clearing it would
+   make an unsubscribed person permanently unmatchable if they ever
+   reappear in AC — creating exactly the duplicate this whole redesign
+   exists to prevent. Unsubscribing means "don't contact them" (enforced
+   by the `unsubscribed` flag alone, wherever outbound comms logic is
+   ever built) — it is not "forget them," and nothing in this app
+   currently sends email from this table anyway.
+5. **New column, after `unsubscribed`**: `registry.registrants.nfc`
+   ("No Further Contact"). Checked **before** decision 2's
+   invalid-postcode-to-null step: if the raw postcode field contains
+   "NFC" anywhere (case-insensitive), set `nfc = 'Yes'`. This is what
+   the CSV's mystery `9NFC`-style postcode values actually were —
+   not garbage, a second marker convention (like Church's
+   "UNSUBSCRIBED") living in the postcode column instead of its own
+   field. The postcode itself still ends up `NULL` regardless (an "NFC"
+   postcode was never a valid one either), same as any other invalid
+   value.
+6. **The CSV's ~22 internally-duplicated emails** — inspected row by
+   row, not assumed. Three patterns, confirmed live against the actual
+   data:
+   - **17 of 22**: a fuller row (church/training/leader populated) plus
+     a thin re-entry of the same person (phone reformatted, those three
+     fields blank) — all dated 2026-08-22. Keep the fuller row.
+   - **2 of 22**: direct collisions with decision 4 — one duplicate row
+     has "UNSUBSCRIBED" in Church, the other (near-identical) doesn't.
+     Resolved: `unsubscribed = 'Yes'` if *either* duplicate row shows
+     the marker, regardless of merge order.
+   - **2 of 22**: genuine repeat registrations from the same person
+     months/years apart with real updates (a new postcode; a
+     previously-blank church filled in later). Resolved: merge by
+     taking the most complete non-null value per field, preferring the
+     *later* `Regd` date's value when both rows actually conflict.
+   - **The 22nd is a real anomaly, not a clean duplicate**:
+     `steve.i.walker@icloud.com` has 3 rows — the third is a completely
+     different name, "Cilla Geldenhuys," sharing Stephen Walker's email.
+     Almost certainly a data-entry error (wrong email pasted into her
+     row). **Still open** — Peter hasn't yet picked one of: (a) drop
+     Cilla's row as a Walker-household typo, (b) keep her as her own
+     registrant with no email (matchable only by phone going forward),
+     or (c) something else, e.g. if her real email is recoverable from
+     elsewhere. Don't build against a guess here.
 
 **Not yet done:** the actual migration (new columns above) and reload
 script. This entry only records the decisions once they were available
