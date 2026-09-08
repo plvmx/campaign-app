@@ -109,31 +109,82 @@ export function createDb(client: SupabaseClient = createServiceClient()): DbPort
       return (data ?? []) as KnownSourceTag[];
     },
 
+    // Keyed on email, not ac_contact_id, since 2026-09-07 (see
+    // docs/registry-pipeline/OPERATIONS.md's identity-redesign entry):
+    // the same real person can plausibly hold more than one AC contact
+    // ID across different registration forms, so ac_contact_id was never
+    // a reliable one-row-per-person guarantee. email is lower-cased here
+    // because the unique index it conflicts on (idx_registrants_email_unique,
+    // see scripts/prepare_registrants_for_csv_reload.sql) is a plain
+    // column index, not an expression index on lower(email) — PostgREST's
+    // upsert on_conflict parameter can only target a real column, so
+    // case-insensitivity is enforced by always writing lower-case here
+    // instead.
     async upsertRegistrant(input) {
+      const email = input.email ? input.email.trim().toLowerCase() : null;
+      const fields = {
+        ac_contact_id: input.acContactId,
+        first_name: input.firstName,
+        last_name: input.lastName,
+        email,
+        phone: input.phone,
+        phone_raw: input.phoneRaw,
+        state: input.state,
+        postcode: input.postcode,
+        registered_at: input.registeredAt,
+        interested_in_training: input.interestedInTraining,
+        church_leader: input.churchLeader,
+        church_name: input.churchName,
+        last_updated_at: new Date().toISOString(),
+      };
+
+      if (email) {
+        const { data, error } = await client
+          .schema('registry')
+          .from('registrants')
+          .upsert(fields, { onConflict: 'email' })
+          .select('id')
+          .single();
+        assertNoError(error, 'upsertRegistrant');
+        return { id: (data as { id: string }).id };
+      }
+
+      // No email on this contact — fall back to matching by phone, but
+      // only against other email-less registrants (a bare phone number
+      // is too weak a key to match against an email-bearing row;
+      // households share phones — see OPERATIONS.md). No unique index
+      // enforces this at the DB level, so it's an explicit look-up then
+      // write rather than a single atomic upsert.
+      if (input.phone) {
+        const { data: existing, error: findError } = await client
+          .schema('registry')
+          .from('registrants')
+          .select('id')
+          .is('email', null)
+          .eq('phone', input.phone)
+          .maybeSingle();
+        assertNoError(findError, 'upsertRegistrant (phone lookup)');
+
+        if (existing) {
+          const { data, error } = await client
+            .schema('registry')
+            .from('registrants')
+            .update(fields)
+            .eq('id', (existing as { id: string }).id)
+            .select('id')
+            .single();
+          assertNoError(error, 'upsertRegistrant (phone match update)');
+          return { id: (data as { id: string }).id };
+        }
+      }
+
       const { data, error } = await client
         .schema('registry')
         .from('registrants')
-        .upsert(
-          {
-            ac_contact_id: input.acContactId,
-            first_name: input.firstName,
-            last_name: input.lastName,
-            email: input.email,
-            phone: input.phone,
-            phone_raw: input.phoneRaw,
-            state: input.state,
-            postcode: input.postcode,
-            registered_at: input.registeredAt,
-            interested_in_training: input.interestedInTraining,
-            church_leader: input.churchLeader,
-            church_name: input.churchName,
-            last_updated_at: new Date().toISOString(),
-          },
-          { onConflict: 'ac_contact_id' }
-        )
+        .insert(fields)
         .select('id')
         .single();
-      assertNoError(error, 'upsertRegistrant');
+      assertNoError(error, 'upsertRegistrant (insert, no email/phone match)');
       return { id: (data as { id: string }).id };
     },
 
