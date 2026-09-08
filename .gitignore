@@ -63,3 +63,6 @@ TECHNICAL_DOCS.html
 .supabase
 supabase/.temp
 scratch_*
+
+# Local-only backup dumps (scripts/backup_registrants_before_reload.ts) — real PII, never committed
+/backups

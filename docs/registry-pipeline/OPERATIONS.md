@@ -1083,3 +1083,64 @@ script. This entry only records the decisions once they were available
 "quickly," per Peter's own framing of why the 2026-09-05 attempt
 stalled — building against them is the next session's work, not done
 here yet.
+
+## Registrations reload: built (2026-09-08), not yet run
+
+Implements every decision from the two entries above. Nothing has been
+run against the live database yet — this is the built-and-tested code,
+still pending the actual execution.
+
+- `lib/registryPipeline/csvParse.ts` — a small dependency-free CSV
+  parser (quoted fields, embedded commas/newlines, `""` escapes). Needed
+  because at least one real value in the CSV has a comma inside a quoted
+  field ("Huon Valley Christian Life Centre, Cygnet") — a naive
+  `split(',')` would have silently corrupted that row.
+- `lib/registryPipeline/csvRegistrantTransform.ts` — every actual rule,
+  pure and unit tested: non-AU-state exclusion, the NFC-before-postcode-
+  validation check, the UNSUBSCRIBED-in-Church check, `D/M/YYYY` date
+  parsing, and `dedupeByEmail()` — the email-based de-duplication,
+  including the general "differently-named rows sharing one email are
+  different people" rule that resolves the `steve.i.walker@icloud.com` /
+  "Cilla Geldenhuys" anomaly algorithmically rather than as a hardcoded
+  special case. Tests exercise the real patterns found in the CSV
+  directly (Pattern A/B/C plus the Cilla case), not just synthetic cases.
+- `scripts/prepare_registrants_for_csv_reload.sql` — the schema
+  migration: `ac_contact_id` becomes nullable and non-unique; new
+  `unsubscribed`/`nfc` columns; a new **plain-column** unique index on
+  `email` (not `lower(email)`) — PostgREST's upsert `on_conflict`
+  parameter can only target a real column, not an expression index, so
+  case-insensitivity is enforced by always lower-casing email at the
+  write boundary instead (both the reload script and the `ac-sync`
+  change below do this).
+- `scripts/backup_registrants_before_reload.ts` — dumps both tables to
+  local JSON before anything is touched (neither has coverage in
+  `lib/services/backupService.ts`).
+- `scripts/truncate_registrants_before_reload.sql` — the actual wipe, run
+  manually in the SQL Editor (deliberately not automated from a script —
+  supabase-js/PostgREST has no real `TRUNCATE`, and an unconditional
+  `DELETE` isn't something a script should do quietly).
+- `scripts/reload_registrants_from_csv.ts` — the reload itself. Defaults
+  to a dry run (prints a summary, writes nothing). `--apply` refuses to
+  insert if `registry.registrants` isn't already empty (checks live,
+  doesn't just trust that the steps above were followed) and only ever
+  `INSERT`s, never truncates.
+- `supabase/functions/ac-sync/db.ts`'s `upsertRegistrant()` — updated to
+  match the reload: upserts on `email` (lower-cased) when the contact has
+  one; falls back to an explicit look-up-then-write match against other
+  email-less registrants by phone when it doesn't (no DB constraint
+  enforces this narrower path — a bare phone number isn't a safe
+  uniqueness key on its own). Deno-only, not unit tested, same precedent
+  as the rest of this file — verify live after deploying, the same way
+  every other change to this file has been.
+
+**Order of operations for whoever actually runs this:**
+1. `npx tsx scripts/backup_registrants_before_reload.ts`
+2. `scripts/prepare_registrants_for_csv_reload.sql` (SQL Editor)
+3. `scripts/truncate_registrants_before_reload.sql` (SQL Editor)
+4. `npx tsx scripts/reload_registrants_from_csv.ts` (dry run — check the
+   summary numbers look right)
+5. `npx tsx scripts/reload_registrants_from_csv.ts --apply`
+6. Redeploy `ac-sync` (`supabase functions deploy ac-sync`) so future
+   syncs use the new email-keyed `upsertRegistrant()` — otherwise the
+   next scheduled/manual sync would still try the old `ac_contact_id`
+   conflict target, which no longer has a unique constraint backing it.
