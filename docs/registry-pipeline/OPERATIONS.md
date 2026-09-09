@@ -1189,3 +1189,40 @@ This closes out the registrations reload. `/registry/recent-registrations`
 needed for its original purpose now that `registry.registrants` is
 current — left in place rather than torn out immediately, since it's
 harmless and might still be a convenient live spot-check tool.
+
+## Not actually current: ac-sync needs a manual catch-up before it's genuinely "up to today" (2026-09-09)
+
+The reload only loaded what was in the CSV (max `Regd` date
+2026-09-06) — it did not also run AC sync, so anything registered in
+AC between then and now isn't in `registry.registrants` yet. Checked
+before assuming this was fine: **no `registry.sync_log` row has ever
+had `status='success'`** (every run before the pivot was `'partial'`,
+time-budget-limited) — `getLastCompletedSyncTimestamp()` returns
+`null`, so invoking `ac-sync` right now would treat itself as a
+first-ever full backfill and re-crawl the whole ~14,000+-contact
+account, rather than a targeted catch-up. Not unsafe any more (see
+below), just extremely slow for what's actually needed.
+
+Peter also flagged a real reason to go back further than just
+"since the CSV's own cutoff": Lorraine has been adding some
+recently-seen registrants (via the `/registry/recent-registrations`
+screen) into her spreadsheet by hand, and it's unclear exactly how far
+that manual incorporation got before this CSV was exported. Going back
+to **2026-08-22** (the previous cutoff) covers that uncertainty
+entirely — and is safe to do specifically *because* of this same
+session's identity redesign: matching is now by email (with a
+phone-based fallback using the same `normalizePhone()` on both sides),
+not `ac_contact_id`, so re-discovering someone already loaded from the
+CSV updates their existing row instead of duplicating it. The cost is
+efficiency, not correctness — `filters[updated_after]` also catches AC
+contacts touched for unrelated reasons in that window (routine
+bookkeeping, not just genuine registration changes), so this pulls
+more volume than a tighter window would.
+
+**Fix**: `scripts/seed_sync_log_baseline_after_csv_reload.ts` — inserts
+one synthetic `status='success'` row into `registry.sync_log` at a
+given cutoff (refuses to run if a real completed sync already exists,
+so it can't accidentally overwrite a genuine cursor). Seeded at
+`2026-08-22T00:00:00Z`. The very next real `ac-sync` invocation will
+then use `filters[updated_after]=2026-08-22T00:00:00Z` and do a
+genuinely targeted catch-up instead of a full re-crawl.
