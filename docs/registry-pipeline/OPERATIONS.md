@@ -1262,3 +1262,38 @@ No data was lost: `markStagingError()` only records `processing_error`,
 it doesn't set `processed_at` — all 37 failed rows are still
 `processed_at IS NULL` and will retry automatically on the next
 `ac-sync` invocation, no manual reset needed.
+
+## Fix confirmed live; ac-sync catch-up in progress (2026-09-09)
+
+Peter ran `scripts/fix_registrants_email_unique_index.sql` in the SQL
+Editor, then `ac-sync` was invoked directly via
+`curl -X POST .../functions/v1/ac-sync` with a service-role bearer
+token (`supabase functions invoke` doesn't exist in the installed CLI,
+v2.117.0 — that subcommand was removed).
+
+Confirmed the fix works: the first post-fix invocation returned
+`{"recordsIn":30,"recordsUpserted":30,"errors":0,"partial":true}`, and
+`scripts/debug_check_42p10_remaining.ts` (new diagnostic) confirmed
+**zero** staging rows still carry the 42P10 error unprocessed — all 37
+from the pre-fix run were successfully reprocessed on this first
+invocation.
+
+Ran 14 consecutive invocations total, all clean (0 errors throughout),
+each processing roughly 20-40 records — `registry.registrants` grew
+from 9,128 to 9,145 over this stretch, the rest being updates to
+already-loaded rows matched by email (exactly the intended behavior,
+not duplication). Every invocation still returns `"partial":true` —
+the 2026-08-22 catch-up window is large enough (routine AC bookkeeping
+included, not just genuine registrations, per the baseline-seeding
+entry above) that it isn't going to fully drain in a handful of manual
+invocations. `staging.ac_events` unprocessed count is 0 between
+invocations — this isn't a growing backlog, `ac-sync` fetches directly
+from AC's API each time rather than pre-queuing, so "partial" only
+means AC still has more updated-since-cutoff contacts beyond what one
+invocation's time budget covers.
+
+The `ac-sync-daily` `pg_cron` schedule (`scripts/schedule_ac_sync_cron.sql`)
+will keep invoking this automatically and will finish draining the
+backlog on its own over subsequent days without any further manual
+action — manual invocation here was only to get fast confirmation the
+fix actually works, not a requirement to fully catch up by hand.
