@@ -1310,3 +1310,133 @@ only a direct SQL Editor check (`select * from cron.job where
 jobname = 'ac-sync-daily';`) can settle this. **Until that's confirmed,
 treat the catch-up as manual-invocation-only** — nothing drains this
 backlog unless `ac-sync` is invoked by hand.
+
+## Cron actually set up and confirmed live (2026-09-09, later same day)
+
+Checked, and the correction above was right: `select * from cron.job
+where jobname = 'ac-sync-daily'` returned `relation "cron.job" does
+not exist` — `pg_cron` itself had never been enabled on this project.
+Fixed properly:
+
+1. `scripts/schedule_ac_sync_cron.sql` updated with this project's ref
+   already filled in (`vzyoxmfjlwbfqrwiirld` — not secret, already used
+   elsewhere in this repo).
+2. Peter created the Vault secret
+   (`select vault.create_secret(<service-role key>, 'ac_sync_bearer_token');`)
+   and ran the script — `CREATE EXTENSION pg_cron`/`pg_net`, then
+   `cron.schedule('ac-sync-daily', '0 15 * * *', ...)`. Confirmed
+   registered: `select * from cron.job ...` now returns one row,
+   `jobid=1`, `active=true`.
+3. **First attempt at a live end-to-end test failed**, and it wasn't a
+   fluke worth ignoring: Peter's first `vault.create_secret()` call used
+   a key copied from a separate text file, not this repo's `.env.local`
+   — same length (219 chars, both being HS256 JWTs with the same fixed
+   claim shape) and the same header prefix (`eyJhbG`), but a different
+   tail, so it silently looked plausible while being a stale/wrong key.
+   A manual `net.http_post(...)` test (the exact call the cron job
+   itself makes) surfaced this immediately: `401`,
+   `{"code":"UNAUTHORIZED_LEGACY_JWT","message":"Invalid JWT"}`, checked
+   via `select * from net._http_response where id = <request_id>;`
+   (pg_net's own call log — not exposed via PostgREST, SQL-Editor-only).
+   Fixed by re-copying the key from `.env.local` specifically and
+   `vault.update_secret((select id from vault.secrets where name = ...), <correct key>)`
+   — confirmed via a safe length/prefix/suffix check
+   (`select length(...), left(...,6), right(...,6) from
+   vault.decrypted_secrets where name = 'ac_sync_bearer_token';`, which
+   reveals shape without exposing the full secret) before retrying.
+4. **Re-ran the same manual `net.http_post` test after the fix — this
+   is the real confirmation, not just "the job is registered":** it
+   completed with `{"records_in":41,"records_upserted":41,"errors":0,
+   "status":"partial"}` in `registry.sync_log`. This is the actual
+   `pg_net`→Edge-Function call path the cron job uses, not a `curl`
+   substitute, so this is genuine end-to-end proof the scheduled job
+   will work when it fires on its own.
+
+**Current state (superseded by the entry below):** `ac-sync-daily` was
+live at 15:00 UTC daily — see "Backlog size measured, stale cursor bug
+found and fixed, cron temporarily sped up" below for what changed
+within hours of this entry.
+
+## Backlog size measured, stale cursor bug found and fixed, cron temporarily sped up (2026-09-09, later same day)
+
+Peter asked how big the post-reload catch-up backlog actually is (how
+many days behind). Answering this honestly surfaced a real bug, not
+just a number.
+
+**Why "days behind" isn't a direct question this pipeline can answer**:
+`ac-sync` paginates `/contacts` in **contact-ID order**
+(`orders[id]=ASC`), not date order — a contact's ID reflects when it
+was *created* in AC, not when it was last *updated* (what
+`filters[updated_after]` actually selects on). The payload `ac-sync`
+fetches per contact also doesn't capture AC's own update timestamp at
+all (checked the 5 most-recently-synced contacts' raw payloads
+directly: only `id, cdate, email, phone, lastName, firstName` — no
+`udate`). So neither the pagination position nor the stored data can
+be read back as a calendar-date gap.
+
+**Real bug found instead: `registry.sync_progress`'s `'contacts'`
+cursor was never reset when today's `filters[updated_after]=
+2026-08-22` catch-up began.** That cursor only resets on an empty page
+or a manual clear. Before the 2026-09-02 strategic pivot (see that
+entry above), it was mid-way through an *unfiltered* full-account
+crawl (`lastSync` had never been non-null, so no date filter was ever
+applied) — explicitly paused, not completed
+("stopped the exhaustive historical backfill batching"), so it never
+hit the empty-page reset. Nothing between then and today's baseline
+seed touched it (the Sept 2 investigation used a separate probe
+script, not `ac-sync` itself). So every invocation since this
+morning's SQL fix was resuming from a leftover position that belonged
+to a completely different, unfiltered query — silently skipping
+whatever range of *today's* actual 3,496-contact filtered list that
+leftover position had already passed, with no error, since offset only
+ever moves forward.
+
+**Fixed** with `scripts/reset_sync_progress_contacts_cursor.ts`
+(dry-run by default) — deleted the `'contacts'` row, which makes the
+next invocation start from offset 0 (same effect as the code's own
+`clearSyncProgress`). Safe because `upsertRegistrant()` is idempotent
+on email — re-visiting contacts already caught today just re-confirms
+them; the only risk was *not* fixing this and permanently missing
+whichever range got skipped.
+
+**Got the real total via a live AC API call** (added
+`AC_API_BASE_URL`/`AC_API_KEY` to local `.env.local` for this —
+previously only available as a Supabase Edge Function secret / Vercel
+env var, not locally; corrected `AC_API_BASE_URL` to include the
+`/api/3` suffix, the exact class of misconfiguration noted earlier in
+this file): **3,496 contacts** match
+`filters[updated_after]=2026-08-22T00:00:00Z`, checked via `/contacts`
+with `limit=1` and reading `meta.total` from the response.
+
+**Measured the real per-invocation rate from a clean offset-0 start**:
+two consecutive invocations advanced the offset by exactly **32**
+each, both times — a reliable, repeatable number (unlike `records_in`,
+which overcounts since one contact on both List 1 and List 2 produces
+two staging rows from a single raw contact scanned). Bounded by
+`DEFAULT_AC_BUDGET_MS = 65_000` (`lib/registryPipeline/sync.ts`) and
+`REQUEST_PACING_MS = 250` (`lib/registryPipeline/rateLimiter.ts`), not
+something to just raise — the function's total wall time (AC-pull +
+transform budgets) is already close to typical Edge Function execution
+limits, and pushing it further risks the platform killing an
+invocation mid-run with no clean state at all.
+
+**The actual answer to "how many days behind":** at 32/invocation and
+the then-current once-daily cron, draining 3,432 remaining contacts
+would have taken **~107 more days** — not acceptable for a one-time
+backlog. Fixed with a lower-risk lever than raising the budget
+constant: temporarily increased the existing cron's frequency in place
+(`select cron.schedule('ac-sync-daily', '*/5 * * * *', ...)` —
+calling `cron.schedule` again with the same job name updates it,
+same `jobid`) instead of every-24-hours. At the measured rate that's
+~106 more invocations × 5 min ≈ **~9 hours** to fully catch up.
+Confirmed the new cadence is genuinely firing unattended (not just
+registered): watched `registry.sync_progress`'s offset advance on its
+own between manual checks, no invocation triggered by hand.
+
+**Once caught up** (`registry.sync_log` gets a real `status='success'`
+row for the first time — that's the moment to revert), change it back
+with the same `cron.schedule(...)` call, `'0 15 * * *'` in place of
+`'*/5 * * * *'`. Left running unattended for now; check
+`registry.sync_log`/`registry.sync_progress` to see current status
+rather than assuming either the old daily cadence or this sped-up one
+is still active.
