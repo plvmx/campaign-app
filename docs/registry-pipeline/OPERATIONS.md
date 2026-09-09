@@ -1310,3 +1310,51 @@ only a direct SQL Editor check (`select * from cron.job where
 jobname = 'ac-sync-daily';`) can settle this. **Until that's confirmed,
 treat the catch-up as manual-invocation-only** — nothing drains this
 backlog unless `ac-sync` is invoked by hand.
+
+## Cron actually set up and confirmed live (2026-09-09, later same day)
+
+Checked, and the correction above was right: `select * from cron.job
+where jobname = 'ac-sync-daily'` returned `relation "cron.job" does
+not exist` — `pg_cron` itself had never been enabled on this project.
+Fixed properly:
+
+1. `scripts/schedule_ac_sync_cron.sql` updated with this project's ref
+   already filled in (`vzyoxmfjlwbfqrwiirld` — not secret, already used
+   elsewhere in this repo).
+2. Peter created the Vault secret
+   (`select vault.create_secret(<service-role key>, 'ac_sync_bearer_token');`)
+   and ran the script — `CREATE EXTENSION pg_cron`/`pg_net`, then
+   `cron.schedule('ac-sync-daily', '0 15 * * *', ...)`. Confirmed
+   registered: `select * from cron.job ...` now returns one row,
+   `jobid=1`, `active=true`.
+3. **First attempt at a live end-to-end test failed**, and it wasn't a
+   fluke worth ignoring: Peter's first `vault.create_secret()` call used
+   a key copied from a separate text file, not this repo's `.env.local`
+   — same length (219 chars, both being HS256 JWTs with the same fixed
+   claim shape) and the same header prefix (`eyJhbG`), but a different
+   tail, so it silently looked plausible while being a stale/wrong key.
+   A manual `net.http_post(...)` test (the exact call the cron job
+   itself makes) surfaced this immediately: `401`,
+   `{"code":"UNAUTHORIZED_LEGACY_JWT","message":"Invalid JWT"}`, checked
+   via `select * from net._http_response where id = <request_id>;`
+   (pg_net's own call log — not exposed via PostgREST, SQL-Editor-only).
+   Fixed by re-copying the key from `.env.local` specifically and
+   `vault.update_secret((select id from vault.secrets where name = ...), <correct key>)`
+   — confirmed via a safe length/prefix/suffix check
+   (`select length(...), left(...,6), right(...,6) from
+   vault.decrypted_secrets where name = 'ac_sync_bearer_token';`, which
+   reveals shape without exposing the full secret) before retrying.
+4. **Re-ran the same manual `net.http_post` test after the fix — this
+   is the real confirmation, not just "the job is registered":** it
+   completed with `{"records_in":41,"records_upserted":41,"errors":0,
+   "status":"partial"}` in `registry.sync_log`. This is the actual
+   `pg_net`→Edge-Function call path the cron job uses, not a `curl`
+   substitute, so this is genuine end-to-end proof the scheduled job
+   will work when it fires on its own.
+
+**Current state**: `ac-sync-daily` is live, scheduled for 15:00 UTC
+daily (~01:00 AEST / 02:00 AEDT), and will keep draining the
+2026-08-22 catch-up backlog automatically from here — no further
+manual invocation needed. The `CLAUDE.md` architecture note that was
+softened by the correction above can be trusted again; treat *this*
+entry, not that one, as the current source of truth on cron status.
