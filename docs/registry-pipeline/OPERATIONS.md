@@ -1292,8 +1292,21 @@ from AC's API each time rather than pre-queuing, so "partial" only
 means AC still has more updated-since-cutoff contacts beyond what one
 invocation's time budget covers.
 
-The `ac-sync-daily` `pg_cron` schedule (`scripts/schedule_ac_sync_cron.sql`)
-will keep invoking this automatically and will finish draining the
-backlog on its own over subsequent days without any further manual
-action — manual invocation here was only to get fast confirmation the
-fix actually works, not a requirement to fully catch up by hand.
+**Correction (checked 2026-09-09, same day):** the entry above originally
+claimed the `ac-sync-daily` `pg_cron` schedule would keep draining this
+automatically — that was an unverified assumption, wrong on this
+project's own standing rule of not trusting an assumed state over a
+live check. Re-reading this file's own history: `schedule_ac_sync_cron.sql`
+is step 9 of "One-time setup" above, gated behind a manual Vault-secret
+step and a hand-edited `<PROJECT_REF>`; the "Manual invocation (do this
+before scheduling)" section explicitly treats scheduling as a distinct,
+later step; and the 2026-08-30/09-01 entry above ("`filters[updated_since]`
+is also ignored by AC") explicitly says cron "should stay deferred"
+pending a fix — which Proposal 2 later delivered, but no entry anywhere
+in this file records `schedule_ac_sync_cron.sql` actually being run
+afterward. There is currently no way to confirm `cron.job` state from
+this codebase (no generic SQL RPC exposed to the service-role client) —
+only a direct SQL Editor check (`select * from cron.job where
+jobname = 'ac-sync-daily';`) can settle this. **Until that's confirmed,
+treat the catch-up as manual-invocation-only** — nothing drains this
+backlog unless `ac-sync` is invoked by hand.
