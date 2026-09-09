@@ -42,13 +42,24 @@ COMMENT ON COLUMN registry.registrants.ac_contact_id IS 'The AC contact ID this 
 --    email itself before it's ever written here — case-insensitivity is
 --    enforced by convention at the write boundary, not by the index.
 --
+--    Also NOT partial (no `WHERE email IS NOT NULL`), despite that being
+--    "the minority of rows participate" the reasoning above suggests —
+--    confirmed live 2026-09-09 this breaks PostgREST's upsert entirely
+--    (Postgres error 42P10, "no unique or exclusion constraint matching
+--    the ON CONFLICT specification"): ON CONFLICT inference only matches
+--    a partial index when the statement repeats its exact WHERE
+--    predicate, which PostgREST's on_conflict parameter has no way to
+--    do. Unnecessary anyway — a plain (non-partial) UNIQUE index already
+--    allows any number of NULL emails on its own, since NULL is never
+--    considered equal to another NULL for uniqueness purposes. See
+--    scripts/fix_registrants_email_unique_index.sql for the live fix.
+--
 --    This is the conflict target both this reload's own de-duplication
 --    and (from this point on) ac-sync's upsertRegistrant() must use for
 --    any row that has an email.
 -- ---------------------------------------------------------------------
 CREATE UNIQUE INDEX IF NOT EXISTS idx_registrants_email_unique
-  ON registry.registrants (email)
-  WHERE email IS NOT NULL;
+  ON registry.registrants (email);
 
 -- ---------------------------------------------------------------------
 -- 3. New columns from the CSV reload decisions.
