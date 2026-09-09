@@ -11,7 +11,8 @@
 --      Supabase Vault (Dashboard -> Project Settings -> Vault, or via SQL:
 --      `select vault.create_secret('<service-role-or-dedicated-key>', 'ac_sync_bearer_token');`)
 --      so the literal key never appears in this committed script.
---   4. Replace <PROJECT_REF> below with this project's ref before running.
+--   4. The URL below is already filled in with this project's ref
+--      (vzyoxmfjlwbfqrwiirld) — no edit needed.
 --
 -- Run this in the Supabase SQL Editor after the above.
 
@@ -23,7 +24,7 @@ SELECT cron.schedule(
   '0 15 * * *', -- 15:00 UTC daily (~01:00 AEST / 02:00 AEDT) — adjust if a different window suits AFJ better
   $$
   SELECT net.http_post(
-    url := 'https://<PROJECT_REF>.supabase.co/functions/v1/ac-sync',
+    url := 'https://vzyoxmfjlwbfqrwiirld.supabase.co/functions/v1/ac-sync',
     headers := jsonb_build_object(
       'Content-Type', 'application/json',
       'Authorization', 'Bearer ' || (
