@@ -1352,9 +1352,91 @@ Fixed properly:
    substitute, so this is genuine end-to-end proof the scheduled job
    will work when it fires on its own.
 
-**Current state**: `ac-sync-daily` is live, scheduled for 15:00 UTC
-daily (~01:00 AEST / 02:00 AEDT), and will keep draining the
-2026-08-22 catch-up backlog automatically from here — no further
-manual invocation needed. The `CLAUDE.md` architecture note that was
-softened by the correction above can be trusted again; treat *this*
-entry, not that one, as the current source of truth on cron status.
+**Current state (superseded by the entry below):** `ac-sync-daily` was
+live at 15:00 UTC daily — see "Backlog size measured, stale cursor bug
+found and fixed, cron temporarily sped up" below for what changed
+within hours of this entry.
+
+## Backlog size measured, stale cursor bug found and fixed, cron temporarily sped up (2026-09-09, later same day)
+
+Peter asked how big the post-reload catch-up backlog actually is (how
+many days behind). Answering this honestly surfaced a real bug, not
+just a number.
+
+**Why "days behind" isn't a direct question this pipeline can answer**:
+`ac-sync` paginates `/contacts` in **contact-ID order**
+(`orders[id]=ASC`), not date order — a contact's ID reflects when it
+was *created* in AC, not when it was last *updated* (what
+`filters[updated_after]` actually selects on). The payload `ac-sync`
+fetches per contact also doesn't capture AC's own update timestamp at
+all (checked the 5 most-recently-synced contacts' raw payloads
+directly: only `id, cdate, email, phone, lastName, firstName` — no
+`udate`). So neither the pagination position nor the stored data can
+be read back as a calendar-date gap.
+
+**Real bug found instead: `registry.sync_progress`'s `'contacts'`
+cursor was never reset when today's `filters[updated_after]=
+2026-08-22` catch-up began.** That cursor only resets on an empty page
+or a manual clear. Before the 2026-09-02 strategic pivot (see that
+entry above), it was mid-way through an *unfiltered* full-account
+crawl (`lastSync` had never been non-null, so no date filter was ever
+applied) — explicitly paused, not completed
+("stopped the exhaustive historical backfill batching"), so it never
+hit the empty-page reset. Nothing between then and today's baseline
+seed touched it (the Sept 2 investigation used a separate probe
+script, not `ac-sync` itself). So every invocation since this
+morning's SQL fix was resuming from a leftover position that belonged
+to a completely different, unfiltered query — silently skipping
+whatever range of *today's* actual 3,496-contact filtered list that
+leftover position had already passed, with no error, since offset only
+ever moves forward.
+
+**Fixed** with `scripts/reset_sync_progress_contacts_cursor.ts`
+(dry-run by default) — deleted the `'contacts'` row, which makes the
+next invocation start from offset 0 (same effect as the code's own
+`clearSyncProgress`). Safe because `upsertRegistrant()` is idempotent
+on email — re-visiting contacts already caught today just re-confirms
+them; the only risk was *not* fixing this and permanently missing
+whichever range got skipped.
+
+**Got the real total via a live AC API call** (added
+`AC_API_BASE_URL`/`AC_API_KEY` to local `.env.local` for this —
+previously only available as a Supabase Edge Function secret / Vercel
+env var, not locally; corrected `AC_API_BASE_URL` to include the
+`/api/3` suffix, the exact class of misconfiguration noted earlier in
+this file): **3,496 contacts** match
+`filters[updated_after]=2026-08-22T00:00:00Z`, checked via `/contacts`
+with `limit=1` and reading `meta.total` from the response.
+
+**Measured the real per-invocation rate from a clean offset-0 start**:
+two consecutive invocations advanced the offset by exactly **32**
+each, both times — a reliable, repeatable number (unlike `records_in`,
+which overcounts since one contact on both List 1 and List 2 produces
+two staging rows from a single raw contact scanned). Bounded by
+`DEFAULT_AC_BUDGET_MS = 65_000` (`lib/registryPipeline/sync.ts`) and
+`REQUEST_PACING_MS = 250` (`lib/registryPipeline/rateLimiter.ts`), not
+something to just raise — the function's total wall time (AC-pull +
+transform budgets) is already close to typical Edge Function execution
+limits, and pushing it further risks the platform killing an
+invocation mid-run with no clean state at all.
+
+**The actual answer to "how many days behind":** at 32/invocation and
+the then-current once-daily cron, draining 3,432 remaining contacts
+would have taken **~107 more days** — not acceptable for a one-time
+backlog. Fixed with a lower-risk lever than raising the budget
+constant: temporarily increased the existing cron's frequency in place
+(`select cron.schedule('ac-sync-daily', '*/5 * * * *', ...)` —
+calling `cron.schedule` again with the same job name updates it,
+same `jobid`) instead of every-24-hours. At the measured rate that's
+~106 more invocations × 5 min ≈ **~9 hours** to fully catch up.
+Confirmed the new cadence is genuinely firing unattended (not just
+registered): watched `registry.sync_progress`'s offset advance on its
+own between manual checks, no invocation triggered by hand.
+
+**Once caught up** (`registry.sync_log` gets a real `status='success'`
+row for the first time — that's the moment to revert), change it back
+with the same `cron.schedule(...)` call, `'0 15 * * *'` in place of
+`'*/5 * * * *'`. Left running unattended for now; check
+`registry.sync_log`/`registry.sync_progress` to see current status
+rather than assuming either the old daily cadence or this sped-up one
+is still active.
