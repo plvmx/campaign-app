@@ -1226,3 +1226,39 @@ so it can't accidentally overwrite a genuine cursor). Seeded at
 `2026-08-22T00:00:00Z`. The very next real `ac-sync` invocation will
 then use `filters[updated_after]=2026-08-22T00:00:00Z` and do a
 genuinely targeted catch-up instead of a full re-crawl.
+
+## Incident: every ac-sync upsert failed after the reload — partial unique index breaks PostgREST's ON CONFLICT (2026-09-09)
+
+The first real `ac-sync` invocation after seeding the baseline above
+returned `{"recordsIn":37,"recordsUpserted":0,"errors":37,"partial":true}`
+— every single record failed. Checked `staging.ac_events.processing_error`
+directly rather than guess: all 37 had the identical error,
+`"upsertRegistrant: there is no unique or exclusion constraint matching
+the ON CONFLICT specification | code: 42P10"`.
+
+Root cause: `idx_registrants_email_unique` (from
+`prepare_registrants_for_csv_reload.sql`) was created as a **partial**
+index — `ON registry.registrants (email) WHERE email IS NOT NULL`.
+Postgres's `ON CONFLICT` inference only matches a partial index when the
+`INSERT` statement repeats its exact `WHERE` predicate in the conflict
+target — PostgREST's upsert mechanism (what `db.ts`'s
+`.upsert(fields, { onConflict: 'email' })` compiles to) has no way to
+specify a predicate at all, so it always emits a plain
+`ON CONFLICT (email)`, which can never match a partial index. This
+particular gap only ever surfaced now because the CSV reload script only
+ever `INSERT`s (no `ON CONFLICT` involved) — `ac-sync`'s `upsertRegistrant()`
+was the first thing to actually exercise this index's `ON CONFLICT` path.
+
+Fixed with `scripts/fix_registrants_email_unique_index.sql` — drops and
+recreates the index without the `WHERE` clause. The partial predicate was
+unnecessary in the first place: a plain (non-partial) `UNIQUE` index
+already tolerates any number of `NULL` emails on its own, since `NULL` is
+never considered equal to another `NULL` for uniqueness purposes in
+Postgres — so this is the exact same practical behavior, just actually
+compatible with PostgREST. `prepare_registrants_for_csv_reload.sql`
+updated to match, so a fresh environment gets it right first time.
+
+No data was lost: `markStagingError()` only records `processing_error`,
+it doesn't set `processed_at` — all 37 failed rows are still
+`processed_at IS NULL` and will retry automatically on the next
+`ac-sync` invocation, no manual reset needed.
