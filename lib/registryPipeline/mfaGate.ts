@@ -42,3 +42,15 @@ export function evaluateMfaGate(input: MfaGateInput): MfaGateResult {
   if (!input.hasVerifiedTotpFactor) return 'needs_enrollment';
   return 'needs_challenge';
 }
+
+/**
+ * True for the two national-scope roles (state is null for both — see
+ * AFJ_PII_Technical_Implementation_Plan.md Section 7.1), false for a
+ * state-scoped `state_leader`. Single source of truth for "is this signed-in
+ * registry user an admin" — used both to decide whether to show the Manage
+ * button on the /registry landing page and, server-side, to authorize
+ * /api/registry/manage-summary, so the two checks can't drift apart.
+ */
+export function isNationalRegistryAdmin(role: LeaderRoleRow['role'] | null | undefined): boolean {
+  return role === 'national_admin' || role === 'whatsapp_admin';
+}

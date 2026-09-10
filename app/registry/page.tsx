@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { registrySupabase } from '@/lib/registrySupabaseClient';
 import { signOutOfRegistry } from '@/lib/registryAuth';
 import { useRegistryGate } from '@/app/registry/useRegistryGate';
-import type { MfaGateResult } from '@/lib/registryPipeline/mfaGate';
+import { isNationalRegistryAdmin, type MfaGateResult } from '@/lib/registryPipeline/mfaGate';
 import {
   RegistryAuthLayout,
   registryPrimaryButtonClass,
@@ -48,6 +48,11 @@ export default function RegistryHomePage() {
         Role: {gate.leaderRole?.role ?? 'unknown'}.
       </p>
       <div className="space-y-3">
+        {isNationalRegistryAdmin(gate.leaderRole?.role) && (
+          <Link href="/registry/manage" className={`${registryPrimaryButtonClass} block text-center`}>
+            Manage
+          </Link>
+        )}
         <Link href="/registry/recent-registrations" className={`${registryPrimaryButtonClass} block text-center`}>
           Recent Registrations
         </Link>

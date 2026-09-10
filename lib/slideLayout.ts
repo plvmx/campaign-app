@@ -29,6 +29,23 @@ export function getSlideStateColor(state: string): string {
   return SLIDE_STATE_COLORS[upper] ?? 'rgb(0, 0, 0)';
 }
 
+/**
+ * Same per-state colors as the campaign results slides, lightened into a
+ * tint suitable as a background (the colors above are text-color-
+ * saturated, not meant to be used at full strength behind content).
+ * Shared by any screen that shades a row/column by state — originally
+ * written for the registry portal's Recent Registrations table
+ * (app/registry/recent-registrations/page.tsx), now also used by its
+ * Manage console (app/registry/manage/page.tsx).
+ */
+export function getSlideStateShade(state: string | null): string {
+  if (!state) return 'transparent';
+  const rgb = getSlideStateColor(state).match(/\d+/g);
+  if (!rgb) return 'transparent';
+  const [r, g, b] = rgb;
+  return `rgba(${r}, ${g}, ${b}, 0.14)`;
+}
+
 export function getOrdinalSuffix(day: number): string {
   if (day >= 11 && day <= 13) return 'th';
   const last = day % 10;
