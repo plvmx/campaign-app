@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { evaluateMfaGate, type MfaGateInput } from '../mfaGate';
+import { evaluateMfaGate, isNationalRegistryAdmin, type MfaGateInput } from '../mfaGate';
 
 const base: MfaGateInput = {
   hasSession: true,
@@ -40,5 +40,24 @@ describe('evaluateMfaGate', () => {
 
   it('passes at aal2 even if hasVerifiedTotpFactor were somehow stale/false — aal2 itself proves a factor was verified', () => {
     expect(evaluateMfaGate({ ...base, hasVerifiedTotpFactor: false, currentLevel: 'aal2' })).toBe('ok');
+  });
+});
+
+describe('isNationalRegistryAdmin', () => {
+  it('recognizes national_admin', () => {
+    expect(isNationalRegistryAdmin('national_admin')).toBe(true);
+  });
+
+  it('recognizes whatsapp_admin', () => {
+    expect(isNationalRegistryAdmin('whatsapp_admin')).toBe(true);
+  });
+
+  it('rejects a state-scoped state_leader', () => {
+    expect(isNationalRegistryAdmin('state_leader')).toBe(false);
+  });
+
+  it('rejects null/undefined (no leader_roles row yet, or still loading)', () => {
+    expect(isNationalRegistryAdmin(null)).toBe(false);
+    expect(isNationalRegistryAdmin(undefined)).toBe(false);
   });
 });
