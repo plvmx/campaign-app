@@ -5,12 +5,14 @@ import Link from 'next/link';
 import { registrySupabase } from '@/lib/registrySupabaseClient';
 import { useRegistryGate } from '@/app/registry/useRegistryGate';
 import { isNationalRegistryAdmin, type MfaGateResult } from '@/lib/registryPipeline/mfaGate';
-import type { ManageSummaryResponse, SyncLogSummary } from '@/lib/registryPipeline/manageSummaryTypes';
+import type { ManageRegistrant, ManageSummaryResponse, SyncLogSummary } from '@/lib/registryPipeline/manageSummaryTypes';
 import {
   FILTER_PERIOD_OPTIONS,
   MANAGE_CONSOLE_STATES,
   countAllRegistrants,
   countRegistrantsForPeriod,
+  filterRegistrantsForCell,
+  type ConsoleColumn,
   type FilterPeriod,
   type PeriodCounts,
 } from '@/lib/registryPipeline/registrantCounts';
@@ -18,9 +20,37 @@ import { getSlideStateShade } from '@/lib/slideLayout';
 
 const ALLOW: MfaGateResult[] = ['ok'];
 
+// Cells (Total/Unknown) that aren't tied to a specific state color still
+// need a "selected" look — a neutral accent rather than no color at all.
+const NEUTRAL_HIGHLIGHT = 'rgba(37, 99, 235, 0.18)';
+
+// A cell's records list can get long (the unfiltered Total column is every
+// registrant) — capped so the pane stays scannable rather than dumping
+// thousands of rows into the DOM at once.
+const RECORDS_DISPLAY_LIMIT = 500;
+
+type RowKey = 'all' | 'primary' | 'alternative';
+
+interface SelectedCell {
+  row: RowKey;
+  rowLabel: string;
+  column: ConsoleColumn;
+  columnLabel: string;
+}
+
 const cellStyle: CSSProperties = { border: '1px solid #ccc', padding: '0.6rem 0.75rem', textAlign: 'center' };
 const headerCellStyle: CSSProperties = { ...cellStyle, fontWeight: 600, background: '#f3f4f6' };
 const labelCellStyle: CSSProperties = { ...cellStyle, textAlign: 'left', fontWeight: 600, background: '#f3f4f6' };
+const numberButtonStyle: CSSProperties = {
+  font: 'inherit',
+  fontWeight: 600,
+  cursor: 'pointer',
+  background: 'transparent',
+  border: 'none',
+  padding: '0.15rem 0.4rem',
+  borderRadius: 4,
+  width: '100%',
+};
 
 function formatDateTime(iso: string | null): string {
   if (!iso) return '—';
@@ -48,18 +78,60 @@ function statusColor(sync: SyncLogSummary): string {
   }
 }
 
+/** Background for one grid cell: the column's state tint (or a neutral accent for Total/Unknown), boosted in intensity when this is the cell currently shown in the record pane below. */
+function cellShade(column: ConsoleColumn, isSelected: boolean): string {
+  const isState = (MANAGE_CONSOLE_STATES as readonly string[]).includes(column);
+  if (isState) return getSlideStateShade(column, isSelected ? 0.45 : 0.14);
+  return isSelected ? NEUTRAL_HIGHLIGHT : 'transparent';
+}
+
+/** One number cell in the grid — a click target when it has records, otherwise plain text. */
+function CountCell({
+  count,
+  column,
+  isSelected,
+  onSelect,
+}: {
+  count: number | null;
+  column: ConsoleColumn;
+  isSelected: boolean;
+  onSelect: (column: ConsoleColumn) => void;
+}) {
+  return (
+    <td style={{ ...cellStyle, padding: '0.35rem', background: cellShade(column, isSelected) }}>
+      {count === null ? (
+        '—'
+      ) : count > 0 ? (
+        <button type="button" onClick={() => onSelect(column)} style={numberButtonStyle} aria-pressed={isSelected}>
+          {count.toLocaleString('en-AU')}
+        </button>
+      ) : (
+        <span style={{ color: '#9ca3af' }}>0</span>
+      )}
+    </td>
+  );
+}
+
 /** One row of the console grid: a label, an optional period selector, and the resulting counts. */
 function ConsoleRow({
+  rowKey,
   label,
   period,
   onPeriodChange,
   counts,
+  selectedCell,
+  onSelectCell,
 }: {
+  rowKey: RowKey;
   label: string;
   period: FilterPeriod | null;
   onPeriodChange?: (period: FilterPeriod) => void;
   counts: PeriodCounts | null;
+  selectedCell: SelectedCell | null;
+  onSelectCell: (column: ConsoleColumn, columnLabel: string) => void;
 }) {
+  const isSelected = (column: ConsoleColumn) => selectedCell?.row === rowKey && selectedCell.column === column;
+
   return (
     <tr>
       <td style={labelCellStyle}>{label}</td>
@@ -77,14 +149,78 @@ function ConsoleRow({
           </select>
         ) : null}
       </td>
-      <td style={{ ...cellStyle, fontWeight: 600 }}>{counts ? counts.total.toLocaleString('en-AU') : '—'}</td>
+      <CountCell count={counts?.total ?? null} column="total" isSelected={isSelected('total')} onSelect={() => onSelectCell('total', 'Total')} />
       {MANAGE_CONSOLE_STATES.map((state) => (
-        <td key={state} style={{ ...cellStyle, background: getSlideStateShade(state) }}>
-          {counts ? counts.byState[state].toLocaleString('en-AU') : '—'}
-        </td>
+        <CountCell
+          key={state}
+          count={counts?.byState[state] ?? null}
+          column={state}
+          isSelected={isSelected(state)}
+          onSelect={() => onSelectCell(state, state)}
+        />
       ))}
-      <td style={cellStyle}>{counts ? counts.unknown.toLocaleString('en-AU') : '—'}</td>
+      <CountCell count={counts?.unknown ?? null} column="unknown" isSelected={isSelected('unknown')} onSelect={() => onSelectCell('unknown', 'Unknown')} />
     </tr>
+  );
+}
+
+/** The record pane under the grid — every registrant behind the currently-selected cell, shaded per row the same way as Recent Registrations. */
+function RecordsPane({ selectedCell, records, onClear }: { selectedCell: SelectedCell; records: ManageRegistrant[]; onClear: () => void }) {
+  const sorted = useMemo(
+    () => [...records].sort((a, b) => (b.registeredAt ?? '').localeCompare(a.registeredAt ?? '')),
+    [records],
+  );
+  const shown = sorted.slice(0, RECORDS_DISPLAY_LIMIT);
+
+  return (
+    <div style={{ marginTop: '1.5rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: '0.5rem' }}>
+        <h2 style={{ margin: 0, fontSize: '1.1rem' }}>
+          {selectedCell.rowLabel} — {selectedCell.columnLabel} ({records.length.toLocaleString('en-AU')})
+        </h2>
+        <button type="button" onClick={onClear} style={{ background: 'none', border: 'none', color: '#2563eb', cursor: 'pointer', padding: 0 }}>
+          Clear selection
+        </button>
+      </div>
+
+      {records.length > RECORDS_DISPLAY_LIMIT && (
+        <p style={{ color: '#6b7280', fontSize: '0.85rem' }}>
+          Showing the most recent {RECORDS_DISPLAY_LIMIT.toLocaleString('en-AU')} of {records.length.toLocaleString('en-AU')} matching records — narrow with the Primary/Alternative Filter to see the rest.
+        </p>
+      )}
+
+      <div style={{ overflowX: 'auto', marginTop: '0.5rem' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 700 }}>
+          <thead>
+            <tr>
+              <th style={headerCellStyle}>First name</th>
+              <th style={headerCellStyle}>Last name</th>
+              <th style={headerCellStyle}>Email</th>
+              <th style={headerCellStyle}>Mobile</th>
+              <th style={headerCellStyle}>State</th>
+              <th style={headerCellStyle}>Postcode</th>
+              <th style={headerCellStyle}>Date registered</th>
+            </tr>
+          </thead>
+          <tbody>
+            {shown.map((r) => (
+              <tr key={r.id} style={{ borderBottom: '1px solid #eee', background: getSlideStateShade(r.state) }}>
+                <td style={{ padding: '0.5rem' }}>{r.firstName ?? '—'}</td>
+                <td style={{ padding: '0.5rem' }}>{r.lastName ?? '—'}</td>
+                <td style={{ padding: '0.5rem' }}>{r.email ?? '—'}</td>
+                <td style={{ padding: '0.5rem' }}>{r.phone ?? '—'}</td>
+                <td style={{ padding: '0.5rem' }}>{r.state ?? '—'}</td>
+                <td style={{ padding: '0.5rem' }}>{r.postcode ?? '—'}</td>
+                <td style={{ padding: '0.5rem' }}>{formatDateTime(r.registeredAt)}</td>
+              </tr>
+            ))}
+            {shown.length === 0 && (
+              <tr><td colSpan={7} style={{ padding: '1rem', textAlign: 'center' }}>No matching records.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }
 
@@ -95,6 +231,7 @@ export default function RegistryManagePage() {
   const [isLoading, setIsLoading] = useState(false);
   const [primaryPeriod, setPrimaryPeriod] = useState<FilterPeriod>('last_7_days');
   const [alternativePeriod, setAlternativePeriod] = useState<FilterPeriod>('last_month');
+  const [selectedCell, setSelectedCell] = useState<SelectedCell | null>(null);
 
   const isAdmin = gate.status === 'ready' && isNationalRegistryAdmin(gate.leaderRole?.role);
 
@@ -140,6 +277,25 @@ export default function RegistryManagePage() {
     () => (rows ? countRegistrantsForPeriod(rows, alternativePeriod) : null),
     [rows, alternativePeriod],
   );
+
+  // Selection is pinned by cell identity (row + column), not by a snapshot
+  // of the period at click time — so if the admin leaves a cell selected
+  // and then changes that row's filter dropdown, the pane's records
+  // recompute against the new period automatically, the same way the
+  // grid's own count for that cell does.
+  const selectedPeriod: FilterPeriod | null =
+    selectedCell?.row === 'primary' ? primaryPeriod : selectedCell?.row === 'alternative' ? alternativePeriod : null;
+
+  const selectedRecords = useMemo(() => {
+    if (!selectedCell || !rows) return [];
+    return filterRegistrantsForCell(rows, selectedCell.column, selectedPeriod);
+  }, [rows, selectedCell, selectedPeriod]);
+
+  function selectCell(row: RowKey, rowLabel: string) {
+    return (column: ConsoleColumn, columnLabel: string) => {
+      setSelectedCell({ row, rowLabel, column, columnLabel });
+    };
+  }
 
   if (gate.status === 'loading') return null;
 
@@ -197,16 +353,45 @@ export default function RegistryManagePage() {
                 </tr>
               </thead>
               <tbody>
-                <ConsoleRow label="All AFJ Registrations" period={null} counts={allCounts} />
-                <ConsoleRow label="Primary Filter" period={primaryPeriod} onPeriodChange={setPrimaryPeriod} counts={primaryCounts} />
-                <ConsoleRow label="Alternative Filter" period={alternativePeriod} onPeriodChange={setAlternativePeriod} counts={alternativeCounts} />
+                <ConsoleRow
+                  rowKey="all"
+                  label="All AFJ Registrations"
+                  period={null}
+                  counts={allCounts}
+                  selectedCell={selectedCell}
+                  onSelectCell={selectCell('all', 'All AFJ Registrations')}
+                />
+                <ConsoleRow
+                  rowKey="primary"
+                  label="Primary Filter"
+                  period={primaryPeriod}
+                  onPeriodChange={setPrimaryPeriod}
+                  counts={primaryCounts}
+                  selectedCell={selectedCell}
+                  onSelectCell={selectCell('primary', 'Primary Filter')}
+                />
+                <ConsoleRow
+                  rowKey="alternative"
+                  label="Alternative Filter"
+                  period={alternativePeriod}
+                  onPeriodChange={setAlternativePeriod}
+                  counts={alternativeCounts}
+                  selectedCell={selectedCell}
+                  onSelectCell={selectCell('alternative', 'Alternative Filter')}
+                />
               </tbody>
             </table>
           </div>
           <p style={{ color: '#6b7280', fontSize: '0.85rem', marginTop: '0.75rem' }}>
             Counts are based on {summary.registrants.length.toLocaleString('en-AU')} registrants currently in the registry. &quot;Unknown&quot; covers registrants with no state on file, or a state outside VIC/NSW/ACT/QLD/NT/WA/SA/TAS.
-            A registrant with no recorded registration date can never match Primary/Alternative Filter, but is still counted in All AFJ Registrations.
+            A registrant with no recorded registration date can never match Primary/Alternative Filter, but is still counted in All AFJ Registrations. Click any non-zero number to list its records below.
           </p>
+
+          {selectedCell ? (
+            <RecordsPane selectedCell={selectedCell} records={selectedRecords} onClear={() => setSelectedCell(null)} />
+          ) : (
+            <p style={{ color: '#6b7280', marginTop: '1.5rem' }}>Click a number above to list the matching records here.</p>
+          )}
         </>
       )}
     </div>

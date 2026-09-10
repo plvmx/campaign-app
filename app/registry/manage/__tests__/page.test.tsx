@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, cleanup, within } from '@testing-library/react';
 
 const mockGetSession = vi.fn();
 vi.mock('@/lib/registrySupabaseClient', () => ({
@@ -30,9 +30,18 @@ const DAY = 24 * HOUR;
 // month but outside the last 7 days), one old + state-less (only shows
 // up in the unfiltered "All AFJ Registrations" row's Unknown column).
 const SAMPLE_REGISTRANTS = [
-  { state: 'VIC', registeredAt: new Date(Date.now() - HOUR).toISOString() },
-  { state: 'NSW', registeredAt: new Date(Date.now() - 20 * DAY).toISOString() },
-  { state: null, registeredAt: new Date(Date.now() - 400 * DAY).toISOString() },
+  {
+    id: 'r1', firstName: 'Vicky', lastName: 'Vale', email: 'vicky@example.com', phone: '+61400000001',
+    state: 'VIC', postcode: '3000', registeredAt: new Date(Date.now() - HOUR).toISOString(),
+  },
+  {
+    id: 'r2', firstName: 'Nat', lastName: 'Nelson', email: 'nat@example.com', phone: '+61400000002',
+    state: 'NSW', postcode: '2000', registeredAt: new Date(Date.now() - 20 * DAY).toISOString(),
+  },
+  {
+    id: 'r3', firstName: 'Uma', lastName: 'Unknown', email: 'uma@example.com', phone: '+61400000003',
+    state: null, postcode: null, registeredAt: new Date(Date.now() - 400 * DAY).toISOString(),
+  },
 ];
 
 describe('RegistryManagePage', () => {
@@ -100,5 +109,67 @@ describe('RegistryManagePage', () => {
     // Switching to "Last month" also picks up the 20-day-old NSW registrant.
     fireEvent.change(screen.getByLabelText('Primary Filter period'), { target: { value: 'last_month' } });
     await waitFor(() => expect(primaryRow).toHaveTextContent('2'));
+  });
+
+  it('shows no record pane, and plain "0" text (not a button), for every zero-count cell', async () => {
+    mockUseRegistryGate.mockReturnValue({ status: 'ready', leaderRole: { role: 'national_admin', mfa_required: true } });
+    render(<RegistryManagePage />);
+    const allRow = requireRow(await screen.findByText('All AFJ Registrations'));
+    // ACT/QLD/NT/WA/SA/TAS all have no registrants in the sample data — none of those cells should be clickable.
+    for (const zeroCell of within(allRow).getAllByText('0')) {
+      expect(zeroCell.tagName).not.toBe('BUTTON');
+    }
+    expect(screen.getByText(/click a number above/i)).toBeInTheDocument();
+  });
+
+  it('lists the matching records and highlights the clicked cell when a non-zero number is clicked', async () => {
+    mockUseRegistryGate.mockReturnValue({ status: 'ready', leaderRole: { role: 'national_admin', mfa_required: true } });
+    render(<RegistryManagePage />);
+    const allRow = requireRow(await screen.findByText('All AFJ Registrations'));
+
+    // "All AFJ Registrations" x VIC = 1 (Vicky Vale, unfiltered). Total is 3,
+    // so VIC and NSW are the only two "1" cells in this row — VIC comes
+    // first (column order: Total, VIC, NSW, ...).
+    fireEvent.click(within(allRow).getAllByRole('button', { name: '1' })[0]);
+
+    expect(await screen.findByText('vicky@example.com')).toBeInTheDocument();
+    expect(screen.queryByText('nat@example.com')).not.toBeInTheDocument();
+    expect(screen.getByText(/All AFJ Registrations — VIC/)).toBeInTheDocument();
+
+    // The clicked cell's shading intensifies (VIC's normal column tint is 0.14).
+    const clickedCell = screen.getByRole('button', { name: '1', pressed: true }).closest('td');
+    expect(clickedCell).toHaveStyle({ background: 'rgba(234, 107, 20, 0.45)' });
+  });
+
+  it('clears the record pane via "Clear selection"', async () => {
+    mockUseRegistryGate.mockReturnValue({ status: 'ready', leaderRole: { role: 'national_admin', mfa_required: true } });
+    render(<RegistryManagePage />);
+    const allRow = requireRow(await screen.findByText('All AFJ Registrations'));
+    fireEvent.click(within(allRow).getAllByRole('button', { name: '1' })[0]);
+    await screen.findByText('vicky@example.com');
+
+    fireEvent.click(screen.getByText('Clear selection'));
+
+    expect(screen.queryByText('vicky@example.com')).not.toBeInTheDocument();
+    expect(screen.getByText(/click a number above/i)).toBeInTheDocument();
+  });
+
+  it('re-filters the record pane live when the selected row\'s own period dropdown changes', async () => {
+    mockUseRegistryGate.mockReturnValue({ status: 'ready', leaderRole: { role: 'national_admin', mfa_required: true } });
+    render(<RegistryManagePage />);
+    await screen.findByText('All AFJ Registrations');
+
+    // Primary Filter x Total, default "Last 7 days": only Vicky (1 hour ago)
+    // — Total and VIC are both "1" here too; Total is the first (leftmost).
+    const primaryRow = requireRow(screen.getByLabelText('Primary Filter period'));
+    fireEvent.click(within(primaryRow).getAllByRole('button', { name: '1' })[0]);
+    expect(await screen.findByText('vicky@example.com')).toBeInTheDocument();
+    expect(screen.queryByText('nat@example.com')).not.toBeInTheDocument();
+
+    // Without re-clicking, widening the same dropdown to "Last month" should
+    // pull Nat's 20-day-old registration into the still-open pane too.
+    fireEvent.change(screen.getByLabelText('Primary Filter period'), { target: { value: 'last_month' } });
+    await waitFor(() => expect(screen.getByText('nat@example.com')).toBeInTheDocument());
+    expect(screen.getByText('vicky@example.com')).toBeInTheDocument();
   });
 });

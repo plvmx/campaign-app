@@ -111,6 +111,16 @@ export function resolvePeriodRange(period: FilterPeriod, now: Date): DateWindow 
   }
 }
 
+/** One column of the console grid: a specific state, the Total column (every row), or Unknown (no recognized state). Identifies which cell a national admin clicked to drill into its records. */
+export type ConsoleColumn = 'total' | 'unknown' | (typeof MANAGE_CONSOLE_STATES)[number];
+
+function matchesColumn(row: RegistrantForCount, column: ConsoleColumn): boolean {
+  if (column === 'total') return true;
+  const code = row.state?.trim().toUpperCase() ?? null;
+  const isKnown = !!code && (MANAGE_CONSOLE_STATES as readonly string[]).includes(code);
+  return column === 'unknown' ? !isKnown : code === column;
+}
+
 function emptyByState(): Record<(typeof MANAGE_CONSOLE_STATES)[number], number> {
   const byState = {} as Record<(typeof MANAGE_CONSOLE_STATES)[number], number>;
   for (const s of MANAGE_CONSOLE_STATES) byState[s] = 0;
@@ -124,12 +134,13 @@ function tally(rows: RegistrantForCount[], include: (row: RegistrantForCount) =>
   for (const row of rows) {
     if (!include(row)) continue;
     total++;
-    // Same normalization the CSV reload applies (csvRegistrantTransform.ts)
-    // — ac-sync stores state as free text from the AC form field, so this
-    // is what actually buckets a real value like " vic " into "VIC".
-    const code = row.state?.trim().toUpperCase() ?? null;
-    if (code && (MANAGE_CONSOLE_STATES as readonly string[]).includes(code)) {
-      byState[code as (typeof MANAGE_CONSOLE_STATES)[number]]++;
+    // matchesColumn owns the state-normalization rule (same one the CSV
+    // reload applies — ac-sync stores state as free text from the AC form
+    // field, so " vic " and "VIC" must bucket together) — single source of
+    // truth, shared with filterRegistrantsForCell's per-column matching below.
+    const state = MANAGE_CONSOLE_STATES.find((s) => matchesColumn(row, s));
+    if (state) {
+      byState[state]++;
     } else {
       unknown++;
     }
@@ -142,13 +153,35 @@ export function countAllRegistrants(rows: RegistrantForCount[]): PeriodCounts {
   return tally(rows, () => true);
 }
 
+function withinWindow(row: RegistrantForCount, window: DateWindow | null): boolean {
+  if (!window) return true; // no period selected (the unfiltered "All" row) — every row is in range.
+  if (!row.registeredAt) return false;
+  const t = new Date(row.registeredAt).getTime();
+  if (Number.isNaN(t)) return false;
+  return t >= window.start && t < window.end;
+}
+
 /** A "Primary Filter" / "Alternative Filter" row — only rows whose registeredAt falls in the resolved period count; a row with no registeredAt never matches any period. */
 export function countRegistrantsForPeriod(rows: RegistrantForCount[], period: FilterPeriod, now: Date = new Date()): PeriodCounts {
-  const { start, end } = resolvePeriodRange(period, now);
-  return tally(rows, (row) => {
-    if (!row.registeredAt) return false;
-    const t = new Date(row.registeredAt).getTime();
-    if (Number.isNaN(t)) return false;
-    return t >= start && t < end;
-  });
+  const window = resolvePeriodRange(period, now);
+  return tally(rows, (row) => withinWindow(row, window));
+}
+
+/**
+ * The actual records behind one grid cell — what a national admin sees in
+ * the record pane after clicking a non-zero count. `period: null` matches
+ * the unfiltered "All AFJ Registrations" row (date is ignored entirely,
+ * same as countAllRegistrants); otherwise mirrors countRegistrantsForPeriod's
+ * window. Generic over T so callers get back their own richer row type
+ * (e.g. ManageRegistrant, with name/email/phone) rather than being
+ * narrowed to RegistrantForCount's bare state/registeredAt.
+ */
+export function filterRegistrantsForCell<T extends RegistrantForCount>(
+  rows: T[],
+  column: ConsoleColumn,
+  period: FilterPeriod | null,
+  now: Date = new Date(),
+): T[] {
+  const window = period ? resolvePeriodRange(period, now) : null;
+  return rows.filter((row) => matchesColumn(row, column) && withinWindow(row, window));
 }

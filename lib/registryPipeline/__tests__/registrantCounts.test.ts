@@ -3,6 +3,7 @@ import {
   resolvePeriodRange,
   countAllRegistrants,
   countRegistrantsForPeriod,
+  filterRegistrantsForCell,
   MANAGE_CONSOLE_STATES,
   type RegistrantForCount,
 } from '../registrantCounts';
@@ -91,5 +92,51 @@ describe('countRegistrantsForPeriod', () => {
   it('ignores an unparseable registeredAt rather than throwing', () => {
     const bad = [row('VIC', 'not-a-date')];
     expect(countRegistrantsForPeriod(bad, 'last_12_months', NOW).total).toBe(0);
+  });
+});
+
+describe('filterRegistrantsForCell', () => {
+  // Richer than RegistrantForCount, same as ManageRegistrant — confirms the
+  // function is generic and hands back the caller's own row shape rather
+  // than narrowing it down to just state/registeredAt.
+  function record(id: string, state: string | null, registeredAt: string | null) {
+    return { id, state, registeredAt };
+  }
+
+  const rows = [
+    record('vic-recent', 'VIC', '2026-09-10T06:00:00Z'), // within last 24h of NOW
+    record('vic-old', 'vic', '2026-08-01T00:00:00Z'), // lowercase — within last month, outside last 24h
+    record('nsw-old', 'NSW', '2025-01-01T00:00:00Z'),
+    record('no-state', null, '2026-09-10T00:00:00Z'),
+    record('no-date', 'QLD', null),
+  ];
+
+  it('"total" with no period matches every row, regardless of state or date', () => {
+    expect(filterRegistrantsForCell(rows, 'total', null, NOW).map((r) => r.id)).toEqual(rows.map((r) => r.id));
+  });
+
+  it('a specific state column matches case-insensitively, independent of period', () => {
+    const result = filterRegistrantsForCell(rows, 'VIC', null, NOW);
+    expect(result.map((r) => r.id)).toEqual(['vic-recent', 'vic-old']);
+  });
+
+  it('"unknown" matches a missing or unrecognized state', () => {
+    const result = filterRegistrantsForCell(rows, 'unknown', null, NOW);
+    expect(result.map((r) => r.id)).toEqual(['no-state']);
+  });
+
+  it('combines the column with a period when one is given', () => {
+    const result = filterRegistrantsForCell(rows, 'VIC', 'last_24_hours', NOW);
+    expect(result.map((r) => r.id)).toEqual(['vic-recent']);
+  });
+
+  it('excludes a row with no registeredAt once a period is applied, even if its column matches', () => {
+    const result = filterRegistrantsForCell(rows, 'QLD', 'last_12_months', NOW);
+    expect(result).toEqual([]);
+  });
+
+  it('returns the caller\'s own richer row objects, not a stripped-down copy', () => {
+    const result = filterRegistrantsForCell(rows, 'NSW', null, NOW);
+    expect(result[0]).toBe(rows[2]); // same object reference, not a rebuilt one
   });
 });
