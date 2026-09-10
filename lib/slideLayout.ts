@@ -36,14 +36,16 @@ export function getSlideStateColor(state: string): string {
  * Shared by any screen that shades a row/column by state — originally
  * written for the registry portal's Recent Registrations table
  * (app/registry/recent-registrations/page.tsx), now also used by its
- * Manage console (app/registry/manage/page.tsx).
+ * Manage console (app/registry/manage/page.tsx), which also passes a
+ * higher `alpha` to highlight whichever grid cell's records are
+ * currently shown below it.
  */
-export function getSlideStateShade(state: string | null): string {
+export function getSlideStateShade(state: string | null, alpha = 0.14): string {
   if (!state) return 'transparent';
   const rgb = getSlideStateColor(state).match(/\d+/g);
   if (!rgb) return 'transparent';
   const [r, g, b] = rgb;
-  return `rgba(${r}, ${g}, ${b}, 0.14)`;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
 export function getOrdinalSuffix(day: number): string {

@@ -3,16 +3,21 @@
  *
  * Returns the most recent registry.sync_log row (whatever a national admin
  * needs to answer "when did the cron job last run, and did it succeed") and
- * every registry.registrants row's state + registered_at — just enough for
- * the console's per-state/per-period tallying (lib/registryPipeline/
- * registrantCounts.ts, run client-side so the two filter dropdowns update
- * instantly without a round trip per change). No PII leaves this route:
- * no name, email, or phone is selected.
+ * every registry.registrants row — first/last name, email, phone, state,
+ * postcode, registered_at. The console tallies these into its grid
+ * (lib/registryPipeline/registrantCounts.ts) and, when a national admin
+ * clicks a non-zero cell, lists the actual matching records underneath it —
+ * both done client-side against this one fetch, so the filter dropdowns and
+ * record drill-down are instant with no extra round trip.
+ *
+ * This is PII (same fields as /api/registry/recent-registrations already
+ * returns to this same admin audience), which is why this route is gated
+ * exactly as strictly as that one — see the admin-only note below.
  *
  * ~9,100 registrants as of the 2026-09 reload (see
  * scripts/backup_registrants_before_reload.ts), growing by a handful a day
  * via ac-sync — small enough to page through and return whole. Revisit with
- * server-side aggregation if that ever stops being true.
+ * server-side aggregation/pagination if that ever stops being true.
  *
  * Admin-only: verifyRegistryAdminRequest() proves the caller cleared the
  * MFA gate, and isNationalRegistryAdmin() further restricts this to
@@ -26,7 +31,7 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { enforceOrigin } from '@/lib/corsUtils';
 import { verifyRegistryAdminRequest } from '@/lib/registryServerAuth';
 import { isNationalRegistryAdmin } from '@/lib/registryPipeline/mfaGate';
-import type { ManageSummaryResponse, RegistrantStateRow, SyncLogSummary } from '@/lib/registryPipeline/manageSummaryTypes';
+import type { ManageRegistrant, ManageSummaryResponse, SyncLogSummary } from '@/lib/registryPipeline/manageSummaryTypes';
 
 const PAGE_SIZE = 1000;
 
@@ -68,16 +73,25 @@ export async function GET(request: NextRequest) {
         }
       : null;
 
-    const registrants: RegistrantStateRow[] = [];
+    const registrants: ManageRegistrant[] = [];
     for (let offset = 0; ; offset += PAGE_SIZE) {
       const { data, error } = await supabaseAdmin
         .schema('registry')
         .from('registrants')
-        .select('state, registered_at')
+        .select('id, first_name, last_name, email, phone, state, postcode, registered_at')
         .range(offset, offset + PAGE_SIZE - 1);
       if (error) throw error;
       if (!data || data.length === 0) break;
-      registrants.push(...data.map((r) => ({ state: r.state, registeredAt: r.registered_at })));
+      registrants.push(...data.map((r) => ({
+        id: r.id,
+        firstName: r.first_name,
+        lastName: r.last_name,
+        email: r.email,
+        phone: r.phone,
+        state: r.state,
+        postcode: r.postcode,
+        registeredAt: r.registered_at,
+      })));
       if (data.length < PAGE_SIZE) break;
     }
 
