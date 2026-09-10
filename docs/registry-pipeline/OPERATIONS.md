@@ -1440,3 +1440,35 @@ with the same `cron.schedule(...)` call, `'0 15 * * *'` in place of
 `registry.sync_log`/`registry.sync_progress` to see current status
 rather than assuming either the old daily cadence or this sped-up one
 is still active.
+
+## Backlog fully drained — first genuine `status='success'` sync (2026-09-09, ~8.5 hours later)
+
+Watched via `scripts/monitor_ac_sync_catchup.ts` (polling every 2
+minutes, reporting only on a notable state change) rather than manual
+checks. `registry.sync_log` id 990: `status='success'`,
+`completed_at=2026-09-09T19:55:48Z`, `errors=0` — the **first
+completed sync this pipeline has ever recorded** (every run before
+this, going back to before the registrations reload, was `'partial'`).
+`registry.sync_progress`'s `'contacts'` row is gone, exactly as
+expected — the code's own `clearSyncProgress` fires on the first empty
+page, i.e. reaching the true end of the `filters[updated_after]=
+2026-08-22` result set.
+
+`registry.registrants` grew from 9,145 (right after the cursor reset)
+to **9,272** over the ~8.5-hour drain — some of that is genuinely new
+registrants, the rest updates to already-loaded rows matched by email
+(exactly the intended behavior, not duplication).
+
+**Cron still needs reverting back to daily** — 5-minute polling was
+only ever meant for this one-time catch-up, now finished. Run the same
+`cron.schedule(...)` call from the entry above with `'0 15 * * *'` in
+place of `'*/5 * * * *'` (same job name, same `jobid`, updates in
+place) to put it back. From that point on, `ac-sync` runs once daily
+and `getLastCompletedSyncTimestamp()` uses today's real
+`completed_at` as tomorrow's incremental cursor — the pipeline reaches
+its intended steady state: small daily deltas, not a backlog.
+
+This closes out the entire post-reload catch-up saga (registrations
+reload → partial-index bug → cron never actually scheduled → stale
+cursor bug → backlog measured and drained). Nothing further expected
+here short of a new incident.
