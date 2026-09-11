@@ -16,8 +16,9 @@ vi.mock('@/app/registry/useRegistryGate', () => ({
 }));
 
 import RegistryManageEditLogPage from '../page';
+import type { RegistrantEditLogEntry } from '@/lib/registryPipeline/manageSummaryTypes';
 
-const PAGE_1_ENTRIES = [
+const PAGE_1_ENTRIES: RegistrantEditLogEntry[] = [
   {
     id: 3, field: 'state', oldValue: null, newValue: 'NSW', editedByEmail: 'admin@example.com', editedAt: '2026-09-11T02:00:00Z',
     registrant: { firstName: 'Vicky', lastName: 'Vale', email: 'vicky@example.com', state: 'NSW' },
@@ -28,7 +29,7 @@ const PAGE_1_ENTRIES = [
   },
 ];
 
-function installFetchMock(overrides: Partial<{ entries: typeof PAGE_1_ENTRIES; totalCount: number }> = {}) {
+function installFetchMock(overrides: Partial<{ entries: RegistrantEditLogEntry[]; totalCount: number }> = {}) {
   global.fetch = vi.fn().mockResolvedValue({
     ok: true,
     json: async () => ({ entries: overrides.entries ?? PAGE_1_ENTRIES, totalCount: overrides.totalCount ?? PAGE_1_ENTRIES.length }),
