@@ -1,6 +1,7 @@
 // Shared shapes between the /registry/manage API routes
-// (app/api/registry/manage-summary/route.ts, manage-record/route.ts) and
-// the page (app/registry/manage/page.tsx) — kept out of route.ts itself,
+// (app/api/registry/manage-summary/route.ts, manage-record/route.ts,
+// manage-edit-log/route.ts) and their pages (app/registry/manage/page.tsx,
+// app/registry/manage/edit-log/page.tsx) — kept out of route.ts itself,
 // same reason as recentRegistrationTypes.ts: Next.js's App Router
 // restricts a route.ts's exports to recognized HTTP methods and route
 // config.
@@ -55,4 +56,27 @@ export interface ManageRecordEditResponse {
   id: string;
   field: EditableRegistrantField;
   value: string | null;
+}
+
+/**
+ * One row of registry.registrant_edits, joined with the registrant it was
+ * about — for /registry/manage/edit-log. `registrant` is null only if that
+ * registrant row was itself later deleted (the FK is ON DELETE CASCADE, so
+ * in practice its edit rows would be gone too — this is defensive typing,
+ * not an expected case).
+ */
+export interface RegistrantEditLogEntry {
+  id: number;
+  /** The actual registry.registrants column that was changed (e.g. 'first_name') — look up EDITABLE_FIELD_LABELS for a display label. */
+  field: string;
+  oldValue: string | null;
+  newValue: string | null;
+  editedByEmail: string | null;
+  editedAt: string;
+  registrant: { firstName: string | null; lastName: string | null; email: string | null; state: string | null } | null;
+}
+
+export interface RegistrantEditLogResponse {
+  entries: RegistrantEditLogEntry[];
+  totalCount: number;
 }
