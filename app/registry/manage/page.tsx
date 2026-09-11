@@ -401,6 +401,7 @@ function RecordsPane({
               <th style={headerCellStyle}>State</th>
               <th style={headerCellStyle}>Postcode</th>
               <th style={headerCellStyle}>Date registered</th>
+              <th style={headerCellStyle}>Leader</th>
             </tr>
           </thead>
           <tbody>
@@ -429,10 +430,17 @@ function RecordsPane({
                   <td style={{ padding: '0.5rem' }}>{r.postcode ?? '—'}</td>
                 )}
                 <td style={{ padding: '0.5rem' }}>{formatDateTime(r.registeredAt)}</td>
+                <td style={{ padding: '0.5rem' }}>
+                  {r.isLeader ? (
+                    <span style={{ fontWeight: 600, color: '#15803d' }} title={r.leaderName ?? undefined}>
+                      Leader · {r.leaderState}
+                    </span>
+                  ) : '—'}
+                </td>
               </tr>
             ))}
             {shown.length === 0 && (
-              <tr><td colSpan={7} style={{ padding: '1rem', textAlign: 'center' }}>No matching records.</td></tr>
+              <tr><td colSpan={8} style={{ padding: '1rem', textAlign: 'center' }}>No matching records.</td></tr>
             )}
           </tbody>
         </table>

@@ -4,11 +4,19 @@
  * Returns the most recent registry.sync_log row (whatever a national admin
  * needs to answer "when did the cron job last run, and did it succeed") and
  * every registry.registrants row — first/last name, email, phone, state,
- * postcode, registered_at. The console tallies these into its grid
- * (lib/registryPipeline/registrantCounts.ts) and, when a national admin
- * clicks a non-zero cell, lists the actual matching records underneath it —
- * both done client-side against this one fetch, so the filter dropdowns and
- * record drill-down are instant with no extra round trip.
+ * postcode, registered_at, plus whether it matches a public.state_leaders
+ * row by normalized phone (lib/registryPipeline/leaderMatch.ts — every
+ * AFJ leader is expected to also be a registrant, so Peter wanted this
+ * visible in the record list; computed live on every request, not a
+ * synced/stored column, since state_leaders is small and this is the
+ * first place the registry pipeline reads the main app's public schema —
+ * both live in the same Postgres database, just different schemas, so
+ * it's one more query, not a cross-database join). The console tallies
+ * these into its grid (lib/registryPipeline/registrantCounts.ts) and,
+ * when a national admin clicks a non-zero cell, lists the actual matching
+ * records underneath it — both done client-side against this one fetch,
+ * so the filter dropdowns and record drill-down are instant with no extra
+ * round trip.
  *
  * This is PII (same fields as /api/registry/recent-registrations already
  * returns to this same admin audience), which is why this route is gated
@@ -31,6 +39,7 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { enforceOrigin } from '@/lib/corsUtils';
 import { verifyRegistryAdminRequest } from '@/lib/registryServerAuth';
 import { isNationalRegistryAdmin } from '@/lib/registryPipeline/mfaGate';
+import { matchRegistrantsToLeaders, type LeaderForMatch } from '@/lib/registryPipeline/leaderMatch';
 import type { ManageRegistrant, ManageSummaryResponse, SyncLogSummary } from '@/lib/registryPipeline/manageSummaryTypes';
 
 const PAGE_SIZE = 1000;
@@ -73,7 +82,13 @@ export async function GET(request: NextRequest) {
         }
       : null;
 
-    const registrants: ManageRegistrant[] = [];
+    const { data: leaderRows, error: leaderError } = await supabaseAdmin
+      .from('state_leaders')
+      .select('leader, mobile, state');
+    if (leaderError) throw leaderError;
+    const leaders: LeaderForMatch[] = (leaderRows ?? []) as LeaderForMatch[];
+
+    const bareRegistrants: Omit<ManageRegistrant, 'isLeader' | 'leaderName' | 'leaderState'>[] = [];
     for (let offset = 0; ; offset += PAGE_SIZE) {
       const { data, error } = await supabaseAdmin
         .schema('registry')
@@ -82,7 +97,7 @@ export async function GET(request: NextRequest) {
         .range(offset, offset + PAGE_SIZE - 1);
       if (error) throw error;
       if (!data || data.length === 0) break;
-      registrants.push(...data.map((r) => ({
+      bareRegistrants.push(...data.map((r) => ({
         id: r.id,
         firstName: r.first_name,
         lastName: r.last_name,
@@ -94,6 +109,7 @@ export async function GET(request: NextRequest) {
       })));
       if (data.length < PAGE_SIZE) break;
     }
+    const registrants: ManageRegistrant[] = matchRegistrantsToLeaders(bareRegistrants, leaders);
 
     const body: ManageSummaryResponse = { lastSync, registrants };
     return NextResponse.json(body);
