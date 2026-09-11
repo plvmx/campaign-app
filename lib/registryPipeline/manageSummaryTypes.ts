@@ -39,12 +39,13 @@ export interface ManageRegistrant {
   /**
    * Whether this registrant's phone matches a public.state_leaders row, by
    * normalized phone (lib/registryPipeline/leaderMatch.ts) — computed live
-   * on every request, not stored. leaderName/leaderState are that matched
-   * row's own leader/state, non-null only when isLeader is true.
+   * on every request, not stored. leaderName is that matched row's own
+   * leader name (for a hover confirmation), non-null only when isLeader is
+   * true — deliberately no leaderState, Peter only needs to know a
+   * registrant is a leader at all, not where.
    */
   isLeader: boolean;
   leaderName: string | null;
-  leaderState: string | null;
 }
 
 export interface ManageSummaryResponse {

@@ -7,7 +7,8 @@
  * postcode, registered_at, plus whether it matches a public.state_leaders
  * row by normalized phone (lib/registryPipeline/leaderMatch.ts — every
  * AFJ leader is expected to also be a registrant, so Peter wanted this
- * visible in the record list; computed live on every request, not a
+ * visible in the record list, just as a yes/no next to their name — not
+ * which state they lead; computed live on every request, not a
  * synced/stored column, since state_leaders is small and this is the
  * first place the registry pipeline reads the main app's public schema —
  * both live in the same Postgres database, just different schemas, so
@@ -84,11 +85,11 @@ export async function GET(request: NextRequest) {
 
     const { data: leaderRows, error: leaderError } = await supabaseAdmin
       .from('state_leaders')
-      .select('leader, mobile, state');
+      .select('leader, mobile');
     if (leaderError) throw leaderError;
     const leaders: LeaderForMatch[] = (leaderRows ?? []) as LeaderForMatch[];
 
-    const bareRegistrants: Omit<ManageRegistrant, 'isLeader' | 'leaderName' | 'leaderState'>[] = [];
+    const bareRegistrants: Omit<ManageRegistrant, 'isLeader' | 'leaderName'>[] = [];
     for (let offset = 0; ; offset += PAGE_SIZE) {
       const { data, error } = await supabaseAdmin
         .schema('registry')

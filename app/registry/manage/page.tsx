@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type CSSProperties } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type CSSProperties, type ReactNode } from 'react';
 import Link from 'next/link';
 import { registrySupabase } from '@/lib/registrySupabaseClient';
 import { useRegistryGate } from '@/app/registry/useRegistryGate';
@@ -79,6 +79,13 @@ function formatDateTime(iso: string | null): string {
   if (!iso) return '—';
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? iso : d.toLocaleString('en-AU', { dateStyle: 'medium', timeStyle: 'short' });
+}
+
+/** Date only, no time — for the record pane's "Registered" column specifically (formatDateTime above still carries the time where it's actually useful, e.g. the last cron run). */
+function formatDateOnly(iso: string | null): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 function statusLabel(sync: SyncLogSummary): string {
@@ -196,11 +203,14 @@ function EditableTextCell({
   field,
   value,
   onSave,
+  suffix,
 }: {
   recordId: string;
   field: EditableRegistrantField;
   value: string | null;
   onSave: SaveEditFn;
+  /** Extra content shown beside the input — e.g. the leader icon next to Last name. */
+  suffix?: ReactNode;
 }) {
   const [draft, setDraft] = useState(value ?? '');
   const [isSaving, setIsSaving] = useState(false);
@@ -234,18 +244,21 @@ function EditableTextCell({
 
   return (
     <td style={{ padding: '0.35rem' }}>
-      <input
-        type="text"
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={commit}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-        }}
-        disabled={isSaving}
-        style={editInputStyle}
-        aria-label={field}
-      />
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+        <input
+          type="text"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+          }}
+          disabled={isSaving}
+          style={{ ...editInputStyle, width: 'auto', flex: '1 1 auto' }}
+          aria-label={field}
+        />
+        {suffix}
+      </div>
       {error && <div style={editErrorStyle}>{error}</div>}
     </td>
   );
@@ -400,47 +413,57 @@ function RecordsPane({
               <th style={headerCellStyle}>Mobile</th>
               <th style={headerCellStyle}>State</th>
               <th style={headerCellStyle}>Postcode</th>
-              <th style={headerCellStyle}>Date registered</th>
-              <th style={headerCellStyle}>Leader</th>
+              <th style={headerCellStyle}>Registered</th>
             </tr>
           </thead>
           <tbody>
-            {shown.map((r) => (
-              <tr key={r.id} style={{ borderBottom: '1px solid #eee', background: getSlideStateShade(r.state) }}>
-                {mode === 'edit' ? (
-                  <EditableTextCell recordId={r.id} field="firstName" value={r.firstName} onSave={onSaveEdit} />
-                ) : (
-                  <td style={{ padding: '0.5rem' }}>{r.firstName ?? '—'}</td>
-                )}
-                {mode === 'edit' ? (
-                  <EditableTextCell recordId={r.id} field="lastName" value={r.lastName} onSave={onSaveEdit} />
-                ) : (
-                  <td style={{ padding: '0.5rem' }}>{r.lastName ?? '—'}</td>
-                )}
-                <td style={{ padding: '0.5rem' }}>{r.email ?? '—'}</td>
-                <td style={{ padding: '0.5rem' }}>{r.phone ?? '—'}</td>
-                {mode === 'edit' ? (
-                  <EditableStateCell recordId={r.id} value={r.state} onSave={onSaveEdit} />
-                ) : (
-                  <td style={{ padding: '0.5rem' }}>{r.state ?? '—'}</td>
-                )}
-                {mode === 'edit' ? (
-                  <EditableTextCell recordId={r.id} field="postcode" value={r.postcode} onSave={onSaveEdit} />
-                ) : (
-                  <td style={{ padding: '0.5rem' }}>{r.postcode ?? '—'}</td>
-                )}
-                <td style={{ padding: '0.5rem' }}>{formatDateTime(r.registeredAt)}</td>
-                <td style={{ padding: '0.5rem' }}>
-                  {r.isLeader ? (
-                    <span style={{ fontWeight: 600, color: '#15803d' }} title={r.leaderName ?? undefined}>
-                      Leader · {r.leaderState}
-                    </span>
-                  ) : '—'}
-                </td>
-              </tr>
-            ))}
+            {shown.map((r) => {
+              const leaderIcon = r.isLeader ? (
+                <span
+                  role="img"
+                  aria-label="Registered as a state leader"
+                  title={r.leaderName ? `Leader: ${r.leaderName}` : 'Registered as a state leader'}
+                  style={{ color: '#d97706', fontSize: '0.95rem', lineHeight: 1 }}
+                >
+                  ★
+                </span>
+              ) : null;
+
+              return (
+                <tr key={r.id} style={{ borderBottom: '1px solid #eee', background: getSlideStateShade(r.state) }}>
+                  {mode === 'edit' ? (
+                    <EditableTextCell recordId={r.id} field="firstName" value={r.firstName} onSave={onSaveEdit} />
+                  ) : (
+                    <td style={{ padding: '0.5rem' }}>{r.firstName ?? '—'}</td>
+                  )}
+                  {mode === 'edit' ? (
+                    <EditableTextCell recordId={r.id} field="lastName" value={r.lastName} onSave={onSaveEdit} suffix={leaderIcon} />
+                  ) : (
+                    <td style={{ padding: '0.5rem' }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                        {r.lastName ?? '—'}
+                        {leaderIcon}
+                      </span>
+                    </td>
+                  )}
+                  <td style={{ padding: '0.5rem' }}>{r.email ?? '—'}</td>
+                  <td style={{ padding: '0.5rem' }}>{r.phone ?? '—'}</td>
+                  {mode === 'edit' ? (
+                    <EditableStateCell recordId={r.id} value={r.state} onSave={onSaveEdit} />
+                  ) : (
+                    <td style={{ padding: '0.5rem' }}>{r.state ?? '—'}</td>
+                  )}
+                  {mode === 'edit' ? (
+                    <EditableTextCell recordId={r.id} field="postcode" value={r.postcode} onSave={onSaveEdit} />
+                  ) : (
+                    <td style={{ padding: '0.5rem' }}>{r.postcode ?? '—'}</td>
+                  )}
+                  <td style={{ padding: '0.5rem' }}>{formatDateOnly(r.registeredAt)}</td>
+                </tr>
+              );
+            })}
             {shown.length === 0 && (
-              <tr><td colSpan={8} style={{ padding: '1rem', textAlign: 'center' }}>No matching records.</td></tr>
+              <tr><td colSpan={7} style={{ padding: '1rem', textAlign: 'center' }}>No matching records.</td></tr>
             )}
           </tbody>
         </table>

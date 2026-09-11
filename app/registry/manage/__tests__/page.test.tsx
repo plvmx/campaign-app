@@ -41,17 +41,17 @@ const SAMPLE_REGISTRANTS = [
   {
     id: 'r1', firstName: 'Vicky', lastName: 'Vale', email: 'vicky@example.com', phone: '+61400000001',
     state: 'VIC', postcode: '3000', registeredAt: new Date(Date.now() - HOUR).toISOString(),
-    isLeader: true, leaderName: 'Vicky Vale', leaderState: 'VIC',
+    isLeader: true, leaderName: 'Vicky Vale',
   },
   {
     id: 'r2', firstName: 'Nat', lastName: 'Nelson', email: 'nat@example.com', phone: '+61400000002',
     state: 'NSW', postcode: '2000', registeredAt: new Date(Date.now() - 20 * DAY).toISOString(),
-    isLeader: false, leaderName: null, leaderState: null,
+    isLeader: false, leaderName: null,
   },
   {
     id: 'r3', firstName: 'Uma', lastName: 'Unknown', email: 'uma@example.com', phone: '+61400000003',
     state: null, postcode: null, registeredAt: new Date(Date.now() - 400 * DAY).toISOString(),
-    isLeader: false, leaderName: null, leaderState: null,
+    isLeader: false, leaderName: null,
   },
 ];
 
@@ -115,6 +115,21 @@ describe('RegistryManagePage', () => {
     expect(row).toHaveTextContent(/3/); // total
   });
 
+  it('labels the registration-date column "Registered" and shows a date only, no time', async () => {
+    mockUseRegistryGate.mockReturnValue({ status: 'ready', leaderRole: { role: 'national_admin', mfa_required: true } });
+    render(<RegistryManagePage />);
+    const allRow = requireRow(await screen.findByText('All AFJ Registrations'));
+    fireEvent.click(within(allRow).getByRole('button', { name: '3' }));
+
+    const table = await screen.findByRole('table', { name: 'Matching records' });
+    expect(within(table).getByText('Registered')).toBeInTheDocument();
+    expect(within(table).queryByText('Date registered')).not.toBeInTheDocument();
+
+    const vickyRow = requireRow(within(table).getByText('vicky@example.com')) as HTMLTableRowElement;
+    const dateCell = vickyRow.cells[vickyRow.cells.length - 1];
+    expect(dateCell.textContent).toMatch(/^\d{1,2} [A-Za-z]+\.? \d{4}$/); // e.g. "10 Sept 2026" — no time component
+  });
+
   it('updates the Primary Filter row counts when a different period is selected', async () => {
     mockUseRegistryGate.mockReturnValue({ status: 'ready', leaderRole: { role: 'national_admin', mfa_required: true } });
     render(<RegistryManagePage />);
@@ -160,15 +175,18 @@ describe('RegistryManagePage', () => {
     expect(clickedCell).toHaveStyle({ background: 'rgba(234, 107, 20, 0.45)' });
   });
 
-  it('marks a registrant who matches a state_leaders row as a Leader, and everyone else with a dash', async () => {
+  it('shows a leader icon next to the name of a registrant who matches a state_leaders row, and only that one', async () => {
     mockUseRegistryGate.mockReturnValue({ status: 'ready', leaderRole: { role: 'national_admin', mfa_required: true } });
     render(<RegistryManagePage />);
     const allRow = requireRow(await screen.findByText('All AFJ Registrations'));
     fireEvent.click(within(allRow).getByRole('button', { name: '3' })); // Total — all three sample registrants
 
     const table = await screen.findByRole('table', { name: 'Matching records' });
-    expect(within(table).getByText('Leader · VIC')).toBeInTheDocument(); // Vicky
-    expect(within(table).getAllByText('—').length).toBeGreaterThanOrEqual(2); // Nat + Uma, not leaders
+    const icons = within(table).getAllByRole('img', { name: 'Registered as a state leader' });
+    expect(icons).toHaveLength(1); // only Vicky is a leader
+
+    const vickyRow = requireRow(within(table).getByText('vicky@example.com'));
+    expect(within(vickyRow).getByRole('img', { name: 'Registered as a state leader' })).toHaveAttribute('title', 'Leader: Vicky Vale');
   });
 
   it('clears the record pane via "Clear selection"', async () => {
