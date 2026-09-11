@@ -23,6 +23,14 @@ function requireRow(el: HTMLElement): HTMLElement {
   return row;
 }
 
+// The lookup dropdowns above the records table render every field value as
+// an <option> too, so a bare `screen.getByText('vicky@example.com')` etc.
+// is ambiguous once a cell is selected (it matches both the option and the
+// table cell) — scope those queries to the table itself instead.
+function recordsTable(): HTMLElement {
+  return screen.getByRole('table', { name: 'Matching records' });
+}
+
 const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;
 
@@ -139,8 +147,9 @@ describe('RegistryManagePage', () => {
     // first (column order: Total, VIC, NSW, ...).
     fireEvent.click(within(allRow).getAllByRole('button', { name: '1' })[0]);
 
-    expect(await screen.findByText('vicky@example.com')).toBeInTheDocument();
-    expect(screen.queryByText('nat@example.com')).not.toBeInTheDocument();
+    await screen.findByRole('table', { name: 'Matching records' });
+    expect(within(recordsTable()).getByText('vicky@example.com')).toBeInTheDocument();
+    expect(within(recordsTable()).queryByText('nat@example.com')).not.toBeInTheDocument();
     expect(screen.getByText(/All AFJ Registrations — VIC/)).toBeInTheDocument();
 
     // The clicked cell's shading intensifies (VIC's normal column tint is 0.14).
@@ -153,11 +162,11 @@ describe('RegistryManagePage', () => {
     render(<RegistryManagePage />);
     const allRow = requireRow(await screen.findByText('All AFJ Registrations'));
     fireEvent.click(within(allRow).getAllByRole('button', { name: '1' })[0]);
-    await screen.findByText('vicky@example.com');
+    await screen.findByRole('table', { name: 'Matching records' });
 
     fireEvent.click(screen.getByText('Clear selection'));
 
-    expect(screen.queryByText('vicky@example.com')).not.toBeInTheDocument();
+    expect(screen.queryByRole('table', { name: 'Matching records' })).not.toBeInTheDocument();
     expect(screen.getByText(/click a number above/i)).toBeInTheDocument();
   });
 
@@ -170,14 +179,15 @@ describe('RegistryManagePage', () => {
     // — Total and VIC are both "1" here too; Total is the first (leftmost).
     const primaryRow = requireRow(screen.getByLabelText('Primary Filter period'));
     fireEvent.click(within(primaryRow).getAllByRole('button', { name: '1' })[0]);
-    expect(await screen.findByText('vicky@example.com')).toBeInTheDocument();
-    expect(screen.queryByText('nat@example.com')).not.toBeInTheDocument();
+    await screen.findByRole('table', { name: 'Matching records' });
+    expect(within(recordsTable()).getByText('vicky@example.com')).toBeInTheDocument();
+    expect(within(recordsTable()).queryByText('nat@example.com')).not.toBeInTheDocument();
 
     // Without re-clicking, widening the same dropdown to "Last month" should
     // pull Nat's 20-day-old registration into the still-open pane too.
     fireEvent.change(screen.getByLabelText('Primary Filter period'), { target: { value: 'last_month' } });
-    await waitFor(() => expect(screen.getByText('nat@example.com')).toBeInTheDocument());
-    expect(screen.getByText('vicky@example.com')).toBeInTheDocument();
+    await waitFor(() => expect(within(recordsTable()).getByText('nat@example.com')).toBeInTheDocument());
+    expect(within(recordsTable()).getByText('vicky@example.com')).toBeInTheDocument();
   });
 
   describe('editing records', () => {
@@ -207,14 +217,14 @@ describe('RegistryManagePage', () => {
       render(<RegistryManagePage />);
       const allRow = requireRow(await screen.findByText('All AFJ Registrations'));
       fireEvent.click(within(allRow).getAllByRole('button', { name: '1' })[0]);
-      await screen.findByText('vicky@example.com');
+      await screen.findByRole('table', { name: 'Matching records' });
     }
 
     it('defaults to View (plain text, no inputs)', async () => {
       installFetchMock();
       await selectAllVicCell();
       expect(screen.queryByLabelText('firstName')).not.toBeInTheDocument();
-      expect(screen.getByText('Vicky')).toBeInTheDocument();
+      expect(within(recordsTable()).getByText('Vicky')).toBeInTheDocument();
     });
 
     it('in Edit mode, First/Last/State/Postcode become inputs but Email/Mobile/Date registered never do', async () => {
@@ -228,8 +238,8 @@ describe('RegistryManagePage', () => {
       expect(screen.getByLabelText('state')).toHaveValue('VIC');
       expect(screen.getByLabelText('postcode')).toHaveValue('3000');
       // Still plain text — never rendered as an input, in either mode.
-      expect(screen.getByText('vicky@example.com')).toBeInTheDocument();
-      expect(screen.getByText('+61400000001')).toBeInTheDocument();
+      expect(within(recordsTable()).getByText('vicky@example.com')).toBeInTheDocument();
+      expect(within(recordsTable()).getByText('+61400000001')).toBeInTheDocument();
     });
 
     it('saves a text field edit on blur, with the field/value the input actually held', async () => {
@@ -299,6 +309,79 @@ describe('RegistryManagePage', () => {
 
       await screen.findByText(/Primary Filter — Total/);
       expect(screen.queryByLabelText('firstName')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('lookup filters', () => {
+    // Selects "All AFJ Registrations" x Total — all three sample
+    // registrants (Vicky, Nat, Uma), unfiltered by date or state.
+    async function selectAllTotalCell() {
+      mockUseRegistryGate.mockReturnValue({ status: 'ready', leaderRole: { role: 'national_admin', mfa_required: true } });
+      render(<RegistryManagePage />);
+      const allRow = requireRow(await screen.findByText('All AFJ Registrations'));
+      fireEvent.click(within(allRow).getByRole('button', { name: '3' }));
+      await screen.findByRole('table', { name: 'Matching records' });
+    }
+
+    it('populates each lookup dropdown from the distinct values actually present among the selected cell\'s records', async () => {
+      await selectAllTotalCell();
+      const options = screen.getByLabelText('Look up by First name').querySelectorAll('option');
+      const values = Array.from(options).map((o) => o.textContent);
+      expect(values).toEqual(['All', 'Nat', 'Uma', 'Vicky']);
+    });
+
+    it('narrows the shown records to an exact match when a lookup value is selected', async () => {
+      await selectAllTotalCell();
+      fireEvent.change(screen.getByLabelText('Look up by First name'), { target: { value: 'Vicky' } });
+
+      expect(within(recordsTable()).getByText('vicky@example.com')).toBeInTheDocument();
+      expect(within(recordsTable()).queryByText('nat@example.com')).not.toBeInTheDocument();
+      expect(within(recordsTable()).queryByText('uma@example.com')).not.toBeInTheDocument();
+    });
+
+    it('combines multiple active lookups with AND', async () => {
+      await selectAllTotalCell();
+      fireEvent.change(screen.getByLabelText('Look up by First name'), { target: { value: 'Vicky' } });
+      fireEvent.change(screen.getByLabelText('Look up by Postcode'), { target: { value: '2000' } }); // Nat's postcode, not Vicky's
+
+      expect(within(recordsTable()).queryByText('vicky@example.com')).not.toBeInTheDocument();
+      expect(screen.getByText(/\(0 of 3\)/)).toBeInTheDocument();
+    });
+
+    it('offers a "(blank)" option only for a field that actually has a blank value, and filtering by it isolates those records', async () => {
+      await selectAllTotalCell();
+      // Uma is the only sample registrant with no postcode.
+      fireEvent.change(screen.getByLabelText('Look up by Postcode'), { target: { value: '__blank__' } });
+      expect(within(recordsTable()).getByText('uma@example.com')).toBeInTheDocument();
+      expect(within(recordsTable()).queryByText('vicky@example.com')).not.toBeInTheDocument();
+
+      // Every sample registrant has an email — no "(blank)" option should exist for that field.
+      const emailOptionLabels = Array.from(screen.getByLabelText('Look up by Email').querySelectorAll('option')).map((o) => o.textContent);
+      expect(emailOptionLabels).not.toContain('(blank)');
+    });
+
+    it('shows "Reset lookups" only once a lookup is active, and it restores the full list', async () => {
+      await selectAllTotalCell();
+      expect(screen.queryByText('Reset lookups')).not.toBeInTheDocument();
+
+      fireEvent.change(screen.getByLabelText('Look up by First name'), { target: { value: 'Vicky' } });
+      expect(within(recordsTable()).queryByText('nat@example.com')).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByText('Reset lookups'));
+      expect(screen.getByLabelText('Look up by First name')).toHaveValue('');
+      expect(within(recordsTable()).getByText('nat@example.com')).toBeInTheDocument();
+    });
+
+    it('resets active lookups when a different cell is selected', async () => {
+      await selectAllTotalCell();
+      fireEvent.change(screen.getByLabelText('Look up by First name'), { target: { value: 'Vicky' } });
+      expect(screen.getByLabelText('Look up by First name')).toHaveValue('Vicky');
+
+      const primaryRow = requireRow(screen.getByLabelText('Primary Filter period'));
+      fireEvent.click(within(primaryRow).getAllByRole('button', { name: '1' })[0]);
+
+      await screen.findByText(/Primary Filter — Total/);
+      expect(screen.getByLabelText('Look up by First name')).toHaveValue('');
     });
   });
 });
