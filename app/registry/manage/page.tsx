@@ -1,11 +1,16 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type CSSProperties } from 'react';
 import Link from 'next/link';
 import { registrySupabase } from '@/lib/registrySupabaseClient';
 import { useRegistryGate } from '@/app/registry/useRegistryGate';
 import { isNationalRegistryAdmin, type MfaGateResult } from '@/lib/registryPipeline/mfaGate';
-import type { ManageRegistrant, ManageSummaryResponse, SyncLogSummary } from '@/lib/registryPipeline/manageSummaryTypes';
+import type {
+  ManageRecordEditResponse,
+  ManageRegistrant,
+  ManageSummaryResponse,
+  SyncLogSummary,
+} from '@/lib/registryPipeline/manageSummaryTypes';
 import {
   FILTER_PERIOD_OPTIONS,
   MANAGE_CONSOLE_STATES,
@@ -16,7 +21,9 @@ import {
   type FilterPeriod,
   type PeriodCounts,
 } from '@/lib/registryPipeline/registrantCounts';
+import type { EditableRegistrantField } from '@/lib/registryPipeline/registrantValidation';
 import { getSlideStateShade } from '@/lib/slideLayout';
+import { AUSTRALIAN_STATES } from '@/lib/constants';
 
 const ALLOW: MfaGateResult[] = ['ok'];
 
@@ -37,6 +44,13 @@ interface SelectedCell {
   column: ConsoleColumn;
   columnLabel: string;
 }
+
+type PaneMode = 'view' | 'edit';
+
+type SaveEditResult = { ok: true } | { ok: false; error: string };
+
+/** Persists one field edit (PATCH /api/registry/manage-record) and reports success/failure — the editable cells below revert their own display on failure, they don't need to know how saving actually works. */
+type SaveEditFn = (recordId: string, field: EditableRegistrantField, value: string) => Promise<SaveEditResult>;
 
 const cellStyle: CSSProperties = { border: '1px solid #ccc', padding: '0.6rem 0.75rem', textAlign: 'center' };
 const headerCellStyle: CSSProperties = { ...cellStyle, fontWeight: 600, background: '#f3f4f6' };
@@ -164,8 +178,112 @@ function ConsoleRow({
   );
 }
 
-/** The record pane under the grid — every registrant behind the currently-selected cell, shaded per row the same way as Recent Registrations. */
-function RecordsPane({ selectedCell, records, onClear }: { selectedCell: SelectedCell; records: ManageRegistrant[]; onClear: () => void }) {
+const editInputStyle: CSSProperties = { width: '100%', padding: '0.3rem', border: '1px solid #ccc', borderRadius: 4, font: 'inherit' };
+const editErrorStyle: CSSProperties = { color: 'crimson', fontSize: '0.75rem', marginTop: '0.15rem' };
+
+/** A free-text editable cell (First name / Last name / Postcode) — saves on blur or Enter, only if the value actually changed; reverts to the last-known-good value and shows an error inline if the save is rejected. */
+function EditableTextCell({
+  recordId,
+  field,
+  value,
+  onSave,
+}: {
+  recordId: string;
+  field: EditableRegistrantField;
+  value: string | null;
+  onSave: SaveEditFn;
+}) {
+  const [draft, setDraft] = useState(value ?? '');
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Resets the draft when the underlying value changes (e.g. this record
+  // scrolled out and a different one now occupies this row — React reuses
+  // the component instance since key={r.id} isn't set per-column). Adjusting
+  // state during render, not in an effect, per the react-hooks/set-state-in-effect
+  // rule — see app/app/components/useStateDropdowns.ts for the same rule
+  // satisfied a different way (Promise chains) for an async case; this is
+  // the simpler synchronous "reset on prop change" case React's own docs
+  // recommend handling this way.
+  const [lastValue, setLastValue] = useState(value);
+  if (value !== lastValue) {
+    setLastValue(value);
+    setDraft(value ?? '');
+  }
+
+  async function commit() {
+    if (draft === (value ?? '')) return;
+    setIsSaving(true);
+    setError(null);
+    const result = await onSave(recordId, field, draft);
+    setIsSaving(false);
+    if (!result.ok) {
+      setError(result.error);
+      setDraft(value ?? ''); // revert — the edit was rejected, don't leave an unsaved value showing as if it stuck.
+    }
+  }
+
+  return (
+    <td style={{ padding: '0.35rem' }}>
+      <input
+        type="text"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+        }}
+        disabled={isSaving}
+        style={editInputStyle}
+        aria-label={field}
+      />
+      {error && <div style={editErrorStyle}>{error}</div>}
+    </td>
+  );
+}
+
+/** The State cell in edit mode — a constrained dropdown (never free text), so a correction can't introduce a new typo. Saves immediately on change; the parent's own value flows back in as the `value` prop, so a rejected save reverts the visible selection with no local draft state needed. */
+function EditableStateCell({ recordId, value, onSave }: { recordId: string; value: string | null; onSave: SaveEditFn }) {
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleChange(e: ChangeEvent<HTMLSelectElement>) {
+    setIsSaving(true);
+    setError(null);
+    const result = await onSave(recordId, 'state', e.target.value);
+    setIsSaving(false);
+    if (!result.ok) setError(result.error);
+  }
+
+  return (
+    <td style={{ padding: '0.35rem' }}>
+      <select value={value ?? ''} onChange={handleChange} disabled={isSaving} style={editInputStyle} aria-label="state">
+        <option value="">—</option>
+        {AUSTRALIAN_STATES.map((s) => (
+          <option key={s} value={s}>{s}</option>
+        ))}
+      </select>
+      {error && <div style={editErrorStyle}>{error}</div>}
+    </td>
+  );
+}
+
+/** The record pane under the grid — every registrant behind the currently-selected cell, shaded per row the same way as Recent Registrations. The View/Edit toggle controls whether First name/Last name/State/Postcode render as plain text or as inline-editable cells; Email/Mobile/Date registered are never editable here (see lib/registryPipeline/registrantValidation.ts). */
+function RecordsPane({
+  selectedCell,
+  records,
+  onClear,
+  mode,
+  onModeChange,
+  onSaveEdit,
+}: {
+  selectedCell: SelectedCell;
+  records: ManageRegistrant[];
+  onClear: () => void;
+  mode: PaneMode;
+  onModeChange: (mode: PaneMode) => void;
+  onSaveEdit: SaveEditFn;
+}) {
   const sorted = useMemo(
     () => [...records].sort((a, b) => (b.registeredAt ?? '').localeCompare(a.registeredAt ?? '')),
     [records],
@@ -174,14 +292,30 @@ function RecordsPane({ selectedCell, records, onClear }: { selectedCell: Selecte
 
   return (
     <div style={{ marginTop: '1.5rem' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: '0.5rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: '1rem' }}>
         <h2 style={{ margin: 0, fontSize: '1.1rem' }}>
           {selectedCell.rowLabel} — {selectedCell.columnLabel} ({records.length.toLocaleString('en-AU')})
         </h2>
-        <button type="button" onClick={onClear} style={{ background: 'none', border: 'none', color: '#2563eb', cursor: 'pointer', padding: 0 }}>
-          Clear selection
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <span role="radiogroup" aria-label="Pane mode" style={{ display: 'flex', gap: '0.75rem' }}>
+            <label style={{ cursor: 'pointer' }}>
+              <input type="radio" name="pane-mode" checked={mode === 'view'} onChange={() => onModeChange('view')} /> View
+            </label>
+            <label style={{ cursor: 'pointer' }}>
+              <input type="radio" name="pane-mode" checked={mode === 'edit'} onChange={() => onModeChange('edit')} /> Edit
+            </label>
+          </span>
+          <button type="button" onClick={onClear} style={{ background: 'none', border: 'none', color: '#2563eb', cursor: 'pointer', padding: 0 }}>
+            Clear selection
+          </button>
+        </div>
       </div>
+
+      {mode === 'edit' && (
+        <p style={{ color: '#6b7280', fontSize: '0.85rem', marginTop: '0.35rem' }}>
+          Editing First name, Last name, State, and Postcode — each field saves on its own as soon as you leave it. Email, Mobile, and Date registered can&apos;t be changed here.
+        </p>
+      )}
 
       {records.length > RECORDS_DISPLAY_LIMIT && (
         <p style={{ color: '#6b7280', fontSize: '0.85rem' }}>
@@ -205,12 +339,28 @@ function RecordsPane({ selectedCell, records, onClear }: { selectedCell: Selecte
           <tbody>
             {shown.map((r) => (
               <tr key={r.id} style={{ borderBottom: '1px solid #eee', background: getSlideStateShade(r.state) }}>
-                <td style={{ padding: '0.5rem' }}>{r.firstName ?? '—'}</td>
-                <td style={{ padding: '0.5rem' }}>{r.lastName ?? '—'}</td>
+                {mode === 'edit' ? (
+                  <EditableTextCell recordId={r.id} field="firstName" value={r.firstName} onSave={onSaveEdit} />
+                ) : (
+                  <td style={{ padding: '0.5rem' }}>{r.firstName ?? '—'}</td>
+                )}
+                {mode === 'edit' ? (
+                  <EditableTextCell recordId={r.id} field="lastName" value={r.lastName} onSave={onSaveEdit} />
+                ) : (
+                  <td style={{ padding: '0.5rem' }}>{r.lastName ?? '—'}</td>
+                )}
                 <td style={{ padding: '0.5rem' }}>{r.email ?? '—'}</td>
                 <td style={{ padding: '0.5rem' }}>{r.phone ?? '—'}</td>
-                <td style={{ padding: '0.5rem' }}>{r.state ?? '—'}</td>
-                <td style={{ padding: '0.5rem' }}>{r.postcode ?? '—'}</td>
+                {mode === 'edit' ? (
+                  <EditableStateCell recordId={r.id} value={r.state} onSave={onSaveEdit} />
+                ) : (
+                  <td style={{ padding: '0.5rem' }}>{r.state ?? '—'}</td>
+                )}
+                {mode === 'edit' ? (
+                  <EditableTextCell recordId={r.id} field="postcode" value={r.postcode} onSave={onSaveEdit} />
+                ) : (
+                  <td style={{ padding: '0.5rem' }}>{r.postcode ?? '—'}</td>
+                )}
                 <td style={{ padding: '0.5rem' }}>{formatDateTime(r.registeredAt)}</td>
               </tr>
             ))}
@@ -232,6 +382,7 @@ export default function RegistryManagePage() {
   const [primaryPeriod, setPrimaryPeriod] = useState<FilterPeriod>('last_7_days');
   const [alternativePeriod, setAlternativePeriod] = useState<FilterPeriod>('last_month');
   const [selectedCell, setSelectedCell] = useState<SelectedCell | null>(null);
+  const [paneMode, setPaneMode] = useState<PaneMode>('view');
 
   const isAdmin = gate.status === 'ready' && isNationalRegistryAdmin(gate.leaderRole?.role);
 
@@ -294,8 +445,48 @@ export default function RegistryManagePage() {
   function selectCell(row: RowKey, rowLabel: string) {
     return (column: ConsoleColumn, columnLabel: string) => {
       setSelectedCell({ row, rowLabel, column, columnLabel });
+      setPaneMode('view'); // land back on View for a freshly-selected cell, rather than carrying Edit over from whatever was selected before.
     };
   }
+
+  function clearSelection() {
+    setSelectedCell(null);
+    setPaneMode('view');
+  }
+
+  // Applies one field edit and, on success, patches the in-memory registrant
+  // list in place — the grid's counts and the pane's own record list both
+  // recompute from that same array (via useMemo above), so an edit that
+  // moves someone between columns (e.g. a corrected Unknown -> VIC) shows up
+  // immediately without a refetch.
+  const saveEdit: SaveEditFn = useCallback(async (recordId, field, rawValue) => {
+    const value = rawValue.trim() === '' ? null : rawValue.trim();
+    try {
+      const { data: { session } } = await registrySupabase.auth.getSession();
+      if (!session) return { ok: false, error: 'Session expired — please sign in again.' };
+
+      const res = await fetch('/api/registry/manage-record', {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: recordId, field, value }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        return { ok: false, error: json.error ?? 'Failed to save.' };
+      }
+
+      const saved = json as ManageRecordEditResponse;
+      setSummary((prev) =>
+        prev
+          ? { ...prev, registrants: prev.registrants.map((r) => (r.id === recordId ? { ...r, [saved.field]: saved.value } : r)) }
+          : prev,
+      );
+      return { ok: true };
+    } catch (err) {
+      console.error('[registry/manage] edit failed:', err);
+      return { ok: false, error: 'Failed to save — check the browser console for detail, or try again.' };
+    }
+  }, []);
 
   if (gate.status === 'loading') return null;
 
@@ -388,7 +579,14 @@ export default function RegistryManagePage() {
           </p>
 
           {selectedCell ? (
-            <RecordsPane selectedCell={selectedCell} records={selectedRecords} onClear={() => setSelectedCell(null)} />
+            <RecordsPane
+              selectedCell={selectedCell}
+              records={selectedRecords}
+              onClear={clearSelection}
+              mode={paneMode}
+              onModeChange={setPaneMode}
+              onSaveEdit={saveEdit}
+            />
           ) : (
             <p style={{ color: '#6b7280', marginTop: '1.5rem' }}>Click a number above to list the matching records here.</p>
           )}

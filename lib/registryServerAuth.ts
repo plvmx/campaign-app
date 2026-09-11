@@ -32,6 +32,9 @@ export function decodeAalFromAccessToken(accessToken: string): 'aal1' | 'aal2' |
  * null for anything short of that — no session, no leader_roles row, or
  * MFA required but not yet at aal2 — so callers can treat this as a
  * single unauthorized/authorized check without re-deriving the gate logic.
+ * Also returns the caller's own email, for routes that need to attribute
+ * a write to who made it (e.g. registry.registrant_edits — see
+ * app/api/registry/manage-record/route.ts).
  *
  * Not independently unit tested — thin SDK glue, same precedent as
  * lib/registryAuth.ts's getRegistryAccessState(); the actual decision
@@ -40,7 +43,7 @@ export function decodeAalFromAccessToken(accessToken: string): 'aal1' | 'aal2' |
 export async function verifyRegistryAdminRequest(
   supabaseAdmin: SupabaseClient,
   accessToken: string,
-): Promise<{ userId: string; leaderRole: LeaderRoleRow } | null> {
+): Promise<{ userId: string; email: string | null; leaderRole: LeaderRoleRow } | null> {
   const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(accessToken);
   if (userError || !user) return null;
 
@@ -64,5 +67,5 @@ export async function verifyRegistryAdminRequest(
   });
   if (result !== 'ok') return null;
 
-  return { userId: user.id, leaderRole: leaderRole as LeaderRoleRow };
+  return { userId: user.id, email: user.email ?? null, leaderRole: leaderRole as LeaderRoleRow };
 }
