@@ -22,6 +22,15 @@ import {
   type PeriodCounts,
 } from '@/lib/registryPipeline/registrantCounts';
 import type { EditableRegistrantField } from '@/lib/registryPipeline/registrantValidation';
+import {
+  LOOKUP_FIELDS,
+  LOOKUP_FIELD_LABELS,
+  getLookupOptions,
+  filterByLookups,
+  type LookupField,
+  type LookupFilters,
+  type LookupOption,
+} from '@/lib/registryPipeline/registrantLookupFilters';
 import { getSlideStateShade } from '@/lib/slideLayout';
 import { AUSTRALIAN_STATES } from '@/lib/constants';
 
@@ -268,21 +277,73 @@ function EditableStateCell({ recordId, value, onSave }: { recordId: string; valu
   );
 }
 
-/** The record pane under the grid — every registrant behind the currently-selected cell, shaded per row the same way as Recent Registrations. The View/Edit toggle controls whether First name/Last name/State/Postcode render as plain text or as inline-editable cells; Email/Mobile/Date registered are never editable here (see lib/registryPipeline/registrantValidation.ts). */
+/** The five "find a record by a specific value" dropdowns above the pane's table — one per field, each already populated from the values actually present among the selected cell's records. */
+function LookupFiltersRow({
+  options,
+  filters,
+  onChange,
+  onReset,
+}: {
+  options: Record<LookupField, LookupOption[]>;
+  filters: LookupFilters;
+  onChange: (field: LookupField, value: string) => void;
+  onReset: () => void;
+}) {
+  const anyActive = LOOKUP_FIELDS.some((field) => !!filters[field]);
+
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: '0.75rem', margin: '0.75rem 0' }}>
+      {LOOKUP_FIELDS.map((field) => (
+        <label key={field} style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', fontSize: '0.8rem', color: '#374151' }}>
+          {LOOKUP_FIELD_LABELS[field]}
+          <select
+            value={filters[field] ?? ''}
+            onChange={(e) => onChange(field, e.target.value)}
+            style={{ padding: '0.3rem', minWidth: 130 }}
+            aria-label={`Look up by ${LOOKUP_FIELD_LABELS[field]}`}
+          >
+            <option value="">All</option>
+            {options[field].map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+        </label>
+      ))}
+      {anyActive && (
+        <button type="button" onClick={onReset} style={{ background: 'none', border: 'none', color: '#2563eb', cursor: 'pointer', padding: '0.3rem 0' }}>
+          Reset lookups
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** The record pane under the grid — every registrant behind the currently-selected cell, shaded per row the same way as Recent Registrations. The View/Edit toggle controls whether First name/Last name/State/Postcode render as plain text or as inline-editable cells; Email/Mobile/Date registered are never editable here (see lib/registryPipeline/registrantValidation.ts). The lookup dropdowns above the table further narrow which of those records are shown, by an exact value on any field except State/Date registered. */
 function RecordsPane({
   selectedCell,
   records,
+  totalForCell,
   onClear,
   mode,
   onModeChange,
   onSaveEdit,
+  lookupOptions,
+  lookupFilters,
+  onLookupFilterChange,
+  onResetLookups,
 }: {
   selectedCell: SelectedCell;
   records: ManageRegistrant[];
+  /** The cell's full unfiltered-by-lookups count, for the "N of M" header when a lookup narrows the list. */
+  totalForCell: number;
   onClear: () => void;
   mode: PaneMode;
   onModeChange: (mode: PaneMode) => void;
   onSaveEdit: SaveEditFn;
+  lookupOptions: Record<LookupField, LookupOption[]>;
+  lookupFilters: LookupFilters;
+  onLookupFilterChange: (field: LookupField, value: string) => void;
+  onResetLookups: () => void;
 }) {
   const sorted = useMemo(
     () => [...records].sort((a, b) => (b.registeredAt ?? '').localeCompare(a.registeredAt ?? '')),
@@ -294,7 +355,11 @@ function RecordsPane({
     <div style={{ marginTop: '1.5rem' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: '1rem' }}>
         <h2 style={{ margin: 0, fontSize: '1.1rem' }}>
-          {selectedCell.rowLabel} — {selectedCell.columnLabel} ({records.length.toLocaleString('en-AU')})
+          {selectedCell.rowLabel} — {selectedCell.columnLabel} (
+          {records.length === totalForCell
+            ? records.length.toLocaleString('en-AU')
+            : `${records.length.toLocaleString('en-AU')} of ${totalForCell.toLocaleString('en-AU')}`}
+          )
         </h2>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           <span role="radiogroup" aria-label="Pane mode" style={{ display: 'flex', gap: '0.75rem' }}>
@@ -311,6 +376,8 @@ function RecordsPane({
         </div>
       </div>
 
+      <LookupFiltersRow options={lookupOptions} filters={lookupFilters} onChange={onLookupFilterChange} onReset={onResetLookups} />
+
       {mode === 'edit' && (
         <p style={{ color: '#6b7280', fontSize: '0.85rem', marginTop: '0.35rem' }}>
           Editing First name, Last name, State, and Postcode — each field saves on its own as soon as you leave it. Email, Mobile, and Date registered can&apos;t be changed here.
@@ -319,12 +386,12 @@ function RecordsPane({
 
       {records.length > RECORDS_DISPLAY_LIMIT && (
         <p style={{ color: '#6b7280', fontSize: '0.85rem' }}>
-          Showing the most recent {RECORDS_DISPLAY_LIMIT.toLocaleString('en-AU')} of {records.length.toLocaleString('en-AU')} matching records — narrow with the Primary/Alternative Filter to see the rest.
+          Showing the most recent {RECORDS_DISPLAY_LIMIT.toLocaleString('en-AU')} of {records.length.toLocaleString('en-AU')} matching records — narrow with the Primary/Alternative Filter or a lookup above to see the rest.
         </p>
       )}
 
       <div style={{ overflowX: 'auto', marginTop: '0.5rem' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 700 }}>
+        <table aria-label="Matching records" style={{ width: '100%', borderCollapse: 'collapse', minWidth: 700 }}>
           <thead>
             <tr>
               <th style={headerCellStyle}>First name</th>
@@ -383,6 +450,7 @@ export default function RegistryManagePage() {
   const [alternativePeriod, setAlternativePeriod] = useState<FilterPeriod>('last_month');
   const [selectedCell, setSelectedCell] = useState<SelectedCell | null>(null);
   const [paneMode, setPaneMode] = useState<PaneMode>('view');
+  const [lookupFilters, setLookupFilters] = useState<LookupFilters>({});
 
   const isAdmin = gate.status === 'ready' && isNationalRegistryAdmin(gate.leaderRole?.role);
 
@@ -442,16 +510,49 @@ export default function RegistryManagePage() {
     return filterRegistrantsForCell(rows, selectedCell.column, selectedPeriod);
   }, [rows, selectedCell, selectedPeriod]);
 
+  // Each lookup dropdown's own option list is built from the cell's full
+  // record set (not from what other lookups have already narrowed it to) —
+  // so picking a value in one field never makes another field's options
+  // disappear out from under the admin.
+  const lookupOptions = useMemo(() => {
+    const options = {} as Record<LookupField, LookupOption[]>;
+    for (const field of LOOKUP_FIELDS) {
+      options[field] = getLookupOptions(selectedRecords, field);
+    }
+    return options;
+  }, [selectedRecords]);
+
+  const displayedRecords = useMemo(
+    () => filterByLookups(selectedRecords, lookupFilters),
+    [selectedRecords, lookupFilters],
+  );
+
+  function updateLookupFilter(field: LookupField, value: string) {
+    setLookupFilters((prev) => {
+      if (!value) {
+        const { [field]: _removed, ...rest } = prev;
+        return rest;
+      }
+      return { ...prev, [field]: value };
+    });
+  }
+
+  function resetLookupFilters() {
+    setLookupFilters({});
+  }
+
   function selectCell(row: RowKey, rowLabel: string) {
     return (column: ConsoleColumn, columnLabel: string) => {
       setSelectedCell({ row, rowLabel, column, columnLabel });
       setPaneMode('view'); // land back on View for a freshly-selected cell, rather than carrying Edit over from whatever was selected before.
+      setLookupFilters({}); // a different cell means a different universe of records — last cell's lookups wouldn't even make sense here.
     };
   }
 
   function clearSelection() {
     setSelectedCell(null);
     setPaneMode('view');
+    setLookupFilters({});
   }
 
   // Applies one field edit and, on success, patches the in-memory registrant
@@ -534,7 +635,7 @@ export default function RegistryManagePage() {
       {summary && (
         <>
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 900 }}>
+            <table aria-label="Registration counts" style={{ width: '100%', borderCollapse: 'collapse', minWidth: 900 }}>
               <thead>
                 <tr>
                   <th style={headerCellStyle}></th>
@@ -584,11 +685,16 @@ export default function RegistryManagePage() {
           {selectedCell ? (
             <RecordsPane
               selectedCell={selectedCell}
-              records={selectedRecords}
+              records={displayedRecords}
+              totalForCell={selectedRecords.length}
               onClear={clearSelection}
               mode={paneMode}
               onModeChange={setPaneMode}
               onSaveEdit={saveEdit}
+              lookupOptions={lookupOptions}
+              lookupFilters={lookupFilters}
+              onLookupFilterChange={updateLookupFilter}
+              onResetLookups={resetLookupFilters}
             />
           ) : (
             <p style={{ color: '#6b7280', marginTop: '1.5rem' }}>Click a number above to list the matching records here.</p>
