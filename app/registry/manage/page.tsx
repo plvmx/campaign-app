@@ -607,10 +607,10 @@ export default function RegistryManagePage() {
 
   return (
     <div style={{ maxWidth: 1100, margin: '2rem auto', padding: '0 1rem' }}>
-      <p><Link href="/registry">← Back to Registry</Link></p>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: '0.5rem' }}>
-        <h1>Registrations Management</h1>
-        <Link href="/registry/manage/edit-log">View Edit Log →</Link>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: '1rem' }}>
+        <Link href="/registry" style={{ justifySelf: 'start' }}>← Back to Registry</Link>
+        <h1 style={{ margin: 0, fontSize: '2rem', fontWeight: 800, textAlign: 'center' }}>Registrations Management</h1>
+        <Link href="/registry/manage/edit-log" style={{ justifySelf: 'end' }}>View Edit Log →</Link>
       </div>
 
       <div style={{ margin: '1rem 0', padding: '0.75rem 1rem', border: '1px solid #ddd', borderRadius: 6, background: '#fafafa' }}>
