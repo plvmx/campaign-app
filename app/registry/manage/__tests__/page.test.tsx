@@ -77,6 +77,13 @@ describe('RegistryManagePage', () => {
     ));
   });
 
+  it('links to the edit log', async () => {
+    mockUseRegistryGate.mockReturnValue({ status: 'ready', leaderRole: { role: 'national_admin', mfa_required: true } });
+    render(<RegistryManagePage />);
+    const link = await screen.findByRole('link', { name: /view edit log/i });
+    expect(link).toHaveAttribute('href', '/registry/manage/edit-log');
+  });
+
   it('allows a whatsapp_admin in too', async () => {
     mockUseRegistryGate.mockReturnValue({ status: 'ready', leaderRole: { role: 'whatsapp_admin', mfa_required: true } });
     render(<RegistryManagePage />);

@@ -30,6 +30,19 @@ export function isEditableRegistrantField(value: string): value is EditableRegis
   return (EDITABLE_REGISTRANT_FIELDS as readonly string[]).includes(value);
 }
 
+/**
+ * Display label for a registry.registrant_edits row's `field` column, which
+ * stores the actual DB column name (e.g. 'first_name'), not the camelCase
+ * key above — keyed by that stored value so /registry/manage/edit-log can
+ * label a historical row without re-deriving it from EDITABLE_FIELD_COLUMNS.
+ */
+export const EDITABLE_FIELD_LABELS: Record<string, string> = {
+  first_name: 'First name',
+  last_name: 'Last name',
+  state: 'State',
+  postcode: 'Postcode',
+};
+
 /** Australian postcodes are exactly 4 digits. Blank/null is valid too — postcode is optional, and this is how a national admin clears a bad one. */
 export function isValidAustralianPostcode(value: string | null): boolean {
   if (value === null) return true;

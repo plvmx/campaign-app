@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   EDITABLE_REGISTRANT_FIELDS,
   EDITABLE_FIELD_COLUMNS,
+  EDITABLE_FIELD_LABELS,
   isEditableRegistrantField,
   isValidAustralianPostcode,
   isValidRegistrantState,
@@ -31,6 +32,13 @@ describe('EDITABLE_FIELD_COLUMNS', () => {
       state: 'state',
       postcode: 'postcode',
     });
+  });
+});
+
+describe('EDITABLE_FIELD_LABELS', () => {
+  it('has exactly one label per DB column EDITABLE_FIELD_COLUMNS can write — the edit log must be able to label every row it might show', () => {
+    const columns = Object.values(EDITABLE_FIELD_COLUMNS);
+    expect(Object.keys(EDITABLE_FIELD_LABELS).sort()).toEqual([...columns].sort());
   });
 });
 
