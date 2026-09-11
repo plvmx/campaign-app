@@ -172,4 +172,126 @@ describe('RegistryManagePage', () => {
     await waitFor(() => expect(screen.getByText('nat@example.com')).toBeInTheDocument());
     expect(screen.getByText('vicky@example.com')).toBeInTheDocument();
   });
+
+  describe('editing records', () => {
+    function installFetchMock({ patchOk = true, patchError = 'Failed to save.' }: { patchOk?: boolean; patchError?: string } = {}) {
+      global.fetch = vi.fn(async (_url: unknown, init?: RequestInit) => {
+        if (init?.method === 'PATCH') {
+          const body = JSON.parse(String(init.body));
+          if (!patchOk) {
+            return { ok: false, json: async () => ({ error: patchError }) };
+          }
+          return { ok: true, json: async () => ({ id: body.id, field: body.field, value: body.value }) };
+        }
+        return {
+          ok: true,
+          json: async () => ({
+            lastSync: { startedAt: '2026-09-10T03:00:00Z', completedAt: '2026-09-10T03:01:00Z', status: 'success', recordsIn: 5, recordsUpserted: 5, errors: 0, notes: null },
+            registrants: SAMPLE_REGISTRANTS,
+          }),
+        };
+      }) as unknown as typeof fetch;
+    }
+
+    // Selects "All AFJ Registrations" x VIC (Vicky Vale — id r1) — every
+    // edit test starts from here.
+    async function selectAllVicCell() {
+      mockUseRegistryGate.mockReturnValue({ status: 'ready', leaderRole: { role: 'national_admin', mfa_required: true } });
+      render(<RegistryManagePage />);
+      const allRow = requireRow(await screen.findByText('All AFJ Registrations'));
+      fireEvent.click(within(allRow).getAllByRole('button', { name: '1' })[0]);
+      await screen.findByText('vicky@example.com');
+    }
+
+    it('defaults to View (plain text, no inputs)', async () => {
+      installFetchMock();
+      await selectAllVicCell();
+      expect(screen.queryByLabelText('firstName')).not.toBeInTheDocument();
+      expect(screen.getByText('Vicky')).toBeInTheDocument();
+    });
+
+    it('in Edit mode, First/Last/State/Postcode become inputs but Email/Mobile/Date registered never do', async () => {
+      installFetchMock();
+      await selectAllVicCell();
+
+      fireEvent.click(screen.getByLabelText('Edit'));
+
+      expect(await screen.findByLabelText('firstName')).toHaveValue('Vicky');
+      expect(screen.getByLabelText('lastName')).toHaveValue('Vale');
+      expect(screen.getByLabelText('state')).toHaveValue('VIC');
+      expect(screen.getByLabelText('postcode')).toHaveValue('3000');
+      // Still plain text — never rendered as an input, in either mode.
+      expect(screen.getByText('vicky@example.com')).toBeInTheDocument();
+      expect(screen.getByText('+61400000001')).toBeInTheDocument();
+    });
+
+    it('saves a text field edit on blur, with the field/value the input actually held', async () => {
+      installFetchMock();
+      await selectAllVicCell();
+      fireEvent.click(screen.getByLabelText('Edit'));
+
+      const postcodeInput = await screen.findByLabelText('postcode');
+      fireEvent.change(postcodeInput, { target: { value: '3141' } });
+      fireEvent.blur(postcodeInput);
+
+      await waitFor(() => expect(global.fetch).toHaveBeenCalledWith(
+        '/api/registry/manage-record',
+        expect.objectContaining({
+          method: 'PATCH',
+          body: JSON.stringify({ id: 'r1', field: 'postcode', value: '3141' }),
+        }),
+      ));
+    });
+
+    it('does not re-save on blur when the value was not actually changed', async () => {
+      installFetchMock();
+      await selectAllVicCell();
+      fireEvent.click(screen.getByLabelText('Edit'));
+
+      const fetchCallsBefore = (global.fetch as ReturnType<typeof vi.fn>).mock.calls.length;
+      fireEvent.blur(await screen.findByLabelText('firstName'));
+
+      expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls.length).toBe(fetchCallsBefore);
+    });
+
+    it('moves a registrant between grid columns live when a corrected state is saved', async () => {
+      installFetchMock();
+      await selectAllVicCell();
+      fireEvent.click(screen.getByLabelText('Edit'));
+
+      fireEvent.change(await screen.findByLabelText('state'), { target: { value: 'NSW' } });
+
+      // Vicky was VIC's only registrant; correcting her to NSW should give
+      // "All AFJ Registrations" 0 VIC and 2 NSW (Nat + the corrected Vicky).
+      const allRow = requireRow(screen.getByText('All AFJ Registrations'));
+      await waitFor(() => expect(within(allRow).getAllByText('0').length).toBeGreaterThan(0));
+      expect(within(allRow).getAllByRole('button', { name: '2' })[0]).toBeInTheDocument();
+    });
+
+    it('shows an inline error and reverts the value when the save is rejected', async () => {
+      installFetchMock({ patchOk: false, patchError: 'Invalid value for postcode' });
+      await selectAllVicCell();
+      fireEvent.click(screen.getByLabelText('Edit'));
+
+      const postcodeInput = await screen.findByLabelText('postcode');
+      fireEvent.change(postcodeInput, { target: { value: 'bad' } });
+      fireEvent.blur(postcodeInput);
+
+      expect(await screen.findByText('Invalid value for postcode')).toBeInTheDocument();
+      await waitFor(() => expect(postcodeInput).toHaveValue('3000'));
+    });
+
+    it('resets to View mode when a different cell is selected', async () => {
+      installFetchMock();
+      await selectAllVicCell();
+      fireEvent.click(screen.getByLabelText('Edit'));
+      await screen.findByLabelText('firstName');
+
+      const primaryRow = requireRow(screen.getByLabelText('Primary Filter period'));
+      fireEvent.click(within(primaryRow).getAllByRole('button', { name: '1' })[0]);
+
+      await screen.findByText(/Primary Filter — Total/);
+      expect(screen.queryByLabelText('firstName')).not.toBeInTheDocument();
+    });
+  });
 });

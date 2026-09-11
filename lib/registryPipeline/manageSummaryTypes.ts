@@ -1,7 +1,10 @@
-// Shared shape between app/api/registry/manage-summary/route.ts and its
-// page (app/registry/manage/page.tsx) — kept out of route.ts itself, same
-// reason as recentRegistrationTypes.ts: Next.js's App Router restricts a
-// route.ts's exports to recognized HTTP methods and route config.
+// Shared shapes between the /registry/manage API routes
+// (app/api/registry/manage-summary/route.ts, manage-record/route.ts) and
+// the page (app/registry/manage/page.tsx) — kept out of route.ts itself,
+// same reason as recentRegistrationTypes.ts: Next.js's App Router
+// restricts a route.ts's exports to recognized HTTP methods and route
+// config.
+import type { EditableRegistrantField } from './registrantValidation';
 
 /** One row of registry.sync_log, whichever ran most recently regardless of outcome — see supabase/functions/ac-sync/db.ts and scripts/add_status_to_sync_log.sql for what writes these. */
 export interface SyncLogSummary {
@@ -38,4 +41,18 @@ export interface ManageSummaryResponse {
   /** null only if registry.sync_log has no rows at all yet. */
   lastSync: SyncLogSummary | null;
   registrants: ManageRegistrant[];
+}
+
+/** PATCH /api/registry/manage-record body — one hand-edit to one field of one registrant. `value: null` clears the field. */
+export interface ManageRecordEditRequest {
+  id: string;
+  field: EditableRegistrantField;
+  value: string | null;
+}
+
+/** Echoes back the field/value as actually stored (post-normalization — e.g. a blank string comes back as null) so the page can update its in-memory copy without re-fetching. */
+export interface ManageRecordEditResponse {
+  id: string;
+  field: EditableRegistrantField;
+  value: string | null;
 }
