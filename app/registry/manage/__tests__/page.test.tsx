@@ -41,14 +41,17 @@ const SAMPLE_REGISTRANTS = [
   {
     id: 'r1', firstName: 'Vicky', lastName: 'Vale', email: 'vicky@example.com', phone: '+61400000001',
     state: 'VIC', postcode: '3000', registeredAt: new Date(Date.now() - HOUR).toISOString(),
+    isLeader: true, leaderName: 'Vicky Vale', leaderState: 'VIC',
   },
   {
     id: 'r2', firstName: 'Nat', lastName: 'Nelson', email: 'nat@example.com', phone: '+61400000002',
     state: 'NSW', postcode: '2000', registeredAt: new Date(Date.now() - 20 * DAY).toISOString(),
+    isLeader: false, leaderName: null, leaderState: null,
   },
   {
     id: 'r3', firstName: 'Uma', lastName: 'Unknown', email: 'uma@example.com', phone: '+61400000003',
     state: null, postcode: null, registeredAt: new Date(Date.now() - 400 * DAY).toISOString(),
+    isLeader: false, leaderName: null, leaderState: null,
   },
 ];
 
@@ -155,6 +158,17 @@ describe('RegistryManagePage', () => {
     // The clicked cell's shading intensifies (VIC's normal column tint is 0.14).
     const clickedCell = screen.getByRole('button', { name: '1', pressed: true }).closest('td');
     expect(clickedCell).toHaveStyle({ background: 'rgba(234, 107, 20, 0.45)' });
+  });
+
+  it('marks a registrant who matches a state_leaders row as a Leader, and everyone else with a dash', async () => {
+    mockUseRegistryGate.mockReturnValue({ status: 'ready', leaderRole: { role: 'national_admin', mfa_required: true } });
+    render(<RegistryManagePage />);
+    const allRow = requireRow(await screen.findByText('All AFJ Registrations'));
+    fireEvent.click(within(allRow).getByRole('button', { name: '3' })); // Total — all three sample registrants
+
+    const table = await screen.findByRole('table', { name: 'Matching records' });
+    expect(within(table).getByText('Leader · VIC')).toBeInTheDocument(); // Vicky
+    expect(within(table).getAllByText('—').length).toBeGreaterThanOrEqual(2); // Nat + Uma, not leaders
   });
 
   it('clears the record pane via "Clear selection"', async () => {

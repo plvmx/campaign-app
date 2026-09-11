@@ -36,6 +36,15 @@ export interface ManageRegistrant {
   state: string | null;
   postcode: string | null;
   registeredAt: string | null;
+  /**
+   * Whether this registrant's phone matches a public.state_leaders row, by
+   * normalized phone (lib/registryPipeline/leaderMatch.ts) — computed live
+   * on every request, not stored. leaderName/leaderState are that matched
+   * row's own leader/state, non-null only when isLeader is true.
+   */
+  isLeader: boolean;
+  leaderName: string | null;
+  leaderState: string | null;
 }
 
 export interface ManageSummaryResponse {
