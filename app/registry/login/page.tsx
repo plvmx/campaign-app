@@ -45,6 +45,9 @@ export default function RegistryLoginPage() {
 
   return (
     <RegistryAuthLayout title="AFJ Registry Sign In">
+      <p className={registryBodyTextClass}>
+        Registry Management (the registrations console) is built for a desktop or tablet screen — please use one of those rather than a mobile phone for the best experience.
+      </p>
       {sent ? (
         <p className={registryBodyTextClass}>
           If that address has registry access, a sign-in link is on its way — check your email.

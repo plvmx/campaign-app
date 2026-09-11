@@ -27,6 +27,11 @@ describe('RegistryLoginPage', () => {
     cleanup();
   });
 
+  it('shows a notice that Registry Management is best used on a desktop/tablet', () => {
+    render(<RegistryLoginPage />);
+    expect(screen.getByText(/desktop or tablet/i)).toBeInTheDocument();
+  });
+
   it('requests an OTP with shouldCreateUser: false, scoped to the registry callback', async () => {
     mockSignInWithOtp.mockResolvedValue({ error: null });
     render(<RegistryLoginPage />);
