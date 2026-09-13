@@ -13,7 +13,7 @@ vi.mock('@/lib/services/statePlacesService', () => ({
 import { supabase } from '@/lib/supabaseClient';
 import { getCampaignsByDateRange } from '@/lib/services/campaignService';
 import { getStatePlaces } from '@/lib/services/statePlacesService';
-import { getMapData, getStatePlacesMapData, fetchPlaceCoordinates } from '../campaignMapService';
+import { getMapData, getStatePlacesMapData, fetchPlaceCoordinates, placeKey } from '../campaignMapService';
 import type { Campaign } from '@/lib/types';
 import type { StatePlace } from '../statePlacesService';
 
@@ -349,5 +349,19 @@ describe('fetchPlaceCoordinates', () => {
         body: JSON.stringify({ state: 'VIC', place: 'Melbourne', force: true }),
       }),
     );
+  });
+});
+
+describe('placeKey', () => {
+  it('normalizes state to uppercase and place to lowercase with collapsed whitespace', () => {
+    expect(placeKey('vic', '  Preston  ')).toBe('VIC::preston');
+  });
+
+  it('treats incidental whitespace/case differences as the same key', () => {
+    expect(placeKey('VIC', 'Preston')).toBe(placeKey('vic', '  preston  '));
+  });
+
+  it('treats genuinely different places as different keys', () => {
+    expect(placeKey('VIC', 'Preston')).not.toBe(placeKey('VIC', 'Prestonville'));
   });
 });

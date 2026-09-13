@@ -27,8 +27,10 @@ export interface MapDataResult {
 
 // campaigns.place and state_places.place are independently free-typed and can differ by
 // incidental whitespace/case (e.g. "Preston" vs "Preston "), so cache keys are normalized
-// to avoid silently missing an already-geocoded place.
-function placeKey(state: string, place: string): string {
+// to avoid silently missing an already-geocoded place. Exported so any other code
+// matching campaigns against state_places by place (e.g. publicCampaignsNearMeService.ts)
+// uses this exact same normalization rather than a second, possibly-inconsistent one.
+export function placeKey(state: string, place: string): string {
   return `${state.trim().toUpperCase()}::${place.trim().replace(/\s+/g, ' ').toLowerCase()}`;
 }
 
