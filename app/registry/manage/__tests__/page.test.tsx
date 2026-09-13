@@ -122,8 +122,8 @@ describe('RegistryManagePage', () => {
     fireEvent.click(within(allRow).getByRole('button', { name: '3' }));
 
     const table = await screen.findByRole('table', { name: 'Matching records' });
-    expect(within(table).getByText('Registered')).toBeInTheDocument();
-    expect(within(table).queryByText('Date registered')).not.toBeInTheDocument();
+    expect(within(table).getByText(/^Registered/)).toBeInTheDocument(); // may carry a sort indicator, e.g. "Registered ▼"
+    expect(within(table).queryByText(/Date registered/)).not.toBeInTheDocument();
 
     const vickyRow = requireRow(within(table).getByText('vicky@example.com')) as HTMLTableRowElement;
     const dateCell = vickyRow.cells[vickyRow.cells.length - 1];
@@ -465,10 +465,28 @@ describe('RegistryManagePage', () => {
       expect(asc.indexOf('nat@example.com')).toBeLessThan(asc.indexOf('vicky@example.com')); // 2000 < 3000
     });
 
-    it('does not make Email, Mobile, State, or Registered clickable/sortable', async () => {
+    it('sorts by Registered date, defaulting to newest-first with a visible indicator', async () => {
       await selectAllTotalCell();
       const table = recordsTable();
-      for (const header of ['Email', 'Mobile', 'State', 'Registered']) {
+
+      // Default state: registeredAt desc (newest first) — the indicator
+      // shows this from the start, even before any header is clicked.
+      expect(within(table).getByText('Registered ▼')).toBeInTheDocument();
+      const initial = table.textContent ?? '';
+      expect(initial.indexOf('vicky@example.com')).toBeLessThan(initial.indexOf('nat@example.com'));
+      expect(initial.indexOf('nat@example.com')).toBeLessThan(initial.indexOf('uma@example.com'));
+
+      fireEvent.click(within(table).getByText(/Registered/));
+      expect(within(table).getByText('Registered ▲')).toBeInTheDocument();
+      const asc = table.textContent ?? '';
+      expect(asc.indexOf('uma@example.com')).toBeLessThan(asc.indexOf('nat@example.com'));
+      expect(asc.indexOf('nat@example.com')).toBeLessThan(asc.indexOf('vicky@example.com'));
+    });
+
+    it('does not make Email, Mobile, or State clickable/sortable', async () => {
+      await selectAllTotalCell();
+      const table = recordsTable();
+      for (const header of ['Email', 'Mobile', 'State']) {
         expect(within(table).getByText(header)).not.toHaveStyle({ cursor: 'pointer' });
       }
     });
