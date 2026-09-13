@@ -1472,3 +1472,44 @@ This closes out the entire post-reload catch-up saga (registrations
 reload → partial-index bug → cron never actually scheduled → stale
 cursor bug → backlog measured and drained). Nothing further expected
 here short of a new incident.
+
+## Cron frequency increased to once every 6 hours (2026-09-13)
+
+Peter asked for registrations to show up in `/registry/manage` sooner
+than "up to a full day later" — the once-daily cadence from the entry
+above meant someone who registered right after that day's run had to
+wait nearly 24 hours to appear. Changed `ac-sync`'s schedule from
+`'0 15 * * *'` to `'0 */6 * * *'` (00:00/06:00/12:00/18:00 UTC) via the
+same `cron.schedule('ac-sync-daily', ...)` call used for both the
+2026-09-09 catch-up speed-up and its revert — same job name, same
+`jobid`, updates the existing schedule in place. `scripts/
+schedule_ac_sync_cron.sql` (the canonical source of truth for this
+job) updated to match; the job name stays `ac-sync-daily` even though
+it's no longer literally daily, for the same continuity reason those
+earlier entries gave.
+
+No application code changes — `getLastCompletedSyncTimestamp()` and
+the whole incremental-sync design already just ask "since the last
+successful run," whatever that interval actually is, so this is a
+schedule-only change. Confirmed nothing else assumes a 24-hour cadence
+(no hardcoded `daily`/`86400` outside `lib/registryPipeline/
+registrantCounts.ts`'s unrelated `last_24_hours` grid filter option).
+
+Worth keeping an eye on going forward, not because anything's expected
+to break, but because this is genuinely new territory for this
+pipeline:
+- **AC's rate limit** (shared 5 req/sec, `lib/registryPipeline/
+  rateLimiter.ts`) — running 4x/day instead of 1x/day doesn't increase
+  total daily request volume (same registrants get pulled either way,
+  now in 4 smaller batches instead of 1 larger one), so no reason to
+  expect this to matter, but it's the one shared external constraint.
+- **`records_upserted` per run** should drop to roughly a quarter of
+  the old daily figure now that each run only covers a 6-hour window
+  instead of 24 — a sudden change back to daily-sized batches on a
+  6-hourly cadence would suggest the cursor logic regressed, not that
+  registrations picked up.
+- Confirm via `select * from cron.job where jobname = 'ac-sync-daily'`
+  that the schedule actually reads `0 */6 * * *` after running the
+  updated script — not just registered, per the 2026-09-09 entries'
+  own lesson about not trusting a schedule change until it's confirmed
+  live.
