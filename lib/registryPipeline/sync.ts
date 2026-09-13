@@ -99,7 +99,7 @@
 import { getErrorMessage } from '../errorUtils.ts';
 import { isActiveListStatus } from './listFilter.ts';
 import { REQUEST_PACING_MS, sleep } from './rateLimiter.ts';
-import type { AcPort, DbPort } from './ports.ts';
+import type { AcPort, DbPort, EmailPort } from './ports.ts';
 import { transformPendingStagingEvents } from './transform.ts';
 
 /** AC lists a discovered contact's memberships are checked against. Anything else (including 3/5) is never acted on — see plan Section 3.6/6.1. */
@@ -171,6 +171,8 @@ export interface RunSyncOptions {
   transformBudgetMs?: number;
   /** Injectable clock, defaulting to Date.now — lets tests control elapsed time deterministically without real timers. */
   now?: () => number;
+  /** Passed straight through to transformPendingStagingEvents — see TransformOptions.email. Omit to skip WhatsApp invite emails entirely. */
+  email?: EmailPort;
 }
 
 export async function runSync(ac: AcPort, db: DbPort, options: RunSyncOptions = {}): Promise<SyncResult> {
@@ -286,6 +288,7 @@ export async function runSync(ac: AcPort, db: DbPort, options: RunSyncOptions = 
     const { recordsUpserted, errors, partial: transformPartial } = await transformPendingStagingEvents(db, {
       deadline: transformDeadline,
       now,
+      email: options.email,
     });
 
     const partial = anyTimedOut || transformPartial;

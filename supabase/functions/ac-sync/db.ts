@@ -139,6 +139,21 @@ export function createDb(client: SupabaseClient = createServiceClient()): DbPort
       };
 
       if (email) {
+        // Existence pre-check, purely to answer "did this INSERT a new row
+        // or update one that was already there" for the caller (transform.ts
+        // uses this to decide whether to send the WhatsApp invite email —
+        // without it, every subsequent re-sync of an existing registrant
+        // would look identical to their first-ever registration). Not
+        // needed for correctness of the upsert itself, which would work
+        // the same either way.
+        const { data: existing, error: findError } = await client
+          .schema('registry')
+          .from('registrants')
+          .select('id')
+          .eq('email', email)
+          .maybeSingle();
+        assertNoError(findError, 'upsertRegistrant (email existence check)');
+
         const { data, error } = await client
           .schema('registry')
           .from('registrants')
@@ -146,7 +161,7 @@ export function createDb(client: SupabaseClient = createServiceClient()): DbPort
           .select('id')
           .single();
         assertNoError(error, 'upsertRegistrant');
-        return { id: (data as { id: string }).id };
+        return { id: (data as { id: string }).id, isNew: !existing };
       }
 
       // No email on this contact — fall back to matching by phone, but
@@ -174,7 +189,7 @@ export function createDb(client: SupabaseClient = createServiceClient()): DbPort
             .select('id')
             .single();
           assertNoError(error, 'upsertRegistrant (phone match update)');
-          return { id: (data as { id: string }).id };
+          return { id: (data as { id: string }).id, isNew: false };
         }
       }
 
@@ -185,7 +200,7 @@ export function createDb(client: SupabaseClient = createServiceClient()): DbPort
         .select('id')
         .single();
       assertNoError(error, 'upsertRegistrant (insert, no email/phone match)');
-      return { id: (data as { id: string }).id };
+      return { id: (data as { id: string }).id, isNew: true };
     },
 
     async insertRegistrationEvent(input) {
@@ -254,6 +269,17 @@ export function createDb(client: SupabaseClient = createServiceClient()): DbPort
         })
         .eq('id', id);
       assertNoError(error, 'recordPartialSync');
+    },
+
+    async getWhatsAppGroupLink(groupKey) {
+      const { data, error } = await client
+        .schema('registry')
+        .from('whatsapp_group_links')
+        .select('invite_url')
+        .eq('group_key', groupKey)
+        .maybeSingle();
+      assertNoError(error, 'getWhatsAppGroupLink');
+      return (data as { invite_url: string } | null)?.invite_url ?? null;
     },
   };
 }

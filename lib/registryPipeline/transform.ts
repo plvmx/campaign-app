@@ -24,9 +24,17 @@ import { getErrorMessage } from '../errorUtils.ts';
 import { mapAcFields } from './fieldMap.ts';
 import { isActiveListStatus } from './listFilter.ts';
 import { normalizePhone } from './phone.ts';
-import type { DbPort } from './ports.ts';
+import type { DbPort, EmailPort } from './ports.ts';
 import { matchSourceTag } from './sourceAttribution.ts';
 import { isExcludedSourceOnly } from './tagExclusion.ts';
+import { NATIONAL_GROUP_KEY, shouldSendWhatsAppInvite } from './whatsappInvite.ts';
+
+/** Used whenever no EmailPort is supplied (TransformOptions.email is optional) — every existing caller that doesn't care about WhatsApp invites keeps working unchanged. */
+const NOOP_EMAIL_PORT: EmailPort = {
+  async sendWhatsAppInviteEmail() {
+    // Intentionally does nothing.
+  },
+};
 
 /**
  * Caps the initial query too, so a large backlog is never pulled into
@@ -52,15 +60,19 @@ export interface TransformOptions {
   deadline?: number;
   /** Injectable clock, defaulting to Date.now — lets tests control elapsed time deterministically without real timers. */
   now?: () => number;
+  /** Sends the WhatsApp invite email to each genuinely new registrant with an email on file, when a national invite link is configured. Omit for a no-op — e.g. in tests that don't exercise this. */
+  email?: EmailPort;
 }
 
 export async function transformPendingStagingEvents(db: DbPort, options: TransformOptions = {}): Promise<TransformResult> {
   const now = options.now ?? Date.now;
   const deadline = options.deadline ?? Infinity;
+  const email = options.email ?? NOOP_EMAIL_PORT;
 
-  const [events, knownTags] = await Promise.all([
+  const [events, knownTags, nationalInviteUrl] = await Promise.all([
     db.getPendingStagingEvents(TRANSFORM_BATCH_LIMIT),
     db.getKnownSourceTags(),
+    db.getWhatsAppGroupLink(NATIONAL_GROUP_KEY),
   ]);
 
   let recordsUpserted = 0;
@@ -125,6 +137,22 @@ export async function transformPendingStagingEvents(db: DbPort, options: Transfo
         eventType: 'new_registration',
         rawStagingId: event.id,
       });
+
+      // Best-effort side effect, deliberately outside the outer try/catch's
+      // "mark this staging event as an error" path: the registrant and
+      // registration event above are already committed, so a failed send
+      // here must never cause this event to be retried — retrying would
+      // just re-upsert the same (now-existing) registrant forever without
+      // ever being able to send the invite, since isNew would be false on
+      // every subsequent attempt.
+      const inviteCandidate = { isNew: registrant.isNew, email: fields.email };
+      if (nationalInviteUrl && shouldSendWhatsAppInvite(inviteCandidate)) {
+        try {
+          await email.sendWhatsAppInviteEmail({ to: inviteCandidate.email, firstName: fields.firstName, inviteUrl: nationalInviteUrl });
+        } catch (err) {
+          console.error(`transformPendingStagingEvents: failed to send WhatsApp invite email for staging event ${event.id}:`, getErrorMessage(err));
+        }
+      }
 
       await db.markStagingProcessed(event.id, null);
       recordsUpserted++;

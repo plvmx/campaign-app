@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { TRANSFORM_BATCH_LIMIT, transformPendingStagingEvents } from '../transform';
-import type { DbPort, StagingEventRow } from '../ports';
+import type { DbPort, EmailPort, StagingEventRow } from '../ports';
 import type { KnownSourceTag, RawAcContactPayload } from '../types';
+import { NATIONAL_GROUP_KEY } from '../whatsappInvite';
 
 const KNOWN_TAGS: KnownSourceTag[] = [
   { ac_tag_id: '48', tag_name: 'CAMPAIGN: TWOL Sept 2019 Register', source_label: 'wayoflife_interest' },
@@ -20,7 +21,7 @@ function makeEvent(id: number, overrides: Partial<RawAcContactPayload> = {}): St
   };
 }
 
-function makeDb(events: StagingEventRow[]): DbPort {
+function makeDb(events: StagingEventRow[], overrides: Partial<DbPort> = {}): DbPort {
   return {
     startSyncLog: vi.fn(),
     getLastCompletedSyncTimestamp: vi.fn(),
@@ -29,7 +30,7 @@ function makeDb(events: StagingEventRow[]): DbPort {
     failSyncLog: vi.fn(),
     getPendingStagingEvents: vi.fn().mockResolvedValue(events),
     getKnownSourceTags: vi.fn().mockResolvedValue(KNOWN_TAGS),
-    upsertRegistrant: vi.fn().mockResolvedValue({ id: 'registrant-1' }),
+    upsertRegistrant: vi.fn().mockResolvedValue({ id: 'registrant-1', isNew: true }),
     insertRegistrationEvent: vi.fn().mockResolvedValue(undefined),
     markStagingProcessed: vi.fn().mockResolvedValue(undefined),
     markStagingError: vi.fn().mockResolvedValue(undefined),
@@ -37,6 +38,10 @@ function makeDb(events: StagingEventRow[]): DbPort {
     saveSyncProgress: vi.fn().mockResolvedValue(undefined),
     clearSyncProgress: vi.fn().mockResolvedValue(undefined),
     recordPartialSync: vi.fn().mockResolvedValue(undefined),
+    // No national link configured by default — most tests here don't care
+    // about WhatsApp invites at all; override per-test where they do.
+    getWhatsAppGroupLink: vi.fn().mockResolvedValue(null),
+    ...overrides,
   };
 }
 
@@ -190,5 +195,73 @@ describe('transformPendingStagingEvents', () => {
     const result = await transformPendingStagingEvents(db);
 
     expect(result.partial).toBe(false);
+  });
+});
+
+describe('WhatsApp invite email', () => {
+  function makeEmail(): EmailPort {
+    return { sendWhatsAppInviteEmail: vi.fn().mockResolvedValue(undefined) };
+  }
+
+  it('sends the invite for a genuinely new registrant with an email, when a national link is configured', async () => {
+    const db = makeDb([makeEvent(1)], { getWhatsAppGroupLink: vi.fn().mockResolvedValue('https://chat.whatsapp.com/abc123') });
+    const email = makeEmail();
+
+    await transformPendingStagingEvents(db, { email });
+
+    expect(db.getWhatsAppGroupLink).toHaveBeenCalledWith(NATIONAL_GROUP_KEY);
+    expect(email.sendWhatsAppInviteEmail).toHaveBeenCalledWith({
+      to: 'jane@example.com',
+      firstName: 'Jane',
+      inviteUrl: 'https://chat.whatsapp.com/abc123',
+    });
+  });
+
+  it('does not send when no national link is configured yet', async () => {
+    const db = makeDb([makeEvent(1)]); // default: getWhatsAppGroupLink resolves null
+    const email = makeEmail();
+
+    await transformPendingStagingEvents(db, { email });
+
+    expect(email.sendWhatsAppInviteEmail).not.toHaveBeenCalled();
+  });
+
+  it('does not send when the registrant already existed (an update, not a new registration)', async () => {
+    const db = makeDb([makeEvent(1)], {
+      getWhatsAppGroupLink: vi.fn().mockResolvedValue('https://chat.whatsapp.com/abc123'),
+      upsertRegistrant: vi.fn().mockResolvedValue({ id: 'registrant-1', isNew: false }),
+    });
+    const email = makeEmail();
+
+    await transformPendingStagingEvents(db, { email });
+
+    expect(email.sendWhatsAppInviteEmail).not.toHaveBeenCalled();
+  });
+
+  it('does not send when the registrant has no email on file', async () => {
+    const db = makeDb([makeEvent(1, { contact: { id: 'ac-1', email: null, firstName: 'Jane', lastName: 'Doe', phone: '0438438438', cdate: '2026-01-15T10:00:00Z' } })], {
+      getWhatsAppGroupLink: vi.fn().mockResolvedValue('https://chat.whatsapp.com/abc123'),
+    });
+    const email = makeEmail();
+
+    await transformPendingStagingEvents(db, { email });
+
+    expect(email.sendWhatsAppInviteEmail).not.toHaveBeenCalled();
+  });
+
+  it('does nothing when no EmailPort is supplied at all', async () => {
+    const db = makeDb([makeEvent(1)], { getWhatsAppGroupLink: vi.fn().mockResolvedValue('https://chat.whatsapp.com/abc123') });
+    await expect(transformPendingStagingEvents(db)).resolves.toEqual({ recordsUpserted: 1, errors: 0, partial: false });
+  });
+
+  it('treats a failed send as non-fatal: the staging event still succeeds, not marked as an error', async () => {
+    const db = makeDb([makeEvent(1)], { getWhatsAppGroupLink: vi.fn().mockResolvedValue('https://chat.whatsapp.com/abc123') });
+    const email: EmailPort = { sendWhatsAppInviteEmail: vi.fn().mockRejectedValue(new Error('Resend API error 500')) };
+
+    const result = await transformPendingStagingEvents(db, { email });
+
+    expect(result).toEqual({ recordsUpserted: 1, errors: 0, partial: false });
+    expect(db.markStagingError).not.toHaveBeenCalled();
+    expect(db.markStagingProcessed).toHaveBeenCalledWith(1, null);
   });
 });

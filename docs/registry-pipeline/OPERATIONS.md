@@ -1513,3 +1513,75 @@ pipeline:
   updated script — not just registered, per the 2026-09-09 entries'
   own lesson about not trusting a schedule change until it's confirmed
   live.
+
+## WhatsApp invite email — built, scoped to a single national link (2026-09-13)
+
+Peter asked for an automated WhatsApp group invite, emailed to every new
+registrant. `AFJ_PII_Technical_Implementation_Plan.md` Section 8 marked
+this **"blocked on a leadership decision, not a technical one"** — AFJ's
+real footprint (~100 groups, 9,000+ subscribers) exceeds WhatsApp's
+published limits for its "Communities" feature under every figure the
+executive report found, and nothing since had resolved which structure
+to use instead (federated multi-Community vs. an alternative platform —
+see the report's Section 3.4 and its own open-decisions list).
+
+**Peter's decision:** don't wait on that. Skip the Communities feature
+entirely — it was never actually required for this, since an ordinary
+WhatsApp group's own invite link has no such scale limit, only the newer
+Communities-umbrella feature does. Start with exactly one link, for one
+national group, sent to everyone regardless of state. The
+`registry.whatsapp_group_links` table still carries `group_level`
+(`'national' | 'state' | 'city'`) per the original plan's design, so a
+state/city breakdown could be added later without a schema change — but
+that's explicitly not being built now, and doesn't require revisiting
+the Communities-feature question either, since it'd still just be more
+plain invite links, one per group.
+
+**A real bug found and fixed as part of this**: `registry.registration_events.event_type`
+was hardcoded to `'new_registration'` for every single row `transform.ts`
+ever wrote — including a contact simply being re-synced because some
+other field of theirs changed in AC. Triggering the invite email off
+"a new `registration_events` row" as originally sketched would have
+re-emailed the invite to already-registered people every time ac-sync
+happened to touch their record again. Fixed at the source instead:
+`DbPort.upsertRegistrant()` now returns `isNew` (true only for a genuine
+first-time INSERT), computed via an existence pre-check before the
+upsert (mirroring the pre-check the email-less/phone-match branch
+already did) — `transform.ts`'s `shouldSendWhatsAppInvite()` only fires
+for `isNew: true` with a usable email.
+
+**Failure handling**: sending the email is deliberately outside the
+per-event try/catch that decides whether a staging row is marked done or
+errored — the registrant and registration_event rows are already
+committed by the time the email is attempted, so a Resend outage or a
+missing `RESEND_API_KEY` must never cause that event to be retried
+(retrying would just re-upsert the same, now-existing registrant
+forever, and `isNew` would be false every time after — the invite could
+never go out on a later attempt anyway). Both `emailClient.ts` (missing
+key) and `transform.ts`'s call site (any other failure) log and move on;
+neither ever throws up to the outer per-event catch.
+
+**Four things need doing before any invite actually sends** — none of
+them run automatically by merging the code:
+
+1. Run `scripts/create_registry_whatsapp_group_links_table.sql` in the
+   Supabase SQL Editor.
+2. Insert the real national group's invite link (WhatsApp: Group Settings
+   → Invite via link) — the `INSERT ... ON CONFLICT` template is in that
+   same script's trailing comment.
+3. `supabase secrets set RESEND_API_KEY=...` — a Resend API key with
+   permission to send from AFJ's verified domain. This reuses the Resend
+   *account* already configured as Supabase Auth's custom SMTP provider
+   for magic-link emails, but is a separate credential: this feature
+   calls Resend's own HTTP API directly, not through Supabase Auth.
+   Also confirm `emailClient.ts`'s `FROM_ADDRESS` constant
+   (`noreply@afj.org.au`) is actually a verified sending address on that
+   Resend account/domain — update it if not.
+4. `supabase functions deploy ac-sync` — ships the `db.ts`/`emailClient.ts`/
+   `index.ts` changes.
+
+Until all four are done, nothing breaks — a missing table row or a
+missing `RESEND_API_KEY` both fail safe (log-and-skip via
+`getWhatsAppGroupLink()` returning null, or `emailClient.ts`'s own
+missing-key check), so the SQL migration and code deploy can go out
+well ahead of the real invite link and API key being ready.

@@ -55,6 +55,7 @@ function makeDb(overrides: Partial<DbPort> = {}): DbPort {
     saveSyncProgress: vi.fn().mockResolvedValue(undefined),
     clearSyncProgress: vi.fn().mockResolvedValue(undefined),
     recordPartialSync: vi.fn().mockResolvedValue(undefined),
+    getWhatsAppGroupLink: vi.fn().mockResolvedValue(null),
     ...overrides,
   };
 }
@@ -320,6 +321,33 @@ describe('runSync', () => {
     await runSync(ac, db, { acBudgetMs: 4000 });
 
     expect(ac.getContactsPage).toHaveBeenCalledWith(expect.objectContaining({ limit: 2 }));
+  });
+
+  it('threads the email port through to the transform phase for the WhatsApp invite', async () => {
+    const ac = makeAc({ pages: [[]] });
+    const db = makeDb({
+      getPendingStagingEvents: vi.fn().mockResolvedValue([{
+        id: 1,
+        raw_payload: {
+          contact: { id: 'ac-1', email: 'jane@example.com', firstName: 'Jane', lastName: 'Doe', phone: null, cdate: null },
+          fieldValues: [],
+          tags: [],
+          listMembership: { contact: 'ac-1', list: '1', status: '1' },
+        },
+      }]),
+      upsertRegistrant: vi.fn().mockResolvedValue({ id: 'registrant-1', isNew: true }),
+      insertRegistrationEvent: vi.fn().mockResolvedValue(undefined),
+      getWhatsAppGroupLink: vi.fn().mockResolvedValue('https://chat.whatsapp.com/abc123'),
+    });
+    const email = { sendWhatsAppInviteEmail: vi.fn().mockResolvedValue(undefined) };
+
+    await runSync(ac, db, { email });
+
+    expect(email.sendWhatsAppInviteEmail).toHaveBeenCalledWith({
+      to: 'jane@example.com',
+      firstName: 'Jane',
+      inviteUrl: 'https://chat.whatsapp.com/abc123',
+    });
   });
 });
 

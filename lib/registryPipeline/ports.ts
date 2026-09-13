@@ -115,7 +115,17 @@ export interface DbPort {
     interestedInTraining: string | null;
     churchLeader: string | null;
     churchName: string | null;
-  }): Promise<{ id: string }>;
+  }): Promise<{
+    id: string;
+    /**
+     * True only if this call actually INSERTed a brand-new row — false for
+     * a row that already existed and was just updated. Determines whether
+     * the WhatsApp invite email (transform.ts) is sent: without this, every
+     * contact re-processed by a later sync (e.g. any field touched in AC
+     * again) would look identical to a genuine first-time registration.
+     */
+    isNew: boolean;
+  }>;
   insertRegistrationEvent(input: {
     registrantId: string;
     sourceListId: string;
@@ -149,4 +159,21 @@ export interface DbPort {
    * ignoring it (a partial pass must never advance the incremental cursor).
    */
   recordPartialSync(id: number, counts: { recordsIn: number; recordsUpserted: number; errors: number }): Promise<void>;
+
+  /** registry.whatsapp_group_links.invite_url for one group_key (e.g. 'national' — see whatsappInvite.ts's NATIONAL_GROUP_KEY), or null if that group has no link configured yet. */
+  getWhatsAppGroupLink(groupKey: string): Promise<string | null>;
+}
+
+/**
+ * Sends the WhatsApp group invite email to a newly-registered person —
+ * implemented by ac-sync/emailClient.ts (Resend's HTTP API). A separate
+ * port from DbPort since it talks to an entirely different external
+ * system, same reasoning as AcPort being split out from DbPort.
+ *
+ * transform.ts treats a failure here as non-fatal to the sync itself (see
+ * its call site) — this is a best-effort side effect, not something to
+ * retry by leaving the underlying staging event unprocessed.
+ */
+export interface EmailPort {
+  sendWhatsAppInviteEmail(input: { to: string; firstName: string | null; inviteUrl: string }): Promise<void>;
 }
