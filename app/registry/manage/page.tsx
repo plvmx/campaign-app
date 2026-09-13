@@ -440,7 +440,7 @@ function RecordsPane({
               <th style={headerCellStyle}>Mobile</th>
               <th style={headerCellStyle}>State</th>
               <th style={sortableHeaderCellStyle} onClick={() => toggleSort('postcode')}>Postcode{sortIndicator('postcode')}</th>
-              <th style={headerCellStyle}>Registered</th>
+              <th style={sortableHeaderCellStyle} onClick={() => toggleSort('registeredAt')}>Registered{sortIndicator('registeredAt')}</th>
             </tr>
           </thead>
           <tbody>
