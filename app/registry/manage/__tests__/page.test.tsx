@@ -416,4 +416,61 @@ describe('RegistryManagePage', () => {
       expect(screen.getByLabelText('Look up by First name')).toHaveValue('');
     });
   });
+
+  describe('sorting the record pane', () => {
+    // Selects "All AFJ Registrations" x Total — all three sample
+    // registrants (Vicky/VIC/3000, Nat/NSW/2000, Uma/null-state/null-postcode).
+    async function selectAllTotalCell() {
+      mockUseRegistryGate.mockReturnValue({ status: 'ready', leaderRole: { role: 'national_admin', mfa_required: true } });
+      render(<RegistryManagePage />);
+      const allRow = requireRow(await screen.findByText('All AFJ Registrations'));
+      fireEvent.click(within(allRow).getByRole('button', { name: '3' }));
+      await screen.findByRole('table', { name: 'Matching records' });
+    }
+
+    it('sorts by First name ascending on first click, and reverses on a second click of the same header', async () => {
+      await selectAllTotalCell();
+      const table = recordsTable();
+
+      fireEvent.click(within(table).getByText(/First name/));
+      expect(within(table).getByText('First name ▲')).toBeInTheDocument();
+      const asc = table.textContent ?? '';
+      expect(asc.indexOf('Nat')).toBeLessThan(asc.indexOf('Uma'));
+      expect(asc.indexOf('Uma')).toBeLessThan(asc.indexOf('Vicky'));
+
+      fireEvent.click(within(table).getByText(/First name/));
+      expect(within(table).getByText('First name ▼')).toBeInTheDocument();
+      const desc = table.textContent ?? '';
+      expect(desc.indexOf('Vicky')).toBeLessThan(desc.indexOf('Uma'));
+      expect(desc.indexOf('Uma')).toBeLessThan(desc.indexOf('Nat'));
+    });
+
+    it('sorts by Last name', async () => {
+      await selectAllTotalCell();
+      const table = recordsTable();
+
+      fireEvent.click(within(table).getByText(/Last name/));
+      const asc = table.textContent ?? '';
+      expect(asc.indexOf('Nelson')).toBeLessThan(asc.indexOf('Unknown'));
+      expect(asc.indexOf('Unknown')).toBeLessThan(asc.indexOf('Vale'));
+    });
+
+    it('sorts by Postcode, with a blank postcode sorting first ascending', async () => {
+      await selectAllTotalCell();
+      const table = recordsTable();
+
+      fireEvent.click(within(table).getByText(/Postcode/));
+      const asc = table.textContent ?? '';
+      expect(asc.indexOf('uma@example.com')).toBeLessThan(asc.indexOf('nat@example.com')); // null postcode
+      expect(asc.indexOf('nat@example.com')).toBeLessThan(asc.indexOf('vicky@example.com')); // 2000 < 3000
+    });
+
+    it('does not make Email, Mobile, State, or Registered clickable/sortable', async () => {
+      await selectAllTotalCell();
+      const table = recordsTable();
+      for (const header of ['Email', 'Mobile', 'State', 'Registered']) {
+        expect(within(table).getByText(header)).not.toHaveStyle({ cursor: 'pointer' });
+      }
+    });
+  });
 });

@@ -56,6 +56,10 @@ interface SelectedCell {
 
 type PaneMode = 'view' | 'edit';
 
+/** Which of the record pane's columns can be sorted, and which direction — deliberately just these three (First name/Last name/Postcode), per request; Registered defaults to newest-first and isn't clickable. */
+type RecordSortColumn = 'firstName' | 'lastName' | 'postcode' | 'registeredAt';
+type SortDirection = 'asc' | 'desc';
+
 type SaveEditResult = { ok: true } | { ok: false; error: string };
 
 /** Persists one field edit (PATCH /api/registry/manage-record) and reports success/failure — the editable cells below revert their own display on failure, they don't need to know how saving actually works. */
@@ -63,6 +67,7 @@ type SaveEditFn = (recordId: string, field: EditableRegistrantField, value: stri
 
 const cellStyle: CSSProperties = { border: '1px solid #ccc', padding: '0.6rem 0.75rem', textAlign: 'center' };
 const headerCellStyle: CSSProperties = { ...cellStyle, fontWeight: 600, background: '#f3f4f6' };
+const sortableHeaderCellStyle: CSSProperties = { ...headerCellStyle, cursor: 'pointer', userSelect: 'none' };
 const labelCellStyle: CSSProperties = { ...cellStyle, textAlign: 'left', fontWeight: 600, background: '#f3f4f6' };
 const numberButtonStyle: CSSProperties = {
   font: 'inherit',
@@ -358,10 +363,32 @@ function RecordsPane({
   onLookupFilterChange: (field: LookupField, value: string) => void;
   onResetLookups: () => void;
 }) {
-  const sorted = useMemo(
-    () => [...records].sort((a, b) => (b.registeredAt ?? '').localeCompare(a.registeredAt ?? '')),
-    [records],
-  );
+  // Sort is a view preference, not tied to which cell is selected — unlike
+  // paneMode/lookupFilters (reset on cell change since they concern that
+  // specific record set), a "sort by Last name" choice stays meaningful no
+  // matter which cell you look at next, so it's just local state here with
+  // no reset wiring from the parent.
+  const [sortColumn, setSortColumn] = useState<RecordSortColumn>('registeredAt');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+
+  function toggleSort(column: RecordSortColumn) {
+    if (column === sortColumn) {
+      setSortDirection((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+  }
+
+  function sortIndicator(column: RecordSortColumn): string {
+    if (column !== sortColumn) return '';
+    return sortDirection === 'asc' ? ' ▲' : ' ▼';
+  }
+
+  const sorted = useMemo(() => {
+    const ascending = [...records].sort((a, b) => (a[sortColumn] ?? '').localeCompare(b[sortColumn] ?? ''));
+    return sortDirection === 'asc' ? ascending : ascending.reverse();
+  }, [records, sortColumn, sortDirection]);
   const shown = sorted.slice(0, RECORDS_DISPLAY_LIMIT);
 
   return (
@@ -407,12 +434,12 @@ function RecordsPane({
         <table aria-label="Matching records" style={{ width: '100%', borderCollapse: 'collapse', minWidth: 700 }}>
           <thead>
             <tr>
-              <th style={headerCellStyle}>First name</th>
-              <th style={headerCellStyle}>Last name</th>
+              <th style={sortableHeaderCellStyle} onClick={() => toggleSort('firstName')}>First name{sortIndicator('firstName')}</th>
+              <th style={sortableHeaderCellStyle} onClick={() => toggleSort('lastName')}>Last name{sortIndicator('lastName')}</th>
               <th style={headerCellStyle}>Email</th>
               <th style={headerCellStyle}>Mobile</th>
               <th style={headerCellStyle}>State</th>
-              <th style={headerCellStyle}>Postcode</th>
+              <th style={sortableHeaderCellStyle} onClick={() => toggleSort('postcode')}>Postcode{sortIndicator('postcode')}</th>
               <th style={headerCellStyle}>Registered</th>
             </tr>
           </thead>
