@@ -347,6 +347,7 @@ describe('runSync', () => {
       to: 'jane@example.com',
       firstName: 'Jane',
       inviteUrl: 'https://chat.whatsapp.com/abc123',
+      registrantId: 'registrant-1',
     });
   });
 });

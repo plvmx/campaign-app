@@ -1585,3 +1585,53 @@ missing `RESEND_API_KEY` both fail safe (log-and-skip via
 `getWhatsAppGroupLink()` returning null, or `emailClient.ts`'s own
 missing-key check), so the SQL migration and code deploy can go out
 well ahead of the real invite link and API key being ready.
+
+## Added a "Campaigns Near Me" section to the invite email (2026-09-13)
+
+Peter deliberately hasn't added the real `registry.whatsapp_group_links`
+row yet ("I want to do some other things in the invite email before it's
+ready to send out") — this entry is the first of those additions. The
+invite email now has a second section: a personalized link to
+`/public/campaigns-near-me?r=<registrant id>`, a map of AFJ campaigns
+within 60 km of the registrant's own postcode over the next 7 days, with
+one-tap "Yes I'm In"/"Tell Me More" that writes straight to
+`campaign_interest` — no re-entering name/mobile/email, since the public
+API route looks those up server-side from `registry.registrants` by the
+id in the link (never the raw PII itself, in the URL or otherwise).
+
+**New requirement to actually get this link in the email**:
+`NEXT_PUBLIC_SITE_URL` as an `ac-sync` Edge Function secret
+(`supabase secrets set NEXT_PUBLIC_SITE_URL=https://<the real production
+domain>`) — Deno's environment has no equivalent of Vercel's
+auto-injected `VERCEL_PROJECT_PRODUCTION_URL` (this function isn't
+deployed on Vercel), so without this set explicitly, `emailClient.ts`
+omits the whole Campaigns Near Me section rather than link to
+`localhost` in a real email. This is on top of (not instead of) the four
+steps in the entry above — the WhatsApp invite link itself still needs
+its own table row before anything sends at all.
+
+Reused rather than rebuilt where possible:
+- `components/NearbyCampaignsMap.tsx` (the same Leaflet map
+  `/admin/campaigns-near-me` already used) gained a `renderActions` prop
+  so the public screen could swap in real interest-registration actions
+  (`components/PublicCampaignInterestActions.tsx`) without duplicating
+  ~140 lines of map wiring — the admin screen's own actions
+  (`MapPopupActions.tsx`) are untouched and still a stub, deliberately
+  out of scope here.
+- `lib/services/nearbyCampaignsService.ts`'s `haversineKm()` is reused
+  directly; its `getNearbyCampaigns()` wrapper is not, since that goes
+  through on-demand place geocoding via the admin-only
+  `/api/admin/geocode-place` route an anonymous visitor can't call — the
+  new `lib/services/publicCampaignsNearMeService.ts` only ever uses
+  already-cached `state_places` coordinates instead (an unresolved place
+  is simply omitted, same as the admin map's own established behaviour).
+- `lib/services/campaignMapService.ts`'s `placeKey()` (now exported) is
+  shared by the new service too, so both stay consistent about matching
+  a campaign's place against `state_places` by the same normalization.
+
+The centre point itself IS still geocoded live (via the existing
+`lib/geocoding.ts`'s `geocodeAddress()`, server-side, same Nominatim
+wrapper the admin "Centre on address" feature already uses) — that's a
+one-off lookup of the registrant's own postcode+state, not a place a
+future admin might also need cached, so no new caching layer was added
+for it.

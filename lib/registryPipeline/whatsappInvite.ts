@@ -42,31 +42,54 @@ export function shouldSendWhatsAppInvite(input: { isNew: boolean; email: string 
   return input.isNew && !!input.email;
 }
 
-/** Builds the invite email's subject/html/text — a registrant with no first name on file gets a generic greeting rather than "Hi null". */
-export function buildWhatsAppInviteEmail(firstName: string | null, inviteUrl: string): WhatsAppInviteEmailContent {
+/**
+ * Builds the invite email's subject/html/text — a registrant with no first
+ * name on file gets a generic greeting rather than "Hi null".
+ *
+ * `campaignsNearMeUrl` adds a second section pointing to a personalized
+ * map of campaigns near the registrant, with one-tap "Yes I'm In"/"Tell Me
+ * More" (app/public/campaigns-near-me) — omitted entirely when null (no
+ * NEXT_PUBLIC_SITE_URL configured in the sending environment; see
+ * ac-sync/emailClient.ts, which builds this URL), so the email never links
+ * to a broken/localhost address.
+ */
+export function buildWhatsAppInviteEmail(firstName: string | null, inviteUrl: string, campaignsNearMeUrl: string | null): WhatsAppInviteEmailContent {
   const name = firstName?.trim() || 'there';
   const safeName = escapeHtml(name);
   const safeUrl = escapeHtml(inviteUrl);
 
   const subject = "You're invited: join the AFJ WhatsApp group";
-  const text = [
+
+  const textLines = [
     `Hi ${name},`,
     '',
     "Welcome to Australia For Jesus! Here's your invite to our national WhatsApp group:",
     inviteUrl,
     '',
     "An admin approves new members before you're added, so it may take a little while to come through.",
-    '',
-    'God bless,',
-    'The AFJ Team',
-  ].join('\n');
-  const html = [
+  ];
+  const htmlLines = [
     `<p>Hi ${safeName},</p>`,
     `<p>Welcome to Australia For Jesus! Here&#39;s your invite to our national WhatsApp group:</p>`,
     `<p><a href="${safeUrl}">${safeUrl}</a></p>`,
     `<p>An admin approves new members before you&#39;re added, so it may take a little while to come through.</p>`,
-    `<p>God bless,<br/>The AFJ Team</p>`,
-  ].join('\n');
+  ];
 
-  return { subject, html, text };
+  if (campaignsNearMeUrl) {
+    const safeMapUrl = escapeHtml(campaignsNearMeUrl);
+    textLines.push(
+      '',
+      'Want to get involved sooner? See campaigns happening near you in the next 7 days, and register your interest with one tap:',
+      campaignsNearMeUrl,
+    );
+    htmlLines.push(
+      `<p>Want to get involved sooner? See campaigns happening near you in the next 7 days, and register your interest with one tap:</p>`,
+      `<p><a href="${safeMapUrl}">${safeMapUrl}</a></p>`,
+    );
+  }
+
+  textLines.push('', 'God bless,', 'The AFJ Team');
+  htmlLines.push(`<p>God bless,<br/>The AFJ Team</p>`);
+
+  return { subject, text: textLines.join('\n'), html: htmlLines.join('\n') };
 }

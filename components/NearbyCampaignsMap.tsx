@@ -1,13 +1,36 @@
 'use client';
 
 import 'leaflet/dist/leaflet.css';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, type ReactNode } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Circle, useMap } from 'react-leaflet';
 import L from 'leaflet';
-import type { NearbyMapMarker } from '@/lib/services/nearbyCampaignsService';
 import { getStateMarkerIcon } from '@/lib/leafletMarkerIcon';
 import { formatCampaignDateTimeDisplay, getEarliestCampaign } from '@/lib/campaignUtils';
 import MapPopupActions from '@/components/MapPopupActions';
+
+/**
+ * Just enough of a campaign for this map's popup (id/date/time/leader) —
+ * kept minimal and local rather than importing the admin-only
+ * NearbyMapMarker/Campaign types, so the public "Campaigns Near Me" screen
+ * (app/public/campaigns-near-me) — whose campaign rows carry far fewer
+ * fields — can use this same component without an awkward cast. A full
+ * admin `Campaign` object already structurally satisfies this.
+ */
+export interface NearbyMapPopupCampaign {
+  id: string;
+  date: string;
+  time: string;
+  leader: string;
+}
+
+export interface NearbyMapPopupMarker {
+  state: string;
+  place: string;
+  latitude: number;
+  longitude: number;
+  distanceKm: number;
+  campaigns: NearbyMapPopupCampaign[];
+}
 
 // Distinct centre marker drawn as a CSS pin so it can't be confused with a campaign.
 const centerIcon = L.divIcon({
@@ -74,7 +97,15 @@ function ResetViewControl({ center, radiusKm }: FitBoundsProps) {
 interface NearbyCampaignsMapProps {
   center: [number, number];
   radiusKm: number;
-  markers: NearbyMapMarker[];
+  markers: NearbyMapPopupMarker[];
+  /**
+   * What to render under the Leader line in a campaign marker's popup —
+   * defaults to the admin `MapPopupActions` stub. The public
+   * "Campaigns Near Me" screen (app/public/campaigns-near-me) passes its
+   * own renderer here instead, wired to actually record interest for a
+   * known registrant rather than console.log placeholders.
+   */
+  renderActions?: (props: { campaignId: string; place: string; state: string }) => ReactNode;
 }
 
 /**
@@ -82,7 +113,12 @@ interface NearbyCampaignsMapProps {
  * circle; the user can zoom and pan freely to explore, then use the "Reset
  * view" button to return to that starting frame.
  */
-export default function NearbyCampaignsMap({ center, radiusKm, markers }: NearbyCampaignsMapProps) {
+export default function NearbyCampaignsMap({
+  center,
+  radiusKm,
+  markers,
+  renderActions = (props) => <MapPopupActions {...props} />,
+}: NearbyCampaignsMapProps) {
   const radiusMeters = useMemo(() => radiusKm * 1000, [radiusKm]);
 
   return (
@@ -131,7 +167,7 @@ export default function NearbyCampaignsMap({ center, radiusKm, markers }: Nearby
                 <p className="mt-1">{marker.distanceKm} km away</p>
                 <p className="mt-1">{formatCampaignDateTimeDisplay(firstCampaign.date, firstCampaign.time)}</p>
                 <p>Leader: {firstCampaign.leader}</p>
-                <MapPopupActions campaignId={firstCampaign.id} place={marker.place} state={marker.state} />
+                {renderActions({ campaignId: firstCampaign.id, place: marker.place, state: marker.state })}
               </div>
             </Popup>
           </Marker>

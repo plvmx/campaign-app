@@ -1,13 +1,20 @@
 'use client';
 
 /**
- * Stub RSVP actions shown under a map popup's Leader line (Campaign Map,
- * Campaigns Near Me — not the state places map, which has no campaign to
- * act on). Not wired to any backend yet.
+ * Stub RSVP actions shown under a map popup's Leader line on the ADMIN
+ * Campaign Map / Campaigns Near Me screens (not the state places map,
+ * which has no campaign to act on). Still not wired to any backend for an
+ * admin viewing this map — deliberately out of scope when the equivalent
+ * was built for the public, registrant-facing map instead (below).
  *
  * TODO: replace the console.log placeholders with real actions — e.g.
  * recording an RSVP against `campaignId` and opening a campaign details
- * view — once that behaviour is designed.
+ * view — once that behaviour is designed for an admin's own use of this
+ * map. See components/PublicCampaignInterestActions.tsx for a real,
+ * working equivalent (registers interest into campaign_interest via
+ * /api/public/campaigns-near-me) built for app/public/campaigns-near-me
+ * instead — NearbyCampaignsMap.tsx's `renderActions` prop is what lets
+ * each screen swap this component out for its own.
  */
 interface MapPopupActionsProps {
   campaignId: string;

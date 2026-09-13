@@ -29,16 +29,39 @@ const RESEND_API_URL = 'https://api.resend.com/emails';
 // update if AFJ's verified sending domain differs from this placeholder.
 const FROM_ADDRESS = 'AFJ <noreply@afj.org.au>';
 
+/**
+ * The Next.js app's own public origin, for the personalized
+ * "Campaigns Near Me" link included in the invite email
+ * (app/public/campaigns-near-me). Deno's environment doesn't carry
+ * Vercel's own auto-injected VERCEL_PROJECT_PRODUCTION_URL (this Edge
+ * Function isn't deployed on Vercel) the way lib/siteUrl.ts's Node-side
+ * equivalent can — NEXT_PUBLIC_SITE_URL must be set explicitly as an Edge
+ * Function secret (`supabase secrets set NEXT_PUBLIC_SITE_URL=https://...`)
+ * for this link to appear at all. Returns null rather than guessing at a
+ * fallback (e.g. localhost), which would silently ship a broken link in a
+ * real email — buildWhatsAppInviteEmail() omits the whole section when
+ * this is null.
+ */
+function resolveSiteUrl(): string | null {
+  return Deno.env.get('NEXT_PUBLIC_SITE_URL') ?? null;
+}
+
 export function createEmailClient(): EmailPort {
   return {
-    async sendWhatsAppInviteEmail({ to, firstName, inviteUrl }) {
+    async sendWhatsAppInviteEmail({ to, firstName, inviteUrl, registrantId }) {
       const apiKey = Deno.env.get('RESEND_API_KEY');
       if (!apiKey) {
         console.error('[ac-sync] RESEND_API_KEY is not set — skipping WhatsApp invite email');
         return;
       }
 
-      const { subject, html, text } = buildWhatsAppInviteEmail(firstName, inviteUrl);
+      const siteUrl = resolveSiteUrl();
+      const campaignsNearMeUrl = siteUrl ? `${siteUrl}/public/campaigns-near-me?r=${encodeURIComponent(registrantId)}` : null;
+      if (!siteUrl) {
+        console.error('[ac-sync] NEXT_PUBLIC_SITE_URL is not set — sending WhatsApp invite email without the campaigns-near-me link');
+      }
+
+      const { subject, html, text } = buildWhatsAppInviteEmail(firstName, inviteUrl, campaignsNearMeUrl);
 
       try {
         const res = await fetch(RESEND_API_URL, {

@@ -148,7 +148,7 @@ export async function transformPendingStagingEvents(db: DbPort, options: Transfo
       const inviteCandidate = { isNew: registrant.isNew, email: fields.email };
       if (nationalInviteUrl && shouldSendWhatsAppInvite(inviteCandidate)) {
         try {
-          await email.sendWhatsAppInviteEmail({ to: inviteCandidate.email, firstName: fields.firstName, inviteUrl: nationalInviteUrl });
+          await email.sendWhatsAppInviteEmail({ to: inviteCandidate.email, firstName: fields.firstName, inviteUrl: nationalInviteUrl, registrantId: registrant.id });
         } catch (err) {
           console.error(`transformPendingStagingEvents: failed to send WhatsApp invite email for staging event ${event.id}:`, getErrorMessage(err));
         }

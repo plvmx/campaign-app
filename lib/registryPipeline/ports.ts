@@ -175,5 +175,12 @@ export interface DbPort {
  * retry by leaving the underlying staging event unprocessed.
  */
 export interface EmailPort {
-  sendWhatsAppInviteEmail(input: { to: string; firstName: string | null; inviteUrl: string }): Promise<void>;
+  /**
+   * `registrantId` is registry.registrants.id — used to build the personalized
+   * "Campaigns Near Me" link (app/public/campaigns-near-me) included in the
+   * email, not part of the WhatsApp invite itself. The adapter resolves the
+   * app's site URL and omits that section entirely if it can't (see
+   * ac-sync/emailClient.ts) — never includes a broken/localhost link.
+   */
+  sendWhatsAppInviteEmail(input: { to: string; firstName: string | null; inviteUrl: string; registrantId: string }): Promise<void>;
 }
