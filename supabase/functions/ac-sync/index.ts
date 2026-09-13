@@ -11,11 +11,12 @@
 //
 // All business logic lives in lib/registryPipeline (runSync / transformPendingStagingEvents)
 // and is unit-tested there under Node/Vitest — this file is only wiring:
-// build the two ports (AC HTTP client, Supabase service-role client) and
-// call runSync.
+// build the three ports (AC HTTP client, Supabase service-role client,
+// Resend email client) and call runSync.
 
 import { createAcClient } from './acClient.ts';
 import { createDb } from './db.ts';
+import { createEmailClient } from './emailClient.ts';
 import { runSync } from '../../../lib/registryPipeline/sync.ts';
 import { getErrorMessage } from '../../../lib/errorUtils.ts';
 
@@ -23,7 +24,8 @@ Deno.serve(async (_req: Request) => {
   try {
     const ac = createAcClient();
     const db = createDb();
-    const result = await runSync(ac, db);
+    const email = createEmailClient();
+    const result = await runSync(ac, db, { email });
     return new Response(JSON.stringify(result), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
