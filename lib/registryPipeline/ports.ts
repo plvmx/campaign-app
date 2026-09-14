@@ -133,6 +133,27 @@ export interface DbPort {
     eventType: 'new_registration';
     rawStagingId: number;
   }): Promise<void>;
+  /**
+   * Inserts one registry.twol_respondents row — a `/wayoflife-responder/`
+   * (AC List [2]) submission. Append-only, unlike upsertRegistrant: the
+   * same person can genuinely be the subject of more than one presenter's
+   * report over time, and this table never needs an isNew-style signal
+   * since these never trigger the WhatsApp invite email (transform.ts
+   * routes List [2] here instead of upsertRegistrant precisely so they
+   * don't).
+   */
+  insertTwolRespondent(input: {
+    acContactId: string;
+    firstName: string | null;
+    lastName: string | null;
+    email: string | null;
+    phone: string | null;
+    phoneRaw: string | null;
+    state: string | null;
+    registeredAt: string | null;
+    sourceTag: string | null;
+    rawStagingId: number;
+  }): Promise<void>;
   /** Marks a staging row done. Pass a reason (e.g. 'skipped: list status not active') to record a non-error skip, or null for a clean success. */
   markStagingProcessed(id: number, skipReason: string | null): Promise<void>;
   markStagingError(id: number, error: string): Promise<void>;

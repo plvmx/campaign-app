@@ -49,6 +49,7 @@ function makeDb(overrides: Partial<DbPort> = {}): DbPort {
     getKnownSourceTags: vi.fn().mockResolvedValue([]),
     upsertRegistrant: vi.fn(),
     insertRegistrationEvent: vi.fn(),
+    insertTwolRespondent: vi.fn(),
     markStagingProcessed: vi.fn(),
     markStagingError: vi.fn(),
     getSyncProgress: vi.fn().mockResolvedValue(null),

@@ -32,6 +32,7 @@ function makeDb(events: StagingEventRow[], overrides: Partial<DbPort> = {}): DbP
     getKnownSourceTags: vi.fn().mockResolvedValue(KNOWN_TAGS),
     upsertRegistrant: vi.fn().mockResolvedValue({ id: 'registrant-1', isNew: true }),
     insertRegistrationEvent: vi.fn().mockResolvedValue(undefined),
+    insertTwolRespondent: vi.fn().mockResolvedValue(undefined),
     markStagingProcessed: vi.fn().mockResolvedValue(undefined),
     markStagingError: vi.fn().mockResolvedValue(undefined),
     getSyncProgress: vi.fn().mockResolvedValue(null),
@@ -154,6 +155,50 @@ describe('transformPendingStagingEvents', () => {
     expect(db.upsertRegistrant).toHaveBeenCalledWith(
       expect.objectContaining({ churchLeader: 'Yes', churchName: 'Eaton Baptist Church' })
     );
+  });
+
+  it('routes an AC List [2] (/wayoflife-responder/) submission to twol_respondents, never registrants', async () => {
+    const db = makeDb([
+      makeEvent(11, {
+        tags: [{ id: '1' }],
+        listMembership: { contact: 'ac-11', list: '2', status: '1' },
+      }),
+    ], {
+      getKnownSourceTags: vi.fn().mockResolvedValue([
+        { ac_tag_id: '1', tag_name: 'FORM: Way of life responder: Completed', source_label: 'wayoflife_responder' },
+      ]),
+    });
+
+    const result = await transformPendingStagingEvents(db);
+
+    expect(result).toEqual({ recordsUpserted: 1, errors: 0, partial: false });
+    expect(db.insertTwolRespondent).toHaveBeenCalledWith({
+      acContactId: 'ac-11',
+      firstName: 'Jane',
+      lastName: 'Doe',
+      email: 'jane@example.com',
+      phone: '+61438438438',
+      phoneRaw: '0438438438',
+      state: 'NSW',
+      registeredAt: '2026-01-15T10:00:00Z',
+      sourceTag: 'FORM: Way of life responder: Completed',
+      rawStagingId: 11,
+    });
+    expect(db.upsertRegistrant).not.toHaveBeenCalled();
+    expect(db.insertRegistrationEvent).not.toHaveBeenCalled();
+    expect(db.markStagingProcessed).toHaveBeenCalledWith(11, null);
+  });
+
+  it('never sends a WhatsApp invite for an AC List [2] submission, even when a national link is configured', async () => {
+    const db = makeDb([
+      makeEvent(12, { listMembership: { contact: 'ac-12', list: '2', status: '1' } }),
+    ], { getWhatsAppGroupLink: vi.fn().mockResolvedValue('https://chat.whatsapp.com/abc123') });
+    const email: EmailPort = { sendWhatsAppInviteEmail: vi.fn().mockResolvedValue(undefined) };
+
+    await transformPendingStagingEvents(db, { email });
+
+    expect(email.sendWhatsAppInviteEmail).not.toHaveBeenCalled();
+    expect(db.insertTwolRespondent).toHaveBeenCalled();
   });
 
   it('passes the batch limit through to getPendingStagingEvents', async () => {

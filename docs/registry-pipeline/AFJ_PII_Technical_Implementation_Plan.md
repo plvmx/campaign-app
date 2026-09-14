@@ -88,6 +88,8 @@ The API key provided is **not** a temporary/scoped credential as originally plan
 
 **Critical architecture correction:** List `[1]` is a de facto catch-all for three of the four live registration funnels. **List membership alone cannot distinguish which page a registrant came through** — the tag is the only reliable source-identifier. The ingestion transform must capture and match against tags, not rely on List ID for source attribution. Tag naming is inconsistent across pages (`ACTION:`, `CAMPAIGN:`, `FORM:` prefixes all in use) — match against the known tag ID list, not a naming pattern.
 
+**Amendment (2026-09-14):** the above is true of List `[1]`, but List `[2]` (`/wayoflife-responder/`) has since been repeatedly confirmed — this investigation and prior discovery work alike — to be the sole use of that list, unlike List `[1]`. Its submissions are also not self-registrations at all (a TWOL presenter reporting on someone they presented to) and have no Postcode field. `registry.registrants` originally included them anyway; they're now routed to a separate `registry.twol_respondents` table instead, keyed on `source_list_id === '2'` — a deliberate, narrow exception to this section's "never key off List ID" rule. See `scripts/create_registry_twol_respondents_table.sql` and `OPERATIONS.md`'s 2026-09-14 entry for the full detail.
+
 ### 3.4 Confirmed field mapping (corrects earlier assumptions)
 
 | Field | Decision | Evidence / reason |

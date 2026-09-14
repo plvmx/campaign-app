@@ -102,6 +102,38 @@ export async function transformPendingStagingEvents(db: DbPort, options: Transfo
       // sources on its own (plan Section 3.3/6.2).
       const matchedTag = matchSourceTag(payload.tags, knownTags);
 
+      // AC List [2] is the one deliberate exception to "never key off
+      // source_list_id" above: it has been repeatedly confirmed to be the
+      // sole use of that list — /wayoflife-responder/ submissions, filled
+      // in by a TWOL presenter about someone else, not a self-registration
+      // (see OPERATIONS.md's "List 1 new registrations, List 2 individual
+      // wayoflife-responder outcomes" line, and
+      // scripts/create_registry_twol_respondents_table.sql's header for
+      // the full rationale). Routed to registry.twol_respondents instead of
+      // registry.registrants — these people never went through a
+      // registration funnel themselves, so they must never become a
+      // registrant or receive the WhatsApp invite email. Checked ahead of
+      // the MailChimp-only exclusion below, which only makes sense for
+      // would-be registrants.
+      if (payload.listMembership.list === '2') {
+        const fields = mapAcFields(payload);
+        await db.insertTwolRespondent({
+          acContactId: payload.contact.id,
+          firstName: fields.firstName,
+          lastName: fields.lastName,
+          email: fields.email,
+          phone: normalizePhone(fields.phoneRaw),
+          phoneRaw: fields.phoneRaw,
+          state: fields.state,
+          registeredAt: fields.registeredAt,
+          sourceTag: matchedTag?.tag_name ?? null,
+          rawStagingId: event.id,
+        });
+        await db.markStagingProcessed(event.id, null);
+        recordsUpserted++;
+        continue;
+      }
+
       // Tag-based exclusion (tagExclusion.ts): a contact whose only signal
       // is an excluded source tag (e.g. a MailChimp bulk import) never
       // becomes a registrant at all — checked before upsertRegistrant, not

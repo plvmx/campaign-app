@@ -203,6 +203,27 @@ export function createDb(client: SupabaseClient = createServiceClient()): DbPort
       return { id: (data as { id: string }).id, isNew: true };
     },
 
+    // Plain append-only insert, deliberately not an upsert — unlike
+    // registrants, the same person can genuinely be the subject of more
+    // than one /wayoflife-responder/ submission over time, and each is
+    // its own real event worth keeping (see
+    // scripts/create_registry_twol_respondents_table.sql).
+    async insertTwolRespondent(input) {
+      const { error } = await client.schema('registry').from('twol_respondents').insert({
+        ac_contact_id: input.acContactId,
+        first_name: input.firstName,
+        last_name: input.lastName,
+        email: input.email ? input.email.trim().toLowerCase() : null,
+        phone: input.phone,
+        phone_raw: input.phoneRaw,
+        state: input.state,
+        registered_at: input.registeredAt,
+        source_tag: input.sourceTag,
+        raw_staging_id: input.rawStagingId,
+      });
+      assertNoError(error, 'insertTwolRespondent');
+    },
+
     async insertRegistrationEvent(input) {
       const { error } = await client.schema('registry').from('registration_events').insert({
         registrant_id: input.registrantId,

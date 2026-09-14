@@ -1701,3 +1701,68 @@ in the Supabase SQL Editor — same manual-migration convention as every
 other registry pipeline schema/cron change in this document. Nothing in
 the code change applies it automatically. Once run, confirm via
 `select schedule from cron.job where jobname = 'ac-sync-daily';`.
+
+## `/wayoflife-responder/` submissions wrongly synced into registry.registrants — new twol_respondents table, 46 registrants migrated (2026-09-14)
+
+Investigating a report that several 2026-09-12 registrants had no
+postcode led back to AC List `[2]` — the `/wayoflife-responder/` page.
+Unlike `/register/` and `/thewayoflife/` (both List `[1]`, both
+genuinely missing postcode due to a confirmed landing-page data-loss bug,
+plan Section 3.5), `/wayoflife-responder/` has **no Postcode field at
+all**. It's not a self-registration form either: a TWOL presenter fills
+it in about someone *they* just presented "The Way Of Life" message to
+— name/email/mobile transcribed from a conversation, not self-entered.
+(Confirmed live via one real example: an email landed as
+`toroooesh@yahoo.con`, plausibly mis-heard/mis-typed by the presenter.)
+
+Querying live data confirmed the shape of the problem: of 7 registrants
+dated 2026-09-12, 6 were List `[2]`-only and all 6 had no postcode; since
+2026-08-26 (when postcode capture began), 19 of 20 missing-postcode
+registrants trace to this same source. `EXCLUDED_LIST_IDS` in
+`listFilter.ts` only ever excluded List 3/5 — List `[2]` was always in
+scope by design (`source_label: 'wayoflife_responder'` — plan Section
+3.3), so this wasn't a leak from a form that should've been filtered out
+entirely; it was the *destination* that was wrong. These contacts were
+upserted into `registry.registrants` exactly like a genuine List-1
+registrant, meaning they'd also be eligible for the WhatsApp invite email
+once that goes live (`shouldSendWhatsAppInvite()` has no source
+filtering) — sending an unsolicited invite to a third-party-submitted,
+possibly-mistyped address.
+
+Decision (Peter, 2026-09-14): these are wanted data, just not
+registrants. Added `registry.twol_respondents`
+(`scripts/create_registry_twol_respondents_table.sql`) and routed AC
+List `[2]` events there directly in `transform.ts`, ahead of the
+registrant upsert — the one deliberate exception to this pipeline's
+"never key off `source_list_id`, only the tag" rule elsewhere, justified
+because List `[2]` has been independently confirmed several times over
+(this investigation and the "List 1 new registrations, List 2 individual
+wayoflife-responder outcomes" line above) to be the sole use of that
+list, unlike List `[1]`'s genuine catch-all. Regression test added in
+`transform.test.ts`, confirmed red (calls `upsertRegistrant` and sends
+the WhatsApp invite) against the pre-fix code before the fix, green
+after.
+
+**Migration of already-synced rows**: every ac-sync run since the CSV
+reload (2026-09-08/09) had been affected. Live data showed 248
+registrants with at least one List `[2]` event; of those, 202 were
+"mixed" — they also had a genuine List-1 event (real self-registration
+via `/register/`, `/thewayoflife/`, or BOTJ), so they stayed in
+`registry.registrants`, same precedent as `tagExclusion.ts`'s "a contact
+who was originally MailChimp-imported but later also genuinely
+registered keeps that legitimate attribution" rule. The other 46 had
+*only* List `[2]` events (70 registration_events total, some registrants
+re-synced more than once) — those were moved by
+`scripts/migrate_wayoflife_responders_to_twol_respondents.ts` (dry run
+by default; backs up every affected registrant + event to `backups/`
+before any write, `--apply` required to actually insert into
+`twol_respondents` and delete from `registrants`). CSV-reloaded rows
+(`ac_contact_id IS NULL`) were automatically out of scope — the reload
+never wrote any `registration_events` for them, confirmed live, so they
+can never match "List `[2]` only".
+
+**Action needed**: `scripts/create_registry_twol_respondents_table.sql`
+must be run in the Supabase SQL Editor before the migration script's
+`--apply` step, and before the fixed `ac-sync` is redeployed (otherwise
+every List `[2]` event will error on `insertTwolRespondent` against a
+table that doesn't exist yet).
