@@ -143,13 +143,17 @@ export function createDb(client: SupabaseClient = createServiceClient()): DbPort
         // or update one that was already there" for the caller (transform.ts
         // uses this to decide whether to send the WhatsApp invite email —
         // without it, every subsequent re-sync of an existing registrant
-        // would look identical to their first-ever registration). Not
-        // needed for correctness of the upsert itself, which would work
-        // the same either way.
+        // would look identical to their first-ever registration). Also
+        // carries the pre-existing unsubscribed value through unchanged —
+        // the upsert's own `fields` never includes that column, so this is
+        // the only place that value is available to return to the caller,
+        // which checks it before sending the invite (whatsappInvite.ts).
+        // Not needed for correctness of the upsert itself, which would
+        // work the same either way.
         const { data: existing, error: findError } = await client
           .schema('registry')
           .from('registrants')
-          .select('id')
+          .select('id, unsubscribed')
           .eq('email', email)
           .maybeSingle();
         assertNoError(findError, 'upsertRegistrant (email existence check)');
@@ -161,7 +165,8 @@ export function createDb(client: SupabaseClient = createServiceClient()): DbPort
           .select('id')
           .single();
         assertNoError(error, 'upsertRegistrant');
-        return { id: (data as { id: string }).id, isNew: !existing };
+        const existingRow = existing as { id: string; unsubscribed: string | null } | null;
+        return { id: (data as { id: string }).id, isNew: !existing, unsubscribed: existingRow?.unsubscribed ?? null };
       }
 
       // No email on this contact — fall back to matching by phone, but
@@ -174,22 +179,23 @@ export function createDb(client: SupabaseClient = createServiceClient()): DbPort
         const { data: existing, error: findError } = await client
           .schema('registry')
           .from('registrants')
-          .select('id')
+          .select('id, unsubscribed')
           .is('email', null)
           .eq('phone', input.phone)
           .maybeSingle();
         assertNoError(findError, 'upsertRegistrant (phone lookup)');
 
         if (existing) {
+          const existingRow = existing as { id: string; unsubscribed: string | null };
           const { data, error } = await client
             .schema('registry')
             .from('registrants')
             .update(fields)
-            .eq('id', (existing as { id: string }).id)
+            .eq('id', existingRow.id)
             .select('id')
             .single();
           assertNoError(error, 'upsertRegistrant (phone match update)');
-          return { id: (data as { id: string }).id, isNew: false };
+          return { id: (data as { id: string }).id, isNew: false, unsubscribed: existingRow.unsubscribed };
         }
       }
 
@@ -200,7 +206,28 @@ export function createDb(client: SupabaseClient = createServiceClient()): DbPort
         .select('id')
         .single();
       assertNoError(error, 'upsertRegistrant (insert, no email/phone match)');
-      return { id: (data as { id: string }).id, isNew: true };
+      return { id: (data as { id: string }).id, isNew: true, unsubscribed: null };
+    },
+
+    // Plain append-only insert, deliberately not an upsert — unlike
+    // registrants, the same person can genuinely be the subject of more
+    // than one /wayoflife-responder/ submission over time, and each is
+    // its own real event worth keeping (see
+    // scripts/create_registry_twol_respondents_table.sql).
+    async insertTwolRespondent(input) {
+      const { error } = await client.schema('registry').from('twol_respondents').insert({
+        ac_contact_id: input.acContactId,
+        first_name: input.firstName,
+        last_name: input.lastName,
+        email: input.email ? input.email.trim().toLowerCase() : null,
+        phone: input.phone,
+        phone_raw: input.phoneRaw,
+        state: input.state,
+        registered_at: input.registeredAt,
+        source_tag: input.sourceTag,
+        raw_staging_id: input.rawStagingId,
+      });
+      assertNoError(error, 'insertTwolRespondent');
     },
 
     async insertRegistrationEvent(input) {
@@ -230,6 +257,19 @@ export function createDb(client: SupabaseClient = createServiceClient()): DbPort
         .update({ processing_error: errorMessage })
         .eq('id', id);
       assertNoError(error, 'markStagingError');
+    },
+
+    async markRegistrantUnsubscribedByEmail(email) {
+      // Plain UPDATE ... WHERE email = ? — a no-op (0 rows) when this
+      // email was never a registrant, which is the common case for a
+      // non-active-status sync. Matches by email, not ac_contact_id, so
+      // this also catches a CSV-reloaded registrant (ac_contact_id NULL).
+      const { error } = await client
+        .schema('registry')
+        .from('registrants')
+        .update({ unsubscribed: 'Yes', last_updated_at: new Date().toISOString() })
+        .eq('email', email);
+      assertNoError(error, 'markRegistrantUnsubscribedByEmail');
     },
 
     async getSyncProgress(key) {

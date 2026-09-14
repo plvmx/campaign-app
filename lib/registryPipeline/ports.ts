@@ -125,6 +125,18 @@ export interface DbPort {
      * again) would look identical to a genuine first-time registration.
      */
     isNew: boolean;
+    /**
+     * The pre-existing value of registry.registrants.unsubscribed for this
+     * email/phone match, carried through unchanged (the upsert's own write
+     * never touches this column) — null for a genuinely brand-new row.
+     * Checked by shouldSendWhatsAppInvite alongside isNew, as an explicit
+     * belt-and-braces guard: relying on isNew alone happens to be correct
+     * today (anyone already unsubscribed already has a row, so isNew is
+     * already false for them), but that's an emergent property of the
+     * upsert's email-matching logic, not something this invariant should
+     * silently depend on.
+     */
+    unsubscribed: string | null;
   }>;
   insertRegistrationEvent(input: {
     registrantId: string;
@@ -133,9 +145,43 @@ export interface DbPort {
     eventType: 'new_registration';
     rawStagingId: number;
   }): Promise<void>;
+  /**
+   * Inserts one registry.twol_respondents row — a `/wayoflife-responder/`
+   * (AC List [2]) submission. Append-only, unlike upsertRegistrant: the
+   * same person can genuinely be the subject of more than one presenter's
+   * report over time, and this table never needs an isNew-style signal
+   * since these never trigger the WhatsApp invite email (transform.ts
+   * routes List [2] here instead of upsertRegistrant precisely so they
+   * don't).
+   */
+  insertTwolRespondent(input: {
+    acContactId: string;
+    firstName: string | null;
+    lastName: string | null;
+    email: string | null;
+    phone: string | null;
+    phoneRaw: string | null;
+    state: string | null;
+    registeredAt: string | null;
+    sourceTag: string | null;
+    rawStagingId: number;
+  }): Promise<void>;
   /** Marks a staging row done. Pass a reason (e.g. 'skipped: list status not active') to record a non-error skip, or null for a clean success. */
   markStagingProcessed(id: number, skipReason: string | null): Promise<void>;
   markStagingError(id: number, error: string): Promise<void>;
+  /**
+   * Sets registry.registrants.unsubscribed = 'Yes' for the row matching
+   * this email, if one exists — a no-op otherwise. Email, not
+   * ac_contact_id, since email is registrants' actual identity/dedup key
+   * (2026-09-08 identity redesign) and this must also catch a
+   * CSV-reloaded registrant (ac_contact_id NULL) who has since
+   * unsubscribed in AC. Called whenever a later sync sees a contact's
+   * list status go non-active (transform.ts) — previously this case was
+   * silently skipped with no update to their existing row at all, so an
+   * unsubscribed person's stale "still active" data would linger
+   * indefinitely (see OPERATIONS.md's 2026-09-14 follow-up entry).
+   */
+  markRegistrantUnsubscribedByEmail(email: string): Promise<void>;
 
   /**
    * Records progress made against the `/contacts` sweep's pagination

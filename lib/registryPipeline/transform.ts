@@ -89,10 +89,19 @@ export async function transformPendingStagingEvents(db: DbPort, options: Transfo
       const payload = event.raw_payload;
 
       // List-status check: contactLists status can be non-active (e.g.
-      // bounced) — skip anything not actively subscribed rather than
-      // assuming every list-membership record is an active registrant
-      // (plan Section 6.2 / 10).
+      // unsubscribed, bounced) — skip anything not actively subscribed
+      // rather than assuming every list-membership record is an active
+      // registrant (plan Section 6.2 / 10). If this contact already has a
+      // registrant row (from an earlier, active sync), mark it
+      // unsubscribed rather than just silently leaving it as-is — a
+      // registrant who unsubscribes later must not keep looking active
+      // forever just because nothing ever re-touches their row (see
+      // OPERATIONS.md's 2026-09-14 follow-up entry). A no-op for anyone
+      // who was never a registrant, which is the common case here.
       if (!isActiveListStatus(payload.listMembership.status)) {
+        if (payload.contact.email) {
+          await db.markRegistrantUnsubscribedByEmail(payload.contact.email.trim().toLowerCase());
+        }
         await db.markStagingProcessed(event.id, 'skipped: list status not active');
         continue;
       }
@@ -103,12 +112,43 @@ export async function transformPendingStagingEvents(db: DbPort, options: Transfo
       const matchedTag = matchSourceTag(payload.tags, knownTags);
 
       // Tag-based exclusion (tagExclusion.ts): a contact whose only signal
-      // is an excluded source tag (e.g. a MailChimp bulk import) never
-      // becomes a registrant at all — checked before upsertRegistrant, not
-      // after, so no registrant row is ever created for them in the first
-      // place.
+      // is an excluded source tag (e.g. a MailChimp bulk import, a
+      // donation-form-only completion, a blank "TWOL Explore More" click)
+      // never becomes a registrant OR a twol_respondent — checked ahead of
+      // the List [2] routing below, not after, so being on List 2 can't
+      // accidentally exempt an otherwise-excluded contact from exclusion.
       if (isExcludedSourceOnly(payload.tags, matchedTag !== null)) {
         await db.markStagingProcessed(event.id, 'skipped: excluded source tag only (no recognized registration funnel)');
+        continue;
+      }
+
+      // AC List [2] is the one deliberate exception to "never key off
+      // source_list_id" above: it has been repeatedly confirmed to be the
+      // sole use of that list — /wayoflife-responder/ submissions, filled
+      // in by a TWOL presenter about someone else, not a self-registration
+      // (see OPERATIONS.md's "List 1 new registrations, List 2 individual
+      // wayoflife-responder outcomes" line, and
+      // scripts/create_registry_twol_respondents_table.sql's header for
+      // the full rationale). Routed to registry.twol_respondents instead of
+      // registry.registrants — these people never went through a
+      // registration funnel themselves, so they must never become a
+      // registrant or receive the WhatsApp invite email.
+      if (payload.listMembership.list === '2') {
+        const fields = mapAcFields(payload);
+        await db.insertTwolRespondent({
+          acContactId: payload.contact.id,
+          firstName: fields.firstName,
+          lastName: fields.lastName,
+          email: fields.email,
+          phone: normalizePhone(fields.phoneRaw),
+          phoneRaw: fields.phoneRaw,
+          state: fields.state,
+          registeredAt: fields.registeredAt,
+          sourceTag: matchedTag?.tag_name ?? null,
+          rawStagingId: event.id,
+        });
+        await db.markStagingProcessed(event.id, null);
+        recordsUpserted++;
         continue;
       }
 
@@ -145,7 +185,7 @@ export async function transformPendingStagingEvents(db: DbPort, options: Transfo
       // just re-upsert the same (now-existing) registrant forever without
       // ever being able to send the invite, since isNew would be false on
       // every subsequent attempt.
-      const inviteCandidate = { isNew: registrant.isNew, email: fields.email };
+      const inviteCandidate = { isNew: registrant.isNew, email: fields.email, unsubscribed: registrant.unsubscribed };
       if (nationalInviteUrl && shouldSendWhatsAppInvite(inviteCandidate)) {
         try {
           await email.sendWhatsAppInviteEmail({ to: inviteCandidate.email, firstName: fields.firstName, inviteUrl: nationalInviteUrl, registrantId: registrant.id });

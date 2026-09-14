@@ -30,10 +30,12 @@ function makeDb(events: StagingEventRow[], overrides: Partial<DbPort> = {}): DbP
     failSyncLog: vi.fn(),
     getPendingStagingEvents: vi.fn().mockResolvedValue(events),
     getKnownSourceTags: vi.fn().mockResolvedValue(KNOWN_TAGS),
-    upsertRegistrant: vi.fn().mockResolvedValue({ id: 'registrant-1', isNew: true }),
+    upsertRegistrant: vi.fn().mockResolvedValue({ id: 'registrant-1', isNew: true, unsubscribed: null }),
     insertRegistrationEvent: vi.fn().mockResolvedValue(undefined),
+    insertTwolRespondent: vi.fn().mockResolvedValue(undefined),
     markStagingProcessed: vi.fn().mockResolvedValue(undefined),
     markStagingError: vi.fn().mockResolvedValue(undefined),
+    markRegistrantUnsubscribedByEmail: vi.fn().mockResolvedValue(undefined),
     getSyncProgress: vi.fn().mockResolvedValue(null),
     saveSyncProgress: vi.fn().mockResolvedValue(undefined),
     clearSyncProgress: vi.fn().mockResolvedValue(undefined),
@@ -84,6 +86,27 @@ describe('transformPendingStagingEvents', () => {
     expect(db.markStagingProcessed).toHaveBeenCalledWith(2, 'skipped: list status not active');
   });
 
+  it('marks an existing registrant unsubscribed when a later sync sees their list status go non-active', async () => {
+    const db = makeDb([
+      makeEvent(20, { listMembership: { contact: 'ac-20', list: '1', status: '2' } }),
+    ]);
+    await transformPendingStagingEvents(db);
+
+    expect(db.markRegistrantUnsubscribedByEmail).toHaveBeenCalledWith('jane@example.com');
+  });
+
+  it('does not attempt to mark unsubscribed when the inactive-status contact has no email', async () => {
+    const db = makeDb([
+      makeEvent(21, {
+        contact: { id: 'ac-21', email: null, firstName: 'Jane', lastName: 'Doe', phone: '0438438438', cdate: '2026-01-15T10:00:00Z' },
+        listMembership: { contact: 'ac-21', list: '1', status: '2' },
+      }),
+    ]);
+    await transformPendingStagingEvents(db);
+
+    expect(db.markRegistrantUnsubscribedByEmail).not.toHaveBeenCalled();
+  });
+
   it('skips a contact whose only signal is the excluded MailChimp-import tag, without creating a registrant', async () => {
     const db = makeDb([makeEvent(9, { tags: [{ id: '11' }] })]);
     const result = await transformPendingStagingEvents(db);
@@ -99,6 +122,48 @@ describe('transformPendingStagingEvents', () => {
 
     expect(result).toEqual({ recordsUpserted: 1, errors: 0, partial: false });
     expect(db.upsertRegistrant).toHaveBeenCalled();
+  });
+
+  it('skips a contact whose only signal is the donation-form-only tag [40], without creating a registrant', async () => {
+    const db = makeDb([makeEvent(13, { tags: [{ id: '40' }] })]);
+    const result = await transformPendingStagingEvents(db);
+
+    expect(result).toEqual({ recordsUpserted: 0, errors: 0, partial: false });
+    expect(db.upsertRegistrant).not.toHaveBeenCalled();
+    expect(db.markStagingProcessed).toHaveBeenCalledWith(13, 'skipped: excluded source tag only (no recognized registration funnel)');
+  });
+
+  it('skips a contact whose only signal is the blank "TWOL Explore More" tag [8]/[9], without creating a registrant', async () => {
+    const db = makeDb([makeEvent(14, { tags: [{ id: '8' }, { id: '9' }] })]);
+    const result = await transformPendingStagingEvents(db);
+
+    expect(result).toEqual({ recordsUpserted: 0, errors: 0, partial: false });
+    expect(db.upsertRegistrant).not.toHaveBeenCalled();
+    expect(db.markStagingProcessed).toHaveBeenCalledWith(14, 'skipped: excluded source tag only (no recognized registration funnel)');
+  });
+
+  it('excludes a would-be-excluded contact even when their event is on AC List [2] — never reaches twol_respondents either', async () => {
+    const db = makeDb([
+      makeEvent(15, { tags: [{ id: '8' }], listMembership: { contact: 'ac-15', list: '2', status: '1' } }),
+    ]);
+    const result = await transformPendingStagingEvents(db);
+
+    expect(result).toEqual({ recordsUpserted: 0, errors: 0, partial: false });
+    expect(db.insertTwolRespondent).not.toHaveBeenCalled();
+    expect(db.upsertRegistrant).not.toHaveBeenCalled();
+    expect(db.markStagingProcessed).toHaveBeenCalledWith(15, 'skipped: excluded source tag only (no recognized registration funnel)');
+  });
+
+  it('excludes a "TWOL Video: Requested" (tag [6]) submission entirely, rather than routing it to twol_respondents', async () => {
+    const db = makeDb([
+      makeEvent(16, { tags: [{ id: '6' }], listMembership: { contact: 'ac-16', list: '2', status: '1' } }),
+    ]);
+    const result = await transformPendingStagingEvents(db);
+
+    expect(result).toEqual({ recordsUpserted: 0, errors: 0, partial: false });
+    expect(db.insertTwolRespondent).not.toHaveBeenCalled();
+    expect(db.upsertRegistrant).not.toHaveBeenCalled();
+    expect(db.markStagingProcessed).toHaveBeenCalledWith(16, 'skipped: excluded source tag only (no recognized registration funnel)');
   });
 
   it('records a null source_tag when no known tag matches', async () => {
@@ -154,6 +219,50 @@ describe('transformPendingStagingEvents', () => {
     expect(db.upsertRegistrant).toHaveBeenCalledWith(
       expect.objectContaining({ churchLeader: 'Yes', churchName: 'Eaton Baptist Church' })
     );
+  });
+
+  it('routes an AC List [2] (/wayoflife-responder/) submission to twol_respondents, never registrants', async () => {
+    const db = makeDb([
+      makeEvent(11, {
+        tags: [{ id: '1' }],
+        listMembership: { contact: 'ac-11', list: '2', status: '1' },
+      }),
+    ], {
+      getKnownSourceTags: vi.fn().mockResolvedValue([
+        { ac_tag_id: '1', tag_name: 'FORM: Way of life responder: Completed', source_label: 'wayoflife_responder' },
+      ]),
+    });
+
+    const result = await transformPendingStagingEvents(db);
+
+    expect(result).toEqual({ recordsUpserted: 1, errors: 0, partial: false });
+    expect(db.insertTwolRespondent).toHaveBeenCalledWith({
+      acContactId: 'ac-11',
+      firstName: 'Jane',
+      lastName: 'Doe',
+      email: 'jane@example.com',
+      phone: '+61438438438',
+      phoneRaw: '0438438438',
+      state: 'NSW',
+      registeredAt: '2026-01-15T10:00:00Z',
+      sourceTag: 'FORM: Way of life responder: Completed',
+      rawStagingId: 11,
+    });
+    expect(db.upsertRegistrant).not.toHaveBeenCalled();
+    expect(db.insertRegistrationEvent).not.toHaveBeenCalled();
+    expect(db.markStagingProcessed).toHaveBeenCalledWith(11, null);
+  });
+
+  it('never sends a WhatsApp invite for an AC List [2] submission, even when a national link is configured', async () => {
+    const db = makeDb([
+      makeEvent(12, { listMembership: { contact: 'ac-12', list: '2', status: '1' } }),
+    ], { getWhatsAppGroupLink: vi.fn().mockResolvedValue('https://chat.whatsapp.com/abc123') });
+    const email: EmailPort = { sendWhatsAppInviteEmail: vi.fn().mockResolvedValue(undefined) };
+
+    await transformPendingStagingEvents(db, { email });
+
+    expect(email.sendWhatsAppInviteEmail).not.toHaveBeenCalled();
+    expect(db.insertTwolRespondent).toHaveBeenCalled();
   });
 
   it('passes the batch limit through to getPendingStagingEvents', async () => {
@@ -230,7 +339,7 @@ describe('WhatsApp invite email', () => {
   it('does not send when the registrant already existed (an update, not a new registration)', async () => {
     const db = makeDb([makeEvent(1)], {
       getWhatsAppGroupLink: vi.fn().mockResolvedValue('https://chat.whatsapp.com/abc123'),
-      upsertRegistrant: vi.fn().mockResolvedValue({ id: 'registrant-1', isNew: false }),
+      upsertRegistrant: vi.fn().mockResolvedValue({ id: 'registrant-1', isNew: false, unsubscribed: null }),
     });
     const email = makeEmail();
 
@@ -242,6 +351,18 @@ describe('WhatsApp invite email', () => {
   it('does not send when the registrant has no email on file', async () => {
     const db = makeDb([makeEvent(1, { contact: { id: 'ac-1', email: null, firstName: 'Jane', lastName: 'Doe', phone: '0438438438', cdate: '2026-01-15T10:00:00Z' } })], {
       getWhatsAppGroupLink: vi.fn().mockResolvedValue('https://chat.whatsapp.com/abc123'),
+    });
+    const email = makeEmail();
+
+    await transformPendingStagingEvents(db, { email });
+
+    expect(email.sendWhatsAppInviteEmail).not.toHaveBeenCalled();
+  });
+
+  it('does not send when the registrant is already flagged unsubscribed, even though isNew is true', async () => {
+    const db = makeDb([makeEvent(1)], {
+      getWhatsAppGroupLink: vi.fn().mockResolvedValue('https://chat.whatsapp.com/abc123'),
+      upsertRegistrant: vi.fn().mockResolvedValue({ id: 'registrant-1', isNew: true, unsubscribed: 'Yes' }),
     });
     const email = makeEmail();
 

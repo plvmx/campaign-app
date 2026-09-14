@@ -9,19 +9,23 @@ describe('NATIONAL_GROUP_KEY', () => {
 
 describe('shouldSendWhatsAppInvite', () => {
   it('sends for a genuinely new registrant with an email', () => {
-    expect(shouldSendWhatsAppInvite({ isNew: true, email: 'jane@example.com' })).toBe(true);
+    expect(shouldSendWhatsAppInvite({ isNew: true, email: 'jane@example.com', unsubscribed: null })).toBe(true);
   });
 
   it('does not send for an existing registrant being re-synced, even with an email', () => {
-    expect(shouldSendWhatsAppInvite({ isNew: false, email: 'jane@example.com' })).toBe(false);
+    expect(shouldSendWhatsAppInvite({ isNew: false, email: 'jane@example.com', unsubscribed: null })).toBe(false);
   });
 
   it('does not send for a new registrant with no email on file', () => {
-    expect(shouldSendWhatsAppInvite({ isNew: true, email: null })).toBe(false);
+    expect(shouldSendWhatsAppInvite({ isNew: true, email: null, unsubscribed: null })).toBe(false);
   });
 
   it('does not send for a new registrant with an empty-string email', () => {
-    expect(shouldSendWhatsAppInvite({ isNew: true, email: '' })).toBe(false);
+    expect(shouldSendWhatsAppInvite({ isNew: true, email: '', unsubscribed: null })).toBe(false);
+  });
+
+  it('does not send for a new registrant already flagged unsubscribed, even with an email', () => {
+    expect(shouldSendWhatsAppInvite({ isNew: true, email: 'jane@example.com', unsubscribed: 'Yes' })).toBe(false);
   });
 });
 

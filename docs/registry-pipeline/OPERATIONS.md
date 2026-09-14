@@ -1701,3 +1701,228 @@ in the Supabase SQL Editor — same manual-migration convention as every
 other registry pipeline schema/cron change in this document. Nothing in
 the code change applies it automatically. Once run, confirm via
 `select schedule from cron.job where jobname = 'ac-sync-daily';`.
+
+## `/wayoflife-responder/` submissions wrongly synced into registry.registrants — new twol_respondents table, 46 registrants migrated (2026-09-14)
+
+Investigating a report that several 2026-09-12 registrants had no
+postcode led back to AC List `[2]` — the `/wayoflife-responder/` page.
+Unlike `/register/` and `/thewayoflife/` (both List `[1]`, both
+genuinely missing postcode due to a confirmed landing-page data-loss bug,
+plan Section 3.5), `/wayoflife-responder/` has **no Postcode field at
+all**. It's not a self-registration form either: a TWOL presenter fills
+it in about someone *they* just presented "The Way Of Life" message to
+— name/email/mobile transcribed from a conversation, not self-entered.
+(Confirmed live via one real example: an email landed as
+`toroooesh@yahoo.con`, plausibly mis-heard/mis-typed by the presenter.)
+
+Querying live data confirmed the shape of the problem: of 7 registrants
+dated 2026-09-12, 6 were List `[2]`-only and all 6 had no postcode; since
+2026-08-26 (when postcode capture began), 19 of 20 missing-postcode
+registrants trace to this same source. `EXCLUDED_LIST_IDS` in
+`listFilter.ts` only ever excluded List 3/5 — List `[2]` was always in
+scope by design (`source_label: 'wayoflife_responder'` — plan Section
+3.3), so this wasn't a leak from a form that should've been filtered out
+entirely; it was the *destination* that was wrong. These contacts were
+upserted into `registry.registrants` exactly like a genuine List-1
+registrant, meaning they'd also be eligible for the WhatsApp invite email
+once that goes live (`shouldSendWhatsAppInvite()` has no source
+filtering) — sending an unsolicited invite to a third-party-submitted,
+possibly-mistyped address.
+
+Decision (Peter, 2026-09-14): these are wanted data, just not
+registrants. Added `registry.twol_respondents`
+(`scripts/create_registry_twol_respondents_table.sql`) and routed AC
+List `[2]` events there directly in `transform.ts`, ahead of the
+registrant upsert — the one deliberate exception to this pipeline's
+"never key off `source_list_id`, only the tag" rule elsewhere, justified
+because List `[2]` has been independently confirmed several times over
+(this investigation and the "List 1 new registrations, List 2 individual
+wayoflife-responder outcomes" line above) to be the sole use of that
+list, unlike List `[1]`'s genuine catch-all. Regression test added in
+`transform.test.ts`, confirmed red (calls `upsertRegistrant` and sends
+the WhatsApp invite) against the pre-fix code before the fix, green
+after.
+
+**Migration of already-synced rows**: every ac-sync run since the CSV
+reload (2026-09-08/09) had been affected. Live data showed 248
+registrants with at least one List `[2]` event; of those, 202 were
+"mixed" — they also had a genuine List-1 event (real self-registration
+via `/register/`, `/thewayoflife/`, or BOTJ), so they stayed in
+`registry.registrants`, same precedent as `tagExclusion.ts`'s "a contact
+who was originally MailChimp-imported but later also genuinely
+registered keeps that legitimate attribution" rule. The other 46 had
+*only* List `[2]` events (70 registration_events total, some registrants
+re-synced more than once) — those were moved by
+`scripts/migrate_wayoflife_responders_to_twol_respondents.ts` (dry run
+by default; backs up every affected registrant + event to `backups/`
+before any write, `--apply` required to actually insert into
+`twol_respondents` and delete from `registrants`). CSV-reloaded rows
+(`ac_contact_id IS NULL`) were automatically out of scope — the reload
+never wrote any `registration_events` for them, confirmed live, so they
+can never match "List `[2]` only".
+
+**Action needed**: `scripts/create_registry_twol_respondents_table.sql`
+must be run in the Supabase SQL Editor before the migration script's
+`--apply` step, and before the fixed `ac-sync` is redeployed (otherwise
+every List `[2]` event will error on `insertTwolRespondent` against a
+table that doesn't exist yet).
+
+## Follow-up: full AC tag audit surfaces two more excluded-tag populations, plus a routing-order gap (2026-09-14)
+
+Same day, same investigation, one level deeper. Peter asked for a full
+list of every AC tag actually appearing in `staging.ac_events`, to check
+nothing else was leaking in the way `/wayoflife-responder/` had been.
+Resolved all 57 distinct tag IDs against AC's own `/tags/{id}` endpoint
+(63,835 staging rows scanned). Most are pure engagement/demographic
+metadata that never gets checked against `known_source_tags` at all
+(`STATE: *`, `VIDEO: N seen`, `LOCATION: *`, etc.) — harmless. Two were
+not:
+
+- **`[40]`/`[41]` "Mobilise - Make a Donation: Form completed" / its
+  FUNNEL companion** — 144 contacts (account-wide history) whose only
+  signal was this tag, ~2 field values each, no relation to any tracked
+  registration funnel. This sits in the same financial-intent-adjacent
+  sensitivity category that already excludes fields `[12]`/`[13]` and
+  List 5 elsewhere in this pipeline (List 5's own contacts include "How
+  much would you like to give?" data — see the technical plan Section
+  3.6). Peter's call: exclude, same as MailChimp.
+- **`[8]`/`[9]` "FORM/FUNNEL: TWOL Explore More: Requested"** — 259
+  contacts, 257 with zero field values anywhere. Most land on List 2
+  (already kept out of `registrants` by the `twol_respondents` routing
+  regardless of tag), but a residual 23 events sit on List 1 and were
+  still becoming ordinary, near-blank registrants. Peter's call: exclude
+  entirely, not routed to `twol_respondents` either.
+- **`[6]` "FORM: TWOL Video: Requested"** — the tag on the Lorraine
+  record that started this whole audit (see the entry above). Originally
+  routed to `twol_respondents` since it shares List 2 with genuine `[1]`
+  submissions. Peter's call: exclude this one too — a video-request click
+  isn't the same kind of event as a presenter's response report, and
+  carries no real data either.
+
+All three added to `EXCLUDED_SOURCE_TAG_IDS` in `tagExclusion.ts`. Fixing
+this also surfaced a real ordering bug in `transform.ts`: the List `[2]`
+→ `twol_respondents` routing had been checked *before* the exclusion
+check, meaning an excluded-tag-only contact who happened to land on List
+2 would have been wrongly routed into `twol_respondents` instead of
+excluded — reordered so exclusion is always checked first, regardless of
+list. Regression test added confirming an excluded-tag-only contact on
+List 2 never reaches `insertTwolRespondent`.
+
+**Cleanup of already-synced rows**: `scripts/cleanup_excluded_tag_only_records.ts`
+re-derives, for every AC contact ever seen (not just their latest sync),
+whether any of their staging events ever matched a genuine
+`known_source_tags` entry — the same check `isExcludedSourceOnly` makes
+live, just applied across full history. Far fewer rows were actually
+affected than the raw tag counts above suggested (144/259 are counts of
+contacts appearing *anywhere* in AC's history, most of them old/inactive
+and already stopped by the unrelated "list status not active" check):
+just **1 registrant** (Joan Anderson) and **3 `twol_respondents`**
+(including Lorraine's record) needed deleting, all backed up to
+`backups/` first. Unlike the wayoflife-responder migration, this is a
+straight delete, not a move — `tagExclusion.ts`'s existing MailChimp
+precedent is "excluded from the registry" outright, not preserved
+elsewhere.
+
+**Action needed**: none beyond the usual `ac-sync` redeploy to pick up
+`transform.ts`/`tagExclusion.ts` — no new table, no SQL migration this
+time.
+
+## Follow-up: unsubscribe tracking — no live leak found, one real gap fixed, Jordan's sheet cross-checked (2026-09-14)
+
+Same day again. Peter asked whether unsubscribed contacts could be
+flowing into the registry from AC, prompted by remembering that Jordan's
+spreadsheet used to track a list of unsubscribed emails.
+
+**Checked for a leak — found none.** `isActiveListStatus()`
+(`listFilter.ts`) already rejects any `contactLists.status` other than
+`'1'` before a contact is ever considered for `registrants` or
+`twol_respondents` — confirmed live: of all 63,835 staging rows, 18,331
+(29%) carry a non-`'1'` status and every one was correctly marked
+`skipped: list status not active`, never upserted. Pulled two real
+examples straight from AC to confirm what the codes mean: status `2`
+(12,153 events) is a genuine unsubscribe (contact 307 carries an
+`unsubreason` field and a real `campaign`/`message` they unsubscribed
+from); status `3` (6,178 events) looks like a bounce, matching the
+"seen on a bounced test email" note already in the code. Also
+re-confirmed the original discovery finding (plan Section 3.3):
+"Unsubscribes" was never a distinct AC list/form to begin with — just a
+per-contact/per-list status flag, so there's no separate funnel that
+could leak in the way `/wayoflife-responder/` did. Cross-checked every
+current registrant's latest known AC status too: zero currently show
+"unsubscribed/bounced on every list" while still sitting in the table
+un-flagged.
+
+**One real gap found and fixed**: nothing previously updated an
+*existing* registrant's row when a later sync saw their AC status flip
+to non-active — the sync just silently skipped reprocessing them,
+correctly refusing to touch their data further, but also never marking
+`unsubscribed = 'Yes'`. `registry.registrants.unsubscribed` had been set
+exactly once, from the "UNSUBSCRIBED" marker in Lorraine's spreadsheet's
+Church column during the 2026-09-08/09 CSV reload — a one-time snapshot,
+never kept live by `ac-sync` at all. Fixed: `DbPort.markRegistrantUnsubscribedByEmail()`
+(new port method, implemented as a plain `UPDATE ... WHERE email = ?` —
+a no-op for the common case where the inactive-status contact was never
+a registrant) is now called from `transform.ts` whenever
+`isActiveListStatus` fails and the event carries an email. Matches by
+email, not `ac_contact_id`, so it also catches a CSV-reloaded registrant
+(`ac_contact_id IS NULL`) who has since unsubscribed. Regression tests
+added (calls the port with the right email; does nothing when the
+contact has no email), confirmed red on pre-fix code, green after.
+
+**Jordan's "Unsubscribes" tab, cross-checked as a one-off**: distinct
+from Lorraine's spreadsheet above — part of the same "AFJ Tracking
+export" workbook the Campaign Report project reads its "campaign report"
+tab from (`docs/campaign-report/BRIEF.md`), with its own "Unsubscribes"
+tab (Date, Email columns; 3,546 rows, 3,539 unique emails) that had never
+been cross-referenced against the registry at all.
+`scripts/jordan_unsubscribes_xlsx_to_json.py` extracts it — standard
+library only (`zipfile` + `xml.etree`), not `openpyxl` like
+`campaign_reports_xlsx_to_json.py`, since this dev environment has no
+`pip`/`openpyxl` available and a plain two-column sheet doesn't need a
+real xlsx library. `scripts/mark_unsubscribed_from_jordan_sheet.ts` then
+matched by email against `registry.registrants` (dry run first, backed
+up before writing): of 2,799 email matches, 2,259 were already
+`unsubscribed = 'Yes'` from Lorraine's data, and **540** were not — those
+540 were updated. A `--apply` run only ever sets the flag, never clears
+it and never touches any other column.
+
+**Action needed**: none — this is entirely live now (the unsubscribe
+fix ships with the same `ac-sync` deploy as the tag-exclusion fix above)
+plus the one-off Jordan's-sheet match already applied directly against
+production.
+
+## Follow-up: explicit unsubscribed check on the WhatsApp invite gate (2026-09-14)
+
+Peter asked directly: can we confirm no WhatsApp invite will ever go to
+a `registry.registrants` row with `unsubscribed = 'Yes'`? For everyone
+*currently* flagged that way (2,871 people), yes — `shouldSendWhatsAppInvite`
+only fires on `isNew: true`, and `upsertRegistrant`'s email-existence
+check means anyone with an existing row (which every currently-flagged
+person has) gets `isNew: false` on any future sync, never `isNew: true`.
+That's a real guarantee, just an *emergent* one — nothing actually reads
+`unsubscribed` at invite-decision time, so it depended entirely on the
+upsert's email-matching logic never changing underneath it.
+
+Made it an explicit, direct guarantee instead of an incidental one:
+`DbPort.upsertRegistrant` now also returns the pre-existing
+`unsubscribed` value for the matched row (`null` for a genuine new
+insert — the upsert's own write never touches that column, so this is
+carried through from the existence-check read already being done, not a
+new query), and `shouldSendWhatsAppInvite` checks it directly alongside
+`isNew`/`email`. Regression tests confirmed red on pre-fix code, green
+after.
+
+**Known limitation, called out explicitly rather than left implicit**:
+this closes the loop for anyone already in `registry.registrants` as
+unsubscribed. It does **not** protect a genuinely first-time contact
+(no existing row under any email) whose current AC list status is
+active, but who happens to appear in Jordan's separately-maintained
+Unsubscribes sheet — nothing in the live pipeline consults that sheet at
+sync time, since it's an external file, not a table `ac-sync` can query.
+That's exactly the population the previous follow-up entry's one-off
+match closed retroactively; it would need to become a live, persisted
+suppression list (e.g. importing Jordan's sheet into its own
+`registry.*` table `ac-sync` checks) to be closed going forward. Not
+built — flagged for Peter to decide whether it's worth it, given the
+WhatsApp invite feature isn't live yet regardless (`registry.whatsapp_group_links`
+still has no `'national'` row configured).

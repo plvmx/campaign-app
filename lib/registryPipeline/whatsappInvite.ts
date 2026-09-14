@@ -34,12 +34,16 @@ function escapeHtml(value: string): string {
 }
 
 /**
- * True only for a genuinely new registrant with a usable email address —
- * an existing registrant being re-synced (isNew: false) never gets a
- * repeat invite, and there's nowhere to send one without an email.
+ * True only for a genuinely new registrant with a usable email address who
+ * isn't already flagged unsubscribed — an existing registrant being
+ * re-synced (isNew: false) never gets a repeat invite, there's nowhere to
+ * send one without an email, and unsubscribed is checked explicitly rather
+ * than relying solely on isNew (see DbPort.upsertRegistrant's doc comment
+ * for why that alone isn't something this invariant should silently
+ * depend on).
  */
-export function shouldSendWhatsAppInvite(input: { isNew: boolean; email: string | null }): input is { isNew: true; email: string } {
-  return input.isNew && !!input.email;
+export function shouldSendWhatsAppInvite(input: { isNew: boolean; email: string | null; unsubscribed: string | null }): input is { isNew: true; email: string; unsubscribed: string | null } {
+  return input.isNew && !!input.email && input.unsubscribed !== 'Yes';
 }
 
 /**
