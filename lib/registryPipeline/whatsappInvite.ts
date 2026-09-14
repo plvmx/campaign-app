@@ -65,14 +65,11 @@ export function buildWhatsAppInviteEmail(firstName: string | null, inviteUrl: st
     '',
     "Welcome to Australia For Jesus! Here's your invite to our national WhatsApp group:",
     inviteUrl,
-    '',
-    "An admin approves new members before you're added, so it may take a little while to come through.",
   ];
   const htmlLines = [
     `<p>Hi ${safeName},</p>`,
     `<p>Welcome to Australia For Jesus! Here&#39;s your invite to our national WhatsApp group:</p>`,
     `<p><a href="${safeUrl}">${safeUrl}</a></p>`,
-    `<p>An admin approves new members before you&#39;re added, so it may take a little while to come through.</p>`,
   ];
 
   if (campaignsNearMeUrl) {

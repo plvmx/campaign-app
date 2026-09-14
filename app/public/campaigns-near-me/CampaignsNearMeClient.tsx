@@ -78,7 +78,7 @@ export default function CampaignsNearMeClient() {
 
   return (
     <div className="mx-auto max-w-2xl p-4">
-      <h1 className="text-2xl font-bold text-gray-900">Campaigns Near You</h1>
+      <h1 className="text-2xl font-bold text-gray-900">Upcoming AFJ Campaigns Near You</h1>
 
       {isLoading && <p className="mt-3 text-sm text-gray-600">Loading…</p>}
       {error && <p className="mt-3 text-sm text-red-600" role="alert">{error}</p>}
@@ -97,6 +97,9 @@ export default function CampaignsNearMeClient() {
             </div>
           ) : (
             <>
+              <p className="mt-2 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm font-medium text-blue-800">
+                Click on a colored circle to see details and register your interest.
+              </p>
               <p className="mt-2 text-xs text-gray-500">
                 {data.markers.length} campaign{data.markers.length === 1 ? '' : 's'} found
                 {data.unresolvedCount > 0 && ` (${data.unresolvedCount} place${data.unresolvedCount === 1 ? '' : 's'} could not be shown on the map)`}
