@@ -46,12 +46,12 @@ fs.readFileSync(envPath, 'utf-8').split('\n').forEach((line) => {
 
 const args = process.argv.slice(2);
 const apply = args.includes('--apply');
-const jsonPath = args.find((a) => !a.startsWith('--'));
+const jsonPathArg = args.find((a) => !a.startsWith('--'));
 
-if (!jsonPath) {
-  console.error('Usage: npx tsx scripts/mark_unsubscribed_from_jordan_sheet.ts <emails.json> [--apply]');
-  process.exit(1);
+if (!jsonPathArg) {
+  throw new Error('Usage: npx tsx scripts/mark_unsubscribed_from_jordan_sheet.ts <emails.json> [--apply]');
 }
+const jsonPath: string = jsonPathArg;
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
