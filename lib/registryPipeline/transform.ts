@@ -185,7 +185,7 @@ export async function transformPendingStagingEvents(db: DbPort, options: Transfo
       // just re-upsert the same (now-existing) registrant forever without
       // ever being able to send the invite, since isNew would be false on
       // every subsequent attempt.
-      const inviteCandidate = { isNew: registrant.isNew, email: fields.email };
+      const inviteCandidate = { isNew: registrant.isNew, email: fields.email, unsubscribed: registrant.unsubscribed };
       if (nationalInviteUrl && shouldSendWhatsAppInvite(inviteCandidate)) {
         try {
           await email.sendWhatsAppInviteEmail({ to: inviteCandidate.email, firstName: fields.firstName, inviteUrl: nationalInviteUrl, registrantId: registrant.id });

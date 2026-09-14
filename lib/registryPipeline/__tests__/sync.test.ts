@@ -337,7 +337,7 @@ describe('runSync', () => {
           listMembership: { contact: 'ac-1', list: '1', status: '1' },
         },
       }]),
-      upsertRegistrant: vi.fn().mockResolvedValue({ id: 'registrant-1', isNew: true }),
+      upsertRegistrant: vi.fn().mockResolvedValue({ id: 'registrant-1', isNew: true, unsubscribed: null }),
       insertRegistrationEvent: vi.fn().mockResolvedValue(undefined),
       getWhatsAppGroupLink: vi.fn().mockResolvedValue('https://chat.whatsapp.com/abc123'),
     });

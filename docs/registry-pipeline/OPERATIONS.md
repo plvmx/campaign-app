@@ -1890,3 +1890,39 @@ it and never touches any other column.
 fix ships with the same `ac-sync` deploy as the tag-exclusion fix above)
 plus the one-off Jordan's-sheet match already applied directly against
 production.
+
+## Follow-up: explicit unsubscribed check on the WhatsApp invite gate (2026-09-14)
+
+Peter asked directly: can we confirm no WhatsApp invite will ever go to
+a `registry.registrants` row with `unsubscribed = 'Yes'`? For everyone
+*currently* flagged that way (2,871 people), yes — `shouldSendWhatsAppInvite`
+only fires on `isNew: true`, and `upsertRegistrant`'s email-existence
+check means anyone with an existing row (which every currently-flagged
+person has) gets `isNew: false` on any future sync, never `isNew: true`.
+That's a real guarantee, just an *emergent* one — nothing actually reads
+`unsubscribed` at invite-decision time, so it depended entirely on the
+upsert's email-matching logic never changing underneath it.
+
+Made it an explicit, direct guarantee instead of an incidental one:
+`DbPort.upsertRegistrant` now also returns the pre-existing
+`unsubscribed` value for the matched row (`null` for a genuine new
+insert — the upsert's own write never touches that column, so this is
+carried through from the existence-check read already being done, not a
+new query), and `shouldSendWhatsAppInvite` checks it directly alongside
+`isNew`/`email`. Regression tests confirmed red on pre-fix code, green
+after.
+
+**Known limitation, called out explicitly rather than left implicit**:
+this closes the loop for anyone already in `registry.registrants` as
+unsubscribed. It does **not** protect a genuinely first-time contact
+(no existing row under any email) whose current AC list status is
+active, but who happens to appear in Jordan's separately-maintained
+Unsubscribes sheet — nothing in the live pipeline consults that sheet at
+sync time, since it's an external file, not a table `ac-sync` can query.
+That's exactly the population the previous follow-up entry's one-off
+match closed retroactively; it would need to become a live, persisted
+suppression list (e.g. importing Jordan's sheet into its own
+`registry.*` table `ac-sync` checks) to be closed going forward. Not
+built — flagged for Peter to decide whether it's worth it, given the
+WhatsApp invite feature isn't live yet regardless (`registry.whatsapp_group_links`
+still has no `'national'` row configured).

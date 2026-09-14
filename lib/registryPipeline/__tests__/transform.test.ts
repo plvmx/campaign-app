@@ -30,7 +30,7 @@ function makeDb(events: StagingEventRow[], overrides: Partial<DbPort> = {}): DbP
     failSyncLog: vi.fn(),
     getPendingStagingEvents: vi.fn().mockResolvedValue(events),
     getKnownSourceTags: vi.fn().mockResolvedValue(KNOWN_TAGS),
-    upsertRegistrant: vi.fn().mockResolvedValue({ id: 'registrant-1', isNew: true }),
+    upsertRegistrant: vi.fn().mockResolvedValue({ id: 'registrant-1', isNew: true, unsubscribed: null }),
     insertRegistrationEvent: vi.fn().mockResolvedValue(undefined),
     insertTwolRespondent: vi.fn().mockResolvedValue(undefined),
     markStagingProcessed: vi.fn().mockResolvedValue(undefined),
@@ -339,7 +339,7 @@ describe('WhatsApp invite email', () => {
   it('does not send when the registrant already existed (an update, not a new registration)', async () => {
     const db = makeDb([makeEvent(1)], {
       getWhatsAppGroupLink: vi.fn().mockResolvedValue('https://chat.whatsapp.com/abc123'),
-      upsertRegistrant: vi.fn().mockResolvedValue({ id: 'registrant-1', isNew: false }),
+      upsertRegistrant: vi.fn().mockResolvedValue({ id: 'registrant-1', isNew: false, unsubscribed: null }),
     });
     const email = makeEmail();
 
@@ -351,6 +351,18 @@ describe('WhatsApp invite email', () => {
   it('does not send when the registrant has no email on file', async () => {
     const db = makeDb([makeEvent(1, { contact: { id: 'ac-1', email: null, firstName: 'Jane', lastName: 'Doe', phone: '0438438438', cdate: '2026-01-15T10:00:00Z' } })], {
       getWhatsAppGroupLink: vi.fn().mockResolvedValue('https://chat.whatsapp.com/abc123'),
+    });
+    const email = makeEmail();
+
+    await transformPendingStagingEvents(db, { email });
+
+    expect(email.sendWhatsAppInviteEmail).not.toHaveBeenCalled();
+  });
+
+  it('does not send when the registrant is already flagged unsubscribed, even though isNew is true', async () => {
+    const db = makeDb([makeEvent(1)], {
+      getWhatsAppGroupLink: vi.fn().mockResolvedValue('https://chat.whatsapp.com/abc123'),
+      upsertRegistrant: vi.fn().mockResolvedValue({ id: 'registrant-1', isNew: true, unsubscribed: 'Yes' }),
     });
     const email = makeEmail();
 

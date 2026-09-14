@@ -125,6 +125,18 @@ export interface DbPort {
      * again) would look identical to a genuine first-time registration.
      */
     isNew: boolean;
+    /**
+     * The pre-existing value of registry.registrants.unsubscribed for this
+     * email/phone match, carried through unchanged (the upsert's own write
+     * never touches this column) — null for a genuinely brand-new row.
+     * Checked by shouldSendWhatsAppInvite alongside isNew, as an explicit
+     * belt-and-braces guard: relying on isNew alone happens to be correct
+     * today (anyone already unsubscribed already has a row, so isNew is
+     * already false for them), but that's an emergent property of the
+     * upsert's email-matching logic, not something this invariant should
+     * silently depend on.
+     */
+    unsubscribed: string | null;
   }>;
   insertRegistrationEvent(input: {
     registrantId: string;
