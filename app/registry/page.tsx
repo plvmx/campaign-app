@@ -18,11 +18,13 @@ const ALLOW: MfaGateResult[] = ['ok'];
 
 /**
  * Landing page — proves the magic-link + MFA pipeline works end to end,
- * and links to whatever registry data screens exist so far. The full
- * registrations reload + reconciliation isn't built yet (paused pending
- * decisions on Lorraine's spreadsheet — see
- * docs/registry-pipeline/OPERATIONS.md's "Status" section); "Recent
- * Registrations" is a temporary stand-in for that in the meantime.
+ * and links to whatever registry data screens exist so far. The
+ * registrations reload is done and `registry.registrants` is kept
+ * current by ac-sync, so this only ever links to `/registry/manage`
+ * (national_admin/whatsapp_admin only) — see
+ * docs/registry-pipeline/OPERATIONS.md's 2026-09-14 entry for why the
+ * earlier "Recent Registrations" live-AC-lookup screen was retired
+ * rather than kept as a spot-check tool.
  */
 export default function RegistryHomePage() {
   const router = useRouter();
@@ -53,9 +55,6 @@ export default function RegistryHomePage() {
             Manage
           </Link>
         )}
-        <Link href="/registry/recent-registrations" className={`${registryPrimaryButtonClass} block text-center`}>
-          Recent Registrations
-        </Link>
         <button type="button" onClick={handleSignOut} className={registrySecondaryButtonClass}>Sign out</button>
       </div>
     </RegistryAuthLayout>

@@ -45,7 +45,7 @@ describe('RegistryHomePage', () => {
   it('hides the Manage button from a state_leader', async () => {
     mockUseRegistryGate.mockReturnValue({ status: 'ready', leaderRole: { role: 'state_leader', mfa_required: false } });
     render(<RegistryHomePage />);
-    await screen.findByRole('link', { name: 'Recent Registrations' });
+    await screen.findByRole('button', { name: 'Sign out' });
     expect(screen.queryByRole('link', { name: 'Manage' })).not.toBeInTheDocument();
   });
 });

@@ -531,10 +531,9 @@ export default function RegistryManagePage() {
       }
       setSummary(json);
     } catch (err) {
-      // Same reasoning as recent-registrations/page.tsx: worth logging (a
-      // fetch/JSON failure, nothing sensitive) precisely because a 200
-      // response can still fail client-side, which a generic message alone
-      // wouldn't distinguish from a real network failure.
+      // Worth logging (a fetch/JSON failure, nothing sensitive) precisely
+      // because a 200 response can still fail client-side, which a generic
+      // message alone wouldn't distinguish from a real network failure.
       console.error('[registry/manage] load failed:', err);
       setError('Failed to load the management summary — check the browser console for detail, or try again.');
     } finally {
