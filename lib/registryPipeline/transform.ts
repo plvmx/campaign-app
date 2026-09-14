@@ -89,10 +89,19 @@ export async function transformPendingStagingEvents(db: DbPort, options: Transfo
       const payload = event.raw_payload;
 
       // List-status check: contactLists status can be non-active (e.g.
-      // bounced) — skip anything not actively subscribed rather than
-      // assuming every list-membership record is an active registrant
-      // (plan Section 6.2 / 10).
+      // unsubscribed, bounced) — skip anything not actively subscribed
+      // rather than assuming every list-membership record is an active
+      // registrant (plan Section 6.2 / 10). If this contact already has a
+      // registrant row (from an earlier, active sync), mark it
+      // unsubscribed rather than just silently leaving it as-is — a
+      // registrant who unsubscribes later must not keep looking active
+      // forever just because nothing ever re-touches their row (see
+      // OPERATIONS.md's 2026-09-14 follow-up entry). A no-op for anyone
+      // who was never a registrant, which is the common case here.
       if (!isActiveListStatus(payload.listMembership.status)) {
+        if (payload.contact.email) {
+          await db.markRegistrantUnsubscribedByEmail(payload.contact.email.trim().toLowerCase());
+        }
         await db.markStagingProcessed(event.id, 'skipped: list status not active');
         continue;
       }

@@ -1826,3 +1826,67 @@ elsewhere.
 **Action needed**: none beyond the usual `ac-sync` redeploy to pick up
 `transform.ts`/`tagExclusion.ts` — no new table, no SQL migration this
 time.
+
+## Follow-up: unsubscribe tracking — no live leak found, one real gap fixed, Jordan's sheet cross-checked (2026-09-14)
+
+Same day again. Peter asked whether unsubscribed contacts could be
+flowing into the registry from AC, prompted by remembering that Jordan's
+spreadsheet used to track a list of unsubscribed emails.
+
+**Checked for a leak — found none.** `isActiveListStatus()`
+(`listFilter.ts`) already rejects any `contactLists.status` other than
+`'1'` before a contact is ever considered for `registrants` or
+`twol_respondents` — confirmed live: of all 63,835 staging rows, 18,331
+(29%) carry a non-`'1'` status and every one was correctly marked
+`skipped: list status not active`, never upserted. Pulled two real
+examples straight from AC to confirm what the codes mean: status `2`
+(12,153 events) is a genuine unsubscribe (contact 307 carries an
+`unsubreason` field and a real `campaign`/`message` they unsubscribed
+from); status `3` (6,178 events) looks like a bounce, matching the
+"seen on a bounced test email" note already in the code. Also
+re-confirmed the original discovery finding (plan Section 3.3):
+"Unsubscribes" was never a distinct AC list/form to begin with — just a
+per-contact/per-list status flag, so there's no separate funnel that
+could leak in the way `/wayoflife-responder/` did. Cross-checked every
+current registrant's latest known AC status too: zero currently show
+"unsubscribed/bounced on every list" while still sitting in the table
+un-flagged.
+
+**One real gap found and fixed**: nothing previously updated an
+*existing* registrant's row when a later sync saw their AC status flip
+to non-active — the sync just silently skipped reprocessing them,
+correctly refusing to touch their data further, but also never marking
+`unsubscribed = 'Yes'`. `registry.registrants.unsubscribed` had been set
+exactly once, from the "UNSUBSCRIBED" marker in Lorraine's spreadsheet's
+Church column during the 2026-09-08/09 CSV reload — a one-time snapshot,
+never kept live by `ac-sync` at all. Fixed: `DbPort.markRegistrantUnsubscribedByEmail()`
+(new port method, implemented as a plain `UPDATE ... WHERE email = ?` —
+a no-op for the common case where the inactive-status contact was never
+a registrant) is now called from `transform.ts` whenever
+`isActiveListStatus` fails and the event carries an email. Matches by
+email, not `ac_contact_id`, so it also catches a CSV-reloaded registrant
+(`ac_contact_id IS NULL`) who has since unsubscribed. Regression tests
+added (calls the port with the right email; does nothing when the
+contact has no email), confirmed red on pre-fix code, green after.
+
+**Jordan's "Unsubscribes" tab, cross-checked as a one-off**: distinct
+from Lorraine's spreadsheet above — part of the same "AFJ Tracking
+export" workbook the Campaign Report project reads its "campaign report"
+tab from (`docs/campaign-report/BRIEF.md`), with its own "Unsubscribes"
+tab (Date, Email columns; 3,546 rows, 3,539 unique emails) that had never
+been cross-referenced against the registry at all.
+`scripts/jordan_unsubscribes_xlsx_to_json.py` extracts it — standard
+library only (`zipfile` + `xml.etree`), not `openpyxl` like
+`campaign_reports_xlsx_to_json.py`, since this dev environment has no
+`pip`/`openpyxl` available and a plain two-column sheet doesn't need a
+real xlsx library. `scripts/mark_unsubscribed_from_jordan_sheet.ts` then
+matched by email against `registry.registrants` (dry run first, backed
+up before writing): of 2,799 email matches, 2,259 were already
+`unsubscribed = 'Yes'` from Lorraine's data, and **540** were not — those
+540 were updated. A `--apply` run only ever sets the flag, never clears
+it and never touches any other column.
+
+**Action needed**: none — this is entirely live now (the unsubscribe
+fix ships with the same `ac-sync` deploy as the tag-exclusion fix above)
+plus the one-off Jordan's-sheet match already applied directly against
+production.

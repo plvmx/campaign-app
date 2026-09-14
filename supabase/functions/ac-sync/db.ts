@@ -253,6 +253,19 @@ export function createDb(client: SupabaseClient = createServiceClient()): DbPort
       assertNoError(error, 'markStagingError');
     },
 
+    async markRegistrantUnsubscribedByEmail(email) {
+      // Plain UPDATE ... WHERE email = ? — a no-op (0 rows) when this
+      // email was never a registrant, which is the common case for a
+      // non-active-status sync. Matches by email, not ac_contact_id, so
+      // this also catches a CSV-reloaded registrant (ac_contact_id NULL).
+      const { error } = await client
+        .schema('registry')
+        .from('registrants')
+        .update({ unsubscribed: 'Yes', last_updated_at: new Date().toISOString() })
+        .eq('email', email);
+      assertNoError(error, 'markRegistrantUnsubscribedByEmail');
+    },
+
     async getSyncProgress(key) {
       const { data, error } = await client
         .schema('registry')

@@ -52,6 +52,7 @@ function makeDb(overrides: Partial<DbPort> = {}): DbPort {
     insertTwolRespondent: vi.fn(),
     markStagingProcessed: vi.fn(),
     markStagingError: vi.fn(),
+    markRegistrantUnsubscribedByEmail: vi.fn(),
     getSyncProgress: vi.fn().mockResolvedValue(null),
     saveSyncProgress: vi.fn().mockResolvedValue(undefined),
     clearSyncProgress: vi.fn().mockResolvedValue(undefined),

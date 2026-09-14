@@ -35,6 +35,7 @@ function makeDb(events: StagingEventRow[], overrides: Partial<DbPort> = {}): DbP
     insertTwolRespondent: vi.fn().mockResolvedValue(undefined),
     markStagingProcessed: vi.fn().mockResolvedValue(undefined),
     markStagingError: vi.fn().mockResolvedValue(undefined),
+    markRegistrantUnsubscribedByEmail: vi.fn().mockResolvedValue(undefined),
     getSyncProgress: vi.fn().mockResolvedValue(null),
     saveSyncProgress: vi.fn().mockResolvedValue(undefined),
     clearSyncProgress: vi.fn().mockResolvedValue(undefined),
@@ -83,6 +84,27 @@ describe('transformPendingStagingEvents', () => {
     expect(result).toEqual({ recordsUpserted: 0, errors: 0, partial: false });
     expect(db.upsertRegistrant).not.toHaveBeenCalled();
     expect(db.markStagingProcessed).toHaveBeenCalledWith(2, 'skipped: list status not active');
+  });
+
+  it('marks an existing registrant unsubscribed when a later sync sees their list status go non-active', async () => {
+    const db = makeDb([
+      makeEvent(20, { listMembership: { contact: 'ac-20', list: '1', status: '2' } }),
+    ]);
+    await transformPendingStagingEvents(db);
+
+    expect(db.markRegistrantUnsubscribedByEmail).toHaveBeenCalledWith('jane@example.com');
+  });
+
+  it('does not attempt to mark unsubscribed when the inactive-status contact has no email', async () => {
+    const db = makeDb([
+      makeEvent(21, {
+        contact: { id: 'ac-21', email: null, firstName: 'Jane', lastName: 'Doe', phone: '0438438438', cdate: '2026-01-15T10:00:00Z' },
+        listMembership: { contact: 'ac-21', list: '1', status: '2' },
+      }),
+    ]);
+    await transformPendingStagingEvents(db);
+
+    expect(db.markRegistrantUnsubscribedByEmail).not.toHaveBeenCalled();
   });
 
   it('skips a contact whose only signal is the excluded MailChimp-import tag, without creating a registrant', async () => {

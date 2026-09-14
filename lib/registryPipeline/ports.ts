@@ -157,6 +157,19 @@ export interface DbPort {
   /** Marks a staging row done. Pass a reason (e.g. 'skipped: list status not active') to record a non-error skip, or null for a clean success. */
   markStagingProcessed(id: number, skipReason: string | null): Promise<void>;
   markStagingError(id: number, error: string): Promise<void>;
+  /**
+   * Sets registry.registrants.unsubscribed = 'Yes' for the row matching
+   * this email, if one exists — a no-op otherwise. Email, not
+   * ac_contact_id, since email is registrants' actual identity/dedup key
+   * (2026-09-08 identity redesign) and this must also catch a
+   * CSV-reloaded registrant (ac_contact_id NULL) who has since
+   * unsubscribed in AC. Called whenever a later sync sees a contact's
+   * list status go non-active (transform.ts) — previously this case was
+   * silently skipped with no update to their existing row at all, so an
+   * unsubscribed person's stale "still active" data would linger
+   * indefinitely (see OPERATIONS.md's 2026-09-14 follow-up entry).
+   */
+  markRegistrantUnsubscribedByEmail(email: string): Promise<void>;
 
   /**
    * Records progress made against the `/contacts` sweep's pagination
