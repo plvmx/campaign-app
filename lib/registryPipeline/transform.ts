@@ -102,6 +102,17 @@ export async function transformPendingStagingEvents(db: DbPort, options: Transfo
       // sources on its own (plan Section 3.3/6.2).
       const matchedTag = matchSourceTag(payload.tags, knownTags);
 
+      // Tag-based exclusion (tagExclusion.ts): a contact whose only signal
+      // is an excluded source tag (e.g. a MailChimp bulk import, a
+      // donation-form-only completion, a blank "TWOL Explore More" click)
+      // never becomes a registrant OR a twol_respondent — checked ahead of
+      // the List [2] routing below, not after, so being on List 2 can't
+      // accidentally exempt an otherwise-excluded contact from exclusion.
+      if (isExcludedSourceOnly(payload.tags, matchedTag !== null)) {
+        await db.markStagingProcessed(event.id, 'skipped: excluded source tag only (no recognized registration funnel)');
+        continue;
+      }
+
       // AC List [2] is the one deliberate exception to "never key off
       // source_list_id" above: it has been repeatedly confirmed to be the
       // sole use of that list — /wayoflife-responder/ submissions, filled
@@ -112,9 +123,7 @@ export async function transformPendingStagingEvents(db: DbPort, options: Transfo
       // the full rationale). Routed to registry.twol_respondents instead of
       // registry.registrants — these people never went through a
       // registration funnel themselves, so they must never become a
-      // registrant or receive the WhatsApp invite email. Checked ahead of
-      // the MailChimp-only exclusion below, which only makes sense for
-      // would-be registrants.
+      // registrant or receive the WhatsApp invite email.
       if (payload.listMembership.list === '2') {
         const fields = mapAcFields(payload);
         await db.insertTwolRespondent({
@@ -131,16 +140,6 @@ export async function transformPendingStagingEvents(db: DbPort, options: Transfo
         });
         await db.markStagingProcessed(event.id, null);
         recordsUpserted++;
-        continue;
-      }
-
-      // Tag-based exclusion (tagExclusion.ts): a contact whose only signal
-      // is an excluded source tag (e.g. a MailChimp bulk import) never
-      // becomes a registrant at all — checked before upsertRegistrant, not
-      // after, so no registrant row is ever created for them in the first
-      // place.
-      if (isExcludedSourceOnly(payload.tags, matchedTag !== null)) {
-        await db.markStagingProcessed(event.id, 'skipped: excluded source tag only (no recognized registration funnel)');
         continue;
       }
 

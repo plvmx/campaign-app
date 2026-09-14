@@ -1766,3 +1766,63 @@ must be run in the Supabase SQL Editor before the migration script's
 `--apply` step, and before the fixed `ac-sync` is redeployed (otherwise
 every List `[2]` event will error on `insertTwolRespondent` against a
 table that doesn't exist yet).
+
+## Follow-up: full AC tag audit surfaces two more excluded-tag populations, plus a routing-order gap (2026-09-14)
+
+Same day, same investigation, one level deeper. Peter asked for a full
+list of every AC tag actually appearing in `staging.ac_events`, to check
+nothing else was leaking in the way `/wayoflife-responder/` had been.
+Resolved all 57 distinct tag IDs against AC's own `/tags/{id}` endpoint
+(63,835 staging rows scanned). Most are pure engagement/demographic
+metadata that never gets checked against `known_source_tags` at all
+(`STATE: *`, `VIDEO: N seen`, `LOCATION: *`, etc.) — harmless. Two were
+not:
+
+- **`[40]`/`[41]` "Mobilise - Make a Donation: Form completed" / its
+  FUNNEL companion** — 144 contacts (account-wide history) whose only
+  signal was this tag, ~2 field values each, no relation to any tracked
+  registration funnel. This sits in the same financial-intent-adjacent
+  sensitivity category that already excludes fields `[12]`/`[13]` and
+  List 5 elsewhere in this pipeline (List 5's own contacts include "How
+  much would you like to give?" data — see the technical plan Section
+  3.6). Peter's call: exclude, same as MailChimp.
+- **`[8]`/`[9]` "FORM/FUNNEL: TWOL Explore More: Requested"** — 259
+  contacts, 257 with zero field values anywhere. Most land on List 2
+  (already kept out of `registrants` by the `twol_respondents` routing
+  regardless of tag), but a residual 23 events sit on List 1 and were
+  still becoming ordinary, near-blank registrants. Peter's call: exclude
+  entirely, not routed to `twol_respondents` either.
+- **`[6]` "FORM: TWOL Video: Requested"** — the tag on the Lorraine
+  record that started this whole audit (see the entry above). Originally
+  routed to `twol_respondents` since it shares List 2 with genuine `[1]`
+  submissions. Peter's call: exclude this one too — a video-request click
+  isn't the same kind of event as a presenter's response report, and
+  carries no real data either.
+
+All three added to `EXCLUDED_SOURCE_TAG_IDS` in `tagExclusion.ts`. Fixing
+this also surfaced a real ordering bug in `transform.ts`: the List `[2]`
+→ `twol_respondents` routing had been checked *before* the exclusion
+check, meaning an excluded-tag-only contact who happened to land on List
+2 would have been wrongly routed into `twol_respondents` instead of
+excluded — reordered so exclusion is always checked first, regardless of
+list. Regression test added confirming an excluded-tag-only contact on
+List 2 never reaches `insertTwolRespondent`.
+
+**Cleanup of already-synced rows**: `scripts/cleanup_excluded_tag_only_records.ts`
+re-derives, for every AC contact ever seen (not just their latest sync),
+whether any of their staging events ever matched a genuine
+`known_source_tags` entry — the same check `isExcludedSourceOnly` makes
+live, just applied across full history. Far fewer rows were actually
+affected than the raw tag counts above suggested (144/259 are counts of
+contacts appearing *anywhere* in AC's history, most of them old/inactive
+and already stopped by the unrelated "list status not active" check):
+just **1 registrant** (Joan Anderson) and **3 `twol_respondents`**
+(including Lorraine's record) needed deleting, all backed up to
+`backups/` first. Unlike the wayoflife-responder migration, this is a
+straight delete, not a move — `tagExclusion.ts`'s existing MailChimp
+precedent is "excluded from the registry" outright, not preserved
+elsewhere.
+
+**Action needed**: none beyond the usual `ac-sync` redeploy to pick up
+`transform.ts`/`tagExclusion.ts` — no new table, no SQL migration this
+time.

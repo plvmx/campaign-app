@@ -102,6 +102,48 @@ describe('transformPendingStagingEvents', () => {
     expect(db.upsertRegistrant).toHaveBeenCalled();
   });
 
+  it('skips a contact whose only signal is the donation-form-only tag [40], without creating a registrant', async () => {
+    const db = makeDb([makeEvent(13, { tags: [{ id: '40' }] })]);
+    const result = await transformPendingStagingEvents(db);
+
+    expect(result).toEqual({ recordsUpserted: 0, errors: 0, partial: false });
+    expect(db.upsertRegistrant).not.toHaveBeenCalled();
+    expect(db.markStagingProcessed).toHaveBeenCalledWith(13, 'skipped: excluded source tag only (no recognized registration funnel)');
+  });
+
+  it('skips a contact whose only signal is the blank "TWOL Explore More" tag [8]/[9], without creating a registrant', async () => {
+    const db = makeDb([makeEvent(14, { tags: [{ id: '8' }, { id: '9' }] })]);
+    const result = await transformPendingStagingEvents(db);
+
+    expect(result).toEqual({ recordsUpserted: 0, errors: 0, partial: false });
+    expect(db.upsertRegistrant).not.toHaveBeenCalled();
+    expect(db.markStagingProcessed).toHaveBeenCalledWith(14, 'skipped: excluded source tag only (no recognized registration funnel)');
+  });
+
+  it('excludes a would-be-excluded contact even when their event is on AC List [2] — never reaches twol_respondents either', async () => {
+    const db = makeDb([
+      makeEvent(15, { tags: [{ id: '8' }], listMembership: { contact: 'ac-15', list: '2', status: '1' } }),
+    ]);
+    const result = await transformPendingStagingEvents(db);
+
+    expect(result).toEqual({ recordsUpserted: 0, errors: 0, partial: false });
+    expect(db.insertTwolRespondent).not.toHaveBeenCalled();
+    expect(db.upsertRegistrant).not.toHaveBeenCalled();
+    expect(db.markStagingProcessed).toHaveBeenCalledWith(15, 'skipped: excluded source tag only (no recognized registration funnel)');
+  });
+
+  it('excludes a "TWOL Video: Requested" (tag [6]) submission entirely, rather than routing it to twol_respondents', async () => {
+    const db = makeDb([
+      makeEvent(16, { tags: [{ id: '6' }], listMembership: { contact: 'ac-16', list: '2', status: '1' } }),
+    ]);
+    const result = await transformPendingStagingEvents(db);
+
+    expect(result).toEqual({ recordsUpserted: 0, errors: 0, partial: false });
+    expect(db.insertTwolRespondent).not.toHaveBeenCalled();
+    expect(db.upsertRegistrant).not.toHaveBeenCalled();
+    expect(db.markStagingProcessed).toHaveBeenCalledWith(16, 'skipped: excluded source tag only (no recognized registration funnel)');
+  });
+
   it('records a null source_tag when no known tag matches', async () => {
     const db = makeDb([makeEvent(3, { tags: [{ id: '999' }] })]);
     await transformPendingStagingEvents(db);
