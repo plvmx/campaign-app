@@ -34,11 +34,10 @@ export function getSlideStateColor(state: string): string {
  * tint suitable as a background (the colors above are text-color-
  * saturated, not meant to be used at full strength behind content).
  * Shared by any screen that shades a row/column by state — originally
- * written for the registry portal's Recent Registrations table
- * (app/registry/recent-registrations/page.tsx), now also used by its
- * Manage console (app/registry/manage/page.tsx), which also passes a
- * higher `alpha` to highlight whichever grid cell's records are
- * currently shown below it.
+ * written for the registry portal's (now-retired) Recent Registrations
+ * table, kept in use by its Manage console (app/registry/manage/page.tsx),
+ * which also passes a higher `alpha` to highlight whichever grid cell's
+ * records are currently shown below it.
  */
 export function getSlideStateShade(state: string | null, alpha = 0.14): string {
   if (!state) return 'transparent';

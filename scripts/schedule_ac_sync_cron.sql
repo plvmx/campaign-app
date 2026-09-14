@@ -3,12 +3,13 @@
 -- Section 6 ("start daily; revisit frequency if latency proves an issue" —
 -- plan Section 6.3 / brief build order step 3).
 --
--- Increased from once daily to every 6 hours 2026-09-13 per Peter's
--- request, so a new AC registration shows up in /registry/manage within
--- hours rather than up to a full day — see OPERATIONS.md's "Cron
--- frequency increased to every 6 hours" entry for the full rationale
--- (why 6 hours specifically, and why it doesn't strain AC's rate limit or
--- the Edge Function's execution budget). The job name stays
+-- Increased from once daily to every 6 hours 2026-09-13, then to every 4
+-- hours 2026-09-14, both per Peter's request, so a new AC registration
+-- shows up in /registry/manage within hours rather than up to a full day
+-- — see OPERATIONS.md's "Cron frequency increased to every 6 hours" and
+-- "every 4 hours" entries for the full rationale (why each interval
+-- specifically, and why it doesn't strain AC's rate limit or the Edge
+-- Function's execution budget). The job name stays
 -- `ac-sync-daily` even though it's no longer literally daily — same
 -- precedent as the earlier temporary catch-up speed-ups (OPERATIONS.md's
 -- 2026-09-09 entries): calling `cron.schedule` again with the same job
@@ -37,7 +38,7 @@ CREATE EXTENSION IF NOT EXISTS pg_net;
 
 SELECT cron.schedule(
   'ac-sync-daily',
-  '0 */6 * * *', -- every 6 hours, on the hour (00:00/06:00/12:00/18:00 UTC)
+  '0 */4 * * *', -- every 4 hours, on the hour (00:00/04:00/08:00/12:00/16:00/20:00 UTC)
   $$
   SELECT net.http_post(
     url := 'https://vzyoxmfjlwbfqrwiirld.supabase.co/functions/v1/ac-sync',

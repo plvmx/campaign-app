@@ -19,9 +19,8 @@
  * so the filter dropdowns and record drill-down are instant with no extra
  * round trip.
  *
- * This is PII (same fields as /api/registry/recent-registrations already
- * returns to this same admin audience), which is why this route is gated
- * exactly as strictly as that one — see the admin-only note below.
+ * This is PII, which is why this route is gated as strictly as it is —
+ * see the admin-only note below.
  *
  * ~9,100 registrants as of the 2026-09 reload (see
  * scripts/backup_registrants_before_reload.ts), growing by a handful a day

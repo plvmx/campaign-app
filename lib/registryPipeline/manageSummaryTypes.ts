@@ -22,10 +22,8 @@ export interface SyncLogSummary {
  * One registry.registrants row, as shown on the Manage console: enough to
  * both tally the grid (state/registeredAt — see
  * lib/registryPipeline/registrantCounts.ts) and, when a national admin
- * clicks a non-zero cell, list the actual matching records underneath it.
- * Same fields (and same audience — national_admin/whatsapp_admin, MFA
- * satisfied) as RecentRegistration (recentRegistrationTypes.ts), plus the
- * row id for a stable React key.
+ * clicks a non-zero cell, list the actual matching records underneath it,
+ * plus the row id for a stable React key.
  */
 export interface ManageRegistrant {
   id: string;

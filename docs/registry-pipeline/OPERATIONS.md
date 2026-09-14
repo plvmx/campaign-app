@@ -1635,3 +1635,69 @@ wrapper the admin "Centre on address" feature already uses) — that's a
 one-off lookup of the registrant's own postcode+state, not a place a
 future admin might also need cached, so no new caching layer was added
 for it.
+
+## `/registry/recent-registrations` retired — it had started timing out (2026-09-14)
+
+Peter reported the page reliably failing with `Failed to load recent
+registrations`, console showing `SyntaxError: JSON.parse: unexpected
+character at line 1 column 1`. Root cause: the route walks every AC
+contact created since a **fixed** cutoff
+(`REGISTRATIONS_RELOAD_CUTOFF = '2026-08-22'`), one list-membership call
+plus (for qualifying contacts) one detail call per contact, each paced
+250ms apart against AC's shared 5 req/sec limit. That cutoff never
+moved, so the set of contacts to walk only ever grew — by 2026-09-14,
+over three weeks of accumulated registrations, the walk had grown past
+the route's `maxDuration = 60`. Vercel kills a function that overruns
+its duration and returns its own timeout response (not JSON), which is
+what the browser's `JSON.parse` was actually choking on — confirmed by
+`curl`ing the route unauthenticated, which returned a clean
+`{"error":"Unauthorized"}` (ruling out a routing/build regression; the
+failure only happens once the route actually runs the full AC walk).
+
+This is exactly the scenario the 2026-09-08/09 entry above already
+flagged as the reason this page would eventually stop being useful — it
+was left in place then as a "harmless" live spot-check tool once the
+registrations reload made its original reconciliation purpose obsolete.
+Since `/registry/manage` already shows the same (and more) from
+`registry.registrants`, sourced from the database rather than a live
+per-contact AC crawl, there was no reason to patch the timeout (e.g. a
+higher `maxDuration`, capping contacts scanned) — that would only be a
+reprieve, since the fixed-cutoff walk keeps growing regardless. Removed
+instead:
+
+- `app/registry/recent-registrations/` (page + test) and
+  `app/api/registry/recent-registrations/route.ts` deleted.
+- `lib/registryPipeline/acReadOnlyClient.ts` and
+  `recentRegistrationTypes.ts` deleted — both were only ever used by
+  this route.
+- `/registry`'s landing page no longer links to it. A plain
+  `state_leader` (not `national_admin`/`whatsapp_admin`) now has no
+  functional link there besides Sign out — Recent Registrations was the
+  only screen available to that role. Not addressed here; flagged for
+  Peter to decide whether a state-scoped registry screen is worth
+  building, or whether `state_leader` access to `/registry` should be
+  reconsidered.
+- `AC_API_BASE_URL`/`AC_API_KEY` as Vercel (not just Supabase Edge
+  Function) environment variables are no longer required by this app —
+  left in place in Vercel's settings rather than removed here, since
+  removing env vars isn't something to do from a code change alone.
+
+No regression test was added — this removes a route/page rather than
+fixing a bug in code that remains.
+
+## Cron frequency increased to every 4 hours (2026-09-14)
+
+Tightened again from every 6 hours (2026-09-13 entry above) to every 4
+hours, per Peter's request, so a new AC registration shows up in
+`/registry/manage` sooner. `scripts/schedule_ac_sync_cron.sql`'s
+`cron.schedule(...)` call changed to `'0 */4 * * *'` (00:00/04:00/08:00/
+12:00/16:00/20:00 UTC); the job name stays `ac-sync-daily`, same
+continuity reasoning as every prior frequency change — calling
+`cron.schedule` again with the same name updates the existing job in
+place (same `jobid`).
+
+**Action needed**: this only takes effect once the updated script is run
+in the Supabase SQL Editor — same manual-migration convention as every
+other registry pipeline schema/cron change in this document. Nothing in
+the code change applies it automatically. Once run, confirm via
+`select schedule from cron.job where jobname = 'ac-sync-daily';`.
