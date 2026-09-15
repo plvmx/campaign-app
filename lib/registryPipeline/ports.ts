@@ -208,6 +208,25 @@ export interface DbPort {
 
   /** registry.whatsapp_group_links.invite_url for one group_key (e.g. 'national' — see whatsappInvite.ts's NATIONAL_GROUP_KEY), or null if that group has no link configured yet. */
   getWhatsAppGroupLink(groupKey: string): Promise<string | null>;
+
+  /**
+   * Records one row in registry.whatsapp_invite_log — every outcome
+   * transform.ts's WhatsApp-invite step can reach: a successful send, a
+   * failed one, or a qualifying registrant skipped because no invite link
+   * is configured yet (status: 'skipped_no_link'). Called from within its
+   * own try/catch at the call site (console-error-only on failure) so a
+   * logging problem can never affect the sync's own success/error
+   * accounting — same "best-effort side effect" principle as the send
+   * itself.
+   */
+  logWhatsAppInviteAttempt(input: {
+    registrantId: string;
+    rawStagingId: number;
+    status: 'sent' | 'failed' | 'skipped_no_link';
+    error?: string | null;
+    resendMessageId?: string | null;
+    includedCampaignsNearMeLink?: boolean;
+  }): Promise<void>;
 }
 
 /**
@@ -227,6 +246,17 @@ export interface EmailPort {
    * email, not part of the WhatsApp invite itself. The adapter resolves the
    * app's site URL and omits that section entirely if it can't (see
    * ac-sync/emailClient.ts) — never includes a broken/localhost link.
+   *
+   * Always throws on any failure to send — including a missing
+   * RESEND_API_KEY, which the adapter used to swallow (console.error +
+   * return) rather than throw. Unified to "adapter always throws, caller
+   * always catches" so transform.ts has exactly one path to log every
+   * outcome to registry.whatsapp_invite_log, instead of two divergent
+   * ones. Resolves with the Resend message id and whether the
+   * Campaigns-Near-Me section was included, both persisted to that log.
    */
-  sendWhatsAppInviteEmail(input: { to: string; firstName: string | null; inviteUrl: string; registrantId: string }): Promise<void>;
+  sendWhatsAppInviteEmail(input: { to: string; firstName: string | null; inviteUrl: string; registrantId: string }): Promise<{
+    resendMessageId: string;
+    includedCampaignsNearMeLink: boolean;
+  }>;
 }

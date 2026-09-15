@@ -33,8 +33,23 @@ import { NATIONAL_GROUP_KEY, shouldSendWhatsAppInvite } from './whatsappInvite.t
 const NOOP_EMAIL_PORT: EmailPort = {
   async sendWhatsAppInviteEmail() {
     // Intentionally does nothing.
+    return { resendMessageId: '', includedCampaignsNearMeLink: false };
   },
 };
+
+/**
+ * Wraps db.logWhatsAppInviteAttempt in its own try/catch — a failure to
+ * write the log row must never affect the sync's own success/error
+ * accounting (markStagingProcessed/markStagingError), same "best-effort
+ * side effect" principle as the invite send itself.
+ */
+async function safeLogWhatsAppInviteAttempt(db: DbPort, input: Parameters<DbPort['logWhatsAppInviteAttempt']>[0]): Promise<void> {
+  try {
+    await db.logWhatsAppInviteAttempt(input);
+  } catch (err) {
+    console.error('transformPendingStagingEvents: failed to write whatsapp_invite_log row:', getErrorMessage(err));
+  }
+}
 
 /**
  * Caps the initial query too, so a large backlog is never pulled into
@@ -184,13 +199,28 @@ export async function transformPendingStagingEvents(db: DbPort, options: Transfo
       // here must never cause this event to be retried — retrying would
       // just re-upsert the same (now-existing) registrant forever without
       // ever being able to send the invite, since isNew would be false on
-      // every subsequent attempt.
+      // every subsequent attempt. Every outcome — sent, failed, or skipped
+      // because no invite link is configured yet — is persisted to
+      // registry.whatsapp_invite_log, so none of this is only ever visible
+      // in Edge Function console logs (see that table's own comment).
       const inviteCandidate = { isNew: registrant.isNew, email: fields.email, unsubscribed: registrant.unsubscribed };
-      if (nationalInviteUrl && shouldSendWhatsAppInvite(inviteCandidate)) {
-        try {
-          await email.sendWhatsAppInviteEmail({ to: inviteCandidate.email, firstName: fields.firstName, inviteUrl: nationalInviteUrl, registrantId: registrant.id });
-        } catch (err) {
-          console.error(`transformPendingStagingEvents: failed to send WhatsApp invite email for staging event ${event.id}:`, getErrorMessage(err));
+      if (shouldSendWhatsAppInvite(inviteCandidate)) {
+        if (!nationalInviteUrl) {
+          await safeLogWhatsAppInviteAttempt(db, { registrantId: registrant.id, rawStagingId: event.id, status: 'skipped_no_link' });
+        } else {
+          try {
+            const result = await email.sendWhatsAppInviteEmail({ to: inviteCandidate.email, firstName: fields.firstName, inviteUrl: nationalInviteUrl, registrantId: registrant.id });
+            await safeLogWhatsAppInviteAttempt(db, {
+              registrantId: registrant.id,
+              rawStagingId: event.id,
+              status: 'sent',
+              resendMessageId: result.resendMessageId,
+              includedCampaignsNearMeLink: result.includedCampaignsNearMeLink,
+            });
+          } catch (err) {
+            console.error(`transformPendingStagingEvents: failed to send WhatsApp invite email for staging event ${event.id}:`, getErrorMessage(err));
+            await safeLogWhatsAppInviteAttempt(db, { registrantId: registrant.id, rawStagingId: event.id, status: 'failed', error: getErrorMessage(err) });
+          }
         }
       }
 

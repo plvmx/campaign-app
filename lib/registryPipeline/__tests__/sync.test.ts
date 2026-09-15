@@ -58,6 +58,7 @@ function makeDb(overrides: Partial<DbPort> = {}): DbPort {
     clearSyncProgress: vi.fn().mockResolvedValue(undefined),
     recordPartialSync: vi.fn().mockResolvedValue(undefined),
     getWhatsAppGroupLink: vi.fn().mockResolvedValue(null),
+    logWhatsAppInviteAttempt: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
 }
