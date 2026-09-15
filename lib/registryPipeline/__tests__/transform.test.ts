@@ -67,6 +67,11 @@ describe('transformPendingStagingEvents', () => {
       interestedInTraining: null,
       churchLeader: null,
       churchName: null,
+      // Tag [48] is present on this event's default payload (it's also the
+      // known source tag), so codeOfConductAgreed derives to 'Yes' — the
+      // other three tag/field-derived keys stay omitted (no webinar tags,
+      // no cdate on tag 48, no field [24] in fieldValues).
+      codeOfConductAgreed: 'Yes',
     });
     expect(db.insertRegistrationEvent).toHaveBeenCalledWith({
       registrantId: 'registrant-1',
@@ -76,6 +81,36 @@ describe('transformPendingStagingEvents', () => {
       rawStagingId: 1,
     });
     expect(db.markStagingProcessed).toHaveBeenCalledWith(1, null);
+  });
+
+  it('omits all four tag/field-derived keys entirely when no relevant tag or field is present — never writes null over an existing value', async () => {
+    const db = makeDb([makeEvent(1, { tags: [{ id: '21' }] })]);
+    await transformPendingStagingEvents(db);
+
+    const call = (db.upsertRegistrant as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(call).not.toHaveProperty('webinarSessionAt');
+    expect(call).not.toHaveProperty('webinarAttended');
+    expect(call).not.toHaveProperty('codeOfConductAgreed');
+    expect(call).not.toHaveProperty('codeOfConductAgreedAt');
+  });
+
+  it('passes through webinarSessionAt, webinarAttended, and codeOfConductAgreed/At when all four signals are present', async () => {
+    const db = makeDb([
+      makeEvent(1, {
+        fieldValues: [{ field: '6', value: 'NSW' }, { field: '24', value: '2022-07-05T08:30:00+10:00' }],
+        tags: [{ id: '60' }, { id: '48', cdate: '2021-11-05T18:31:54-05:00' }],
+      }),
+    ]);
+    await transformPendingStagingEvents(db);
+
+    expect(db.upsertRegistrant).toHaveBeenCalledWith(
+      expect.objectContaining({
+        webinarSessionAt: '2022-07-05T08:30:00+10:00',
+        webinarAttended: 'Yes',
+        codeOfConductAgreed: 'Yes',
+        codeOfConductAgreedAt: '2021-11-05T18:31:54-05:00',
+      })
+    );
   });
 
   it('skips a submission whose list status is not active, without touching registrants', async () => {

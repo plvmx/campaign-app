@@ -1926,3 +1926,86 @@ suppression list (e.g. importing Jordan's sheet into its own
 built — flagged for Peter to decide whether it's worth it, given the
 WhatsApp invite feature isn't live yet regardless (`registry.whatsapp_group_links`
 still has no `'national'` row configured).
+
+## Four workflow-tracking CSV fields added — Webinar, W/Done, Code, Date Agreed (2026-09-15)
+
+Scope change: Peter asked for four fields from Lorraine's CSV that were
+deliberately scoped OUT of the Sept 2026 reload ("no new columns, revisit
+later if a real need for them shows up") — Webinar, W/Done, Code, Date
+Agreed. That need has now emerged. Peter initially believed all four
+existed as named AC contact fields ("Attended" under a "BOTJ Webinar"
+field group, "CODE" and "Date" under a "wayoflife" field group, per
+tab names in Jordan's own AC-derived tracking spreadsheet). A live query
+against the AC API found only 28 total contact custom fields, confirmed
+exhaustive — none of those names exist. Tracing continued by
+cross-referencing specific live AC contact records (fieldValues, tags,
+and per-tag `cdate` from `GET /contacts/{id}/contactTags`) against
+matching rows in Jordan's spreadsheet, using real shared records (e.g.
+Andrew Copp, David Chellappa) to confirm each field's true AC-side
+signal before writing any code:
+
+- **Webinar** (CSV column, D/M/YYYY HH:MM) — first mis-traced against AC
+  field `[23]` "BOTJ Webinar Rego Date" via a value decoded from *Jordan's
+  own spreadsheet*, not the actual registrations CSV. Directly
+  cross-checking 8 shared records between the two spreadsheets corrected
+  this: the CSV's "Webinar" value (always carrying a time-of-day) exactly
+  matches Jordan's "Session Date" column every time, and never "Rego
+  Date". This is AC field `[24]` "BOTJ Webinar Session" (a `datetime`
+  field) — already whitelisted in `fieldMap.ts` but never promoted until
+  now (`registry.registrants.webinar_session_at`). Field `[23]` remains
+  unpromoted; nothing sources it.
+- **W/Done** ("was the webinar attended?") — not an AC field at all.
+  Derived from AC tags: `60` "CAMPAIGN: Bringing Others Webinar:
+  Attended" confirmed live on a contact whose sheet row said W/Done=Yes;
+  `56` "...: Missed" is its name-inferred pair in AC's own matched 56-61
+  tag set, but was **not** confirmed applied to any actual contact —
+  Jordan's own tracking data shows Attended as Yes-or-blank in every
+  sampled row (612 Yes, 1470 blank, zero "No" across the whole tab),
+  while Lorraine's CSV genuinely has 355 explicit "No" values. Practical
+  upshot: `webinar_attended` from a live AC sync will likely only ever
+  produce `'Yes'`/null; an explicit `'No'` will likely only ever come
+  from the one-off CSV backfill.
+- **Code** ("Code of Conduct agreed") — not a Code-of-Conduct field or
+  tag anywhere in AC either (confirmed: zero hits for any such name).
+  Peter confirmed it means "this registrant has a genuine
+  `/thewayoflife/` registration" (Code is now a mandatory form field) —
+  derived from the presence of AC tag `48` "CAMPAIGN: TWOL Sept 2019
+  Register", an oddly-named but already-seeded `registry.known_source_tags`
+  row for the `/thewayoflife/` funnel. Checked as raw tag presence, not
+  via `sourceAttribution.matchSourceTag` (whose first-match-wins
+  behaviour is the wrong question for a multi-funnel contact). Confirmed
+  live: the CSV's "Code" column is never anything but blank or "YES" —
+  no "No" value exists in the source data at all.
+- **Date Agreed** — that same tag `48`'s own `cdate` (when AC actually
+  applied it), confirmed live to match the CSV's "Date Agreed" column
+  exactly on multiple shared records. The contact's own `cdate`
+  (`registered_at`) is explicitly NOT a usable proxy — one live example
+  differed by ~6 months.
+
+Implementation: `lib/registryPipeline/tagDerivedFields.ts` (new, unit
+tested) derives the three tag-based fields; `fieldMap.ts` promotes field
+`[24]`; `acClient.ts` now also captures each tag's `cdate` (previously
+discarded) from `/contacts/{id}/contactTags`, since it's the only
+available "when was this tag applied" signal — `AcContactTag.cdate` is
+optional, since every staging payload written before this change
+genuinely lacks it. `transform.ts`/`db.ts` only ever write a value when
+this sync found a real (non-null) signal — omitting the key, never
+`null` — so a routine re-sync can never erase a value the CSV backfill
+already wrote; conversely `scripts/backfill_webinar_and_code_fields_from_csv.ts`
+only ever fills a currently-NULL column, so it can never undo a live
+AC-derived value. Recommended rollout order: run the SQL migration
+(`scripts/add_webinar_and_code_fields_to_registrants.sql`) → redeploy
+`ac-sync` → let one cron cycle run → then run the CSV backfill, so the
+two sources never fight over the same row. `/registry/manage`'s record
+pane gained four new read-only columns (not sortable, not in the lookup
+dropdowns — can be added later without a schema change).
+
+**Coverage limitation, stated explicitly**: these four fields are
+populated for (a) everyone in Lorraine's CSV via the one-off backfill,
+and (b) anyone AC re-syncs after the `ac-sync` redeploy. A registrant in
+neither set — e.g. someone synced from AC after the 2026-09 reload, not
+in the CSV, never touched again in AC — keeps NULLs indefinitely. No
+mechanism here walks every existing registrant against AC's tag API;
+building one would be the kind of large, rate-limited sweep that already
+caused `/registry/recent-registrations` to be retired (see that
+entry above).

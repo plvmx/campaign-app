@@ -109,7 +109,7 @@ The API key provided is **not** a temporary/scoped credential as originally plan
 | `[14]` Church Name / `[26]` What Church do you attend? | **Exclude** | Confirmed by AFJ leadership |
 | `[20]` Music Leader, `[21]` Website, `[29]` Webinar Replay Link | **Exclude** | Not needed for stated purposes |
 | `[8]` Church, `[11]` Country | **Exclude by default** | No confirmed operational need identified |
-| `[23]` BOTJ Webinar Rego Date, `[24]` BOTJ Webinar Session | **Include** | Confirmed live via BOTJ test submission; useful for campaign scheduling |
+| `[23]` BOTJ Webinar Rego Date, `[24]` BOTJ Webinar Session | **Include** | Confirmed live via BOTJ test submission; useful for campaign scheduling. `[24]` promoted to `registry.registrants.webinar_session_at` 2026-09-15 — see `fieldMap.ts` and `OPERATIONS.md`'s entry of that date. `[23]` stays unpromoted; no CSV column maps to it. |
 | Response-outcome fields (`[4]`/`[5]` equivalents on wayoflife-responder) | **Exclude** | Sensitive information, consistent with the exclusion decision above |
 
 Excluded fields remain in ActiveCampaign only and are never queried by the ingestion job — enforced in `map_ac_fields()` (Section 6.2), not just by convention.

@@ -126,7 +126,9 @@ describe('RegistryManagePage', () => {
     expect(within(table).queryByText(/Date registered/)).not.toBeInTheDocument();
 
     const vickyRow = requireRow(within(table).getByText('vicky@example.com')) as HTMLTableRowElement;
-    const dateCell = vickyRow.cells[vickyRow.cells.length - 1];
+    // "Registered" is the 7th column (0-indexed 6) — no longer the last
+    // column since the webinar/Code-of-Conduct columns were added after it.
+    const dateCell = vickyRow.cells[6];
     expect(dateCell.textContent).toMatch(/^\d{1,2} [A-Za-z]+\.? \d{4}$/); // e.g. "10 Sept 2026" — no time component
   });
 

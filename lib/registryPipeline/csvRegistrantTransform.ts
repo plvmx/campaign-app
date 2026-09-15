@@ -14,6 +14,10 @@ export interface RawCsvRow {
   postcode: string;
   church: string;
   regd: string; // D/M/YYYY text, as found in the source
+  webinar: string; // D/M/YYYY HH:MM text — the webinar SESSION date/time (confirmed live against AC field [24]), not a rego date
+  webinarDone: string; // "Yes"/"No" text, as found in the source
+  code: string; // "YES"/blank text — never "No" in the source data
+  dateAgreed: string; // D/M/YYYY text, as found in the source
   lineNumber: number; // 1-indexed CSV line, for traceability in logs/errors
 }
 
@@ -28,6 +32,10 @@ export interface TransformedRegistrant {
   registeredAt: string | null; // ISO date (midnight UTC — the source has no time component)
   unsubscribed: 'Yes' | null;
   nfc: 'Yes' | null;
+  webinarSessionAt: string | null; // ISO date/time (midnight UTC when the source has no time component)
+  webinarAttended: 'Yes' | 'No' | null;
+  codeOfConductAgreed: 'Yes' | null; // never 'No' — see parseYesNo's caller-side narrowing below
+  codeOfConductAgreedAt: string | null; // ISO date (midnight UTC — the source has no time component)
   sourceLines: number[]; // CSV line(s) this row was built from — 1 normally, >1 after a dedup merge
 }
 
@@ -82,6 +90,33 @@ export function parseAuDate(raw: string): string | null {
   return `${iso}T00:00:00Z`;
 }
 
+/** "D/M/YYYY HH:MM" (the CSV's Webinar column — a session date/time, confirmed live against AC field [24]) -> ISO datetime. Null if unparseable. */
+export function parseAuDateTime(raw: string): string | null {
+  const match = raw.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4}) (\d{1,2}):(\d{2})$/);
+  if (!match) return null;
+  const [, d, m, y, h, min] = match;
+  const day = Number(d);
+  const month = Number(m);
+  const year = Number(y);
+  const hour = Number(h);
+  const minute = Number(min);
+  if (month < 1 || month > 12 || day < 1 || day > 31 || hour > 23 || minute > 59) return null;
+  const iso = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00Z`;
+  const d2 = new Date(iso);
+  if (d2.getUTCFullYear() !== year || d2.getUTCMonth() + 1 !== month || d2.getUTCDate() !== day || d2.getUTCHours() !== hour || d2.getUTCMinutes() !== minute) {
+    return null;
+  }
+  return iso;
+}
+
+/** Trims and case-normalizes a Yes/No-ish CSV cell. Anything other than an unambiguous yes/no (blank, "?", a note) is null — never guessed. */
+export function parseYesNo(raw: string): 'Yes' | 'No' | null {
+  const value = raw.trim().toLowerCase();
+  if (value === 'yes' || value === 'y') return 'Yes';
+  if (value === 'no' || value === 'n') return 'No';
+  return null;
+}
+
 export type RowTransformResult =
   | { status: 'included'; registrant: TransformedRegistrant }
   | { status: 'excluded_non_au_state'; state: string };
@@ -109,6 +144,13 @@ export function transformRow(raw: RawCsvRow): RowTransformResult {
       registeredAt: parseAuDate(raw.regd),
       unsubscribed,
       nfc,
+      webinarSessionAt: parseAuDateTime(raw.webinar),
+      webinarAttended: parseYesNo(raw.webinarDone),
+      // "Code" is never anything but blank/"YES" in the source (confirmed
+      // live) — narrowed to Yes-or-null here rather than storing a literal
+      // 'No' that the column never actually contains.
+      codeOfConductAgreed: parseYesNo(raw.code) === 'Yes' ? 'Yes' : null,
+      codeOfConductAgreedAt: parseAuDate(raw.dateAgreed),
       sourceLines: [raw.lineNumber],
     },
   };
@@ -163,6 +205,17 @@ function mergeSameEmailCluster(rows: TransformedRegistrant[]): TransformedRegist
     registeredAt: mergeField(rows, 'registeredAt'),
     unsubscribed: rows.some((r) => r.unsubscribed === 'Yes') ? 'Yes' : null,
     nfc: rows.some((r) => r.nfc === 'Yes') ? 'Yes' : null,
+    webinarSessionAt: mergeField(rows, 'webinarSessionAt'),
+    // Attendance is the stronger signal: if any row says Yes, Yes wins over
+    // any row saying No (same idiom as unsubscribed/nfc, but with an
+    // explicit precedence since this field has a genuine third value).
+    webinarAttended: rows.some((r) => r.webinarAttended === 'Yes')
+      ? 'Yes'
+      : rows.some((r) => r.webinarAttended === 'No')
+        ? 'No'
+        : null,
+    codeOfConductAgreed: rows.some((r) => r.codeOfConductAgreed === 'Yes') ? 'Yes' : null,
+    codeOfConductAgreedAt: mergeField(rows, 'codeOfConductAgreedAt'),
     sourceLines: rows.flatMap((r) => r.sourceLines),
   };
 }

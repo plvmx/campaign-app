@@ -136,6 +136,18 @@ export function createDb(client: SupabaseClient = createServiceClient()): DbPort
         church_leader: input.churchLeader,
         church_name: input.churchName,
         last_updated_at: new Date().toISOString(),
+        // Deliberately omit-on-undefined, not written as `?? null` — these
+        // four are the first columns in this adapter with a second,
+        // authoritative source (Lorraine's CSV backfill,
+        // scripts/backfill_webinar_and_code_fields_from_csv.ts) that a
+        // routine re-sync must never erase. transform.ts already only ever
+        // passes a key when it found a real (non-null) signal this sync —
+        // see ports.ts's upsertRegistrant doc comment — so `undefined` here
+        // always means "say nothing", never "clear it".
+        ...(input.webinarSessionAt !== undefined ? { webinar_session_at: input.webinarSessionAt } : {}),
+        ...(input.webinarAttended !== undefined ? { webinar_attended: input.webinarAttended } : {}),
+        ...(input.codeOfConductAgreed !== undefined ? { code_of_conduct_agreed: input.codeOfConductAgreed } : {}),
+        ...(input.codeOfConductAgreedAt !== undefined ? { code_of_conduct_agreed_at: input.codeOfConductAgreedAt } : {}),
       };
 
       if (email) {
