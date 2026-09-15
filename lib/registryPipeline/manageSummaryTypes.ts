@@ -45,6 +45,18 @@ export interface ManageRegistrant {
    */
   isLeader: boolean;
   leaderName: string | null;
+  /**
+   * Four fields synced/derived from ActiveCampaign (or backfilled from
+   * Lorraine's CSV for pre-2026-09 registrants) — see
+   * lib/registryPipeline/tagDerivedFields.ts and
+   * scripts/add_webinar_and_code_fields_to_registrants.sql. Display-only:
+   * deliberately NOT in EDITABLE_REGISTRANT_FIELDS (registrantValidation.ts) —
+   * an admin never hand-corrects these here, same as email/phone/registeredAt.
+   */
+  webinarSessionAt: string | null;
+  webinarAttended: string | null;
+  codeOfConductAgreed: string | null;
+  codeOfConductAgreedAt: string | null;
 }
 
 export interface ManageSummaryResponse {

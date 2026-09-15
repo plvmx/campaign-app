@@ -26,6 +26,7 @@ import { isActiveListStatus } from './listFilter.ts';
 import { normalizePhone } from './phone.ts';
 import type { DbPort, EmailPort } from './ports.ts';
 import { matchSourceTag } from './sourceAttribution.ts';
+import { deriveTagFields } from './tagDerivedFields.ts';
 import { isExcludedSourceOnly } from './tagExclusion.ts';
 import { NATIONAL_GROUP_KEY, shouldSendWhatsAppInvite } from './whatsappInvite.ts';
 
@@ -169,6 +170,7 @@ export async function transformPendingStagingEvents(db: DbPort, options: Transfo
 
       const fields = mapAcFields(payload);
       const phoneNormalized = normalizePhone(fields.phoneRaw);
+      const derived = deriveTagFields(payload.tags);
 
       const registrant = await db.upsertRegistrant({
         acContactId: payload.contact.id,
@@ -183,6 +185,15 @@ export async function transformPendingStagingEvents(db: DbPort, options: Transfo
         interestedInTraining: fields.interestedInTraining,
         churchLeader: fields.churchLeader,
         churchName: fields.churchName,
+        // Tag/field-derived — included only when this sync found a real
+        // signal (never `null`). Omitting the key leaves the existing
+        // column untouched, so a routine re-sync can never erase a value
+        // the CSV backfill (or an earlier sync) already wrote — see
+        // ports.ts's upsertRegistrant doc comment and tagDerivedFields.ts.
+        ...(fields.webinarSessionAt !== null ? { webinarSessionAt: fields.webinarSessionAt } : {}),
+        ...(derived.webinarAttended !== null ? { webinarAttended: derived.webinarAttended } : {}),
+        ...(derived.codeOfConductAgreed !== null ? { codeOfConductAgreed: derived.codeOfConductAgreed } : {}),
+        ...(derived.codeOfConductAgreedAt !== null ? { codeOfConductAgreedAt: derived.codeOfConductAgreedAt } : {}),
       });
 
       await db.insertRegistrationEvent({

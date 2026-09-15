@@ -336,7 +336,7 @@ function LookupFiltersRow({
   );
 }
 
-/** The record pane under the grid — every registrant behind the currently-selected cell, shaded per row the same way as Recent Registrations. The View/Edit toggle controls whether First name/Last name/State/Postcode render as plain text or as inline-editable cells; Email/Mobile/Date registered are never editable here (see lib/registryPipeline/registrantValidation.ts). The lookup dropdowns above the table further narrow which of those records are shown, by an exact value on any field except State/Date registered. */
+/** The record pane under the grid — every registrant behind the currently-selected cell, shaded per row the same way as Recent Registrations. The View/Edit toggle controls whether First name/Last name/State/Postcode render as plain text or as inline-editable cells; Email/Mobile/Date registered and the four webinar/Code-of-Conduct columns (synced/derived from AC — see lib/registryPipeline/tagDerivedFields.ts) are never editable here (see lib/registryPipeline/registrantValidation.ts). The lookup dropdowns above the table further narrow which of those records are shown, by an exact value on any field except State/Date registered. */
 function RecordsPane({
   selectedCell,
   records,
@@ -420,7 +420,7 @@ function RecordsPane({
 
       {mode === 'edit' && (
         <p style={{ color: '#6b7280', fontSize: '0.85rem', marginTop: '0.35rem' }}>
-          Editing First name, Last name, State, and Postcode — each field saves on its own as soon as you leave it. Email, Mobile, and Date registered can&apos;t be changed here.
+          Editing First name, Last name, State, and Postcode — each field saves on its own as soon as you leave it. Email, Mobile, Date registered, and the webinar/Code of Conduct fields can&apos;t be changed here.
         </p>
       )}
 
@@ -431,7 +431,7 @@ function RecordsPane({
       )}
 
       <div style={{ overflowX: 'auto', marginTop: '0.5rem' }}>
-        <table aria-label="Matching records" style={{ width: '100%', borderCollapse: 'collapse', minWidth: 700 }}>
+        <table aria-label="Matching records" style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1100 }}>
           <thead>
             <tr>
               <th style={sortableHeaderCellStyle} onClick={() => toggleSort('firstName')}>First name{sortIndicator('firstName')}</th>
@@ -441,6 +441,10 @@ function RecordsPane({
               <th style={headerCellStyle}>State</th>
               <th style={sortableHeaderCellStyle} onClick={() => toggleSort('postcode')}>Postcode{sortIndicator('postcode')}</th>
               <th style={sortableHeaderCellStyle} onClick={() => toggleSort('registeredAt')}>Registered{sortIndicator('registeredAt')}</th>
+              <th style={headerCellStyle}>Webinar session</th>
+              <th style={headerCellStyle}>Webinar attended</th>
+              <th style={headerCellStyle}>Code agreed</th>
+              <th style={headerCellStyle}>Date agreed</th>
             </tr>
           </thead>
           <tbody>
@@ -486,11 +490,15 @@ function RecordsPane({
                     <td style={{ padding: '0.5rem' }}>{r.postcode ?? '—'}</td>
                   )}
                   <td style={{ padding: '0.5rem' }}>{formatDateOnly(r.registeredAt)}</td>
+                  <td style={{ padding: '0.5rem' }}>{formatDateTime(r.webinarSessionAt)}</td>
+                  <td style={{ padding: '0.5rem' }}>{r.webinarAttended ?? '—'}</td>
+                  <td style={{ padding: '0.5rem' }}>{r.codeOfConductAgreed ?? '—'}</td>
+                  <td style={{ padding: '0.5rem' }}>{formatDateOnly(r.codeOfConductAgreedAt)}</td>
                 </tr>
               );
             })}
             {shown.length === 0 && (
-              <tr><td colSpan={7} style={{ padding: '1rem', textAlign: 'center' }}>No matching records.</td></tr>
+              <tr><td colSpan={11} style={{ padding: '1rem', textAlign: 'center' }}>No matching records.</td></tr>
             )}
           </tbody>
         </table>

@@ -160,4 +160,26 @@ describe('mapAcFields', () => {
     const result = mapAcFields(makePayload({ fieldValues: [] }));
     expect(result.churchName).toBeNull();
   });
+
+  it('reads webinarSessionAt from field [24] when populated', () => {
+    const result = mapAcFields(
+      makePayload({ fieldValues: [{ field: '24', value: '2022-07-05T08:30:00+10:00' }] })
+    );
+    expect(result.webinarSessionAt).toBe('2022-07-05T08:30:00+10:00');
+  });
+
+  it('returns null webinarSessionAt when field [24] is absent', () => {
+    const result = mapAcFields(makePayload({ fieldValues: [] }));
+    expect(result.webinarSessionAt).toBeNull();
+  });
+
+  it('never reads field [23] Rego Date into webinarSessionAt', () => {
+    const result = mapAcFields(makePayload({ fieldValues: [{ field: '23', value: '2021-06-16' }] }));
+    expect(result.webinarSessionAt).toBeNull();
+  });
+
+  it('normalizes a malformed field [24] value to null rather than passing it through', () => {
+    const result = mapAcFields(makePayload({ fieldValues: [{ field: '24', value: 'TBC' }] }));
+    expect(result.webinarSessionAt).toBeNull();
+  });
 });

@@ -14,6 +14,14 @@ export interface AcFieldValue {
 /** An AC tag ID associated with a contact, as returned by GET /contacts/{id}/contactTags. */
 export interface AcContactTag {
   id: string; // AC tag ID, e.g. '21'
+  /**
+   * When AC applied this tag to this contact, from the same endpoint's own
+   * `cdate`. Optional (not absent-means-invalid) because every
+   * staging.ac_events.raw_payload row written before 2026-09-15 genuinely
+   * has no such key — acClient.ts only started capturing it then. Powers
+   * registry.registrants.code_of_conduct_agreed_at — see tagDerivedFields.ts.
+   */
+  cdate?: string | null;
 }
 
 /** AC list membership status for one contact on one list (from the contactLists relation). */
@@ -70,4 +78,6 @@ export interface MappedRegistrantFields {
   churchLeader: string | null;
   /** [26]/[14] What Church do you attend? / Church Name. Reverses the plan's original exclusion, per Peter 2026-09-01. */
   churchName: string | null;
+  /** [24] BOTJ Webinar Session (datetime) — promoted 2026-09-15. Not [23] Rego Date, which stays unpromoted (no CSV equivalent). Null/junk normalized via tagDerivedFields.ts's normalizeAcDate. */
+  webinarSessionAt: string | null;
 }

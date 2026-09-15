@@ -115,6 +115,21 @@ export interface DbPort {
     interestedInTraining: string | null;
     churchLeader: string | null;
     churchName: string | null;
+    /**
+     * Four fields derived from tags/fields that turned out not to have a
+     * simple 1:1 AC custom field (see tagDerivedFields.ts). Deliberately
+     * OPTIONAL, not `| null` required: omitting a key here means "leave the
+     * existing column untouched" (same convention as unsubscribed/nfc
+     * never being written by this call), whereas passing `null` would
+     * overwrite it. A derivation that found no signal this sync must omit
+     * the key, not pass null — this is what lets the one-off CSV backfill
+     * (scripts/backfill_webinar_and_code_fields_from_csv.ts) coexist with
+     * routine ac-sync re-syncs without one erasing the other's data.
+     */
+    webinarSessionAt?: string | null;
+    webinarAttended?: 'Yes' | 'No' | null;
+    codeOfConductAgreed?: 'Yes' | null;
+    codeOfConductAgreedAt?: string | null;
   }): Promise<{
     id: string;
     /**
