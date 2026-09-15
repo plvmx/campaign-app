@@ -1,8 +1,9 @@
 // Shared shapes between the /registry/manage API routes
 // (app/api/registry/manage-summary/route.ts, manage-record/route.ts,
-// manage-edit-log/route.ts) and their pages (app/registry/manage/page.tsx,
-// app/registry/manage/edit-log/page.tsx) — kept out of route.ts itself,
-// same reason as recentRegistrationTypes.ts: Next.js's App Router
+// manage-edit-log/route.ts, manage-whatsapp-invite-log/route.ts) and their
+// pages (app/registry/manage/page.tsx, app/registry/manage/edit-log/page.tsx,
+// app/registry/manage/whatsapp-invite-log/page.tsx) — kept out of route.ts
+// itself, same reason as recentRegistrationTypes.ts: Next.js's App Router
 // restricts a route.ts's exports to recognized HTTP methods and route
 // config.
 import type { EditableRegistrantField } from './registrantValidation';
@@ -86,5 +87,26 @@ export interface RegistrantEditLogEntry {
 
 export interface RegistrantEditLogResponse {
   entries: RegistrantEditLogEntry[];
+  totalCount: number;
+}
+
+/**
+ * One row of registry.whatsapp_invite_log, joined with the registrant it
+ * was for — for /registry/manage/whatsapp-invite-log. `registrant` is null
+ * only if that registrant row was itself later deleted (defensive typing,
+ * not an expected case — same as RegistrantEditLogEntry above).
+ */
+export interface WhatsAppInviteLogEntry {
+  id: number;
+  status: 'sent' | 'failed' | 'skipped_no_link';
+  error: string | null;
+  resendMessageId: string | null;
+  includedCampaignsNearMeLink: boolean;
+  attemptedAt: string;
+  registrant: { firstName: string | null; lastName: string | null; email: string | null; state: string | null } | null;
+}
+
+export interface WhatsAppInviteLogResponse {
+  entries: WhatsAppInviteLogEntry[];
   totalCount: number;
 }

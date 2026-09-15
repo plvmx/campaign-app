@@ -30,9 +30,7 @@ CREATE INDEX IF NOT EXISTS idx_whatsapp_invite_log_attempted_at ON registry.what
 ALTER TABLE registry.whatsapp_invite_log ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON registry.whatsapp_invite_log FROM anon, authenticated;
 -- No policies added — default-deny, same as sync_log/registration_events/etc.
--- Only the service role (ac-sync's db.ts) ever touches this table; check it
--- via the Supabase SQL Editor for now (select * from registry.whatsapp_invite_log
--- order by attempted_at desc), same as sync_log is checked today. A
--- dedicated admin view (mirroring /registry/manage/edit-log) is a natural
--- next step if this becomes something checked often enough to warrant one —
--- deliberately not built until then.
+-- Only the service role (ac-sync's db.ts) writes to this table; national
+-- registry admins read it via /registry/manage/whatsapp-invite-log
+-- (app/api/registry/manage-whatsapp-invite-log/route.ts, using the service
+-- role client server-side, same as every other /registry/manage route).

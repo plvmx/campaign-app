@@ -667,7 +667,10 @@ export default function RegistryManagePage() {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: '1rem' }}>
         <Link href="/registry" style={{ justifySelf: 'start' }}>← Back to Registry</Link>
         <h1 style={{ margin: 0, fontSize: '2rem', fontWeight: 800, textAlign: 'center' }}>Registrations Management</h1>
-        <Link href="/registry/manage/edit-log" style={{ justifySelf: 'end' }}>View Edit Log →</Link>
+        <div style={{ justifySelf: 'end', display: 'flex', gap: '1rem' }}>
+          <Link href="/registry/manage/whatsapp-invite-log">View WhatsApp Invite Log →</Link>
+          <Link href="/registry/manage/edit-log">View Edit Log →</Link>
+        </div>
       </div>
 
       <div style={{ margin: '1rem 0', padding: '0.75rem 1rem', border: '1px solid #ddd', borderRadius: 6, background: '#fafafa' }}>
