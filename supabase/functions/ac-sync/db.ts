@@ -321,5 +321,17 @@ export function createDb(client: SupabaseClient = createServiceClient()): DbPort
       assertNoError(error, 'getWhatsAppGroupLink');
       return (data as { invite_url: string } | null)?.invite_url ?? null;
     },
+
+    async logWhatsAppInviteAttempt(input) {
+      const { error } = await client.schema('registry').from('whatsapp_invite_log').insert({
+        registrant_id: input.registrantId,
+        raw_staging_id: input.rawStagingId,
+        status: input.status,
+        error: input.error ?? null,
+        resend_message_id: input.resendMessageId ?? null,
+        included_campaigns_near_me_link: input.includedCampaignsNearMeLink ?? false,
+      });
+      assertNoError(error, 'logWhatsAppInviteAttempt');
+    },
   };
 }

@@ -11,13 +11,13 @@
 // something this codebase can read; this calls Resend's own HTTP API
 // directly, so it needs its own API key value here regardless.
 //
-// Deliberately never throws on a missing key or a failed send — this
-// email is a best-effort side effect of a sync that must keep working
-// even if Resend is misconfigured or briefly down (see transform.ts's
-// call site, which also wraps this in its own try/catch as a second line
-// of defense). A missing key logs once per call rather than failing
-// Edge Function startup, so ac-sync's actual job (landing registrants)
-// is never put at risk by this newer, additive feature.
+// Always throws on failure to send — including a missing RESEND_API_KEY —
+// rather than swallowing it. This is still a best-effort side effect of a
+// sync that must keep working even if Resend is misconfigured or briefly
+// down: transform.ts's own try/catch around this call is what actually
+// guarantees that (and additionally persists the failure to
+// registry.whatsapp_invite_log so it isn't only ever visible here in the
+// Edge Function's own console output).
 
 import { getErrorMessage } from '../../../lib/errorUtils.ts';
 import type { EmailPort } from '../../../lib/registryPipeline/ports.ts';
@@ -51,8 +51,12 @@ export function createEmailClient(): EmailPort {
     async sendWhatsAppInviteEmail({ to, firstName, inviteUrl, registrantId }) {
       const apiKey = Deno.env.get('RESEND_API_KEY');
       if (!apiKey) {
-        console.error('[ac-sync] RESEND_API_KEY is not set — skipping WhatsApp invite email');
-        return;
+        // Thrown, not swallowed — transform.ts's own try/catch around this
+        // call is what actually decides this can never fail the
+        // underlying sync, and it also persists this as a 'failed' row in
+        // registry.whatsapp_invite_log, so a misconfigured key doesn't
+        // stay invisible.
+        throw new Error('RESEND_API_KEY is not set');
       }
 
       const siteUrl = resolveSiteUrl();
@@ -76,6 +80,8 @@ export function createEmailClient(): EmailPort {
           const body = await res.text();
           throw new Error(`Resend API error ${res.status}: ${body}`);
         }
+        const data = await res.json();
+        return { resendMessageId: (data as { id?: string }).id ?? '', includedCampaignsNearMeLink: campaignsNearMeUrl !== null };
       } catch (err) {
         // Re-thrown rather than swallowed here — transform.ts's own
         // try/catch around this call is what actually decides this can
