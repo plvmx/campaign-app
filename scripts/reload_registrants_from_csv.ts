@@ -60,11 +60,15 @@ const supabase = createClient(
 
 // Column order in AFJ Registrations.csv (and the earlier xlsx before it) —
 // see OPERATIONS.md. Columns beyond index 17 are blank-header trailing
-// artifacts, deliberately not read here (decision: ignore the second
-// Training column and the six workflow-tracking columns).
+// artifacts. Webinar/W-Done/Code/Date Agreed (10/11/15/16) were originally
+// scoped out as workflow-tracking columns with no clear need — that need
+// has since emerged (2026-09-15, per Peter) and they're now read; WOL Role
+// (12), the second Training column (13), Resources (14), and Submit (17)
+// remain deliberately unread.
 const COLUMNS = {
   firstName: 0, lastName: 1, email: 2, phone: 3, state: 4, postcode: 5,
   church: 6, training: 7, leader: 8, regd: 9,
+  webinar: 10, webinarDone: 11, code: 15, dateAgreed: 16,
 } as const;
 
 function toRawRow(cells: string[], lineNumber: number): RawCsvRow {
@@ -77,6 +81,10 @@ function toRawRow(cells: string[], lineNumber: number): RawCsvRow {
     postcode: cells[COLUMNS.postcode] ?? '',
     church: cells[COLUMNS.church] ?? '',
     regd: cells[COLUMNS.regd] ?? '',
+    webinar: cells[COLUMNS.webinar] ?? '',
+    webinarDone: cells[COLUMNS.webinarDone] ?? '',
+    code: cells[COLUMNS.code] ?? '',
+    dateAgreed: cells[COLUMNS.dateAgreed] ?? '',
     lineNumber,
   };
 }
@@ -108,6 +116,10 @@ async function main() {
   const unsubscribedCount = deduped.filter((r) => r.unsubscribed === 'Yes').length;
   const nfcCount = deduped.filter((r) => r.nfc === 'Yes').length;
   const noEmailCount = deduped.filter((r) => !r.email).length;
+  const webinarSessionCount = deduped.filter((r) => r.webinarSessionAt !== null).length;
+  const webinarAttendedCount = deduped.filter((r) => r.webinarAttended === 'Yes').length;
+  const webinarNotAttendedCount = deduped.filter((r) => r.webinarAttended === 'No').length;
+  const codeAgreedCount = deduped.filter((r) => r.codeOfConductAgreed === 'Yes').length;
 
   console.log('\n--- Summary ---');
   console.log(`Excluded (non-AU state): ${excludedNonAuState}`);
@@ -116,6 +128,10 @@ async function main() {
   console.log(`  unsubscribed: ${unsubscribedCount}`);
   console.log(`  nfc: ${nfcCount}`);
   console.log(`  no email at all: ${noEmailCount}`);
+  console.log(`  webinar session date present: ${webinarSessionCount}`);
+  console.log(`  webinar attended (Yes): ${webinarAttendedCount}`);
+  console.log(`  webinar attended (No): ${webinarNotAttendedCount}`);
+  console.log(`  code of conduct agreed: ${codeAgreedCount}`);
 
   if (!apply) {
     console.log('\nDry run — pass --apply to actually insert (after completing the pre-apply steps in the header comment).');
@@ -152,6 +168,10 @@ async function main() {
       registered_at: r.registeredAt,
       unsubscribed: r.unsubscribed,
       nfc: r.nfc,
+      webinar_session_at: r.webinarSessionAt,
+      webinar_attended: r.webinarAttended,
+      code_of_conduct_agreed: r.codeOfConductAgreed,
+      code_of_conduct_agreed_at: r.codeOfConductAgreedAt,
     }));
     const { error } = await supabase.schema('registry').from('registrants').insert(batch);
     if (error) throw error;

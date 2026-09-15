@@ -4,6 +4,8 @@ import {
   extractPostcode,
   extractChurch,
   parseAuDate,
+  parseAuDateTime,
+  parseYesNo,
   transformRow,
   dedupeByEmail,
   type RawCsvRow,
@@ -20,6 +22,10 @@ function row(overrides: Partial<RawCsvRow> = {}, lineNumber = 1): RawCsvRow {
     postcode: '2000',
     church: 'Some Church',
     regd: '1/01/2020',
+    webinar: '',
+    webinarDone: '',
+    code: '',
+    dateAgreed: '',
     lineNumber,
     ...overrides,
   };
@@ -84,6 +90,51 @@ describe('parseAuDate', () => {
   });
 });
 
+describe('parseAuDateTime', () => {
+  it('parses D/M/YYYY HH:MM into an ISO datetime', () => {
+    expect(parseAuDateTime('22/06/2021 09:30')).toBe('2021-06-22T09:30:00Z');
+    expect(parseAuDateTime('7/12/2021 19:00')).toBe('2021-12-07T19:00:00Z');
+  });
+
+  it('rejects an impossible date rather than silently rolling it over', () => {
+    expect(parseAuDateTime('31/02/2020 10:00')).toBeNull();
+  });
+
+  it('rejects an out-of-range time', () => {
+    expect(parseAuDateTime('22/06/2021 25:00')).toBeNull();
+    expect(parseAuDateTime('22/06/2021 09:60')).toBeNull();
+  });
+
+  it('rejects a date with no time component', () => {
+    expect(parseAuDateTime('22/06/2021')).toBeNull();
+  });
+
+  it('rejects unparseable input', () => {
+    expect(parseAuDateTime('not a date')).toBeNull();
+    expect(parseAuDateTime('')).toBeNull();
+  });
+});
+
+describe('parseYesNo', () => {
+  it('recognizes Yes in various casings', () => {
+    expect(parseYesNo('Yes')).toBe('Yes');
+    expect(parseYesNo('YES')).toBe('Yes');
+    expect(parseYesNo('yes')).toBe('Yes');
+    expect(parseYesNo(' Yes ')).toBe('Yes');
+  });
+
+  it('recognizes No in various casings', () => {
+    expect(parseYesNo('No')).toBe('No');
+    expect(parseYesNo('no')).toBe('No');
+  });
+
+  it('returns null for blank, junk, or ambiguous values', () => {
+    expect(parseYesNo('')).toBeNull();
+    expect(parseYesNo('?')).toBeNull();
+    expect(parseYesNo('maybe')).toBeNull();
+  });
+});
+
 describe('transformRow', () => {
   it('excludes a non-AU state (decision 3)', () => {
     for (const state of ['OS', 'NZ', 'UK', 'os', 'nz']) {
@@ -118,9 +169,32 @@ describe('transformRow', () => {
         registeredAt: '2020-01-01T00:00:00Z',
         unsubscribed: null,
         nfc: null,
+        webinarSessionAt: null,
+        webinarAttended: null,
+        codeOfConductAgreed: null,
+        codeOfConductAgreedAt: null,
         sourceLines: [42],
       },
     });
+  });
+
+  it('reads webinarSessionAt, webinarAttended, codeOfConductAgreed, and codeOfConductAgreedAt when present', () => {
+    const result = transformRow(row({ webinar: '22/06/2021 09:30', webinarDone: 'Yes', code: 'YES', dateAgreed: '5/11/2021' }));
+    expect(result.status).toBe('included');
+    expect(result.status === 'included' && result.registrant.webinarSessionAt).toBe('2021-06-22T09:30:00Z');
+    expect(result.status === 'included' && result.registrant.webinarAttended).toBe('Yes');
+    expect(result.status === 'included' && result.registrant.codeOfConductAgreed).toBe('Yes');
+    expect(result.status === 'included' && result.registrant.codeOfConductAgreedAt).toBe('2021-11-05T00:00:00Z');
+  });
+
+  it('reads webinarAttended = No from the CSV\'s W/Done column', () => {
+    const result = transformRow(row({ webinarDone: 'No' }));
+    expect(result.status === 'included' && result.registrant.webinarAttended).toBe('No');
+  });
+
+  it('never stores a literal "No" for codeOfConductAgreed, even if the column somehow contained one — narrows to null', () => {
+    const result = transformRow(row({ code: 'No' }));
+    expect(result.status === 'included' && result.registrant.codeOfConductAgreed).toBeNull();
   });
 });
 
@@ -136,6 +210,10 @@ function transformed(overrides: Partial<TransformedRegistrant> = {}): Transforme
     registeredAt: '2020-01-01T00:00:00Z',
     unsubscribed: null,
     nfc: null,
+    webinarSessionAt: null,
+    webinarAttended: null,
+    codeOfConductAgreed: null,
+    codeOfConductAgreedAt: null,
     sourceLines: [1],
     ...overrides,
   };
@@ -220,5 +298,48 @@ describe('dedupeByEmail', () => {
     expect(stephen?.churchName).toBe('Australind Bapt Ch'); // still merges normally within his own sub-group
     expect(cillaResult?.email).toBeNull(); // not Stephen's email — she's her own registrant, matchable only by phone
     expect(cillaResult?.phoneRaw).toBe('61467 269 846');
+  });
+
+  it('merges webinarAttended: Yes wins over No when duplicate rows disagree', () => {
+    const withYes = transformed({ email: 'a@example.com', webinarAttended: 'Yes' });
+    const withNo = transformed({ email: 'a@example.com', webinarAttended: 'No' });
+
+    const [merged] = dedupeByEmail([withYes, withNo]);
+    expect(merged.webinarAttended).toBe('Yes');
+  });
+
+  it('merges webinarAttended: No when only one duplicate row has a value at all', () => {
+    const withNo = transformed({ email: 'a@example.com', webinarAttended: 'No' });
+    const blank = transformed({ email: 'a@example.com', webinarAttended: null });
+
+    const [merged] = dedupeByEmail([withNo, blank]);
+    expect(merged.webinarAttended).toBe('No');
+  });
+
+  it('merges codeOfConductAgreed: Yes if either duplicate row shows it, same idiom as unsubscribed/nfc', () => {
+    const withCode = transformed({ email: 'a@example.com', codeOfConductAgreed: 'Yes' });
+    const withoutCode = transformed({ email: 'a@example.com', codeOfConductAgreed: null });
+
+    const [merged] = dedupeByEmail([withCode, withoutCode]);
+    expect(merged.codeOfConductAgreed).toBe('Yes');
+  });
+
+  it('merges webinarSessionAt and codeOfConductAgreedAt using the later-non-null-wins rule', () => {
+    const earlier = transformed({
+      email: 'a@example.com',
+      registeredAt: '2021-01-01T00:00:00Z',
+      webinarSessionAt: '2021-06-16T00:00:00Z',
+      codeOfConductAgreedAt: '2021-06-01T00:00:00Z',
+    });
+    const later = transformed({
+      email: 'a@example.com',
+      registeredAt: '2021-12-01T00:00:00Z',
+      webinarSessionAt: '2021-11-22T09:30:00Z',
+      codeOfConductAgreedAt: '2021-11-05T00:00:00Z',
+    });
+
+    const [merged] = dedupeByEmail([earlier, later]);
+    expect(merged.webinarSessionAt).toBe('2021-11-22T09:30:00Z');
+    expect(merged.codeOfConductAgreedAt).toBe('2021-11-05T00:00:00Z');
   });
 });

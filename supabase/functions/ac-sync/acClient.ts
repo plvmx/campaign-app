@@ -145,7 +145,9 @@ export function createAcClient(): AcPort {
           contact?: { id: string; email: string | null; firstName: string | null; lastName: string | null; phone: string | null; cdate: string | null };
         }>,
         acFetch(`/contacts/${contactId}/fieldValues`, {}) as Promise<{ fieldValues?: Array<{ field: string; value: string }> }>,
-        acFetch(`/contacts/${contactId}/contactTags`, {}) as Promise<{ contactTags?: Array<{ tag: string }> }>,
+        acFetch(`/contacts/${contactId}/contactTags`, {}) as Promise<{
+          contactTags?: Array<{ tag: string; cdate: string | null }>;
+        }>,
       ]);
 
       const c = contactBody.contact;
@@ -164,7 +166,11 @@ export function createAcClient(): AcPort {
       // contactTags associates a contact with a tag *ID* only — no name is
       // needed here, since source attribution (sourceAttribution.ts) matches
       // by ac_tag_id against registry.known_source_tags, not by tag name.
-      const tags: AcContactTag[] = (tagsBody.contactTags ?? []).map((ct) => ({ id: ct.tag }));
+      // `cdate` (when AC applied this specific tag) IS captured, added
+      // 2026-09-15 — it's the only available "when did this happen" signal
+      // for a tag-derived field, used by tagDerivedFields.ts to populate
+      // registry.registrants.code_of_conduct_agreed_at.
+      const tags: AcContactTag[] = (tagsBody.contactTags ?? []).map((ct) => ({ id: ct.tag, cdate: ct.cdate ?? null }));
 
       return { core, fieldValues, tags };
     },

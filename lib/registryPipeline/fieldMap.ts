@@ -10,6 +10,7 @@
 // a sensitive field into the registry without a deliberate edit here.
 
 import type { AcFieldValue, MappedRegistrantFields, RawAcContactPayload } from './types.ts';
+import { normalizeAcDate } from './tagDerivedFields.ts';
 
 /**
  * AC custom-field IDs this pipeline is allowed to read (plan Section 3.4).
@@ -66,14 +67,22 @@ export const ALLOWED_CUSTOM_FIELD_IDS = {
   CHURCH_NAME: '26',
   CHURCH_NAME_FALLBACK: '14',
   /**
-   * Confirmed live/populated and included per plan 3.4, but registry.registrants
-   * (plan Section 5) has no column for these yet — they're preserved untouched
-   * in staging.ac_events.raw_payload and simply not promoted to the canonical
-   * table in this phase. Add registrants columns in a future migration if an
-   * operational need for them emerges; do not read them further than that
-   * without doing so (there's nowhere to put the mapped value yet).
+   * [23] BOTJ Webinar Rego Date (date-only). Confirmed live/populated and
+   * included per plan 3.4, but registry.registrants has no column for it —
+   * preserved untouched in staging.ac_events.raw_payload, not promoted.
+   * Distinct from [24] below: confirmed live (2026-09-15) that Lorraine's
+   * CSV "Webinar" column matches [24]'s value, not this one — no CSV
+   * column maps to Rego Date, so there is no operational need to promote
+   * it. Do not read it further without adding a registrants column first.
    */
   BOTJ_WEBINAR_REGO_DATE: '23',
+  /**
+   * [24] BOTJ Webinar Session (datetime). Promoted to
+   * registry.registrants.webinar_session_at (2026-09-15, per Peter) —
+   * confirmed live against 8 shared records between Lorraine's CSV
+   * "Webinar" column and Jordan's tracking spreadsheet's own "Session
+   * Date" column, always an exact match including time-of-day.
+   */
   BOTJ_WEBINAR_SESSION: '24',
 } as const;
 
@@ -115,5 +124,6 @@ export function mapAcFields(payload: RawAcContactPayload): MappedRegistrantField
     interestedInTraining: findFieldValue(fieldValues, ALLOWED_CUSTOM_FIELD_IDS.INTERESTED_IN_TRAINING),
     churchLeader,
     churchName,
+    webinarSessionAt: normalizeAcDate(findFieldValue(fieldValues, ALLOWED_CUSTOM_FIELD_IDS.BOTJ_WEBINAR_SESSION)),
   };
 }
