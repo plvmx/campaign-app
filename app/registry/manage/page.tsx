@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type CSSProperties, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type ReactNode } from 'react';
 import Link from 'next/link';
 import { registrySupabase } from '@/lib/registrySupabaseClient';
 import { useRegistryGate } from '@/app/registry/useRegistryGate';
@@ -295,6 +295,124 @@ function EditableStateCell({ recordId, value, onSave }: { recordId: string; valu
   );
 }
 
+const lookupInputStyle: CSSProperties = { padding: '0.3rem', minWidth: 130, border: '1px solid #ccc', borderRadius: 4, font: 'inherit' };
+const lookupOptionStyle: CSSProperties = {
+  display: 'block', width: '100%', textAlign: 'left', padding: '0.3rem 0.6rem', background: 'none', border: 'none',
+  cursor: 'pointer', font: 'inherit', fontSize: '0.85rem', color: '#111827',
+};
+
+/**
+ * One "type to filter, then pick" lookup dropdown — a text input that
+ * narrows a floating options list to whatever's typed, rather than a plain
+ * <select> the admin has to scroll through. Typing filters by substring
+ * (case-insensitive) against each option's label; Enter picks the top match,
+ * Escape or a click outside closes without changing the selection.
+ */
+function LookupSelect({
+  field,
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  field: LookupField;
+  label: string;
+  options: LookupOption[];
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const selectedLabel = value === '' ? '' : (options.find((opt) => opt.value === value)?.label ?? value);
+  const [query, setQuery] = useState(selectedLabel);
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Re-sync the displayed text when the selection changes from outside this
+  // component (e.g. "Reset lookups", or a different grid cell resetting all
+  // filters) — same reset-during-render pattern as EditableTextCell's
+  // `lastValue` above, not a useEffect, per the react-hooks/set-state-in-effect rule.
+  const [lastValue, setLastValue] = useState(value);
+  if (value !== lastValue) {
+    setLastValue(value);
+    setQuery(selectedLabel);
+  }
+
+  useEffect(() => {
+    if (!open) return;
+    function handlePointerDown(e: MouseEvent) {
+      if (!containerRef.current?.contains(e.target as Node)) {
+        setOpen(false);
+        setQuery(selectedLabel);
+      }
+    }
+    document.addEventListener('mousedown', handlePointerDown);
+    return () => document.removeEventListener('mousedown', handlePointerDown);
+  }, [open, selectedLabel]);
+
+  const filtered = query.trim() === ''
+    ? options
+    : options.filter((opt) => opt.label.toLowerCase().includes(query.trim().toLowerCase()));
+
+  function select(optValue: string, optLabel: string) {
+    onChange(optValue);
+    setQuery(optLabel);
+    setOpen(false);
+  }
+
+  return (
+    <div ref={containerRef} style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+      <label htmlFor={`lookup-${field}`} style={{ fontSize: '0.8rem', color: '#374151' }}>{label}</label>
+      <input
+        id={`lookup-${field}`}
+        type="text"
+        value={query}
+        onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
+        onFocus={(e) => { setOpen(true); e.target.select(); }}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') {
+            setOpen(false);
+            setQuery(selectedLabel);
+            (e.target as HTMLInputElement).blur();
+          } else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (filtered.length > 0) select(filtered[0].value, filtered[0].label);
+            else select('', '');
+          }
+        }}
+        placeholder="All"
+        autoComplete="off"
+        style={lookupInputStyle}
+        aria-label={`Look up by ${label}`}
+      />
+      {open && (
+        <ul
+          role="listbox"
+          aria-label={`${label} options`}
+          style={{
+            position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 2, maxHeight: 220, overflowY: 'auto',
+            background: '#fff', border: '1px solid #ccc', borderRadius: 4, listStyle: 'none', padding: '0.25rem 0',
+            zIndex: 20, boxShadow: '0 2px 6px rgba(0,0,0,0.12)',
+          }}
+        >
+          <li>
+            <button type="button" role="option" aria-selected={value === ''} onClick={() => select('', '')} style={lookupOptionStyle}>All</button>
+          </li>
+          {filtered.length === 0 ? (
+            <li style={{ padding: '0.3rem 0.6rem', color: '#9ca3af', fontSize: '0.85rem' }}>No matches</li>
+          ) : (
+            filtered.map((opt) => (
+              <li key={opt.value}>
+                <button type="button" role="option" aria-selected={value === opt.value} onClick={() => select(opt.value, opt.label)} style={lookupOptionStyle}>
+                  {opt.label}
+                </button>
+              </li>
+            ))
+          )}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 /** The five "find a record by a specific value" dropdowns above the pane's table — one per field, each already populated from the values actually present among the selected cell's records. */
 function LookupFiltersRow({
   options,
@@ -312,20 +430,14 @@ function LookupFiltersRow({
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: '0.75rem', margin: '0.75rem 0' }}>
       {LOOKUP_FIELDS.map((field) => (
-        <label key={field} style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', fontSize: '0.8rem', color: '#374151' }}>
-          {LOOKUP_FIELD_LABELS[field]}
-          <select
-            value={filters[field] ?? ''}
-            onChange={(e) => onChange(field, e.target.value)}
-            style={{ padding: '0.3rem', minWidth: 130 }}
-            aria-label={`Look up by ${LOOKUP_FIELD_LABELS[field]}`}
-          >
-            <option value="">All</option>
-            {options[field].map((opt) => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
-        </label>
+        <LookupSelect
+          key={field}
+          field={field}
+          label={LOOKUP_FIELD_LABELS[field]}
+          options={options[field]}
+          value={filters[field] ?? ''}
+          onChange={(value) => onChange(field, value)}
+        />
       ))}
       {anyActive && (
         <button type="button" onClick={onReset} style={{ background: 'none', border: 'none', color: '#2563eb', cursor: 'pointer', padding: '0.3rem 0' }}>

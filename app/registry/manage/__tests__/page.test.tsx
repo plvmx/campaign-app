@@ -357,26 +357,66 @@ describe('RegistryManagePage', () => {
       await screen.findByRole('table', { name: 'Matching records' });
     }
 
+    // The lookup fields are typeahead comboboxes now, not plain <select>s:
+    // focusing the input opens a floating options listbox, typing narrows
+    // it by substring, and clicking (or Enter, for the top match) commits
+    // a value. These helpers drive that flow instead of a bare fireEvent.change.
+    function openLookupListbox(label: string): HTMLElement {
+      fireEvent.focus(screen.getByLabelText(`Look up by ${label}`));
+      return screen.getByRole('listbox', { name: `${label} options` });
+    }
+
+    function selectLookupOption(label: string, query: string, optionText: string) {
+      const input = screen.getByLabelText(`Look up by ${label}`);
+      fireEvent.focus(input);
+      fireEvent.change(input, { target: { value: query } });
+      const listbox = screen.getByRole('listbox', { name: `${label} options` });
+      fireEvent.click(within(listbox).getByRole('option', { name: optionText }));
+    }
+
     it('populates each lookup dropdown from the distinct values actually present among the selected cell\'s records', async () => {
       await selectAllTotalCell();
-      const options = screen.getByLabelText('Look up by First name').querySelectorAll('option');
-      const values = Array.from(options).map((o) => o.textContent);
+      const listbox = openLookupListbox('First name');
+      const values = within(listbox).getAllByRole('option').map((o) => o.textContent);
       expect(values).toEqual(['All', 'Nat', 'Uma', 'Vicky']);
+    });
+
+    it('narrows the shown options as the admin types, by case-insensitive substring', async () => {
+      await selectAllTotalCell();
+      const input = screen.getByLabelText('Look up by First name');
+      fireEvent.focus(input);
+      fireEvent.change(input, { target: { value: 'vi' } });
+
+      const listbox = screen.getByRole('listbox', { name: 'First name options' });
+      const values = within(listbox).getAllByRole('option').map((o) => o.textContent);
+      expect(values).toEqual(['All', 'Vicky']);
     });
 
     it('narrows the shown records to an exact match when a lookup value is selected', async () => {
       await selectAllTotalCell();
-      fireEvent.change(screen.getByLabelText('Look up by First name'), { target: { value: 'Vicky' } });
+      selectLookupOption('First name', 'Vicky', 'Vicky');
 
       expect(within(recordsTable()).getByText('vicky@example.com')).toBeInTheDocument();
       expect(within(recordsTable()).queryByText('nat@example.com')).not.toBeInTheDocument();
       expect(within(recordsTable()).queryByText('uma@example.com')).not.toBeInTheDocument();
     });
 
+    it('picks the top filtered match on Enter, without requiring a click', async () => {
+      await selectAllTotalCell();
+      const input = screen.getByLabelText('Look up by First name');
+      fireEvent.focus(input);
+      fireEvent.change(input, { target: { value: 'Vicky' } });
+      fireEvent.keyDown(input, { key: 'Enter' });
+
+      expect(input).toHaveValue('Vicky');
+      expect(within(recordsTable()).getByText('vicky@example.com')).toBeInTheDocument();
+      expect(within(recordsTable()).queryByText('nat@example.com')).not.toBeInTheDocument();
+    });
+
     it('combines multiple active lookups with AND', async () => {
       await selectAllTotalCell();
-      fireEvent.change(screen.getByLabelText('Look up by First name'), { target: { value: 'Vicky' } });
-      fireEvent.change(screen.getByLabelText('Look up by Postcode'), { target: { value: '2000' } }); // Nat's postcode, not Vicky's
+      selectLookupOption('First name', 'Vicky', 'Vicky');
+      selectLookupOption('Postcode', '2000', '2000'); // Nat's postcode, not Vicky's
 
       expect(within(recordsTable()).queryByText('vicky@example.com')).not.toBeInTheDocument();
       expect(screen.getByText(/\(0 of 3\)/)).toBeInTheDocument();
@@ -385,12 +425,13 @@ describe('RegistryManagePage', () => {
     it('offers a "(blank)" option only for a field that actually has a blank value, and filtering by it isolates those records', async () => {
       await selectAllTotalCell();
       // Uma is the only sample registrant with no postcode.
-      fireEvent.change(screen.getByLabelText('Look up by Postcode'), { target: { value: '__blank__' } });
+      selectLookupOption('Postcode', '(blank)', '(blank)');
       expect(within(recordsTable()).getByText('uma@example.com')).toBeInTheDocument();
       expect(within(recordsTable()).queryByText('vicky@example.com')).not.toBeInTheDocument();
 
       // Every sample registrant has an email — no "(blank)" option should exist for that field.
-      const emailOptionLabels = Array.from(screen.getByLabelText('Look up by Email').querySelectorAll('option')).map((o) => o.textContent);
+      const emailListbox = openLookupListbox('Email');
+      const emailOptionLabels = within(emailListbox).getAllByRole('option').map((o) => o.textContent);
       expect(emailOptionLabels).not.toContain('(blank)');
     });
 
@@ -398,7 +439,7 @@ describe('RegistryManagePage', () => {
       await selectAllTotalCell();
       expect(screen.queryByText('Reset lookups')).not.toBeInTheDocument();
 
-      fireEvent.change(screen.getByLabelText('Look up by First name'), { target: { value: 'Vicky' } });
+      selectLookupOption('First name', 'Vicky', 'Vicky');
       expect(within(recordsTable()).queryByText('nat@example.com')).not.toBeInTheDocument();
 
       fireEvent.click(screen.getByText('Reset lookups'));
@@ -408,7 +449,7 @@ describe('RegistryManagePage', () => {
 
     it('resets active lookups when a different cell is selected', async () => {
       await selectAllTotalCell();
-      fireEvent.change(screen.getByLabelText('Look up by First name'), { target: { value: 'Vicky' } });
+      selectLookupOption('First name', 'Vicky', 'Vicky');
       expect(screen.getByLabelText('Look up by First name')).toHaveValue('Vicky');
 
       const primaryRow = requireRow(screen.getByLabelText('Primary Filter period'));
@@ -416,6 +457,19 @@ describe('RegistryManagePage', () => {
 
       await screen.findByText(/Primary Filter — Total/);
       expect(screen.getByLabelText('Look up by First name')).toHaveValue('');
+    });
+
+    it('closes without changing the selection when Escape is pressed', async () => {
+      await selectAllTotalCell();
+      selectLookupOption('First name', 'Vicky', 'Vicky');
+
+      const input = screen.getByLabelText('Look up by First name');
+      fireEvent.focus(input);
+      fireEvent.change(input, { target: { value: 'Nat' } });
+      fireEvent.keyDown(input, { key: 'Escape' });
+
+      expect(input).toHaveValue('Vicky');
+      expect(within(recordsTable()).getByText('vicky@example.com')).toBeInTheDocument();
     });
   });
 
