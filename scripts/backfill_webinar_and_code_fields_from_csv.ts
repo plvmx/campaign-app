@@ -125,11 +125,13 @@ async function main() {
   const csvByEmail = new Map<string, TransformedRegistrant>();
   let unmatchableNoEmail = 0;
   for (const r of deduped) {
+    const hasAnyField = r.webinarSessionAt || r.webinarAttended || r.codeOfConductAgreed || r.codeOfConductAgreedAt;
+    if (!hasAnyField) continue; // nothing this row could contribute to a patch
     if (!r.email) {
       // Either genuinely had no email in the CSV, or had its email cleared
       // by dedupeByEmail's owner-sub-group rule. Either way, this script
       // only matches by email — count and report, never guess by name/phone.
-      if (r.webinarSessionAt || r.webinarAttended || r.codeOfConductAgreed || r.codeOfConductAgreedAt) unmatchableNoEmail++;
+      unmatchableNoEmail++;
       continue;
     }
     csvByEmail.set(r.email.trim().toLowerCase(), r);
