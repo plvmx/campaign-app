@@ -671,7 +671,7 @@ export default function RegistryManagePage() {
   }
 
   return (
-    <div style={{ maxWidth: 1100, margin: '2rem auto', padding: '0 1rem' }}>
+    <div style={{ width: '95%', maxWidth: 1800, margin: '2rem auto', padding: '0 1rem' }}>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: '1rem' }}>
         <Link href="/registry" style={{ justifySelf: 'start' }}>← Back to Registry</Link>
         <h1 style={{ margin: 0, fontSize: '2rem', fontWeight: 800, textAlign: 'center' }}>Registrations Management</h1>
