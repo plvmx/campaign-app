@@ -7,6 +7,7 @@ import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2';
 import { getErrorMessage } from '../../../lib/errorUtils.ts';
 import type { DbPort, StagingEventRow } from '../../../lib/registryPipeline/ports.ts';
 import type { KnownSourceTag } from '../../../lib/registryPipeline/types.ts';
+import { protectExistingRegistrantName } from '../../../lib/registryPipeline/registrantNameGuard.ts';
 
 function requireEnv(name: string): string {
   const value = Deno.env.get(name);
@@ -165,19 +166,24 @@ export function createDb(client: SupabaseClient = createServiceClient()): DbPort
         const { data: existing, error: findError } = await client
           .schema('registry')
           .from('registrants')
-          .select('id, unsubscribed')
+          .select('id, unsubscribed, first_name, last_name')
           .eq('email', email)
           .maybeSingle();
         assertNoError(findError, 'upsertRegistrant (email existence check)');
 
+        const existingRow = existing as { id: string; unsubscribed: string | null; first_name: string | null; last_name: string | null } | null;
+        // A brand-new row has no name to protect; an existing one must
+        // never have its name silently replaced by this sync — see
+        // registrantNameGuard.ts.
+        const upsertFields = existingRow ? protectExistingRegistrantName(fields, existingRow) : fields;
+
         const { data, error } = await client
           .schema('registry')
           .from('registrants')
-          .upsert(fields, { onConflict: 'email' })
+          .upsert(upsertFields, { onConflict: 'email' })
           .select('id')
           .single();
         assertNoError(error, 'upsertRegistrant');
-        const existingRow = existing as { id: string; unsubscribed: string | null } | null;
         return { id: (data as { id: string }).id, isNew: !existing, unsubscribed: existingRow?.unsubscribed ?? null };
       }
 
@@ -191,18 +197,18 @@ export function createDb(client: SupabaseClient = createServiceClient()): DbPort
         const { data: existing, error: findError } = await client
           .schema('registry')
           .from('registrants')
-          .select('id, unsubscribed')
+          .select('id, unsubscribed, first_name, last_name')
           .is('email', null)
           .eq('phone', input.phone)
           .maybeSingle();
         assertNoError(findError, 'upsertRegistrant (phone lookup)');
 
         if (existing) {
-          const existingRow = existing as { id: string; unsubscribed: string | null };
+          const existingRow = existing as { id: string; unsubscribed: string | null; first_name: string | null; last_name: string | null };
           const { data, error } = await client
             .schema('registry')
             .from('registrants')
-            .update(fields)
+            .update(protectExistingRegistrantName(fields, existingRow))
             .eq('id', existingRow.id)
             .select('id')
             .single();
