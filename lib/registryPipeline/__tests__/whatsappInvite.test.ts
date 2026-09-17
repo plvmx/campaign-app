@@ -60,6 +60,8 @@ describe('buildWhatsAppInviteEmail', () => {
     const { text, html } = buildWhatsAppInviteEmail('Jane', 'https://chat.whatsapp.com/abc123', null);
     expect(text).not.toContain('campaigns happening near you');
     expect(html).not.toContain('campaigns happening near you');
+    expect(text).not.toContain('Keep this link safe');
+    expect(html).not.toContain('Keep this link safe');
   });
 
   it('includes a campaigns-near-me section, with the link, when a URL is given', () => {
@@ -69,6 +71,14 @@ describe('buildWhatsAppInviteEmail', () => {
     expect(text).toContain(mapUrl);
     expect(html).toContain('campaigns happening near you');
     expect(html).toContain(`href="${mapUrl}"`);
+  });
+
+  it('reminds the reader to keep the campaigns-near-me link, right after the link itself', () => {
+    const mapUrl = 'https://campaign.afj.org.au/public/campaigns-near-me?r=abc-123';
+    const { text, html } = buildWhatsAppInviteEmail('Jane', 'https://chat.whatsapp.com/abc123', mapUrl);
+    const reminder = 'Keep this link safe and click on it anytime to get an up-to-date view of campaigns near you, and register your interest in joining one.';
+    expect(text.indexOf(mapUrl)).toBeLessThan(text.indexOf(reminder));
+    expect(html).toContain(`<p>${reminder}</p>`);
   });
 
   it('still includes the WhatsApp invite link and sign-off when the campaigns-near-me section is present', () => {

@@ -159,7 +159,10 @@ export default function NearbyCampaignsMap({
           <Marker
             key={`${marker.state}::${marker.place}`}
             position={[marker.latitude, marker.longitude]}
-            icon={getStateMarkerIcon(marker.state, marker.place)}
+            // Larger and more opaque than CampaignMap's default (22px/0.35) —
+            // this map is meant to be tapped on a phone, so markers need to
+            // stand out and be easy to hit, per Peter's request (2026-09-17).
+            icon={getStateMarkerIcon(marker.state, marker.place, { size: 30, fillOpacity: 0.5 })}
           >
             <Popup>
               <div className="text-sm">

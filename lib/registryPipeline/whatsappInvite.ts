@@ -82,10 +82,12 @@ export function buildWhatsAppInviteEmail(firstName: string | null, inviteUrl: st
       '',
       'Want to get involved sooner? See campaigns happening near you in the next 7 days, and register your interest with one tap:',
       campaignsNearMeUrl,
+      'Keep this link safe and click on it anytime to get an up-to-date view of campaigns near you, and register your interest in joining one.',
     );
     htmlLines.push(
       `<p>Want to get involved sooner? See campaigns happening near you in the next 7 days, and register your interest with one tap:</p>`,
       `<p><a href="${safeMapUrl}">${safeMapUrl}</a></p>`,
+      `<p>Keep this link safe and click on it anytime to get an up-to-date view of campaigns near you, and register your interest in joining one.</p>`,
     );
   }
 
