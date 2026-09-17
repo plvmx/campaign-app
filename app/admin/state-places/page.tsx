@@ -316,6 +316,11 @@ export default function StatePlacesPage() {
                         <div className={`text-sm ${stateColor.text} opacity-75`}>
                           {item.location || <span className="italic">No location set</span>}
                         </div>
+                        {(item.latitude == null || item.longitude == null) && (
+                          <div className="text-sm font-medium text-amber-700 dark:text-amber-400">
+                            ⚠ Not geocoded — missing from maps until this is fixed
+                          </div>
+                        )}
                       </div>
                       <div className="flex gap-2">
                         <button
