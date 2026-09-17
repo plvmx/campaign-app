@@ -25,4 +25,12 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA registry GRANT ALL ON TABLES TO service_role;
 -- Identity columns (staging.ac_events.id, registry.registration_events.id,
 -- registry.sync_log.id) don't need a separate sequence grant — Postgres
 -- ties GENERATED ALWAYS AS IDENTITY sequence access to the table's own
--- INSERT privilege, already covered by the table grants above.
+-- INSERT privilege, already covered by the table grants above. This does
+-- NOT extend to a plain SERIAL/BIGSERIAL column, whose sequence is a
+-- separate object the two ALTER DEFAULT PRIVILEGES above don't reach
+-- (those cover TABLES only) — confirmed the hard way when
+-- registry.whatsapp_invite_log shipped with BIGSERIAL by mistake and
+-- silently failed every insert for two days; see
+-- fix_whatsapp_invite_log_sequence_grant.sql (2026-09-17), which also
+-- adds the missing ALTER DEFAULT PRIVILEGES ... ON SEQUENCES so this
+-- can't recur even if a future table gets this wrong again.
