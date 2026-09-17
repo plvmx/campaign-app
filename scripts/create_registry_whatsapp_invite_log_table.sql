@@ -12,7 +12,16 @@
 -- Run this in the Supabase SQL Editor.
 
 CREATE TABLE IF NOT EXISTS registry.whatsapp_invite_log (
-  id                BIGSERIAL PRIMARY KEY,
+  -- BIGINT GENERATED ALWAYS AS IDENTITY, not BIGSERIAL — matching every
+  -- other table in this schema (staging.ac_events, registration_events,
+  -- sync_log). This isn't just a style preference: an IDENTITY column's
+  -- backing sequence is tied to the table's own INSERT privilege, so
+  -- service_role's table grant already covers it. A SERIAL column's
+  -- sequence is a separate object needing its own explicit grant — one
+  -- this table shipped without, so every insert failed silently for two
+  -- days with `permission denied for sequence ..._id_seq` (42501) until
+  -- fixed live via fix_whatsapp_invite_log_sequence_grant.sql (2026-09-17).
+  id                BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   registrant_id     UUID NOT NULL REFERENCES registry.registrants(id),
   raw_staging_id    BIGINT,                  -- the staging.ac_events row that triggered this, same traceability pattern as registration_events.raw_staging_id
   status            TEXT NOT NULL CHECK (status IN ('sent', 'failed', 'skipped_no_link')),
