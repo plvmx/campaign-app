@@ -183,7 +183,11 @@ async function notifyOneLeader(
   }
 
   try {
-    await client.from('campaign_interest_sms_log').insert({
+    // insert() resolves to { data, error } rather than rejecting on a
+    // PostgREST-level failure (missing table, RLS denial, constraint
+    // violation) — checked explicitly so a logging failure can't go
+    // silent the way it would if only a thrown exception were caught here.
+    const { error: logError } = await client.from('campaign_interest_sms_log').insert({
       state: group.state,
       leader: group.leader,
       mobile,
@@ -194,6 +198,7 @@ async function notifyOneLeader(
       error,
       clicksend_message_id: clicksendMessageId,
     });
+    if (logError) throw logError;
   } catch (logErr) {
     console.error('[campaignInterestSmsService] failed to write campaign_interest_sms_log:', getErrorMessage(logErr));
   }
