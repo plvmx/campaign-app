@@ -15,11 +15,21 @@
  * file's comment for why signInWithOtp is safe to call server-side here
  * (this project's magic-link flow is implicit/#hash, not PKCE, so there's
  * no browser-bound code verifier tying the send to this request).
+ *
+ * The redirect URL is built from request.nextUrl.origin — the origin this
+ * request actually arrived on — NOT lib/siteUrl.ts's getSiteUrl(). That
+ * helper is designed for <head> metadata (OG tags, canonical URLs), where
+ * always resolving to the production domain regardless of environment is
+ * the point; here it's wrong, since a magic link needs to return the
+ * leader to whichever deployment actually sent it (a Vercel preview during
+ * testing, or production once merged) — getSiteUrl() would send every
+ * preview-deployment test back to production instead, 404ing on a route
+ * that isn't merged/deployed there yet (confirmed live during this
+ * feature's own rollout testing).
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { isValidEmail } from '@/lib/validation';
-import { getSiteUrl } from '@/lib/siteUrl';
 import { enforceOrigin } from '@/lib/corsUtils';
 import { createRateLimiter, getClientIp } from '@/lib/rateLimit';
 import { findVerifiedStateLeaders } from '@/lib/services/leaderVerificationService';
@@ -78,7 +88,7 @@ export async function POST(request: NextRequest) {
     // otherwise two different leaders proposing the same address (e.g. a shared
     // household email, or one mistyping another's) would let whichever one
     // confirms first silently attach their auth identity to the other's row too.
-    const redirectUrl = new URL('/confirm-email', getSiteUrl());
+    const redirectUrl = new URL('/confirm-email', request.nextUrl.origin);
     redirectUrl.searchParams.set('leaderId', leaderId);
 
     const { error: otpError } = await supabaseAdmin.auth.signInWithOtp({
