@@ -82,7 +82,7 @@ describe('buildLeaderSmsMessage', () => {
   it('formats a single-campaign message', () => {
     const msg = buildLeaderSmsMessage('Sam', 'in', [c({})]);
     expect(msg).toBe(
-      "AFJ: Sam registered interest (Yes I'm In) in your campaign at Orange 1, 12 Oct 2:00 PM. View: https://campaign.afj.org.au/campaign-interest"
+      '<Important AFJ Notification> Sam has registered interest ("Yes I\'m In") in your campaign at Orange 1, 12 Oct 2:00 PM. View details here: https://campaign.afj.org.au/campaign-interest'
     );
   });
 
@@ -92,7 +92,7 @@ describe('buildLeaderSmsMessage', () => {
       c({ place: 'Bathurst', site: '', date: '2026-10-14' }),
     ]);
     expect(msg).toBe(
-      'AFJ: Sam registered interest (Tell Me More) in 2 of your campaigns: Orange 1 (12 Oct), Bathurst (14 Oct). View: https://campaign.afj.org.au/campaign-interest'
+      '<Important AFJ Notification> Sam has registered interest ("Tell Me More") in 2 of your campaigns: Orange 1 (12 Oct), Bathurst (14 Oct). View details here: https://campaign.afj.org.au/campaign-interest'
     );
   });
 });
