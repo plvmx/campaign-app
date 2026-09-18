@@ -8,6 +8,7 @@ import { useUser } from '@/contexts/UserContext';
 import { getStateColor } from '@/lib/stateColors';
 import { AUSTRALIAN_STATES } from '@/lib/constants';
 import { getErrorMessage } from '@/lib/errorUtils';
+import { isValidEmail } from '@/lib/validation';
 import {
   type StateLeader,
   getStateLeaders,
@@ -40,7 +41,7 @@ export default function StateLeadersPage() {
   
   // Form state
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [formState, setFormState] = useState({ state: '', leader: '', mobile: '', admin: '' });
+  const [formState, setFormState] = useState({ state: '', leader: '', mobile: '', admin: '', email: '' });
   const [filterState, setFilterState] = useState<string>('');
   const [filterName, setFilterName]   = useState<string>('');
   const [filterMobile, setFilterMobile] = useState<string>('');
@@ -94,6 +95,12 @@ export default function StateLeadersPage() {
       const leaderValue = formState.leader.trim();
       const mobileValue = formState.mobile.trim() || null;
       const adminValue = formState.admin.trim() || null;
+      const emailValue = formState.email.trim() || null;
+
+      if (emailValue && !isValidEmail(emailValue)) {
+        setError('Please enter a valid email address');
+        return;
+      }
 
       if (editingId) {
         const originalItem = stateLeaders.find(sl => sl.id === editingId);
@@ -102,6 +109,7 @@ export default function StateLeadersPage() {
           leader: leaderValue,
           mobile: mobileValue,
           admin: adminValue,
+          email: emailValue,
         });
         setSuccess('State leader updated successfully');
 
@@ -118,12 +126,13 @@ export default function StateLeadersPage() {
           leader: leaderValue,
           mobile: mobileValue,
           admin: adminValue,
+          email: emailValue,
         });
         setSuccess('State leader created successfully');
       }
 
       // Reset form
-      setFormState({ state: '', leader: '', mobile: '', admin: '' });
+      setFormState({ state: '', leader: '', mobile: '', admin: '', email: '' });
       setEditingId(null);
       await fetchStateLeaders();
     } catch (err: unknown) {
@@ -139,7 +148,8 @@ export default function StateLeadersPage() {
       state: item.state,
       leader: item.leader,
       mobile: item.mobile || '',
-      admin: item.admin || ''
+      admin: item.admin || '',
+      email: item.email || '',
     });
     setError(null);
     setSuccess(null);
@@ -162,7 +172,7 @@ export default function StateLeadersPage() {
 
   const handleCancel = () => {
     setEditingId(null);
-    setFormState({ state: '', leader: '', mobile: '', admin: '' });
+    setFormState({ state: '', leader: '', mobile: '', admin: '', email: '' });
     setError(null);
     setSuccess(null);
   };
@@ -294,6 +304,19 @@ export default function StateLeadersPage() {
               />
             </div>
             <div>
+              <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Email (Optional)
+              </label>
+              <input
+                id="email"
+                type="email"
+                value={formState.email}
+                onChange={(e) => setFormState({ ...formState, email: e.target.value })}
+                className="mt-1 block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
+                placeholder="Enter email address"
+              />
+            </div>
+            <div>
               <label htmlFor="admin" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Admin Role (Optional)
               </label>
@@ -414,6 +437,11 @@ export default function StateLeadersPage() {
                         {item.mobile && (
                           <div className={`text-xs ${stateColor.text} opacity-60 mt-1`}>
                             {item.mobile}
+                          </div>
+                        )}
+                        {item.email && (
+                          <div className={`text-xs ${stateColor.text} opacity-60 mt-1`}>
+                            {item.email}
                           </div>
                         )}
                         {item.admin && (

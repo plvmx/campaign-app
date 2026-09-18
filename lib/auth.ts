@@ -11,6 +11,9 @@ export interface StateLeaderMatch {
   leader: string;
   mobile: string | null;
   admin: string | null;
+  email: string | null;
+  pendingEmail: string | null;
+  suggestedEmail: string | null;
 }
 
 /**
@@ -73,11 +76,14 @@ export async function validateStateLeader(mobile: string, firstName: string): Pr
     }
 
     return (json.matches ?? []).map((m: StateLeaderMatch) => ({
-      id:     m.id,
-      state:  m.state,
-      leader: m.leader,
-      mobile: null,
-      admin:  m.admin,
+      id:             m.id,
+      state:          m.state,
+      leader:         m.leader,
+      mobile:         null,
+      admin:          m.admin,
+      email:          m.email,
+      pendingEmail:   m.pendingEmail,
+      suggestedEmail: m.suggestedEmail,
     }));
   } catch (err) {
     console.error('Error validating state leader:', err);

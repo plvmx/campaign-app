@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { getSession, validateStateLeader, completeSignIn, type StateLeaderMatch } from '@/lib/auth';
 import { getErrorMessage } from '@/lib/errorUtils';
+import { isValidEmail } from '@/lib/validation';
 import { trackEvent } from '@/lib/analytics';
 import { useUser } from '@/contexts/UserContext';
 import { getRecentTWOLCampaignsForLeader } from '@/lib/services/campaignService';
@@ -51,6 +52,14 @@ export default function LoginPage() {
   // the public Register Interest link — gates the "Manage my Campaign
   // Interest" button on the action chooser
   const [hasCampaignInterest, setHasCampaignInterest] = useState(false);
+  // Ahead of a later phase moving login onto real Supabase Auth accounts,
+  // every leader without a confirmed email is asked (skippably) to add/
+  // confirm one, pre-filled from state_leaders.pending_email or a
+  // registry.registrants phone-match suggestion. Shown every login until
+  // confirmed, then never again — see the leader-email-capture plan.
+  const [emailStep, setEmailStep] = useState<{ match: StateLeaderMatch; value: string; phase: 'edit' | 'sent' } | null>(null);
+  const [emailStepError, setEmailStepError] = useState<string | null>(null);
+  const [emailStepSubmitting, setEmailStepSubmitting] = useState(false);
 
   // Check if user is already signed in
   useEffect(() => {
@@ -115,7 +124,7 @@ export default function LoginPage() {
         // (avoids a race where onAuthStateChange fires before the profile upsert completes)
         await refreshUser();
         trackEvent('sign_in', { state: matches[0].state });
-        await checkRecentCampaign(matches[0]);
+        await maybeShowEmailStep(matches[0]);
       } else {
         // Multiple states — show state picker
         setPendingMatches(matches);
@@ -125,6 +134,47 @@ export default function LoginPage() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // ── Post-sign-in, pre-action-chooser: capture/confirm email if not already set ─
+  const maybeShowEmailStep = async (match: StateLeaderMatch) => {
+    if (match.email) {
+      await checkRecentCampaign(match);
+      return;
+    }
+    setEmailStep({ match, value: match.pendingEmail ?? match.suggestedEmail ?? '', phase: 'edit' });
+  };
+
+  const handleEmailContinue = async () => {
+    if (!emailStep) return;
+    const trimmed = emailStep.value.trim();
+    if (!isValidEmail(trimmed)) {
+      setEmailStepError('Please enter a valid email address');
+      return;
+    }
+    setEmailStepError(null);
+    setEmailStepSubmitting(true);
+    try {
+      const res = await fetch('/api/auth/propose-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ leaderId: emailStep.match.id, mobile: mobile.trim(), firstName: firstName.trim(), email: trimmed }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed to send confirmation email');
+      setEmailStep({ ...emailStep, value: trimmed, phase: 'sent' });
+    } catch (err: unknown) {
+      setEmailStepError(getErrorMessage(err, 'Failed to send confirmation email. Please try again.'));
+    } finally {
+      setEmailStepSubmitting(false);
+    }
+  };
+
+  const handleEmailStepDone = () => {
+    if (!emailStep) return;
+    const { match } = emailStep;
+    setEmailStep(null);
+    checkRecentCampaign(match);
   };
 
   // ── Post-sign-in: show action chooser for regular leaders, or check recent TWOL for admins ─
@@ -200,7 +250,7 @@ export default function LoginPage() {
       await completeSignIn(match);
       await refreshUser();
       trackEvent('sign_in', { state: match.state });
-      await checkRecentCampaign(match);
+      await maybeShowEmailStep(match);
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Failed to sign in. Please try again.'));
       setPendingMatches(null);
@@ -234,6 +284,67 @@ export default function LoginPage() {
     const h12 = h % 12 || 12;
     const formattedTime = `${h12}:${mStr} ${ampm}`;
     return `${place} ${day}${suffix} ${month} ${formattedTime} ... Yes?`;
+  }
+
+  if (emailStep) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8 dark:bg-gray-900">
+        <div className={cardClass}>
+          {emailStep.phase === 'edit' ? (
+            <div className="space-y-4">
+              <h2 className="text-center text-xl font-bold text-gray-900 dark:text-gray-100">
+                Add your email
+              </h2>
+              <p className="text-center text-sm text-gray-600 dark:text-gray-400">
+                We&apos;re moving towards secure email sign-in for leaders. Please confirm or add your email address.
+              </p>
+              {emailStepError && (
+                <div className="rounded-md bg-red-50 p-3 text-sm text-red-800 dark:bg-red-900/20 dark:text-red-200">
+                  {emailStepError}
+                </div>
+              )}
+              <input
+                type="email"
+                autoComplete="email"
+                value={emailStep.value}
+                onChange={(e) => setEmailStep({ ...emailStep, value: e.target.value })}
+                className="mt-1 block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
+                placeholder="you@example.com"
+              />
+              <button
+                onClick={handleEmailContinue}
+                disabled={emailStepSubmitting}
+                className="w-full rounded-md bg-blue-600 px-4 py-3 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 border-2 border-gray-800 dark:border-gray-600"
+              >
+                {emailStepSubmitting ? 'Sending…' : 'Continue'}
+              </button>
+              <button
+                onClick={handleEmailStepDone}
+                disabled={emailStepSubmitting}
+                className="w-full text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 disabled:opacity-50"
+              >
+                Skip for now
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <h2 className="text-center text-xl font-bold text-gray-900 dark:text-gray-100">
+                Check your inbox
+              </h2>
+              <p className="text-center text-sm text-gray-600 dark:text-gray-400">
+                We sent a confirmation link to <strong>{emailStep.value}</strong>. Click it to confirm your email.
+              </p>
+              <button
+                onClick={handleEmailStepDone}
+                className="w-full rounded-md bg-blue-600 px-4 py-3 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
+              >
+                Continue
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
   }
 
   if (showActionChooser) {
