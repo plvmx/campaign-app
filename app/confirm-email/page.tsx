@@ -100,6 +100,22 @@ export default function ConfirmEmailPage() {
         {message && (
           <p className="text-center text-sm text-gray-600 dark:text-gray-400">{message}</p>
         )}
+        {status === 'success' && (
+          <a
+            href="/app"
+            className="block w-full rounded-md bg-blue-600 px-4 py-3 text-center text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
+          >
+            Continue
+          </a>
+        )}
+        {status === 'error' && (
+          <a
+            href="/login"
+            className="block w-full rounded-md bg-blue-600 px-4 py-3 text-center text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
+          >
+            Back to sign in
+          </a>
+        )}
       </div>
     </div>
   );
