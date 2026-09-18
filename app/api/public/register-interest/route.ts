@@ -26,6 +26,7 @@ import { calculateCampaignDates, formatDateForDb, getFortnightDateRange } from '
 import { isCampaignPast } from '@/lib/campaignUtils';
 import { isValidMobile, isValidEmail } from '@/lib/validation';
 import type { AriseCampaign } from '@/lib/ariseLayout';
+import { notifyLeadersOfCampaignInterest, type CampaignInterestType } from '@/lib/services/campaignInterestSmsService';
 
 const getRateLimiter = createRateLimiter({ windowMs: 60 * 1000, maxAttempts: 30 });
 // Writes get a tighter, longer-window limit than the read-only public GETs —
@@ -169,6 +170,18 @@ export async function POST(request: NextRequest) {
     if (error) {
       console.error('public register-interest POST error:', error);
       return NextResponse.json({ error: 'Failed to register your interest' }, { status: 500 });
+    }
+
+    // Best-effort — a leader-notification failure must never turn into a
+    // 500 for someone who has already successfully registered interest.
+    try {
+      await notifyLeadersOfCampaignInterest(supabaseAdmin, {
+        campaignIds,
+        registrantFirstName: firstName,
+        interestType: interestType as CampaignInterestType,
+      });
+    } catch (notifyErr) {
+      console.error('public register-interest: leader SMS notification error:', notifyErr);
     }
 
     return NextResponse.json({ success: true });

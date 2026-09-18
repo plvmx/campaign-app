@@ -360,6 +360,20 @@ CREATE POLICY "campaign_changes_log: authenticated can insert"
 
 
 -- =============================================================================
+-- campaign_interest_sms_log  (append-only audit trail, "text the leader" SMS)
+-- Admins can read all. No insert/update/delete policy — only the service
+-- role writes here (from the public register-interest / campaigns-near-me
+-- API routes), and the service role bypasses RLS entirely.
+-- =============================================================================
+ALTER TABLE campaign_interest_sms_log ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "campaign_interest_sms_log: admin can read" ON campaign_interest_sms_log;
+CREATE POLICY "campaign_interest_sms_log: admin can read"
+  ON campaign_interest_sms_log FOR SELECT TO authenticated
+  USING (public.is_admin());
+
+
+-- =============================================================================
 -- app_events  (analytics, append-only)
 -- =============================================================================
 ALTER TABLE app_events ENABLE ROW LEVEL SECURITY;
