@@ -112,6 +112,7 @@ describe('notifyLeadersOfCampaignInterest', () => {
   function makeClient(opts: {
     campaigns: CampaignLeaderInfo[];
     leaderMobile: string | null;
+    logInsertError?: { message: string };
   }) {
     const inserted: unknown[] = [];
     const from = vi.fn((table: string) => {
@@ -122,7 +123,7 @@ describe('notifyLeadersOfCampaignInterest', () => {
         return makeQueryBuilder({ data: opts.leaderMobile ? { mobile: opts.leaderMobile } : null, error: null });
       }
       if (table === 'campaign_interest_sms_log') {
-        const builder = makeQueryBuilder({ data: null, error: null });
+        const builder = makeQueryBuilder({ data: null, error: opts.logInsertError ?? null });
         builder.insert = vi.fn((row: unknown) => {
           inserted.push(row);
           return builder;
@@ -216,5 +217,36 @@ describe('notifyLeadersOfCampaignInterest', () => {
     });
 
     expect(sendSms).not.toHaveBeenCalled();
+  });
+
+  // Regression: insert() resolves to { data, error } rather than rejecting
+  // on a PostgREST-level failure (e.g. the table not existing yet, or an
+  // RLS denial) — a bug caught during a real end-to-end smoke test against
+  // production, where campaign_interest_sms_log hadn't been created yet
+  // and the failed insert went completely unlogged, silently, because the
+  // surrounding try/catch only ever catches a *thrown* exception.
+  it('logs a console error when writing to campaign_interest_sms_log itself fails (does not throw)', async () => {
+    vi.mocked(sendSms).mockResolvedValue({ messageId: 'msg-1' });
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const campaigns = [campaignsRow({ id: 'c1' })];
+    const { from } = makeClient({
+      campaigns,
+      leaderMobile: '0412345678',
+      logInsertError: { message: 'relation "campaign_interest_sms_log" does not exist' },
+    });
+
+    await expect(
+      notifyLeadersOfCampaignInterest({ from } as never, {
+        campaignIds: ['c1'],
+        registrantFirstName: 'Sam',
+        interestType: 'in',
+      })
+    ).resolves.toBeUndefined();
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      '[campaignInterestSmsService] failed to write campaign_interest_sms_log:',
+      expect.stringContaining('does not exist')
+    );
+    consoleErrorSpy.mockRestore();
   });
 });
