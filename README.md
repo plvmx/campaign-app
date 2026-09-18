@@ -39,10 +39,13 @@ For the full architecture, page-by-page route map, database schema, testing poli
    NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
    SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
    CRON_SECRET=any-random-string-for-local-testing
+   CLICKSEND_USERNAME=your_clicksend_username
+   CLICKSEND_API_KEY=your_clicksend_api_key
    ```
 
    - `SUPABASE_SERVICE_ROLE_KEY` is required for the server-side leader-lookup and cron API routes (`app/api/auth/validate-leader`, `app/api/cron/weekly-refresh`) — keep it out of anything committed.
    - `CRON_SECRET` just needs to match what you send when hitting the cron route manually in dev; it doesn't need to be the real production value.
+   - `CLICKSEND_USERNAME`/`CLICKSEND_API_KEY` are required for `lib/clickSendClient.ts` to text a campaign's leader when someone registers interest (`lib/services/campaignInterestSmsService.ts`) — without them, that notification fails (and is logged to `campaign_interest_sms_log` as `failed`), but registering interest itself still succeeds.
 
 3. Database: the schema has grown through many incremental SQL scripts in [`scripts/`](./scripts) and [`docs/migrations/`](./docs/migrations) rather than one canonical setup file. There's no supported "create every table from scratch" path — for a new environment, get a schema clone or a data export from Peter (see `/admin/backup` for exporting/restoring the admin-curated tables once you have access to a running instance). [`supabase/rls-policies.sql`](./supabase/rls-policies.sql) has the current Row Level Security policies for reference.
 

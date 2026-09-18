@@ -35,6 +35,7 @@ import { formatDateForDb } from '@/lib/campaignDates';
 import { isCampaignPast } from '@/lib/campaignUtils';
 import { normalizeMobile } from '@/lib/auth';
 import { geocodeAddress } from '@/lib/geocoding';
+import { notifyLeadersOfCampaignInterest, type CampaignInterestType } from '@/lib/services/campaignInterestSmsService';
 import {
   buildNearbyMarkers,
   type CampaignsNearMeResponse,
@@ -229,6 +230,18 @@ export async function POST(request: NextRequest) {
     if (error) {
       console.error('[public/campaigns-near-me] POST insert error:', error);
       return NextResponse.json({ error: 'Failed to register your interest' }, { status: 500 });
+    }
+
+    // Best-effort — a leader-notification failure must never turn into a
+    // 500 for someone who has already successfully registered interest.
+    try {
+      await notifyLeadersOfCampaignInterest(supabaseAdmin, {
+        campaignIds: [campaignId],
+        registrantFirstName: registrant.first_name?.trim() || 'AFJ Registrant',
+        interestType: interestType as CampaignInterestType,
+      });
+    } catch (notifyErr) {
+      console.error('[public/campaigns-near-me] leader SMS notification error:', notifyErr);
     }
 
     return NextResponse.json({ success: true });
