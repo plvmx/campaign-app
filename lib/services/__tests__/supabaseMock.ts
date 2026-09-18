@@ -7,7 +7,7 @@ type MockFn = ReturnType<typeof vi.fn>;
  * (much stricter) PostgrestQueryBuilder generic types. */
 export interface MockQueryBuilder extends PromiseLike<{ data: unknown; error: unknown }> {
   select: MockFn; insert: MockFn; update: MockFn; delete: MockFn; upsert: MockFn;
-  eq: MockFn; neq: MockFn; ilike: MockFn; like: MockFn; in: MockFn; or: MockFn;
+  eq: MockFn; neq: MockFn; ilike: MockFn; like: MockFn; in: MockFn; or: MockFn; not: MockFn;
   gte: MockFn; lte: MockFn; gt: MockFn; lt: MockFn;
   order: MockFn; limit: MockFn; range: MockFn;
   single: MockFn; maybeSingle: MockFn;
@@ -29,7 +29,7 @@ export function makeQueryBuilder<T>(result: { data: T; error: unknown }): MockQu
   const builder = {} as MockQueryBuilder;
   const chainMethods = [
     'select', 'insert', 'update', 'delete', 'upsert',
-    'eq', 'neq', 'ilike', 'like', 'in', 'or', 'gte', 'lte', 'gt', 'lt',
+    'eq', 'neq', 'ilike', 'like', 'in', 'or', 'not', 'gte', 'lte', 'gt', 'lt',
     'order', 'limit', 'range',
   ] as const;
   for (const method of chainMethods) {

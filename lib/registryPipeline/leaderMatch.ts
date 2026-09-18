@@ -1,7 +1,10 @@
 // Cross-references registry.registrants against public.state_leaders by
-// normalized phone number — the only field both systems reliably collect
-// (state_leaders has no email column at all; login there is mobile+name —
-// see lib/auth.ts). Name matching isn't used: state_leaders.leader is one
+// normalized phone number — the only field both systems reliably collect.
+// state_leaders does now carry an email column (added for the leader
+// email-capture rollout — see CLAUDE.md's "Leader email capture" section),
+// but it's still unpopulated for most rows and login there remains
+// mobile+name (see lib/auth.ts), so phone stays the reliable join key here.
+// Name matching isn't used: state_leaders.leader is one
 // combined free-text field while registry.registrants splits first/last,
 // so it's exactly the kind of fuzzy comparison that produces false
 // positives/negatives. Kept pure/framework-free, same precedent as the

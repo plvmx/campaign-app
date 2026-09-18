@@ -150,6 +150,30 @@ CREATE POLICY "state_leaders: only admin can delete"
 
 
 -- =============================================================================
+-- state_leader_email_changes
+-- Append-only audit trail (see scripts/create_state_leader_email_changes_table.sql).
+-- Admins can read it from /admin/state-leaders. The propose/confirm-email
+-- API routes write via the service role (bypasses RLS); the insert policy
+-- below covers only the admin-panel direct-set path
+-- (lib/services/stateLeadersService.ts), which runs under the admin's own
+-- authenticated session. No UPDATE/DELETE policies — entries are immutable.
+-- =============================================================================
+ALTER TABLE state_leader_email_changes ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "state_leader_email_changes: admin can read" ON state_leader_email_changes;
+CREATE POLICY "state_leader_email_changes: admin can read"
+  ON state_leader_email_changes FOR SELECT
+  TO authenticated
+  USING (public.is_admin());
+
+DROP POLICY IF EXISTS "state_leader_email_changes: admin can insert" ON state_leader_email_changes;
+CREATE POLICY "state_leader_email_changes: admin can insert"
+  ON state_leader_email_changes FOR INSERT
+  TO authenticated
+  WITH CHECK (public.is_admin());
+
+
+-- =============================================================================
 -- state_places
 -- =============================================================================
 ALTER TABLE state_places ENABLE ROW LEVEL SECURITY;

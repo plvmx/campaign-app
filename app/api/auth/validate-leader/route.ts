@@ -1,13 +1,13 @@
 /**
  * Server-side login validation. Uses service role to bypass RLS.
  * POST body: { mobile: string, firstName: string }
- * Returns: { matches: Array<{ id, state, leader, admin }> }
+ * Returns: { matches: Array<{ id, state, leader, admin, email, pendingEmail, suggestedEmail }> }
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabaseAdmin';
-import { normalizeMobile, normalizeName } from '@/lib/auth';
 import { enforceOrigin } from '@/lib/corsUtils';
 import { createRateLimiter, getClientIp } from '@/lib/rateLimit';
+import { findVerifiedStateLeaders } from '@/lib/services/leaderVerificationService';
+import { getSuggestedEmailByMobile } from '@/lib/services/registrantEmailSuggestionService';
 
 // Rate limiting — in-memory, per IP, 10 attempts per 15 minutes.
 const rateLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, maxAttempts: 10 });
@@ -39,45 +39,30 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ matches: [] });
     }
 
-    const mobileNormalized    = normalizeMobile(mobile);
-    const firstNameNormalized = normalizeName(firstName);
+    const matches = await findVerifiedStateLeaders(mobile, firstName);
 
-    if (!mobileNormalized || !firstNameNormalized) {
+    if (matches.length === 0) {
       return NextResponse.json({ matches: [] });
     }
 
-    // Prefix-match on leader name to limit the result set while still tolerating
-    // trailing whitespace in stored values (e.g. "Rosheen "). The JS filter below
-    // enforces an exact normalised-name match, so "Rosh" will never match "Rosheen".
-    const { data, error } = await supabaseAdmin
-      .from('state_leaders')
-      .select('id, state, leader, mobile, admin')
-      .ilike('leader', `${firstNameNormalized}%`);
-
-    if (error) {
-      console.error('validate-leader API error:', error);
-      return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
-    }
-
-    if (!data || data.length === 0) {
-      return NextResponse.json({ matches: [] });
-    }
-
-    // Exact name + mobile verification in JS — filters out prefix-only matches.
-    const matches = data.filter((rec: { mobile?: string; leader?: string }) => {
-      const storedNameNormalized = normalizeName(rec.leader ?? '');
-      if (storedNameNormalized !== firstNameNormalized) return false;
-      const mobileValue = rec.mobile;
-      if (!mobileValue) return false;
-      return normalizeMobile(mobileValue) === mobileNormalized;
-    });
+    // Only worth the registry.registrants lookup (unindexed on phone, ~9,100
+    // rows) when at least one match still needs a suggestion — an
+    // already-confirmed leader will never see it, so skip the query entirely
+    // once every match has an email, keeping the common case cheap. All
+    // matches share the same verified mobile, so one lookup covers any that do.
+    const suggestedEmail = matches.some((m) => !m.email)
+      ? await getSuggestedEmailByMobile(mobile)
+      : null;
 
     return NextResponse.json({
-      matches: matches.map((m: { id: string; state: string; leader: string; admin: string | null }) => ({
-        id:     m.id,
-        state:  m.state,
-        leader: m.leader,
-        admin:  m.admin,
+      matches: matches.map((m) => ({
+        id:            m.id,
+        state:         m.state,
+        leader:        m.leader,
+        admin:         m.admin,
+        email:         m.email,
+        pendingEmail:  m.pending_email,
+        suggestedEmail,
       })),
     });
   } catch (err) {
