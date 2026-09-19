@@ -72,6 +72,12 @@ export const PUBLIC_LINKS: PublicLink[] = [
     description: "Tick the campaigns you'd like to join or find out more about, then let us know — no login required.",
     path: '/public/register-interest',
   },
+  {
+    slug: 'upcoming-campaigns',
+    title: 'Upcoming AFJ Campaigns Map',
+    description: 'See upcoming AFJ campaigns on an interactive map and register your interest — no login required.',
+    path: '/public/upcoming-campaigns',
+  },
 ];
 
 /** app_settings key for a public link's title override. */
