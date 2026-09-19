@@ -168,26 +168,29 @@ export default function UpcomingCampaignsClient() {
 
       <div className="relative flex-1 overflow-hidden rounded-lg border-2 border-gray-800">
         <div className="absolute top-2 right-2 z-[1000] w-fit max-w-[calc(100%-1rem)] rounded-md border-2 border-gray-800 bg-white px-3 py-2 shadow">
-          <form onSubmit={handlePostcodeSubmit} className="flex flex-nowrap items-center justify-center gap-2 overflow-x-auto">
-            <label className="whitespace-nowrap text-xs text-gray-700">
-              Show me Campaigns <strong className="font-bold">Near Me</strong> - my Postcode is
-            </label>
-            <input
-              type="text"
-              inputMode="numeric"
-              maxLength={4}
-              value={postcode}
-              onChange={(e) => setPostcode(e.target.value.replace(/\D/g, ''))}
-              placeholder="3000"
-              className="w-16 shrink-0 rounded-md border border-gray-300 px-1.5 py-1 text-xs font-normal text-gray-900"
-            />
-            <button
-              type="submit"
-              disabled={isLocating || postcode.trim().length !== 4}
-              className="shrink-0 rounded-md bg-blue-600 px-2 py-1 text-xs font-bold text-white hover:bg-blue-700 disabled:bg-gray-400"
-            >
-              {isLocating ? '…' : 'Go'}
-            </button>
+          <form onSubmit={handlePostcodeSubmit}>
+            <p className="whitespace-nowrap text-center text-xs text-gray-700">
+              Show me Campaigns <strong className="font-bold">Near Me</strong>
+            </p>
+            <div className="mt-1 flex flex-nowrap items-center justify-center gap-2">
+              <label className="whitespace-nowrap text-xs text-gray-700">My Postcode is</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                maxLength={4}
+                value={postcode}
+                onChange={(e) => setPostcode(e.target.value.replace(/\D/g, ''))}
+                placeholder="3000"
+                className="w-16 shrink-0 rounded-md border border-gray-300 px-1.5 py-1 text-xs font-normal text-gray-900"
+              />
+              <button
+                type="submit"
+                disabled={isLocating || postcode.trim().length !== 4}
+                className="shrink-0 rounded-md bg-blue-600 px-2 py-1 text-xs font-bold text-white hover:bg-blue-700 disabled:bg-gray-400"
+              >
+                {isLocating ? '…' : 'Go'}
+              </button>
+            </div>
           </form>
           {postcodeError && (
             <p className="mt-1 text-center text-xs font-normal text-red-700">{postcodeError}</p>
