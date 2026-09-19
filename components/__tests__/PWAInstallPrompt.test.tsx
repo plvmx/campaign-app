@@ -2,8 +2,8 @@
  * Regression test for the map-under-bottom-nav bug: the admin map pages size
  * their map container using `calc(100dvh - ... - var(--pwa-banner-height,0px))`,
  * relying on PWAInstallPrompt to publish its own rendered height as that CSS
- * custom property (see app/admin/campaign-map/page.tsx and friends). Before the
- * fix, nothing published that height, so the map's height calc had no way to
+ * custom property (see app/admin/campaigns-near-me/page.tsx and friends). Before
+ * the fix, nothing published that height, so the map's height calc had no way to
  * know the banner was pushing it down, and the map rendered underneath the
  * fixed bottom nav whenever the (dismissible, mobile-only-taller) banner showed.
  */

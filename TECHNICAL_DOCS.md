@@ -198,7 +198,6 @@ campaign-app/
 │   │   ├── backup/                 # Route: /admin/backup — export/restore JSON snapshot
 │   │   ├── campaign-categories/    # Route: /admin/campaign-categories — manage TWOL/BOTJ/TLT etc.
 │   │   ├── campaign-logs/          # Route: /admin/campaign-logs — audit log, paginated
-│   │   ├── campaign-map/           # Route: /admin/campaign-map — map of upcoming campaigns
 │   │   ├── campaign-messages/      # Route: /admin/campaign-messages — per-date banner text
 │   │   ├── campaign-rules/         # Route: /admin/campaign-rules — recurring scheduling rules
 │   │   ├── campaigns-near-me/      # Route: /admin/campaigns-near-me — geolocation-filtered map
@@ -241,7 +240,7 @@ campaign-app/
 │
 ├── components/                 # Shared components (used across multiple pages)
 │   ├── CampaignForm.tsx        # Generic campaign add/edit form
-│   ├── CampaignMap.tsx         # Leaflet map used by /admin/campaign-map, /admin/state-places-map
+│   ├── CampaignMap.tsx         # Leaflet map used by /public/upcoming-campaigns, /admin/state-places-map
 │   ├── ErrorBoundary.tsx       # React error boundary
 │   ├── LoadingSpinner.tsx      # Loading indicator
 │   ├── MapPopupActions.tsx     # RSVP buttons shown inside map popups
@@ -542,6 +541,7 @@ There is no separate permissions module. Role logic is kept inline wherever it i
 
 /public/week1-campaigns               Public, no-login "Week 1 Campaigns" link (shareable)
 /public/temporary-upcoming-campaigns  Public, no-login temporary-upcoming-campaigns link
+/public/upcoming-campaigns            Public, no-login map of upcoming campaigns, all states (replaces the former /admin/campaign-map)
 /auth/callback                        Supabase OAuth code-exchange handler, not user-facing
 
 /admin                                Admin hub (full admin only)
@@ -552,7 +552,6 @@ There is no separate permissions module. Role logic is kept inline wherever it i
 /admin/campaign-categories            Manage campaign type codes (TWOL, BOTJ, TLT, …)
 /admin/campaign-messages              Manage date-specific banner messages
 /admin/campaign-logs                  View campaign change audit log
-/admin/campaign-map                   Interactive map of upcoming campaigns
 /admin/campaigns-near-me              Upcoming campaigns near the admin's current location
 /admin/register-interest              Tick upcoming campaigns, RSVP ("Yes I'm In" / "Tell Me More")
 /admin/member-activity                Active member counts, by total/state/place/campaign
@@ -813,7 +812,7 @@ Supabase Postgres
 
 | Function | Description |
 |----------|-------------|
-| `getMapData(options)` | Campaigns in a date range (optionally by state), grouped by place, with coordinates resolved from `state_places` or on-demand geocoding — backs `/admin/campaign-map` |
+| `getMapData(options)` | Campaigns in a date range (optionally by state), grouped by place, with coordinates resolved from `state_places` or on-demand geocoding — used by `getNearbyCampaigns()` below (`/admin/campaigns-near-me`) |
 | `getStatePlacesMapData(options)` | Same coordinate-resolution pipeline for every valid place — backs `/admin/state-places-map` |
 | `fetchPlaceCoordinates(state, place, force?)` | Look up (or force-refresh) one place's lat/lon |
 
