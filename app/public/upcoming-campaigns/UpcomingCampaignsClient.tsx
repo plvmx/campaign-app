@@ -18,6 +18,7 @@ import { formatDateForDb, formatWeekDateRangeString } from '@/lib/campaignDates'
 import { getErrorMessage } from '@/lib/errorUtils';
 import type { UpcomingCampaignsResponse } from '@/app/api/public/upcoming-campaigns/route';
 import PublicMapRegisterInterestActions from '@/components/PublicMapRegisterInterestActions';
+import RegisterInterestClient from '@/components/registerInterest/RegisterInterestClient';
 
 /** Approximate zoom level for a ~60km-radius view around a postcode. */
 const POSTCODE_ZOOM = 10;
@@ -30,6 +31,11 @@ const CampaignMap = dynamic(() => import('@/components/CampaignMap'), {
 });
 
 export default function UpcomingCampaignsClient() {
+  // Lets a visitor who'd rather not use the map switch to the same
+  // checkbox-list screen as /public/register-interest — reused verbatim
+  // (same component, same data/submit flow), not a second implementation.
+  const [viewMode, setViewMode] = useState<'map' | 'list'>('map');
+
   const { dates: campaignDates } = useCampaignDates();
 
   // Week 1 is the upcoming campaign week; Week 2 is the one after it.
@@ -126,6 +132,21 @@ export default function UpcomingCampaignsClient() {
 
   const { center, zoom } = nearMeTarget ?? { center: [AUSTRALIA_MAP_CENTER.lat, AUSTRALIA_MAP_CENTER.lng] as [number, number], zoom: AUSTRALIA_MAP_CENTER.zoom };
 
+  if (viewMode === 'list') {
+    return (
+      <div className="relative h-[100dvh]">
+        <RegisterInterestClient />
+        <button
+          type="button"
+          onClick={() => setViewMode('map')}
+          className="absolute bottom-4 left-4 z-[1000] rounded-md border-2 border-gray-800 bg-white px-3 py-2 text-sm font-bold text-gray-700 shadow hover:bg-gray-100"
+        >
+          Map View
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto flex h-[100dvh] max-w-4xl flex-col p-4">
       <div className="mb-3">
@@ -201,6 +222,13 @@ export default function UpcomingCampaignsClient() {
             <p className="text-sm text-gray-700">Please wait — locating campaigns on the map</p>
           </div>
         )}
+        <button
+          type="button"
+          onClick={() => setViewMode('list')}
+          className="absolute bottom-2 left-2 z-[1000] rounded-md border-2 border-gray-800 bg-white px-2 py-1 text-xs font-bold text-gray-700 shadow hover:bg-gray-100"
+        >
+          List View
+        </button>
         <CampaignMap
           center={center}
           zoom={zoom}
