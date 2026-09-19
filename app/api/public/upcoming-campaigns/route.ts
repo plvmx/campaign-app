@@ -18,9 +18,9 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { enforceOrigin } from '@/lib/corsUtils';
 import { createRateLimiter, getClientIp } from '@/lib/rateLimit';
 import { isCampaignPast } from '@/lib/campaignUtils';
+import type { AriseCampaign } from '@/lib/ariseLayout';
 import {
   buildUpcomingCampaignMarkers,
-  type PublicUpcomingCampaignRow,
   type PublicUpcomingPlaceCoords,
   type PublicUpcomingMarker,
 } from '@/lib/services/publicUpcomingCampaignsService';
@@ -32,6 +32,14 @@ const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 export interface UpcomingCampaignsResponse {
   markers: PublicUpcomingMarker[];
   unresolvedCount: number;
+  /**
+   * The same upcoming campaigns the markers are built from, as a flat,
+   * pre-sorted list — powers the "List View" toggle on
+   * /public/upcoming-campaigns (CampaignCheckboxList, the same component
+   * /public/register-interest uses), so a visitor who'd rather not use the
+   * map sees an equivalent checklist for the exact same date range.
+   */
+  campaigns: AriseCampaign[];
 }
 
 // Short-lived in-memory cache — the response is identical for every caller
@@ -69,10 +77,12 @@ export async function GET(request: NextRequest) {
     const [{ data: campaignRows, error: campaignError }, { data: placeRows, error: placeError }] = await Promise.all([
       supabaseAdmin
         .from('campaigns')
-        .select('id, date, state, place, time, leader, category')
+        .select('id, date, state, place, site, time, leader, category')
         .gte('date', startDate)
         .lte('date', endDate)
         .order('date', { ascending: true })
+        .order('state', { ascending: true })
+        .order('place', { ascending: true })
         .order('time', { ascending: true }),
       supabaseAdmin
         .from('state_places')
@@ -83,12 +93,16 @@ export async function GET(request: NextRequest) {
     if (campaignError) throw campaignError;
     if (placeError) throw placeError;
 
-    const upcoming = ((campaignRows ?? []) as PublicUpcomingCampaignRow[]).filter((c) => !isCampaignPast(c.date, c.time));
+    // Typed as AriseCampaign (carries `site`, unlike PublicUpcomingCampaignRow)
+    // since this same filtered list also becomes the response's flat
+    // `campaigns` field for the List View toggle — it structurally
+    // satisfies PublicUpcomingCampaignRow[] for marker-building below too.
+    const upcoming = ((campaignRows ?? []) as AriseCampaign[]).filter((c) => !isCampaignPast(c.date, c.time));
     const placeCoords = (placeRows ?? []) as PublicUpcomingPlaceCoords[];
 
     const { markers, unresolvedCount } = buildUpcomingCampaignMarkers(upcoming, placeCoords);
 
-    const response: UpcomingCampaignsResponse = { markers, unresolvedCount };
+    const response: UpcomingCampaignsResponse = { markers, unresolvedCount, campaigns: upcoming };
     cache.set(cacheKey, { expiresAt: Date.now() + CACHE_TTL_MS, response });
 
     return NextResponse.json(response);
