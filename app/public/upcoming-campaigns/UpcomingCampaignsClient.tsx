@@ -5,10 +5,15 @@
  * general-public replacement for the admin-only "View Campaign Map"
  * screen (formerly /admin/campaign-map, removed from the Admin console's
  * "In Development" section once this shipped). Backed by
- * app/api/public/upcoming-campaigns/route.ts for markers and
- * app/api/public/geocode-postcode/route.ts for the postcode-based
+ * app/api/public/upcoming-campaigns/route.ts for markers (and, for the
+ * List View toggle below, the same date range's campaigns as a flat list)
+ * and app/api/public/geocode-postcode/route.ts for the postcode-based
  * "Near Me" recentre — no browser geolocation prompt, since an anonymous
  * visitor types their own postcode instead.
+ *
+ * The header/intro/This Week/Next Week toggle above the map are shared
+ * between Map View and List View — only the box below them swaps, so
+ * toggling views never changes the top of the page (Peter's request).
  */
 import { useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
@@ -18,7 +23,8 @@ import { formatDateForDb, formatWeekDateRangeString } from '@/lib/campaignDates'
 import { getErrorMessage } from '@/lib/errorUtils';
 import type { UpcomingCampaignsResponse } from '@/app/api/public/upcoming-campaigns/route';
 import PublicMapRegisterInterestActions from '@/components/PublicMapRegisterInterestActions';
-import RegisterInterestClient from '@/components/registerInterest/RegisterInterestClient';
+import PublicRegisterInterestModal, { type PublicInterestType } from '@/components/PublicRegisterInterestModal';
+import CampaignCheckboxList from '@/components/registerInterest/CampaignCheckboxList';
 
 /** Approximate zoom level for a ~60km-radius view around a postcode. */
 const POSTCODE_ZOOM = 10;
@@ -31,9 +37,10 @@ const CampaignMap = dynamic(() => import('@/components/CampaignMap'), {
 });
 
 export default function UpcomingCampaignsClient() {
-  // Lets a visitor who'd rather not use the map switch to the same
-  // checkbox-list screen as /public/register-interest — reused verbatim
-  // (same component, same data/submit flow), not a second implementation.
+  // Lets a visitor who'd rather not use the map see the same campaigns as
+  // a checklist instead — same data/submit flow as /public/register-interest
+  // (CampaignCheckboxList + PublicRegisterInterestModal), for the same
+  // This Week/Next Week range the map is showing.
   const [viewMode, setViewMode] = useState<'map' | 'list'>('map');
 
   const { dates: campaignDates } = useCampaignDates();
@@ -60,6 +67,7 @@ export default function UpcomingCampaignsClient() {
   }, [weeks, selectedWeek]);
 
   const [markers, setMarkers] = useState<UpcomingCampaignsResponse['markers']>([]);
+  const [campaigns, setCampaigns] = useState<UpcomingCampaignsResponse['campaigns']>([]);
   const [unresolvedCount, setUnresolvedCount] = useState(0);
   const [isLoadingMap, setIsLoadingMap] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
@@ -83,6 +91,7 @@ export default function UpcomingCampaignsClient() {
       .then((result) => {
         if (cancelled) return;
         setMarkers(result.markers);
+        setCampaigns(result.campaigns);
         setUnresolvedCount(result.unresolvedCount);
       })
       .catch((err: unknown) => {
@@ -132,20 +141,32 @@ export default function UpcomingCampaignsClient() {
 
   const { center, zoom } = nearMeTarget ?? { center: [AUSTRALIA_MAP_CENTER.lat, AUSTRALIA_MAP_CENTER.lng] as [number, number], zoom: AUSTRALIA_MAP_CENTER.zoom };
 
-  if (viewMode === 'list') {
-    return (
-      <div className="relative h-[100dvh]">
-        <RegisterInterestClient />
-        <button
-          type="button"
-          onClick={() => setViewMode('map')}
-          className="absolute bottom-4 left-4 z-[1000] rounded-md border-2 border-gray-800 bg-white px-3 py-2 text-sm font-bold text-gray-700 shadow hover:bg-gray-100"
-        >
-          Map View
-        </button>
-      </div>
-    );
-  }
+  // List View — same checklist + confirmation popup as /public/register-interest,
+  // for the same week's campaigns the map would otherwise show.
+  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
+  const toggleChecked = (id: string) => {
+    setCheckedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+  const [listValidationError, setListValidationError] = useState<string | null>(null);
+  const [listPopupAction, setListPopupAction] = useState<PublicInterestType | null>(null);
+
+  const openListPopup = (action: PublicInterestType) => {
+    setListValidationError(null);
+    if (checkedIds.size === 0) {
+      setListValidationError('Tick at least one campaign below first.');
+      return;
+    }
+    setListPopupAction(action);
+  };
+
+  const handleListSuccess = () => {
+    setCheckedIds(new Set());
+    setListPopupAction(null);
+  };
 
   return (
     <div className="mx-auto flex h-[100dvh] max-w-4xl flex-col p-4">
@@ -187,55 +208,109 @@ export default function UpcomingCampaignsClient() {
         </div>
       )}
 
-      <div className="relative flex-1 overflow-hidden rounded-lg border-2 border-gray-800">
-        <div className="absolute top-2 right-2 z-[1000] w-fit max-w-[calc(100%-1rem)] rounded-md border-2 border-gray-800 bg-white px-3 py-2 shadow">
-          <form onSubmit={handlePostcodeSubmit}>
-            <p className="whitespace-nowrap text-center text-xs text-gray-700">
-              Show me Campaigns <strong className="font-bold">Near Me</strong>
-            </p>
-            <div className="mt-1 flex flex-nowrap items-center justify-center gap-2">
-              <label className="whitespace-nowrap text-xs text-gray-700">My Postcode is</label>
-              <input
-                type="text"
-                inputMode="numeric"
-                maxLength={4}
-                value={postcode}
-                onChange={(e) => setPostcode(e.target.value.replace(/\D/g, ''))}
-                placeholder="3000"
-                className="w-16 shrink-0 rounded-md border border-gray-300 px-1.5 py-1 text-xs font-normal text-gray-900"
-              />
-              <button
-                type="submit"
-                disabled={isLocating || postcode.trim().length !== 4}
-                className="shrink-0 rounded-md bg-blue-600 px-2 py-1 text-xs font-bold text-white hover:bg-blue-700 disabled:bg-gray-400"
-              >
-                {isLocating ? '…' : 'Go'}
-              </button>
-            </div>
-          </form>
-          {postcodeError && (
-            <p className="mt-1 text-center text-xs font-normal text-red-700">{postcodeError}</p>
-          )}
+      {viewMode === 'list' && listValidationError && (
+        <div className="mb-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+          {listValidationError}
         </div>
-        {isLoadingMap && (
-          <div className="absolute inset-0 z-[1100] flex flex-col items-center justify-center gap-3 bg-white/80 px-6 text-center">
-            <p className="text-sm text-gray-700">Please wait — locating campaigns on the map</p>
+      )}
+
+      {viewMode === 'map' ? (
+        <div className="relative flex-1 overflow-hidden rounded-lg border-2 border-gray-800">
+          <div className="absolute top-2 right-2 z-[1000] w-fit max-w-[calc(100%-1rem)] rounded-md border-2 border-gray-800 bg-white px-3 py-2 shadow">
+            <form onSubmit={handlePostcodeSubmit}>
+              <p className="whitespace-nowrap text-center text-xs text-gray-700">
+                Show me Campaigns <strong className="font-bold">Near Me</strong>
+              </p>
+              <div className="mt-1 flex flex-nowrap items-center justify-center gap-2">
+                <label className="whitespace-nowrap text-xs text-gray-700">My Postcode is</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={4}
+                  value={postcode}
+                  onChange={(e) => setPostcode(e.target.value.replace(/\D/g, ''))}
+                  placeholder="3000"
+                  className="w-16 shrink-0 rounded-md border border-gray-300 px-1.5 py-1 text-xs font-normal text-gray-900"
+                />
+                <button
+                  type="submit"
+                  disabled={isLocating || postcode.trim().length !== 4}
+                  className="shrink-0 rounded-md bg-blue-600 px-2 py-1 text-xs font-bold text-white hover:bg-blue-700 disabled:bg-gray-400"
+                >
+                  {isLocating ? '…' : 'Go'}
+                </button>
+              </div>
+            </form>
+            {postcodeError && (
+              <p className="mt-1 text-center text-xs font-normal text-red-700">{postcodeError}</p>
+            )}
           </div>
-        )}
-        <button
-          type="button"
-          onClick={() => setViewMode('list')}
-          className="absolute bottom-2 left-2 z-[1000] rounded-md border-2 border-gray-800 bg-white px-2 py-1 text-xs font-bold text-gray-700 shadow hover:bg-gray-100"
-        >
-          List View
-        </button>
-        <CampaignMap
-          center={center}
-          zoom={zoom}
-          markers={markers}
-          renderActions={({ campaignId }) => <PublicMapRegisterInterestActions campaignId={campaignId} />}
-        />
-      </div>
+          {isLoadingMap && (
+            <div className="absolute inset-0 z-[1100] flex flex-col items-center justify-center gap-3 bg-white/80 px-6 text-center">
+              <p className="text-sm text-gray-700">Please wait — locating campaigns on the map</p>
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={() => setViewMode('list')}
+            className="absolute bottom-2 left-2 z-[1000] rounded-md border-2 border-gray-800 bg-white px-2 py-1 text-xs font-bold text-gray-700 shadow hover:bg-gray-100"
+          >
+            List View
+          </button>
+          <CampaignMap
+            center={center}
+            zoom={zoom}
+            markers={markers}
+            renderActions={({ campaignId }) => <PublicMapRegisterInterestActions campaignId={campaignId} />}
+          />
+        </div>
+      ) : (
+        <>
+          <div className="relative flex-1 overflow-hidden rounded-lg border-2 border-gray-800">
+            {isLoadingMap && (
+              <div className="absolute inset-0 z-[1100] flex flex-col items-center justify-center gap-3 bg-white/80 px-6 text-center">
+                <p className="text-sm text-gray-700">Please wait — loading campaigns</p>
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => setViewMode('map')}
+              className="absolute bottom-2 left-2 z-[1000] rounded-md border-2 border-gray-800 bg-white px-2 py-1 text-xs font-bold text-gray-700 shadow hover:bg-gray-100"
+            >
+              Map View
+            </button>
+            <div className="h-full overflow-y-auto">
+              <CampaignCheckboxList campaigns={campaigns} checkedIds={checkedIds} onToggle={toggleChecked} />
+            </div>
+          </div>
+
+          <div className="mt-3 flex shrink-0 gap-2">
+            <button
+              type="button"
+              onClick={() => openListPopup('in')}
+              className="flex-1 rounded-md bg-green-600 px-4 py-3 text-base font-bold text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 border-2 border-gray-800"
+            >
+              Yes I&apos;m In
+            </button>
+            <button
+              type="button"
+              onClick={() => openListPopup('more')}
+              className="flex-1 rounded-md bg-orange-500 px-4 py-3 text-base font-bold text-white hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 border-2 border-gray-800"
+            >
+              Tell Me More
+            </button>
+          </div>
+
+          {listPopupAction && (
+            <PublicRegisterInterestModal
+              campaignIds={[...checkedIds]}
+              interestType={listPopupAction}
+              onCancel={() => setListPopupAction(null)}
+              onSuccess={handleListSuccess}
+            />
+          )}
+        </>
+      )}
     </div>
   );
 }
