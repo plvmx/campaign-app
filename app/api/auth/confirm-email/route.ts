@@ -81,9 +81,16 @@ export async function POST(request: NextRequest) {
       .eq('pending_email', email);
 
     if (updateError) {
+      // state_leaders.email has no uniqueness constraint (deliberately — see
+      // scripts/drop_state_leaders_email_unique_index.sql: several leaders
+      // legitimately hold more than one row in the SAME state — an AD row,
+      // an SR row, and/or a plain leader row — and may have only one real
+      // email to give all of them). This branch is a generic fallback for
+      // any future constraint on these columns, not a currently-reachable
+      // path.
       if (updateError.code === '23505') {
         return NextResponse.json(
-          { error: 'This email is already confirmed on another leader record in the same state. Contact an admin.' },
+          { error: 'This email could not be confirmed due to a conflicting record. Contact an admin.' },
           { status: 409 },
         );
       }
