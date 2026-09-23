@@ -1,0 +1,25 @@
+-- Removes the per-state uniqueness constraint on state_leaders.email added
+-- in scripts/add_email_to_state_leaders.sql.
+--
+-- That constraint was built to let one person's multi-STATE rows share an
+-- email, but it turns out this app also has leaders with several rows
+-- WITHIN the same state (an AD row, an SR row, and/or a plain leader row,
+-- each differentiated by leader name/mobile so they satisfy the existing
+-- state+leader uniqueness constraint on this table) — the same real person,
+-- who may have only one real email address to give. The per-state
+-- constraint blocked them from confirming it on more than one of their own
+-- rows, with admin-panel edits hitting the exact same DB-level wall.
+--
+-- Safe to drop: the real protection against two DIFFERENT leaders ending up
+-- sharing one email by mistake already lives in the application layer, not
+-- this index. app/api/auth/propose-email/route.ts re-verifies mobile+name
+-- against the SPECIFIC row before ever writing pending_email, and
+-- app/api/auth/confirm-email/route.ts scopes its commit to that one
+-- leaderId (carried on the magic-link redirect), never a blanket match on
+-- the email string — no confirmation can attach to a row its own
+-- mobile+name pair wasn't independently verified against, uniqueness
+-- constraint or not.
+--
+-- Run this in the Supabase SQL Editor.
+
+DROP INDEX IF EXISTS idx_state_leaders_email_unique_per_state;
