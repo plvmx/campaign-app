@@ -57,6 +57,8 @@ export interface ManageRegistrant {
   webinarAttended: string | null;
   codeOfConductAgreed: string | null;
   codeOfConductAgreedAt: string | null;
+  /** 'Yes' if this person has unsubscribed (Lorraine's CSV, Jordan's tracking sheet, or a later ac-sync list-status change — see the registry schema notes in CLAUDE.md); null otherwise. Powers the "Exclude unsubscribed" toggle on the console — display-only, never hand-corrected here. */
+  unsubscribed: string | null;
 }
 
 export interface ManageSummaryResponse {

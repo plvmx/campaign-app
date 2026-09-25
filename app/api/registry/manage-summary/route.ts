@@ -4,8 +4,8 @@
  * Returns the most recent registry.sync_log row (whatever a national admin
  * needs to answer "when did the cron job last run, and did it succeed") and
  * every registry.registrants row — first/last name, email, phone, state,
- * postcode, registered_at, the four webinar/Code-of-Conduct fields (see
- * lib/registryPipeline/tagDerivedFields.ts), plus whether it matches a public.state_leaders
+ * postcode, registered_at, unsubscribed status, the four webinar/Code-of-Conduct
+ * fields (see lib/registryPipeline/tagDerivedFields.ts), plus whether it matches a public.state_leaders
  * row by normalized phone (lib/registryPipeline/leaderMatch.ts — every
  * AFJ leader is expected to also be a registrant, so Peter wanted this
  * visible in the record list, just as a yes/no next to their name — not
@@ -96,7 +96,7 @@ export async function GET(request: NextRequest) {
       const { data, error } = await supabaseAdmin
         .schema('registry')
         .from('registrants')
-        .select('id, first_name, last_name, email, phone, state, postcode, registered_at, webinar_session_at, webinar_attended, code_of_conduct_agreed, code_of_conduct_agreed_at')
+        .select('id, first_name, last_name, email, phone, state, postcode, registered_at, webinar_session_at, webinar_attended, code_of_conduct_agreed, code_of_conduct_agreed_at, unsubscribed')
         .range(offset, offset + PAGE_SIZE - 1);
       if (error) throw error;
       if (!data || data.length === 0) break;
@@ -113,6 +113,7 @@ export async function GET(request: NextRequest) {
         webinarAttended: r.webinar_attended,
         codeOfConductAgreed: r.code_of_conduct_agreed,
         codeOfConductAgreedAt: r.code_of_conduct_agreed_at,
+        unsubscribed: r.unsubscribed,
       })));
       if (data.length < PAGE_SIZE) break;
     }

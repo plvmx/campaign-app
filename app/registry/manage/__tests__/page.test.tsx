@@ -547,4 +547,67 @@ describe('RegistryManagePage', () => {
       }
     });
   });
+
+  describe('exclude unsubscribed toggle', () => {
+    // Same three regulars as SAMPLE_REGISTRANTS, plus one flagged
+    // unsubscribed — kept local to this describe block rather than folded
+    // into the shared fixture, since most of the file's other tests assert
+    // an exact total of 3.
+    const WITH_UNSUBSCRIBED = [
+      ...SAMPLE_REGISTRANTS,
+      {
+        id: 'r4', firstName: 'Xavier', lastName: 'Exley', email: 'xavier@example.com', phone: '+61400000004',
+        state: 'VIC', postcode: '3000', registeredAt: new Date(Date.now() - HOUR).toISOString(),
+        isLeader: false, leaderName: null, unsubscribed: 'Yes',
+      },
+    ];
+
+    beforeEach(() => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          lastSync: { startedAt: '2026-09-10T03:00:00Z', completedAt: '2026-09-10T03:01:00Z', status: 'success', recordsIn: 5, recordsUpserted: 5, errors: 0, notes: null },
+          registrants: WITH_UNSUBSCRIBED,
+        }),
+      }) as unknown as typeof fetch;
+    });
+
+    it('counts unsubscribed registrants by default, and only shows the toggle once data has loaded', async () => {
+      mockUseRegistryGate.mockReturnValue({ status: 'ready', leaderRole: { role: 'national_admin', mfa_required: true } });
+      render(<RegistryManagePage />);
+      expect(screen.queryByLabelText('Exclude unsubscribed registrants')).not.toBeInTheDocument();
+
+      const row = requireRow(await screen.findByText('All AFJ Registrations'));
+      expect(row).toHaveTextContent(/4/);
+      expect(screen.getByLabelText('Exclude unsubscribed registrants')).not.toBeChecked();
+    });
+
+    it('drops unsubscribed registrants from the grid counts and the record pane once checked', async () => {
+      mockUseRegistryGate.mockReturnValue({ status: 'ready', leaderRole: { role: 'national_admin', mfa_required: true } });
+      render(<RegistryManagePage />);
+      const allRow = requireRow(await screen.findByText('All AFJ Registrations'));
+      expect(allRow).toHaveTextContent(/4/);
+
+      fireEvent.click(await screen.findByLabelText('Exclude unsubscribed registrants'));
+      expect(allRow).toHaveTextContent(/3/);
+
+      fireEvent.click(within(allRow).getByRole('button', { name: '3' }));
+      const table = await screen.findByRole('table', { name: 'Matching records' });
+      expect(within(table).queryByText('xavier@example.com')).not.toBeInTheDocument();
+      expect(within(table).getByText('vicky@example.com')).toBeInTheDocument();
+    });
+
+    it('restores unsubscribed registrants when unchecked', async () => {
+      mockUseRegistryGate.mockReturnValue({ status: 'ready', leaderRole: { role: 'national_admin', mfa_required: true } });
+      render(<RegistryManagePage />);
+      const allRow = requireRow(await screen.findByText('All AFJ Registrations'));
+      const checkbox = await screen.findByLabelText('Exclude unsubscribed registrants');
+
+      fireEvent.click(checkbox);
+      expect(allRow).toHaveTextContent(/3/);
+
+      fireEvent.click(checkbox);
+      expect(allRow).toHaveTextContent(/4/);
+    });
+  });
 });
