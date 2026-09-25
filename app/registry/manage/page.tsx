@@ -280,7 +280,12 @@ function EditableTextCell({
             if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
           }}
           disabled={isSaving}
-          style={{ ...editInputStyle, width: 'auto', flex: '1 1 auto' }}
+          maxLength={field === 'postcode' ? 4 : undefined}
+          // Postcode is always 4 digits — flex-filling the cell (like
+          // First/Last name, which genuinely need the room) left it
+          // stretching to however wide the column happened to be, ~30
+          // characters wide once the page itself was widened.
+          style={field === 'postcode' ? { ...editInputStyle, width: '4.5rem', flex: '0 0 auto' } : { ...editInputStyle, width: 'auto', flex: '1 1 auto' }}
           aria-label={field}
         />
         {suffix}
