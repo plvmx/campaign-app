@@ -3,9 +3,12 @@ import {
   resolvePeriodRange,
   countAllRegistrants,
   countRegistrantsForPeriod,
+  countRegistrantsByCategory,
   filterRegistrantsForCell,
+  filterRegistrantsByCategoryForCell,
   MANAGE_CONSOLE_STATES,
   type RegistrantForCount,
+  type RegistrantForCategoryCount,
 } from '../registrantCounts';
 
 const NOW = new Date('2026-09-10T12:00:00Z');
@@ -138,5 +141,61 @@ describe('filterRegistrantsForCell', () => {
   it('returns the caller\'s own richer row objects, not a stripped-down copy', () => {
     const result = filterRegistrantsForCell(rows, 'NSW', null, NOW);
     expect(result[0]).toBe(rows[2]); // same object reference, not a rebuilt one
+  });
+});
+
+describe('countRegistrantsByCategory', () => {
+  function categoryRow(state: string | null, unsubscribed: string | null, nfc: string | null): RegistrantForCategoryCount {
+    return { state, registeredAt: null, unsubscribed, nfc };
+  }
+
+  const rows = [
+    categoryRow('VIC', 'Yes', null),
+    categoryRow('VIC', null, 'Yes'),
+    categoryRow('NSW', 'Yes', 'Yes'), // flagged both — counts under either category
+    categoryRow('QLD', null, null), // neither — never counted
+  ];
+
+  it('counts only rows flagged \'Yes\' for the selected category', () => {
+    const unsubscribed = countRegistrantsByCategory(rows, 'unsubscribed');
+    expect(unsubscribed.total).toBe(2);
+    expect(unsubscribed.byState.VIC).toBe(1);
+    expect(unsubscribed.byState.NSW).toBe(1);
+
+    const nfc = countRegistrantsByCategory(rows, 'nfc');
+    expect(nfc.total).toBe(2);
+    expect(nfc.byState.VIC).toBe(1);
+    expect(nfc.byState.NSW).toBe(1);
+  });
+
+  it('ignores registeredAt entirely — a null date still counts if the category flag is set', () => {
+    const result = countRegistrantsByCategory([categoryRow('VIC', 'Yes', null)], 'unsubscribed');
+    expect(result.total).toBe(1);
+  });
+});
+
+describe('filterRegistrantsByCategoryForCell', () => {
+  function record(id: string, state: string | null, unsubscribed: string | null, nfc: string | null) {
+    return { id, state, registeredAt: null, unsubscribed, nfc };
+  }
+
+  const rows = [
+    record('vic-unsub', 'VIC', 'Yes', null),
+    record('vic-nfc', 'VIC', null, 'Yes'),
+    record('nsw-unsub', 'NSW', 'Yes', null),
+    record('vic-neither', 'VIC', null, null),
+  ];
+
+  it('"total" matches every row flagged for the category, regardless of state', () => {
+    expect(filterRegistrantsByCategoryForCell(rows, 'total', 'unsubscribed').map((r) => r.id)).toEqual(['vic-unsub', 'nsw-unsub']);
+  });
+
+  it('combines the column with the category', () => {
+    expect(filterRegistrantsByCategoryForCell(rows, 'VIC', 'unsubscribed').map((r) => r.id)).toEqual(['vic-unsub']);
+    expect(filterRegistrantsByCategoryForCell(rows, 'VIC', 'nfc').map((r) => r.id)).toEqual(['vic-nfc']);
+  });
+
+  it('excludes a row that matches the column but not the category', () => {
+    expect(filterRegistrantsByCategoryForCell(rows, 'VIC', 'unsubscribed').map((r) => r.id)).not.toContain('vic-neither');
   });
 });

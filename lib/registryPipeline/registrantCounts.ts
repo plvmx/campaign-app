@@ -1,8 +1,8 @@
-// Pure date-window + per-state tallying logic for the /registry/manage
-// console (the "Primary Filter" / "Alternative Filter" comparison grid —
-// see app/registry/manage/page.tsx). Kept framework/IO-free, same
-// precedent as the rest of lib/registryPipeline/, so the date-window math
-// is unit testable without mocking Supabase or the real clock (every
+// Pure date-window/category + per-state tallying logic for the
+// /registry/manage console (the "Primary Filter" / "Other Filters"
+// comparison grid — see app/registry/manage/page.tsx). Kept framework/IO-free,
+// same precedent as the rest of lib/registryPipeline/, so the date-window
+// math is unit testable without mocking Supabase or the real clock (every
 // function here takes `now` explicitly rather than reading it).
 
 /** One row of the data this module consumes — just enough per-registrant detail to tally by state and date, never any PII. */
@@ -25,7 +25,7 @@ export type FilterPeriod =
   | '2023'
   | '2022';
 
-/** Drives both filter dropdowns on the console — order matches Peter's mockup. */
+/** Drives the Primary Filter row's period dropdown — order matches Peter's mockup. */
 export const FILTER_PERIOD_OPTIONS: { value: FilterPeriod; label: string }[] = [
   { value: 'last_24_hours', label: 'Last 24 hours' },
   { value: 'last_7_days', label: 'Last 7 days' },
@@ -127,7 +127,7 @@ function emptyByState(): Record<(typeof MANAGE_CONSOLE_STATES)[number], number> 
   return byState;
 }
 
-function tally(rows: RegistrantForCount[], include: (row: RegistrantForCount) => boolean): PeriodCounts {
+function tally<T extends RegistrantForCount>(rows: T[], include: (row: T) => boolean): PeriodCounts {
   const byState = emptyByState();
   let total = 0;
   let unknown = 0;
@@ -149,7 +149,7 @@ function tally(rows: RegistrantForCount[], include: (row: RegistrantForCount) =>
 }
 
 /** The unfiltered "All AFJ Registrations" row — every row counts, regardless of registeredAt. */
-export function countAllRegistrants(rows: RegistrantForCount[]): PeriodCounts {
+export function countAllRegistrants<T extends RegistrantForCount>(rows: T[]): PeriodCounts {
   return tally(rows, () => true);
 }
 
@@ -161,10 +161,28 @@ function withinWindow(row: RegistrantForCount, window: DateWindow | null): boole
   return t >= window.start && t < window.end;
 }
 
-/** A "Primary Filter" / "Alternative Filter" row — only rows whose registeredAt falls in the resolved period count; a row with no registeredAt never matches any period. */
-export function countRegistrantsForPeriod(rows: RegistrantForCount[], period: FilterPeriod, now: Date = new Date()): PeriodCounts {
+/** The "Primary Filter" row — only rows whose registeredAt falls in the resolved period count; a row with no registeredAt never matches any period. */
+export function countRegistrantsForPeriod<T extends RegistrantForCount>(rows: T[], period: FilterPeriod, now: Date = new Date()): PeriodCounts {
   const window = resolvePeriodRange(period, now);
   return tally(rows, (row) => withinWindow(row, window));
+}
+
+/** The two categories the "Other Filters" row can isolate — both plain 'Yes'/null flags on registry.registrants, set independently of any date. */
+export type OtherFilterCategory = 'unsubscribed' | 'nfc';
+
+export const OTHER_FILTER_OPTIONS: { value: OtherFilterCategory; label: string }[] = [
+  { value: 'unsubscribed', label: 'Unsubscribed' },
+  { value: 'nfc', label: 'No Further Contact' },
+];
+
+export interface RegistrantForCategoryCount extends RegistrantForCount {
+  unsubscribed: string | null;
+  nfc: string | null;
+}
+
+/** The "Other Filters" row — only rows flagged 'Yes' for the selected category count; unlike Primary Filter, this ignores registeredAt entirely. */
+export function countRegistrantsByCategory<T extends RegistrantForCategoryCount>(rows: T[], category: OtherFilterCategory): PeriodCounts {
+  return tally(rows, (row) => row[category] === 'Yes');
 }
 
 /**
@@ -184,4 +202,13 @@ export function filterRegistrantsForCell<T extends RegistrantForCount>(
 ): T[] {
   const window = period ? resolvePeriodRange(period, now) : null;
   return rows.filter((row) => matchesColumn(row, column) && withinWindow(row, window));
+}
+
+/** The actual records behind one "Other Filters" grid cell — mirrors filterRegistrantsForCell above, but the second axis is a category flag instead of a date window. */
+export function filterRegistrantsByCategoryForCell<T extends RegistrantForCategoryCount>(
+  rows: T[],
+  column: ConsoleColumn,
+  category: OtherFilterCategory,
+): T[] {
+  return rows.filter((row) => matchesColumn(row, column) && row[category] === 'Yes');
 }

@@ -643,4 +643,112 @@ describe('RegistryManagePage', () => {
       expect(allRow).toHaveTextContent(/5/);
     });
   });
+
+  describe('Other Filters row', () => {
+    // Three regulars (none flagged), one unsubscribed, one NFC.
+    const ROWS = [
+      ...SAMPLE_REGISTRANTS,
+      {
+        id: 'r4', firstName: 'Xavier', lastName: 'Exley', email: 'xavier@example.com', phone: '+61400000004',
+        state: 'VIC', postcode: '3000', registeredAt: new Date(Date.now() - HOUR).toISOString(),
+        isLeader: false, leaderName: null, unsubscribed: 'Yes',
+      },
+      {
+        id: 'r5', firstName: 'Noah', lastName: 'North', email: 'noah@example.com', phone: '+61400000005',
+        state: 'NSW', postcode: '2000', registeredAt: new Date(Date.now() - HOUR).toISOString(),
+        isLeader: false, leaderName: null, nfc: 'Yes',
+      },
+    ];
+
+    beforeEach(() => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          lastSync: { startedAt: '2026-09-10T03:00:00Z', completedAt: '2026-09-10T03:01:00Z', status: 'success', recordsIn: 5, recordsUpserted: 5, errors: 0, notes: null },
+          registrants: ROWS,
+        }),
+      }) as unknown as typeof fetch;
+    });
+
+    it('is labeled "Other Filters", not "Alternative Filter"', async () => {
+      mockUseRegistryGate.mockReturnValue({ status: 'ready', leaderRole: { role: 'national_admin', mfa_required: true } });
+      render(<RegistryManagePage />);
+      expect(await screen.findByText('Other Filters')).toBeInTheDocument();
+      expect(screen.queryByText('Alternative Filter')).not.toBeInTheDocument();
+    });
+
+    it('offers exactly Unsubscribed and No Further Contact as category options, defaulting to Unsubscribed', async () => {
+      mockUseRegistryGate.mockReturnValue({ status: 'ready', leaderRole: { role: 'national_admin', mfa_required: true } });
+      render(<RegistryManagePage />);
+      const select = await screen.findByLabelText('Other Filters category');
+      expect(select).toHaveValue('unsubscribed');
+      const optionLabels = Array.from((select as HTMLSelectElement).options).map((o) => o.textContent);
+      expect(optionLabels).toEqual(['Unsubscribed', 'No Further Contact']);
+    });
+
+    it('counts and lists only unsubscribed registrants by default', async () => {
+      mockUseRegistryGate.mockReturnValue({ status: 'ready', leaderRole: { role: 'national_admin', mfa_required: true } });
+      render(<RegistryManagePage />);
+      const otherRow = requireRow(await screen.findByText('Other Filters'));
+      expect(otherRow).toHaveTextContent(/1/); // just Xavier
+
+      fireEvent.click(within(otherRow).getAllByRole('button', { name: '1' })[0]);
+      const table = await screen.findByRole('table', { name: 'Matching records' });
+      expect(within(table).getByText('xavier@example.com')).toBeInTheDocument();
+      expect(within(table).queryByText('noah@example.com')).not.toBeInTheDocument();
+      expect(within(table).queryByText('vicky@example.com')).not.toBeInTheDocument();
+    });
+
+    it('switches to No Further Contact and re-filters live', async () => {
+      mockUseRegistryGate.mockReturnValue({ status: 'ready', leaderRole: { role: 'national_admin', mfa_required: true } });
+      render(<RegistryManagePage />);
+      const otherRow = requireRow(await screen.findByText('Other Filters'));
+      fireEvent.click(within(otherRow).getAllByRole('button', { name: '1' })[0]); // select Total while on Unsubscribed
+      await screen.findByRole('table', { name: 'Matching records' });
+
+      fireEvent.change(screen.getByLabelText('Other Filters category'), { target: { value: 'nfc' } });
+
+      expect(otherRow).toHaveTextContent(/1/); // still exactly one (Noah) once switched to NFC
+      const table = screen.getByRole('table', { name: 'Matching records' });
+      expect(within(table).getByText('noah@example.com')).toBeInTheDocument();
+      expect(within(table).queryByText('xavier@example.com')).not.toBeInTheDocument();
+    });
+
+    it('has no period control, unlike Primary Filter', async () => {
+      mockUseRegistryGate.mockReturnValue({ status: 'ready', leaderRole: { role: 'national_admin', mfa_required: true } });
+      render(<RegistryManagePage />);
+      const otherRow = requireRow(await screen.findByText('Other Filters'));
+      expect(within(otherRow).queryByLabelText(/period/i)).not.toBeInTheDocument();
+      expect(screen.getByLabelText('Primary Filter period')).toBeInTheDocument();
+    });
+  });
+
+  describe('Other Filters ignores registration date', () => {
+    // Xavier is unsubscribed but has no registeredAt at all — a Primary
+    // Filter period would exclude him entirely, but Other Filters should
+    // still count him since it isn't date-based.
+    const ROWS = [
+      ...SAMPLE_REGISTRANTS,
+      {
+        id: 'r4', firstName: 'Xavier', lastName: 'Exley', email: 'xavier@example.com', phone: '+61400000004',
+        state: 'VIC', postcode: '3000', registeredAt: null,
+        isLeader: false, leaderName: null, unsubscribed: 'Yes',
+      },
+    ];
+
+    it('still counts an unsubscribed registrant with no registeredAt', async () => {
+      mockUseRegistryGate.mockReturnValue({ status: 'ready', leaderRole: { role: 'national_admin', mfa_required: true } });
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          lastSync: { startedAt: '2026-09-10T03:00:00Z', completedAt: '2026-09-10T03:01:00Z', status: 'success', recordsIn: 5, recordsUpserted: 5, errors: 0, notes: null },
+          registrants: ROWS,
+        }),
+      }) as unknown as typeof fetch;
+
+      render(<RegistryManagePage />);
+      const otherRow = requireRow(await screen.findByText('Other Filters'));
+      expect(otherRow).toHaveTextContent(/1/);
+    });
+  });
 });
