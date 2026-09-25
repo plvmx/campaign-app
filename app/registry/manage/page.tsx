@@ -310,7 +310,8 @@ function EditableStateCell({ recordId, value, onSave }: { recordId: string; valu
 
   return (
     <td style={{ padding: '0.35rem' }}>
-      <select value={value ?? ''} onChange={handleChange} disabled={isSaving} style={editInputStyle} aria-label="state">
+      {/* minWidth beyond the plain 100% fill — a bare 3-letter state code left too little room next to the browser's own dropdown arrow, obscuring the value. */}
+      <select value={value ?? ''} onChange={handleChange} disabled={isSaving} style={{ ...editInputStyle, minWidth: '5rem' }} aria-label="state">
         <option value="">—</option>
         {AUSTRALIAN_STATES.map((s) => (
           <option key={s} value={s}>{s}</option>
@@ -336,7 +337,8 @@ function EditableNfcCell({ recordId, value, onSave }: { recordId: string; value:
 
   return (
     <td style={{ padding: '0.35rem' }}>
-      <select value={value ?? ''} onChange={handleChange} disabled={isSaving} style={editInputStyle} aria-label="nfc">
+      {/* Same reasoning as EditableStateCell's minWidth above — "Yes" was cramped against the dropdown arrow. */}
+      <select value={value ?? ''} onChange={handleChange} disabled={isSaving} style={{ ...editInputStyle, minWidth: '4.5rem' }} aria-label="nfc">
         <option value="">—</option>
         <option value="Yes">Yes</option>
       </select>
