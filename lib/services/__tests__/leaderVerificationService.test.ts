@@ -23,7 +23,7 @@ beforeEach(() => {
 
 const rosheen = {
   id: 'l1', state: 'VIC', leader: 'Rosheen', mobile: '0412345678', admin: null,
-  email: null, pending_email: null,
+  email: null, pending_email: null, mfa_enrolled_at: null,
 };
 
 describe('findVerifiedStateLeaders', () => {
@@ -31,6 +31,13 @@ describe('findVerifiedStateLeaders', () => {
     mockFrom.mockReturnValue(makeQueryBuilder({ data: [rosheen], error: null }));
     const result = await findVerifiedStateLeaders('0412345678', 'Rosheen');
     expect(result).toEqual([rosheen]);
+  });
+
+  it('passes mfa_enrolled_at through untouched when set', async () => {
+    const enrolled = { ...rosheen, mfa_enrolled_at: '2026-09-01T00:00:00Z' };
+    mockFrom.mockReturnValue(makeQueryBuilder({ data: [enrolled], error: null }));
+    const result = await findVerifiedStateLeaders('0412345678', 'Rosheen');
+    expect(result).toEqual([enrolled]);
   });
 
   it('rejects a name-prefix-only match — "Rosh" must not match "Rosheen"', async () => {

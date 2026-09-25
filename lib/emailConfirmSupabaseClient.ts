@@ -1,5 +1,9 @@
 /**
- * Supabase browser client for the /confirm-email page only.
+ * Supabase browser client shared by /confirm-email and /setup-mfa — both
+ * need the identical "isolated session to prove identity via magic link,
+ * then sign out" shape, so this file is reused rather than adding a third
+ * near-duplicate of lib/registrySupabaseClient.ts's own isolated-client
+ * pattern.
  *
  * A SEPARATE client instance from lib/supabaseClient.ts, pointed at the same
  * Supabase project but with its own localStorage key — exactly mirroring

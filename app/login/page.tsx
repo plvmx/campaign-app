@@ -60,6 +60,12 @@ export default function LoginPage() {
   const [emailStep, setEmailStep] = useState<{ match: StateLeaderMatch; value: string; phase: 'edit' | 'sent' } | null>(null);
   const [emailStepError, setEmailStepError] = useState<string | null>(null);
   const [emailStepSubmitting, setEmailStepSubmitting] = useState(false);
+  // Once a leader has a confirmed email, offer (skippably) to set up MFA
+  // ahead of a later phase that starts requiring it — same "every login
+  // until done, then never again" shape as the email step above.
+  const [mfaStep, setMfaStep] = useState<{ match: StateLeaderMatch; phase: 'offer' | 'sent' } | null>(null);
+  const [mfaStepError, setMfaStepError] = useState<string | null>(null);
+  const [mfaStepSubmitting, setMfaStepSubmitting] = useState(false);
 
   // Check if user is already signed in
   useEffect(() => {
@@ -139,7 +145,7 @@ export default function LoginPage() {
   // ── Post-sign-in, pre-action-chooser: capture/confirm email if not already set ─
   const maybeShowEmailStep = async (match: StateLeaderMatch) => {
     if (match.email) {
-      await checkRecentCampaign(match);
+      await maybeShowMfaStep(match);
       return;
     }
     setEmailStep({ match, value: match.pendingEmail ?? match.suggestedEmail ?? '', phase: 'edit' });
@@ -174,6 +180,46 @@ export default function LoginPage() {
     if (!emailStep) return;
     const { match } = emailStep;
     setEmailStep(null);
+    maybeShowMfaStep(match);
+  };
+
+  // ── Post-email-step, pre-action-chooser: offer MFA setup if not already done ─
+  const maybeShowMfaStep = async (match: StateLeaderMatch) => {
+    // match.email is still null right after the email step exits (whether
+    // skipped, or just proposed but not yet confirmed via the separate
+    // magic-link click) — MFA setup requires a confirmed email, so only
+    // offer it once one is actually on file.
+    if (!match.email || match.mfaEnrolledAt) {
+      await checkRecentCampaign(match);
+      return;
+    }
+    setMfaStep({ match, phase: 'offer' });
+  };
+
+  const handleMfaContinue = async () => {
+    if (!mfaStep) return;
+    setMfaStepError(null);
+    setMfaStepSubmitting(true);
+    try {
+      const res = await fetch('/api/auth/request-mfa-setup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ leaderId: mfaStep.match.id, mobile: mobile.trim(), firstName: firstName.trim() }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed to send sign-in link');
+      setMfaStep({ ...mfaStep, phase: 'sent' });
+    } catch (err: unknown) {
+      setMfaStepError(getErrorMessage(err, 'Failed to send sign-in link. Please try again.'));
+    } finally {
+      setMfaStepSubmitting(false);
+    }
+  };
+
+  const handleMfaStepDone = () => {
+    if (!mfaStep) return;
+    const { match } = mfaStep;
+    setMfaStep(null);
     checkRecentCampaign(match);
   };
 
@@ -336,6 +382,59 @@ export default function LoginPage() {
               </p>
               <button
                 onClick={handleEmailStepDone}
+                className="w-full rounded-md bg-blue-600 px-4 py-3 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
+              >
+                Continue
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (mfaStep) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8 dark:bg-gray-900">
+        <div className={cardClass}>
+          {mfaStep.phase === 'offer' ? (
+            <div className="space-y-4">
+              <h2 className="text-center text-xl font-bold text-gray-900 dark:text-gray-100">
+                Set up two-factor authentication
+              </h2>
+              <p className="text-center text-sm text-gray-600 dark:text-gray-400">
+                Add an extra layer of security to your account using an authenticator app or a text message code.
+              </p>
+              {mfaStepError && (
+                <div className="rounded-md bg-red-50 p-3 text-sm text-red-800 dark:bg-red-900/20 dark:text-red-200">
+                  {mfaStepError}
+                </div>
+              )}
+              <button
+                onClick={handleMfaContinue}
+                disabled={mfaStepSubmitting}
+                className="w-full rounded-md bg-blue-600 px-4 py-3 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 border-2 border-gray-800 dark:border-gray-600"
+              >
+                {mfaStepSubmitting ? 'Sending…' : 'Set up now'}
+              </button>
+              <button
+                onClick={handleMfaStepDone}
+                disabled={mfaStepSubmitting}
+                className="w-full text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 disabled:opacity-50"
+              >
+                Skip for now
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <h2 className="text-center text-xl font-bold text-gray-900 dark:text-gray-100">
+                Check your inbox
+              </h2>
+              <p className="text-center text-sm text-gray-600 dark:text-gray-400">
+                We sent a sign-in link to your email. Click it to choose and set up your authentication method.
+              </p>
+              <button
+                onClick={handleMfaStepDone}
                 className="w-full rounded-md bg-blue-600 px-4 py-3 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
               >
                 Continue

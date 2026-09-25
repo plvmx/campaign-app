@@ -66,7 +66,7 @@ export type BackupData = {
 } & Partial<Record<BackupTableKey, BackupTableData>>;
 
 /** Current export format version. Bump when the set of backed-up tables changes. */
-export const BACKUP_FORMAT_VERSION = '6';
+export const BACKUP_FORMAT_VERSION = '7';
 
 export function isValidBackupFile(parsed: unknown): parsed is BackupData {
   return (
