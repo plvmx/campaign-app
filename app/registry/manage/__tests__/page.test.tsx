@@ -547,4 +547,100 @@ describe('RegistryManagePage', () => {
       }
     });
   });
+
+  describe('exclude unsubscribed / NFC toggles', () => {
+    // Same three regulars as SAMPLE_REGISTRANTS, plus one flagged
+    // unsubscribed and one flagged NFC — kept local to this describe block
+    // rather than folded into the shared fixture, since most of the file's
+    // other tests assert an exact total of 3.
+    const WITH_UNSUBSCRIBED_AND_NFC = [
+      ...SAMPLE_REGISTRANTS,
+      {
+        id: 'r4', firstName: 'Xavier', lastName: 'Exley', email: 'xavier@example.com', phone: '+61400000004',
+        state: 'VIC', postcode: '3000', registeredAt: new Date(Date.now() - HOUR).toISOString(),
+        isLeader: false, leaderName: null, unsubscribed: 'Yes',
+      },
+      {
+        id: 'r5', firstName: 'Noah', lastName: 'North', email: 'noah@example.com', phone: '+61400000005',
+        state: 'VIC', postcode: '3000', registeredAt: new Date(Date.now() - HOUR).toISOString(),
+        isLeader: false, leaderName: null, nfc: 'Yes',
+      },
+    ];
+
+    beforeEach(() => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          lastSync: { startedAt: '2026-09-10T03:00:00Z', completedAt: '2026-09-10T03:01:00Z', status: 'success', recordsIn: 5, recordsUpserted: 5, errors: 0, notes: null },
+          registrants: WITH_UNSUBSCRIBED_AND_NFC,
+        }),
+      }) as unknown as typeof fetch;
+    });
+
+    it('counts unsubscribed/NFC registrants by default, and only shows the toggles once data has loaded', async () => {
+      mockUseRegistryGate.mockReturnValue({ status: 'ready', leaderRole: { role: 'national_admin', mfa_required: true } });
+      render(<RegistryManagePage />);
+      expect(screen.queryByLabelText('Exclude unsubscribed registrants')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Exclude No Further Contact (NFC) registrants')).not.toBeInTheDocument();
+
+      const row = requireRow(await screen.findByText('All AFJ Registrations'));
+      expect(row).toHaveTextContent(/5/);
+      expect(screen.getByLabelText('Exclude unsubscribed registrants')).not.toBeChecked();
+      expect(screen.getByLabelText('Exclude No Further Contact (NFC) registrants')).not.toBeChecked();
+    });
+
+    it('drops unsubscribed registrants from the grid counts and the record pane once checked', async () => {
+      mockUseRegistryGate.mockReturnValue({ status: 'ready', leaderRole: { role: 'national_admin', mfa_required: true } });
+      render(<RegistryManagePage />);
+      const allRow = requireRow(await screen.findByText('All AFJ Registrations'));
+      expect(allRow).toHaveTextContent(/5/);
+
+      fireEvent.click(await screen.findByLabelText('Exclude unsubscribed registrants'));
+      expect(allRow).toHaveTextContent(/4/);
+
+      fireEvent.click(within(allRow).getByRole('button', { name: '4' }));
+      const table = await screen.findByRole('table', { name: 'Matching records' });
+      expect(within(table).queryByText('xavier@example.com')).not.toBeInTheDocument();
+      expect(within(table).getByText('noah@example.com')).toBeInTheDocument();
+      expect(within(table).getByText('vicky@example.com')).toBeInTheDocument();
+    });
+
+    it('drops NFC registrants from the grid counts and the record pane once checked', async () => {
+      mockUseRegistryGate.mockReturnValue({ status: 'ready', leaderRole: { role: 'national_admin', mfa_required: true } });
+      render(<RegistryManagePage />);
+      const allRow = requireRow(await screen.findByText('All AFJ Registrations'));
+      expect(allRow).toHaveTextContent(/5/);
+
+      fireEvent.click(await screen.findByLabelText('Exclude No Further Contact (NFC) registrants'));
+      expect(allRow).toHaveTextContent(/4/);
+
+      fireEvent.click(within(allRow).getByRole('button', { name: '4' }));
+      const table = await screen.findByRole('table', { name: 'Matching records' });
+      expect(within(table).queryByText('noah@example.com')).not.toBeInTheDocument();
+      expect(within(table).getByText('xavier@example.com')).toBeInTheDocument();
+    });
+
+    it('combines both toggles', async () => {
+      mockUseRegistryGate.mockReturnValue({ status: 'ready', leaderRole: { role: 'national_admin', mfa_required: true } });
+      render(<RegistryManagePage />);
+      const allRow = requireRow(await screen.findByText('All AFJ Registrations'));
+
+      fireEvent.click(await screen.findByLabelText('Exclude unsubscribed registrants'));
+      fireEvent.click(screen.getByLabelText('Exclude No Further Contact (NFC) registrants'));
+      expect(allRow).toHaveTextContent(/3/);
+    });
+
+    it('restores excluded registrants when unchecked', async () => {
+      mockUseRegistryGate.mockReturnValue({ status: 'ready', leaderRole: { role: 'national_admin', mfa_required: true } });
+      render(<RegistryManagePage />);
+      const allRow = requireRow(await screen.findByText('All AFJ Registrations'));
+      const checkbox = await screen.findByLabelText('Exclude unsubscribed registrants');
+
+      fireEvent.click(checkbox);
+      expect(allRow).toHaveTextContent(/4/);
+
+      fireEvent.click(checkbox);
+      expect(allRow).toHaveTextContent(/5/);
+    });
+  });
 });

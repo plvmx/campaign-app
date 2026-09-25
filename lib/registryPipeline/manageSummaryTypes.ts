@@ -57,6 +57,10 @@ export interface ManageRegistrant {
   webinarAttended: string | null;
   codeOfConductAgreed: string | null;
   codeOfConductAgreedAt: string | null;
+  /** 'Yes' if this person has unsubscribed (Lorraine's CSV, Jordan's tracking sheet, or a later ac-sync list-status change — see the registry schema notes in CLAUDE.md); null otherwise. Powers the "Exclude unsubscribed" toggle on the console — display-only, never hand-corrected here. */
+  unsubscribed: string | null;
+  /** 'Yes' if the CSV reload's source postcode field carried a literal "NFC" (No Further Contact) marker (scripts/prepare_registrants_for_csv_reload.sql); null otherwise. Set only at reload time — never written by ac-sync's live upsert, same as unsubscribed. Powers the "Exclude NFC" toggle. */
+  nfc: string | null;
 }
 
 export interface ManageSummaryResponse {
