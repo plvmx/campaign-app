@@ -2009,3 +2009,50 @@ mechanism here walks every existing registrant against AC's tag API;
 building one would be the kind of large, rate-limited sweep that already
 caused `/registry/recent-registrations` to be retired (see that
 entry above).
+
+## Postcode/NFC/state backfill from Lorraine's 24 Sept 2026 sheet (2026-09-25)
+
+Lorraine provided an updated soulwinners export ("Current AFJ Soulwinners
+as at 24 Sept 2026.xlsx", "main AFJ page" tab — same column layout as the
+original registrations CSV, but no header row). Peter's initial
+understanding was that the only real change was postcodes added where
+previously missing, some marked "NFC". A live diff against production
+(matching by email) found it wasn't quite that clean:
+
+- **76 registrants**: DB `postcode` was `NULL`, sheet has a valid
+  4-digit postcode -> filled.
+- **61 registrants**: DB `state` was `NULL`, the sheet's own State
+  column for that row is a real `AUSTRALIAN_STATES` value -> filled. No
+  postcode-to-state range derivation was needed — every candidate
+  already had the sheet's own State column populated directly.
+- **26 registrants**: sheet marks NFC (`extractPostcode`'s existing
+  "5NFC"-style marker handling, already built for the original CSV
+  reload) and DB `nfc` wasn't already `'Yes'` -> set `'Yes'`. Applied
+  regardless of whether DB already had a postcode on file — Peter's
+  call: NFC is purely additive here, never clears an existing postcode.
+  6 further NFC candidates found in a first manual pass couldn't be
+  applied via this script at all: they share an email address with a
+  differently-named person on the sheet, and `dedupeByEmail`'s existing
+  "owner sub-group keeps the email, others get it cleared" rule
+  (unchanged, working as designed) left them without a matchable email
+  post-dedupe. Small enough (6 people) to leave as a manual
+  `/registry/manage` follow-up if Peter wants them resolved individually,
+  rather than building a name/phone-matching fallback for it.
+- **67 registrants**: DB already has a *different* valid postcode than
+  the sheet. Deliberately excluded from the write — a spreadsheet
+  snapshot disagreeing with live data isn't evidence either value is
+  wrong — and written to `backups/postcode_conflicts_sept24_sheet_*.json`
+  for Peter to review by hand.
+
+`scripts/afj_soulwinners_sept2026_xlsx_to_json.py` (stdlib-only, same
+reasoning as `jordan_unsubscribes_xlsx_to_json.py` — no openpyxl in this
+dev environment) extracts the sheet to JSON;
+`scripts/backfill_postcode_nfc_state_from_sept24_sheet.ts` reuses
+`csvRegistrantTransform.ts`'s `transformRow`/`dedupeByEmail` rather than
+reimplementing postcode/NFC parsing or email-merge logic — the same
+functions the original CSV reload and the webinar/Code-of-Conduct
+backfill both use. Dry-run by default, backs up affected rows (pre-write
+state + intended patch) before any write, `--apply` to commit. Run
+against production 2026-09-25: 107 registrants updated
+(postcode: 76, state: 61, nfc: 26 — some registrants got more than one
+field, so these don't sum to 107), backed up first.
