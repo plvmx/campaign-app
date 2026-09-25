@@ -630,6 +630,7 @@ export default function RegistryManagePage() {
   const [paneMode, setPaneMode] = useState<PaneMode>('view');
   const [lookupFilters, setLookupFilters] = useState<LookupFilters>({});
   const [excludeUnsubscribed, setExcludeUnsubscribed] = useState(false);
+  const [excludeNfc, setExcludeNfc] = useState(false);
 
   const isAdmin = gate.status === 'ready' && isNationalRegistryAdmin(gate.leaderRole?.role);
 
@@ -667,13 +668,17 @@ export default function RegistryManagePage() {
   }, [isAdmin, load]);
 
   // The single point every grid count and the record pane both derive from
-  // (via the useMemos below) — filtering here, once, means "Exclude
-  // unsubscribed" affects the whole console consistently rather than each
-  // consumer having to remember to apply it separately.
+  // (via the useMemos below) — filtering here, once, means the "Exclude
+  // unsubscribed"/"Exclude NFC" toggles affect the whole console
+  // consistently rather than each consumer having to remember to apply
+  // them separately.
   const rows = useMemo(() => {
     if (!summary) return null;
-    return excludeUnsubscribed ? summary.registrants.filter((r) => r.unsubscribed !== 'Yes') : summary.registrants;
-  }, [summary, excludeUnsubscribed]);
+    if (!excludeUnsubscribed && !excludeNfc) return summary.registrants;
+    return summary.registrants.filter(
+      (r) => (!excludeUnsubscribed || r.unsubscribed !== 'Yes') && (!excludeNfc || r.nfc !== 'Yes'),
+    );
+  }, [summary, excludeUnsubscribed, excludeNfc]);
 
   const allCounts = useMemo(() => (rows ? countAllRegistrants(rows) : null), [rows]);
   const primaryCounts = useMemo(() => (rows ? countRegistrantsForPeriod(rows, primaryPeriod) : null), [rows, primaryPeriod]);
@@ -822,14 +827,24 @@ export default function RegistryManagePage() {
 
       {summary && (
         <>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', margin: '0 0 0.75rem', cursor: 'pointer', fontSize: '0.9rem' }}>
-            <input
-              type="checkbox"
-              checked={excludeUnsubscribed}
-              onChange={(e) => setExcludeUnsubscribed(e.target.checked)}
-            />
-            Exclude unsubscribed registrants
-          </label>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1.25rem', margin: '0 0 0.75rem' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', fontSize: '0.9rem' }}>
+              <input
+                type="checkbox"
+                checked={excludeUnsubscribed}
+                onChange={(e) => setExcludeUnsubscribed(e.target.checked)}
+              />
+              Exclude unsubscribed registrants
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', fontSize: '0.9rem' }}>
+              <input
+                type="checkbox"
+                checked={excludeNfc}
+                onChange={(e) => setExcludeNfc(e.target.checked)}
+              />
+              Exclude No Further Contact (NFC) registrants
+            </label>
+          </div>
 
           <div style={{ overflowX: 'auto' }}>
             <table aria-label="Registration counts" style={{ width: '100%', borderCollapse: 'collapse', minWidth: 900 }}>
@@ -876,8 +891,8 @@ export default function RegistryManagePage() {
           </div>
           <p style={{ color: '#6b7280', fontSize: '0.85rem', marginTop: '0.75rem' }}>
             Counts are based on {(rows?.length ?? 0).toLocaleString('en-AU')} registrants currently in the registry
-            {excludeUnsubscribed && (
-              <> ({(summary.registrants.length - (rows?.length ?? 0)).toLocaleString('en-AU')} unsubscribed excluded)</>
+            {(excludeUnsubscribed || excludeNfc) && (
+              <> ({(summary.registrants.length - (rows?.length ?? 0)).toLocaleString('en-AU')} excluded as unsubscribed/NFC)</>
             )}
             . &quot;Unknown&quot; covers registrants with no state on file, or a state outside VIC/NSW/ACT/QLD/NT/WA/SA/TAS.
             A registrant with no recorded registration date can never match Primary/Alternative Filter, but is still counted in All AFJ Registrations. Click any non-zero number to list its records below.
