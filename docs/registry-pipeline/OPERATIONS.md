@@ -2056,3 +2056,20 @@ state + intended patch) before any write, `--apply` to commit. Run
 against production 2026-09-25: 107 registrants updated
 (postcode: 76, state: 61, nfc: 26 — some registrants got more than one
 field, so these don't sum to 107), backed up first.
+
+## NFC made a manually-editable field on `/registry/manage` (2026-09-25)
+
+While working through the conflicts above, Peter found cases neither
+`ac-sync` nor the CSV backfill tooling could resolve NFC (No Further
+Contact) for automatically, and asked for a manual way to flag it.
+
+`nfc` is added to `EDITABLE_REGISTRANT_FIELDS`
+(`lib/registryPipeline/registrantValidation.ts`), rendered as a fixed
+Yes/blank dropdown in the `/registry/manage` record pane's Edit mode
+(never a recorded "No", matching this column's convention everywhere
+else in this pipeline — `csvRegistrantTransform.ts`, `tagDerivedFields.ts`).
+`registry.registrant_edits`'s `field` CHECK constraint needed a matching
+migration (`scripts/add_nfc_to_registrant_edits_check.sql`) — written to
+look up the constraint's actual (Postgres-auto-generated) name via
+`pg_constraint` rather than guess it, since the original `CREATE TABLE`
+declared it inline with no explicit name.

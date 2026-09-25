@@ -126,9 +126,9 @@ describe('RegistryManagePage', () => {
     expect(within(table).queryByText(/Date registered/)).not.toBeInTheDocument();
 
     const vickyRow = requireRow(within(table).getByText('vicky@example.com')) as HTMLTableRowElement;
-    // "Registered" is the 7th column (0-indexed 6) — no longer the last
-    // column since the webinar/Code-of-Conduct columns were added after it.
-    const dateCell = vickyRow.cells[6];
+    // "Registered" is the 8th column (0-indexed 7) — no longer the last
+    // column since the NFC and webinar/Code-of-Conduct columns were added after it.
+    const dateCell = vickyRow.cells[7];
     expect(dateCell.textContent).toMatch(/^\d{1,2} [A-Za-z]+\.? \d{4}$/); // e.g. "10 Sept 2026" — no time component
   });
 
@@ -290,6 +290,32 @@ describe('RegistryManagePage', () => {
         expect.objectContaining({
           method: 'PATCH',
           body: JSON.stringify({ id: 'r1', field: 'postcode', value: '3141' }),
+        }),
+      ));
+    });
+
+    it('renders NFC as a Yes/blank select in Edit mode, defaulting to blank when unset', async () => {
+      installFetchMock();
+      await selectAllVicCell();
+      fireEvent.click(screen.getByLabelText('Edit'));
+
+      const nfcSelect = await screen.findByLabelText('nfc');
+      expect(nfcSelect).toHaveValue('');
+    });
+
+    it('saves an NFC selection immediately on change, same as State', async () => {
+      installFetchMock();
+      await selectAllVicCell();
+      fireEvent.click(screen.getByLabelText('Edit'));
+
+      const nfcSelect = await screen.findByLabelText('nfc');
+      fireEvent.change(nfcSelect, { target: { value: 'Yes' } });
+
+      await waitFor(() => expect(global.fetch).toHaveBeenCalledWith(
+        '/api/registry/manage-record',
+        expect.objectContaining({
+          method: 'PATCH',
+          body: JSON.stringify({ id: 'r1', field: 'nfc', value: 'Yes' }),
         }),
       ));
     });

@@ -6,11 +6,12 @@ import {
   isEditableRegistrantField,
   isValidAustralianPostcode,
   isValidRegistrantState,
+  isValidNfcFlag,
   isValidRegistrantFieldValue,
 } from '../registrantValidation';
 
 describe('isEditableRegistrantField', () => {
-  it('accepts each of the four whitelisted fields', () => {
+  it('accepts each of the whitelisted fields', () => {
     for (const field of EDITABLE_REGISTRANT_FIELDS) {
       expect(isEditableRegistrantField(field)).toBe(true);
     }
@@ -31,6 +32,7 @@ describe('EDITABLE_FIELD_COLUMNS', () => {
       lastName: 'last_name',
       state: 'state',
       postcode: 'postcode',
+      nfc: 'nfc',
     });
   });
 });
@@ -87,6 +89,24 @@ describe('isValidRegistrantState', () => {
   });
 });
 
+describe('isValidNfcFlag', () => {
+  it('accepts exactly "Yes"', () => {
+    expect(isValidNfcFlag('Yes')).toBe(true);
+  });
+
+  it('rejects any other non-blank value, notably "No" — this column is never a recorded No', () => {
+    expect(isValidNfcFlag('No')).toBe(false);
+    expect(isValidNfcFlag('yes')).toBe(false);
+    expect(isValidNfcFlag('true')).toBe(false);
+  });
+
+  it('allows null or blank — clearing the flag is valid', () => {
+    expect(isValidNfcFlag(null)).toBe(true);
+    expect(isValidNfcFlag('')).toBe(true);
+    expect(isValidNfcFlag('   ')).toBe(true);
+  });
+});
+
 describe('isValidRegistrantFieldValue', () => {
   it('dispatches postcode values to isValidAustralianPostcode', () => {
     expect(isValidRegistrantFieldValue('postcode', '3000')).toBe(true);
@@ -96,6 +116,11 @@ describe('isValidRegistrantFieldValue', () => {
   it('dispatches state values to isValidRegistrantState', () => {
     expect(isValidRegistrantFieldValue('state', 'NSW')).toBe(true);
     expect(isValidRegistrantFieldValue('state', 'bad')).toBe(false);
+  });
+
+  it('dispatches nfc values to isValidNfcFlag', () => {
+    expect(isValidRegistrantFieldValue('nfc', 'Yes')).toBe(true);
+    expect(isValidRegistrantFieldValue('nfc', 'No')).toBe(false);
   });
 
   it('imposes no format constraint on name fields', () => {
