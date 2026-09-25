@@ -13,12 +13,16 @@ import type {
 } from '@/lib/registryPipeline/manageSummaryTypes';
 import {
   FILTER_PERIOD_OPTIONS,
+  OTHER_FILTER_OPTIONS,
   MANAGE_CONSOLE_STATES,
   countAllRegistrants,
   countRegistrantsForPeriod,
+  countRegistrantsByCategory,
   filterRegistrantsForCell,
+  filterRegistrantsByCategoryForCell,
   type ConsoleColumn,
   type FilterPeriod,
+  type OtherFilterCategory,
   type PeriodCounts,
 } from '@/lib/registryPipeline/registrantCounts';
 import type { EditableRegistrantField } from '@/lib/registryPipeline/registrantValidation';
@@ -45,7 +49,7 @@ const NEUTRAL_HIGHLIGHT = 'rgba(37, 99, 235, 0.18)';
 // thousands of rows into the DOM at once.
 const RECORDS_DISPLAY_LIMIT = 500;
 
-type RowKey = 'all' | 'primary' | 'alternative';
+type RowKey = 'all' | 'primary' | 'other';
 
 interface SelectedCell {
   row: RowKey;
@@ -147,20 +151,18 @@ function CountCell({
   );
 }
 
-/** One row of the console grid: a label, an optional period selector, and the resulting counts. */
+/** One row of the console grid: a label, an optional control (a dropdown of some kind — the caller decides which, or none for the unfiltered "All" row), and the resulting counts. */
 function ConsoleRow({
   rowKey,
   label,
-  period,
-  onPeriodChange,
+  control,
   counts,
   selectedCell,
   onSelectCell,
 }: {
   rowKey: RowKey;
   label: string;
-  period: FilterPeriod | null;
-  onPeriodChange?: (period: FilterPeriod) => void;
+  control?: ReactNode;
   counts: PeriodCounts | null;
   selectedCell: SelectedCell | null;
   onSelectCell: (column: ConsoleColumn, columnLabel: string) => void;
@@ -170,20 +172,7 @@ function ConsoleRow({
   return (
     <tr>
       <td style={labelCellStyle}>{label}</td>
-      <td style={{ ...cellStyle, background: '#f9fafb' }}>
-        {period && onPeriodChange ? (
-          <select
-            aria-label={`${label} period`}
-            value={period}
-            onChange={(e) => onPeriodChange(e.target.value as FilterPeriod)}
-            style={{ padding: '0.3rem', width: '100%' }}
-          >
-            {FILTER_PERIOD_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
-        ) : null}
-      </td>
+      <td style={{ ...cellStyle, background: '#f9fafb' }}>{control}</td>
       <CountCell count={counts?.total ?? null} column="total" isSelected={isSelected('total')} onSelect={() => onSelectCell('total', 'Total')} />
       {MANAGE_CONSOLE_STATES.map((state) => (
         <CountCell
@@ -196,6 +185,38 @@ function ConsoleRow({
       ))}
       <CountCell count={counts?.unknown ?? null} column="unknown" isSelected={isSelected('unknown')} onSelect={() => onSelectCell('unknown', 'Unknown')} />
     </tr>
+  );
+}
+
+/** The period-dropdown control for a date-based row (currently just Primary Filter) — factored out so ConsoleRow itself doesn't need to know about FilterPeriod specifically. */
+function PeriodControl({ label, value, onChange }: { label: string; value: FilterPeriod; onChange: (period: FilterPeriod) => void }) {
+  return (
+    <select
+      aria-label={`${label} period`}
+      value={value}
+      onChange={(e) => onChange(e.target.value as FilterPeriod)}
+      style={{ padding: '0.3rem', width: '100%' }}
+    >
+      {FILTER_PERIOD_OPTIONS.map((opt) => (
+        <option key={opt.value} value={opt.value}>{opt.label}</option>
+      ))}
+    </select>
+  );
+}
+
+/** The category-dropdown control for the "Other Filters" row — Unsubscribed or No Further Contact, in place of a date period. */
+function CategoryControl({ label, value, onChange }: { label: string; value: OtherFilterCategory; onChange: (category: OtherFilterCategory) => void }) {
+  return (
+    <select
+      aria-label={`${label} category`}
+      value={value}
+      onChange={(e) => onChange(e.target.value as OtherFilterCategory)}
+      style={{ padding: '0.3rem', width: '100%' }}
+    >
+      {OTHER_FILTER_OPTIONS.map((opt) => (
+        <option key={opt.value} value={opt.value}>{opt.label}</option>
+      ))}
+    </select>
   );
 }
 
@@ -538,7 +559,7 @@ function RecordsPane({
 
       {records.length > RECORDS_DISPLAY_LIMIT && (
         <p style={{ color: '#6b7280', fontSize: '0.85rem' }}>
-          Showing the most recent {RECORDS_DISPLAY_LIMIT.toLocaleString('en-AU')} of {records.length.toLocaleString('en-AU')} matching records — narrow with the Primary/Alternative Filter or a lookup above to see the rest.
+          Showing the most recent {RECORDS_DISPLAY_LIMIT.toLocaleString('en-AU')} of {records.length.toLocaleString('en-AU')} matching records — narrow with the Primary Filter/Other Filters row or a lookup above to see the rest.
         </p>
       )}
 
@@ -625,7 +646,7 @@ export default function RegistryManagePage() {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [primaryPeriod, setPrimaryPeriod] = useState<FilterPeriod>('last_7_days');
-  const [alternativePeriod, setAlternativePeriod] = useState<FilterPeriod>('last_month');
+  const [otherFilterCategory, setOtherFilterCategory] = useState<OtherFilterCategory>('unsubscribed');
   const [selectedCell, setSelectedCell] = useState<SelectedCell | null>(null);
   const [paneMode, setPaneMode] = useState<PaneMode>('view');
   const [lookupFilters, setLookupFilters] = useState<LookupFilters>({});
@@ -682,23 +703,25 @@ export default function RegistryManagePage() {
 
   const allCounts = useMemo(() => (rows ? countAllRegistrants(rows) : null), [rows]);
   const primaryCounts = useMemo(() => (rows ? countRegistrantsForPeriod(rows, primaryPeriod) : null), [rows, primaryPeriod]);
-  const alternativeCounts = useMemo(
-    () => (rows ? countRegistrantsForPeriod(rows, alternativePeriod) : null),
-    [rows, alternativePeriod],
+  const otherFilterCounts = useMemo(
+    () => (rows ? countRegistrantsByCategory(rows, otherFilterCategory) : null),
+    [rows, otherFilterCategory],
   );
 
   // Selection is pinned by cell identity (row + column), not by a snapshot
-  // of the period at click time — so if the admin leaves a cell selected
-  // and then changes that row's filter dropdown, the pane's records
-  // recompute against the new period automatically, the same way the
-  // grid's own count for that cell does.
-  const selectedPeriod: FilterPeriod | null =
-    selectedCell?.row === 'primary' ? primaryPeriod : selectedCell?.row === 'alternative' ? alternativePeriod : null;
+  // of the period/category at click time — so if the admin leaves a cell
+  // selected and then changes that row's own dropdown, the pane's records
+  // recompute against the new value automatically, the same way the grid's
+  // own count for that cell does.
+  const selectedPeriod: FilterPeriod | null = selectedCell?.row === 'primary' ? primaryPeriod : null;
 
   const selectedRecords = useMemo(() => {
     if (!selectedCell || !rows) return [];
+    if (selectedCell.row === 'other') {
+      return filterRegistrantsByCategoryForCell(rows, selectedCell.column, otherFilterCategory);
+    }
     return filterRegistrantsForCell(rows, selectedCell.column, selectedPeriod);
-  }, [rows, selectedCell, selectedPeriod]);
+  }, [rows, selectedCell, selectedPeriod, otherFilterCategory]);
 
   // Each lookup dropdown's own option list is built from the cell's full
   // record set (not from what other lookups have already narrowed it to) —
@@ -863,7 +886,6 @@ export default function RegistryManagePage() {
                 <ConsoleRow
                   rowKey="all"
                   label="All AFJ Registrations"
-                  period={null}
                   counts={allCounts}
                   selectedCell={selectedCell}
                   onSelectCell={selectCell('all', 'All AFJ Registrations')}
@@ -871,20 +893,18 @@ export default function RegistryManagePage() {
                 <ConsoleRow
                   rowKey="primary"
                   label="Primary Filter"
-                  period={primaryPeriod}
-                  onPeriodChange={setPrimaryPeriod}
+                  control={<PeriodControl label="Primary Filter" value={primaryPeriod} onChange={setPrimaryPeriod} />}
                   counts={primaryCounts}
                   selectedCell={selectedCell}
                   onSelectCell={selectCell('primary', 'Primary Filter')}
                 />
                 <ConsoleRow
-                  rowKey="alternative"
-                  label="Alternative Filter"
-                  period={alternativePeriod}
-                  onPeriodChange={setAlternativePeriod}
-                  counts={alternativeCounts}
+                  rowKey="other"
+                  label="Other Filters"
+                  control={<CategoryControl label="Other Filters" value={otherFilterCategory} onChange={setOtherFilterCategory} />}
+                  counts={otherFilterCounts}
                   selectedCell={selectedCell}
-                  onSelectCell={selectCell('alternative', 'Alternative Filter')}
+                  onSelectCell={selectCell('other', 'Other Filters')}
                 />
               </tbody>
             </table>
@@ -895,7 +915,7 @@ export default function RegistryManagePage() {
               <> ({(summary.registrants.length - (rows?.length ?? 0)).toLocaleString('en-AU')} excluded as unsubscribed/NFC)</>
             )}
             . &quot;Unknown&quot; covers registrants with no state on file, or a state outside VIC/NSW/ACT/QLD/NT/WA/SA/TAS.
-            A registrant with no recorded registration date can never match Primary/Alternative Filter, but is still counted in All AFJ Registrations. Click any non-zero number to list its records below.
+            A registrant with no recorded registration date can never match Primary Filter, but is still counted in All AFJ Registrations and Other Filters (which isn&apos;t date-based). Click any non-zero number to list its records below.
           </p>
 
           {selectedCell ? (
