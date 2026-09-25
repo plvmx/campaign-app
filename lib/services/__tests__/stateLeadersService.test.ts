@@ -16,7 +16,7 @@ beforeEach(() => {
 
 describe('getStateLeaders', () => {
   it('returns all leaders when no state filter is given', async () => {
-    const builder = makeQueryBuilder({ data: [{ id: '1', state: 'VIC', leader: 'Alice', mobile: null, admin: null, email: null, pending_email: null, email_confirmed_at: null, created_at: '' }], error: null });
+    const builder = makeQueryBuilder({ data: [{ id: '1', state: 'VIC', leader: 'Alice', mobile: null, admin: null, email: null, pending_email: null, email_confirmed_at: null, mfa_enrolled_at: null, created_at: '' }], error: null });
     mockFrom.mockReturnValue(builder);
     const result = await getStateLeaders();
     expect(result).toHaveLength(1);

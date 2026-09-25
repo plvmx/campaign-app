@@ -11,6 +11,7 @@ export interface StateLeader {
   email: string | null;
   pending_email: string | null;
   email_confirmed_at: string | null;
+  mfa_enrolled_at: string | null;
   created_at: string;
 }
 

@@ -9,6 +9,7 @@ export interface VerifiedStateLeaderRow {
   admin: string | null;
   email: string | null;
   pending_email: string | null;
+  mfa_enrolled_at: string | null;
 }
 
 /**
@@ -37,7 +38,7 @@ export async function findVerifiedStateLeaders(
   // enforces an exact normalised-name match, so "Rosh" will never match "Rosheen".
   const { data, error } = await supabaseAdmin
     .from('state_leaders')
-    .select('id, state, leader, mobile, admin, email, pending_email')
+    .select('id, state, leader, mobile, admin, email, pending_email, mfa_enrolled_at')
     .ilike('leader', `${firstNameNormalized}%`);
 
   if (error) throw error;

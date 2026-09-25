@@ -14,6 +14,7 @@ export interface StateLeaderMatch {
   email: string | null;
   pendingEmail: string | null;
   suggestedEmail: string | null;
+  mfaEnrolledAt: string | null;
 }
 
 /**
@@ -84,6 +85,7 @@ export async function validateStateLeader(mobile: string, firstName: string): Pr
       email:          m.email,
       pendingEmail:   m.pendingEmail,
       suggestedEmail: m.suggestedEmail,
+      mfaEnrolledAt:  m.mfaEnrolledAt,
     }));
   } catch (err) {
     console.error('Error validating state leader:', err);

@@ -441,7 +441,7 @@ export default function StateLeadersPage() {
                         )}
                         {item.email && (
                           <div className={`text-xs ${stateColor.text} opacity-60 mt-1`}>
-                            {item.email}
+                            {item.email}{item.mfa_enrolled_at && ' · MFA ✓'}
                           </div>
                         )}
                         {item.admin && (

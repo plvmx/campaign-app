@@ -1,7 +1,7 @@
 /**
  * Server-side login validation. Uses service role to bypass RLS.
  * POST body: { mobile: string, firstName: string }
- * Returns: { matches: Array<{ id, state, leader, admin, email, pendingEmail, suggestedEmail }> }
+ * Returns: { matches: Array<{ id, state, leader, admin, email, pendingEmail, suggestedEmail, mfaEnrolledAt }> }
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { enforceOrigin } from '@/lib/corsUtils';
@@ -63,6 +63,7 @@ export async function POST(request: NextRequest) {
         email:         m.email,
         pendingEmail:  m.pending_email,
         suggestedEmail,
+        mfaEnrolledAt: m.mfa_enrolled_at,
       })),
     });
   } catch (err) {
