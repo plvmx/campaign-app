@@ -316,6 +316,30 @@ function EditableStateCell({ recordId, value, onSave }: { recordId: string; valu
   );
 }
 
+/** The NFC cell in edit mode — a fixed Yes/blank control (never a recorded 'No', matching this column's convention elsewhere), same "saves immediately, no local draft" shape as EditableStateCell. */
+function EditableNfcCell({ recordId, value, onSave }: { recordId: string; value: string | null; onSave: SaveEditFn }) {
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleChange(e: ChangeEvent<HTMLSelectElement>) {
+    setIsSaving(true);
+    setError(null);
+    const result = await onSave(recordId, 'nfc', e.target.value);
+    setIsSaving(false);
+    if (!result.ok) setError(result.error);
+  }
+
+  return (
+    <td style={{ padding: '0.35rem' }}>
+      <select value={value ?? ''} onChange={handleChange} disabled={isSaving} style={editInputStyle} aria-label="nfc">
+        <option value="">—</option>
+        <option value="Yes">Yes</option>
+      </select>
+      {error && <div style={editErrorStyle}>{error}</div>}
+    </td>
+  );
+}
+
 const lookupInputStyle: CSSProperties = { padding: '0.3rem', minWidth: 130, border: '1px solid #ccc', borderRadius: 4, font: 'inherit' };
 const lookupOptionStyle: CSSProperties = {
   display: 'block', width: '100%', textAlign: 'left', padding: '0.3rem 0.6rem', background: 'none', border: 'none',
@@ -469,7 +493,7 @@ function LookupFiltersRow({
   );
 }
 
-/** The record pane under the grid — every registrant behind the currently-selected cell, shaded per row the same way as Recent Registrations. The View/Edit toggle controls whether First name/Last name/State/Postcode render as plain text or as inline-editable cells; Email/Mobile/Date registered and the four webinar/Code-of-Conduct columns (synced/derived from AC — see lib/registryPipeline/tagDerivedFields.ts) are never editable here (see lib/registryPipeline/registrantValidation.ts). The lookup dropdowns above the table further narrow which of those records are shown, by an exact value on any field except State/Date registered. */
+/** The record pane under the grid — every registrant behind the currently-selected cell, shaded per row the same way as Recent Registrations. The View/Edit toggle controls whether First name/Last name/State/Postcode/NFC render as plain text or as inline-editable cells (NFC added 2026-09-25 — a manual flag alongside the unsubscribed/nfc filter checkboxes above, for cases the sheet cross-reference/CSV backfill couldn't resolve on their own); Email/Mobile/Date registered and the four webinar/Code-of-Conduct columns (synced/derived from AC — see lib/registryPipeline/tagDerivedFields.ts) are never editable here (see lib/registryPipeline/registrantValidation.ts). The lookup dropdowns above the table further narrow which of those records are shown, by an exact value on any field except State/Date registered. */
 function RecordsPane({
   selectedCell,
   records,
@@ -553,7 +577,7 @@ function RecordsPane({
 
       {mode === 'edit' && (
         <p style={{ color: '#6b7280', fontSize: '0.85rem', marginTop: '0.35rem' }}>
-          Editing First name, Last name, State, and Postcode — each field saves on its own as soon as you leave it. Email, Mobile, Date registered, and the webinar/Code of Conduct fields can&apos;t be changed here.
+          Editing First name, Last name, State, Postcode, and NFC — each field saves on its own as soon as you leave it (or change the selection, for State/NFC). Email, Mobile, Date registered, and the webinar/Code of Conduct fields can&apos;t be changed here.
         </p>
       )}
 
@@ -573,6 +597,7 @@ function RecordsPane({
               <th style={headerCellStyle}>Mobile</th>
               <th style={headerCellStyle}>State</th>
               <th style={sortableHeaderCellStyle} onClick={() => toggleSort('postcode')}>Postcode{sortIndicator('postcode')}</th>
+              <th style={headerCellStyle}>NFC</th>
               <th style={sortableHeaderCellStyle} onClick={() => toggleSort('registeredAt')}>Registered{sortIndicator('registeredAt')}</th>
               <th style={headerCellStyle}>Webinar session</th>
               <th style={headerCellStyle}>Webinar attended</th>
@@ -622,6 +647,11 @@ function RecordsPane({
                   ) : (
                     <td style={{ padding: '0.5rem' }}>{r.postcode ?? '—'}</td>
                   )}
+                  {mode === 'edit' ? (
+                    <EditableNfcCell recordId={r.id} value={r.nfc} onSave={onSaveEdit} />
+                  ) : (
+                    <td style={{ padding: '0.5rem' }}>{r.nfc ?? '—'}</td>
+                  )}
                   <td style={{ padding: '0.5rem' }}>{formatDateOnly(r.registeredAt)}</td>
                   <td style={{ padding: '0.5rem' }}>{formatDateTime(r.webinarSessionAt)}</td>
                   <td style={{ padding: '0.5rem' }}>{r.webinarAttended ?? '—'}</td>
@@ -631,7 +661,7 @@ function RecordsPane({
               );
             })}
             {shown.length === 0 && (
-              <tr><td colSpan={11} style={{ padding: '1rem', textAlign: 'center' }}>No matching records.</td></tr>
+              <tr><td colSpan={12} style={{ padding: '1rem', textAlign: 'center' }}>No matching records.</td></tr>
             )}
           </tbody>
         </table>

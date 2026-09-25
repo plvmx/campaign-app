@@ -2009,3 +2009,21 @@ mechanism here walks every existing registrant against AC's tag API;
 building one would be the kind of large, rate-limited sweep that already
 caused `/registry/recent-registrations` to be retired (see that
 entry above).
+
+## NFC made a manually-editable field on `/registry/manage` (2026-09-25)
+
+While cross-referencing an updated source spreadsheet against production
+(a separate, still-in-review change), Peter found cases neither `ac-sync`
+nor the existing CSV backfill tooling could resolve NFC (No Further
+Contact) for automatically, and asked for a manual way to flag it.
+
+`nfc` is added to `EDITABLE_REGISTRANT_FIELDS`
+(`lib/registryPipeline/registrantValidation.ts`), rendered as a fixed
+Yes/blank dropdown in the `/registry/manage` record pane's Edit mode
+(never a recorded "No", matching this column's convention everywhere
+else in this pipeline — `csvRegistrantTransform.ts`, `tagDerivedFields.ts`).
+`registry.registrant_edits`'s `field` CHECK constraint needed a matching
+migration (`scripts/add_nfc_to_registrant_edits_check.sql`) — written to
+look up the constraint's actual (Postgres-auto-generated) name via
+`pg_constraint` rather than guess it, since the original `CREATE TABLE`
+declared it inline with no explicit name.
