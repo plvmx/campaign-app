@@ -221,6 +221,19 @@ function CategoryControl({ label, value, onChange }: { label: string; value: Oth
 }
 
 const editInputStyle: CSSProperties = { width: '100%', padding: '0.3rem', border: '1px solid #ccc', borderRadius: 4, font: 'inherit' };
+
+/**
+ * Per-field sizing for EditableTextCell's <input> — a plain flex-fill (the
+ * default) left every text field stretching to however wide its column
+ * happened to be once the page container itself was widened, which looked
+ * absurd for a short, length-bounded value like a postcode or a name.
+ * Fields not listed here keep the original flex-fill behaviour.
+ */
+const TEXT_FIELD_SIZE: Partial<Record<EditableRegistrantField, { maxLength: number; width: string }>> = {
+  postcode: { maxLength: 4, width: '4.5rem' },
+  firstName: { maxLength: 20, width: '12rem' },
+  lastName: { maxLength: 20, width: '12rem' },
+};
 const editErrorStyle: CSSProperties = { color: 'crimson', fontSize: '0.75rem', marginTop: '0.15rem' };
 
 /** A free-text editable cell (First name / Last name / Postcode) — saves on blur or Enter, only if the value actually changed; reverts to the last-known-good value and shows an error inline if the save is rejected. */
@@ -268,6 +281,8 @@ function EditableTextCell({
     }
   }
 
+  const sizing = TEXT_FIELD_SIZE[field];
+
   return (
     <td style={{ padding: '0.35rem' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
@@ -280,7 +295,8 @@ function EditableTextCell({
             if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
           }}
           disabled={isSaving}
-          style={{ ...editInputStyle, width: 'auto', flex: '1 1 auto' }}
+          maxLength={sizing?.maxLength}
+          style={sizing ? { ...editInputStyle, width: sizing.width, flex: '0 0 auto' } : { ...editInputStyle, width: 'auto', flex: '1 1 auto' }}
           aria-label={field}
         />
         {suffix}
@@ -305,7 +321,8 @@ function EditableStateCell({ recordId, value, onSave }: { recordId: string; valu
 
   return (
     <td style={{ padding: '0.35rem' }}>
-      <select value={value ?? ''} onChange={handleChange} disabled={isSaving} style={editInputStyle} aria-label="state">
+      {/* minWidth beyond the plain 100% fill — a bare 3-letter state code left too little room next to the browser's own dropdown arrow, obscuring the value. */}
+      <select value={value ?? ''} onChange={handleChange} disabled={isSaving} style={{ ...editInputStyle, minWidth: '5rem' }} aria-label="state">
         <option value="">—</option>
         {AUSTRALIAN_STATES.map((s) => (
           <option key={s} value={s}>{s}</option>
@@ -331,7 +348,8 @@ function EditableNfcCell({ recordId, value, onSave }: { recordId: string; value:
 
   return (
     <td style={{ padding: '0.35rem' }}>
-      <select value={value ?? ''} onChange={handleChange} disabled={isSaving} style={editInputStyle} aria-label="nfc">
+      {/* Same reasoning as EditableStateCell's minWidth above — "Yes" was cramped against the dropdown arrow. */}
+      <select value={value ?? ''} onChange={handleChange} disabled={isSaving} style={{ ...editInputStyle, minWidth: '4.5rem' }} aria-label="nfc">
         <option value="">—</option>
         <option value="Yes">Yes</option>
       </select>
