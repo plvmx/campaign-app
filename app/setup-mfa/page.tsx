@@ -14,6 +14,18 @@ const GIVE_UP_AFTER_MS = 8000;
 // any authenticated session read access to every leader's row, so an
 // abandoned tab on a shared device shouldn't stay usable indefinitely.
 const ABANDON_AFTER_MS = 5 * 60 * 1000;
+// The main app and the /registry portal share the same underlying Supabase
+// Auth user pool (same project) — a leader who also has /registry access
+// under the same email could already have a verified TOTP factor there.
+// Supabase's factor-name uniqueness applies regardless of the existing
+// factor's own verification status, and both this app and /registry's own
+// enroll page otherwise default to the same blank friendly_name — so an
+// explicit, distinct name here is required, not just a good idea, to avoid
+// colliding with a factor enrolled through a completely different flow
+// (confirmed live, 2026-09-26: a leader with an existing /registry TOTP
+// factor got a "friendly name \"\" already exists" error here).
+const TOTP_FRIENDLY_NAME = 'AFJ Campaign App (Authenticator)';
+const PHONE_FRIENDLY_NAME = 'AFJ Campaign App (SMS)';
 
 type Screen = 'waiting' | 'expired' | 'choose-method' | 'totp' | 'phone-number' | 'phone-code' | 'success';
 type FactorType = 'totp' | 'phone';
@@ -195,7 +207,7 @@ export default function SetupMfaPage() {
         return;
       }
 
-      const { data, error: enrollError } = await emailConfirmSupabase.auth.mfa.enroll({ factorType: 'totp' });
+      const { data, error: enrollError } = await emailConfirmSupabase.auth.mfa.enroll({ factorType: 'totp', friendlyName: TOTP_FRIENDLY_NAME });
       if (cancelled) return;
       if (enrollError) {
         setError(enrollError.message);
@@ -283,7 +295,7 @@ export default function SetupMfaPage() {
       const cleanupError = await unenrollStaleFactors('phone');
       if (cleanupError) throw new Error(cleanupError);
 
-      const { data, error: enrollError } = await emailConfirmSupabase.auth.mfa.enroll({ factorType: 'phone', phone: normalized });
+      const { data, error: enrollError } = await emailConfirmSupabase.auth.mfa.enroll({ factorType: 'phone', phone: normalized, friendlyName: PHONE_FRIENDLY_NAME });
       if (enrollError) throw enrollError;
       setPhone(normalized);
       setPhoneFactorId(data.id);
@@ -355,7 +367,17 @@ export default function SetupMfaPage() {
             <h2 className="text-center text-xl font-bold text-gray-900 dark:text-gray-100">Set up two-factor authentication</h2>
             <p className={bodyTextClass}>Choose how you&apos;d like to receive your sign-in codes.</p>
             <button onClick={() => { setError(null); setScreen('totp'); }} className={primaryButtonClass}>Use an authenticator app</button>
-            <button onClick={choosePhoneMethod} className={primaryButtonClass}>Use a text message</button>
+            {/* Supabase's Phone MFA factor type / SMS provider isn't connected
+                yet (see CLAUDE.md's "MFA enrollment (unenforced)" section) —
+                hide this option entirely until NEXT_PUBLIC_SMS_MFA_ENABLED=true
+                is set (Vercel env var, needs a redeploy), rather than relying
+                solely on the graceful in-flow error message for an option that
+                can't work yet. Read at render time (not module scope) so it
+                stays a plain build-time-inlined env check in production while
+                still being easy to flip per-test. */}
+            {process.env.NEXT_PUBLIC_SMS_MFA_ENABLED === 'true' && (
+              <button onClick={choosePhoneMethod} className={primaryButtonClass}>Use a text message</button>
+            )}
           </div>
         )}
 

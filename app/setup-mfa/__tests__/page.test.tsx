@@ -89,12 +89,23 @@ describe('SetupMfaPage', () => {
     mockChallengeAndVerify.mockReset().mockResolvedValue({ error: null });
     mockFrom.mockReset().mockReturnValue(makeQueryBuilder({ data: null, error: null }));
     global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
+    // SMS provider isn't connected yet — hidden by default (see the
+    // dedicated test below); the Phone branch tests opt in explicitly.
+    process.env.NEXT_PUBLIC_SMS_MFA_ENABLED = 'true';
   });
 
   afterEach(() => {
     cleanup();
     vi.useRealTimers();
     global.fetch = originalFetch;
+    delete process.env.NEXT_PUBLIC_SMS_MFA_ENABLED;
+  });
+
+  it('hides the text-message option unless NEXT_PUBLIC_SMS_MFA_ENABLED is set (no SMS provider connected yet)', async () => {
+    delete process.env.NEXT_PUBLIC_SMS_MFA_ENABLED;
+    await signIn();
+    expect(screen.getByText(/use an authenticator app/i)).toBeInTheDocument();
+    expect(screen.queryByText(/use a text message/i)).not.toBeInTheDocument();
   });
 
   it('shows the method choice once signed in', async () => {
@@ -147,7 +158,7 @@ describe('SetupMfaPage', () => {
 
       await waitFor(() => expect(mockUnenroll).toHaveBeenCalledTimes(1));
       expect(mockUnenroll).toHaveBeenCalledWith({ factorId: 'stale-totp' });
-      await waitFor(() => expect(mockEnroll).toHaveBeenCalledWith({ factorType: 'totp' }));
+      await waitFor(() => expect(mockEnroll).toHaveBeenCalledWith({ factorType: 'totp', friendlyName: 'AFJ Campaign App (Authenticator)' }));
     });
 
     it('completes enrollment, posts to complete-mfa-setup, signs out, and shows Continue', async () => {
@@ -190,7 +201,7 @@ describe('SetupMfaPage', () => {
       fireEvent.change(phoneInput, { target: { value: '+61412345678' } });
       fireEvent.click(screen.getByRole('button', { name: /send code/i }));
 
-      await waitFor(() => expect(mockEnroll).toHaveBeenCalledWith({ factorType: 'phone', phone: '+61412345678' }));
+      await waitFor(() => expect(mockEnroll).toHaveBeenCalledWith({ factorType: 'phone', phone: '+61412345678', friendlyName: 'AFJ Campaign App (SMS)' }));
       expect(await screen.findByLabelText(/6-digit code/i)).toBeInTheDocument();
 
       fireEvent.change(screen.getByLabelText(/6-digit code/i), { target: { value: '654321' } });
@@ -238,7 +249,7 @@ describe('SetupMfaPage', () => {
       fireEvent.change(screen.getByLabelText(/mobile number/i), { target: { value: '0412345678' } });
       fireEvent.click(screen.getByRole('button', { name: /send code/i }));
 
-      await waitFor(() => expect(mockEnroll).toHaveBeenCalledWith({ factorType: 'phone', phone: '+61412345678' }));
+      await waitFor(() => expect(mockEnroll).toHaveBeenCalledWith({ factorType: 'phone', phone: '+61412345678', friendlyName: 'AFJ Campaign App (SMS)' }));
     });
 
     it('shows a clean message when the phone provider is not configured, not a raw SDK error', async () => {
