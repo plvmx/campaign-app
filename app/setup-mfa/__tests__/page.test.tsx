@@ -156,7 +156,7 @@ describe('SetupMfaPage', () => {
       expect(screen.queryByText(/use an authenticator app/i)).not.toBeInTheDocument();
     });
 
-    it('proceeds to the method choice after a successful step-up challenge', async () => {
+    it('completes enrollment directly after a successful step-up challenge, without asking for a second factor', async () => {
       render(<SetupMfaPage />);
       await act(async () => { authChangeCallback!('SIGNED_IN', SESSION); });
       await screen.findByText(/verify your identity/i);
@@ -165,7 +165,19 @@ describe('SetupMfaPage', () => {
       fireEvent.click(screen.getByRole('button', { name: /verify and continue/i }));
 
       await waitFor(() => expect(mockChallengeAndVerify).toHaveBeenCalledWith({ factorId: 'existing-verified-totp', code: '111222' }));
-      expect(await screen.findByText(/use an authenticator app/i)).toBeInTheDocument();
+      // The existing verified factor already satisfies MFA for this account —
+      // it must go straight to completion, never back through choose-method
+      // to enroll a second, app-specific factor (confirmed live, 2026-09-26:
+      // Peter was asked to scan a brand new QR code right after proving he
+      // already had one set up).
+      await waitFor(() => expect(global.fetch).toHaveBeenCalledWith(
+        '/api/auth/complete-mfa-setup',
+        expect.objectContaining({ method: 'POST', headers: { Authorization: 'Bearer tok-123' } }),
+      ));
+      await waitFor(() => expect(mockSignOut).toHaveBeenCalled());
+      expect(await screen.findByRole('link', { name: /continue/i })).toHaveAttribute('href', '/app');
+      expect(mockEnroll).not.toHaveBeenCalled();
+      expect(screen.queryByText(/use an authenticator app/i)).not.toBeInTheDocument();
     });
 
     it('cancelling step-up signs out and shows a "no problem" screen', async () => {
