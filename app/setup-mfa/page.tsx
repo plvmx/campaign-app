@@ -27,7 +27,7 @@ const ABANDON_AFTER_MS = 5 * 60 * 1000;
 const TOTP_FRIENDLY_NAME = 'AFJ Campaign App (Authenticator)';
 const PHONE_FRIENDLY_NAME = 'AFJ Campaign App (SMS)';
 
-type Screen = 'waiting' | 'expired' | 'choose-method' | 'totp' | 'phone-number' | 'phone-code' | 'success';
+type Screen = 'waiting' | 'expired' | 'cancelled' | 'step-up' | 'choose-method' | 'totp' | 'phone-number' | 'phone-code' | 'success';
 type FactorType = 'totp' | 'phone';
 
 const inputClass =
@@ -66,7 +66,7 @@ function normalizePhoneForMfa(value: string): string | null {
 }
 
 function CodeEntryScreen({
-  title, description, children, code, onCodeChange, onVerify, onBack, error, isBusy, disabled,
+  title, description, children, code, onCodeChange, onVerify, onBack, backLabel = '← Back', error, isBusy, disabled,
 }: {
   title: string;
   description: string;
@@ -75,6 +75,7 @@ function CodeEntryScreen({
   onCodeChange: (value: string) => void;
   onVerify: () => void;
   onBack: () => void;
+  backLabel?: string;
   error: string | null;
   isBusy: boolean;
   disabled: boolean;
@@ -100,7 +101,7 @@ function CodeEntryScreen({
       <button onClick={onVerify} disabled={isBusy || disabled || code.length < 6} className={primaryButtonClass}>
         {isBusy ? 'Verifying…' : 'Verify and continue'}
       </button>
-      <button onClick={onBack} disabled={isBusy} className={secondaryButtonClass}>← Back</button>
+      <button onClick={onBack} disabled={isBusy} className={secondaryButtonClass}>{backLabel}</button>
     </div>
   );
 }
@@ -133,6 +134,9 @@ export default function SetupMfaPage() {
   const [phoneFactorId, setPhoneFactorId] = useState<string | null>(null);
   const [phoneCode, setPhoneCode] = useState('');
 
+  const [stepUpFactorId, setStepUpFactorId] = useState<string | null>(null);
+  const [stepUpCode, setStepUpCode] = useState('');
+
   function clearAbandonTimer() {
     if (abandonTimerRef.current) {
       clearTimeout(abandonTimerRef.current);
@@ -155,6 +159,27 @@ export default function SetupMfaPage() {
       handledRef.current = true;
       setAccessToken(session.access_token);
       setUserId(session.user.id);
+
+      // This app and /registry share one Supabase Auth user pool. If this
+      // account already has ANY verified factor (from /registry, or a prior
+      // enrollment here), Supabase requires the session to already be at
+      // AAL2 before it will allow enrolling a new one at all — regardless of
+      // friendlyName. nextLevel === 'aal2' with currentLevel !== 'aal2' means
+      // "has a verified factor, hasn't proven it this session yet." Confirmed
+      // live, 2026-09-26 (a bare enroll() call failed with "AAL2 required to
+      // enroll a new factor").
+      const { data: aalData } = await emailConfirmSupabase.auth.mfa.getAuthenticatorAssuranceLevel();
+      if (aalData && aalData.nextLevel === 'aal2' && aalData.currentLevel !== 'aal2') {
+        const { data: factorsData } = await emailConfirmSupabase.auth.mfa.listFactors();
+        const existing = factorsData?.all.find((f) => f.status === 'verified');
+        if (existing) {
+          setStepUpFactorId(existing.id);
+          setScreen('step-up');
+          armAbandonTimer();
+          return;
+        }
+      }
+
       setScreen('choose-method');
       armAbandonTimer();
     }
@@ -242,6 +267,25 @@ export default function SetupMfaPage() {
       await emailConfirmSupabase.auth.signOut();
       setScreen('success');
     }
+  }
+
+  async function handleStepUpVerify() {
+    if (!stepUpFactorId) return;
+    setIsBusy(true);
+    setError(null);
+    const { error: verifyError } = await emailConfirmSupabase.auth.mfa.challengeAndVerify({ factorId: stepUpFactorId, code: stepUpCode });
+    setIsBusy(false);
+    if (verifyError) {
+      setError(verifyError.message);
+      return;
+    }
+    setScreen('choose-method');
+  }
+
+  async function handleCancelStepUp() {
+    clearAbandonTimer();
+    await emailConfirmSupabase.auth.signOut();
+    setScreen('cancelled');
   }
 
   async function handleVerifyTotp() {
@@ -347,6 +391,18 @@ export default function SetupMfaPage() {
     );
   }
 
+  if (screen === 'cancelled') {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8 dark:bg-gray-900">
+        <div className={cardClass}>
+          <h2 className="text-center text-xl font-bold text-gray-900 dark:text-gray-100">No problem</h2>
+          <p className={bodyTextClass}>You can set up two-factor authentication another time.</p>
+          <a href="/login" className={`${primaryButtonClass} block text-center`}>Back to sign in</a>
+        </div>
+      </div>
+    );
+  }
+
   if (screen === 'success') {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8 dark:bg-gray-900">
@@ -362,6 +418,21 @@ export default function SetupMfaPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8 dark:bg-gray-900">
       <div className={cardClass}>
+        {screen === 'step-up' && (
+          <CodeEntryScreen
+            title="Verify your identity"
+            description="This account already has two-factor authentication set up elsewhere (e.g. the AFJ Registry portal). Enter a code from your existing authenticator app to continue."
+            code={stepUpCode}
+            onCodeChange={setStepUpCode}
+            onVerify={handleStepUpVerify}
+            onBack={handleCancelStepUp}
+            backLabel="Cancel"
+            error={error}
+            isBusy={isBusy}
+            disabled={!stepUpFactorId}
+          />
+        )}
+
         {screen === 'choose-method' && (
           <div className="space-y-4">
             <h2 className="text-center text-xl font-bold text-gray-900 dark:text-gray-100">Set up two-factor authentication</h2>

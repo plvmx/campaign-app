@@ -40,6 +40,7 @@ const mockListFactors = vi.fn();
 const mockUnenroll = vi.fn();
 const mockEnroll = vi.fn();
 const mockChallengeAndVerify = vi.fn();
+const mockGetAuthenticatorAssuranceLevel = vi.fn();
 const mockFrom = vi.fn();
 
 vi.mock('@/lib/emailConfirmSupabaseClient', () => ({
@@ -53,6 +54,7 @@ vi.mock('@/lib/emailConfirmSupabaseClient', () => ({
         unenroll: (...args: unknown[]) => mockUnenroll(...args),
         enroll: (...args: unknown[]) => mockEnroll(...args),
         challengeAndVerify: (...args: unknown[]) => mockChallengeAndVerify(...args),
+        getAuthenticatorAssuranceLevel: (...args: unknown[]) => mockGetAuthenticatorAssuranceLevel(...args),
       },
     },
     from: (...args: unknown[]) => mockFrom(...args),
@@ -87,6 +89,10 @@ describe('SetupMfaPage', () => {
     mockUnenroll.mockReset().mockResolvedValue({ data: {}, error: null });
     mockEnroll.mockReset().mockResolvedValue(TOTP_ENROLL_RESPONSE);
     mockChallengeAndVerify.mockReset().mockResolvedValue({ error: null });
+    // aal1/aal1 (no verified factor elsewhere yet) is the common case — the
+    // step-up tests below override this to aal1/aal2 to simulate an account
+    // with an existing verified factor (e.g. from the /registry portal).
+    mockGetAuthenticatorAssuranceLevel.mockReset().mockResolvedValue({ data: { currentLevel: 'aal1', nextLevel: 'aal1' }, error: null });
     mockFrom.mockReset().mockReturnValue(makeQueryBuilder({ data: null, error: null }));
     global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
     // SMS provider isn't connected yet — hidden by default (see the
@@ -131,6 +137,48 @@ describe('SetupMfaPage', () => {
 
     expect(mockSignOut).toHaveBeenCalled();
     expect(screen.getByText(/link expired/i)).toBeInTheDocument();
+  });
+
+  describe('Step-up (account already has a verified factor elsewhere)', () => {
+    beforeEach(() => {
+      mockGetAuthenticatorAssuranceLevel.mockResolvedValue({ data: { currentLevel: 'aal1', nextLevel: 'aal2' }, error: null });
+      mockListFactors.mockResolvedValue({
+        data: { all: [{ id: 'existing-verified-totp', factor_type: 'totp', status: 'verified' }] },
+        error: null,
+      });
+    });
+
+    it('shows a step-up verification screen instead of the method choice', async () => {
+      render(<SetupMfaPage />);
+      await act(async () => { authChangeCallback!('SIGNED_IN', SESSION); });
+
+      expect(await screen.findByText(/verify your identity/i)).toBeInTheDocument();
+      expect(screen.queryByText(/use an authenticator app/i)).not.toBeInTheDocument();
+    });
+
+    it('proceeds to the method choice after a successful step-up challenge', async () => {
+      render(<SetupMfaPage />);
+      await act(async () => { authChangeCallback!('SIGNED_IN', SESSION); });
+      await screen.findByText(/verify your identity/i);
+
+      fireEvent.change(screen.getByLabelText(/6-digit code/i), { target: { value: '111222' } });
+      fireEvent.click(screen.getByRole('button', { name: /verify and continue/i }));
+
+      await waitFor(() => expect(mockChallengeAndVerify).toHaveBeenCalledWith({ factorId: 'existing-verified-totp', code: '111222' }));
+      expect(await screen.findByText(/use an authenticator app/i)).toBeInTheDocument();
+    });
+
+    it('cancelling step-up signs out and shows a "no problem" screen', async () => {
+      render(<SetupMfaPage />);
+      await act(async () => { authChangeCallback!('SIGNED_IN', SESSION); });
+      await screen.findByText(/verify your identity/i);
+
+      fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
+
+      await waitFor(() => expect(mockSignOut).toHaveBeenCalled());
+      expect(await screen.findByText(/no problem/i)).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: /back to sign in/i })).toHaveAttribute('href', '/login');
+    });
   });
 
   describe('TOTP branch', () => {
