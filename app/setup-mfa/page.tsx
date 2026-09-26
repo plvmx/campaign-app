@@ -167,7 +167,13 @@ export default function SetupMfaPage() {
       // friendlyName. nextLevel === 'aal2' with currentLevel !== 'aal2' means
       // "has a verified factor, hasn't proven it this session yet." Confirmed
       // live, 2026-09-26 (a bare enroll() call failed with "AAL2 required to
-      // enroll a new factor").
+      // enroll a new factor"). Once that challenge succeeds, enrollment is
+      // already satisfied — it's the same underlying Supabase Auth account,
+      // so a second, app-specific TOTP/SMS factor would just be a duplicate.
+      // (The step-up screen originally continued on to choose-method/enroll
+      // a fresh factor regardless; Peter reported this as confusing — being
+      // asked to scan a brand new QR code right after proving he already had
+      // one set up — confirmed live, 2026-09-26, fixed same day.)
       const { data: aalData } = await emailConfirmSupabase.auth.mfa.getAuthenticatorAssuranceLevel();
       if (aalData && aalData.nextLevel === 'aal2' && aalData.currentLevel !== 'aal2') {
         const { data: factorsData } = await emailConfirmSupabase.auth.mfa.listFactors();
@@ -279,7 +285,11 @@ export default function SetupMfaPage() {
       setError(verifyError.message);
       return;
     }
-    setScreen('choose-method');
+    // The existing verified factor already satisfies MFA for this account —
+    // no separate app-specific factor needed. See the comment on the AAL2
+    // check above for why continuing to choose-method (as this originally
+    // did) was wrong.
+    await finishEnrollment();
   }
 
   async function handleCancelStepUp() {
@@ -421,7 +431,7 @@ export default function SetupMfaPage() {
         {screen === 'step-up' && (
           <CodeEntryScreen
             title="Verify your identity"
-            description="This account already has two-factor authentication set up elsewhere (e.g. the AFJ Registry portal). Enter a code from your existing authenticator app to continue."
+            description="This account already has two-factor authentication set up elsewhere (e.g. the AFJ Registry portal). Enter a code from your existing authenticator app to finish setup here — no need to set up a separate one."
             code={stepUpCode}
             onCodeChange={setStepUpCode}
             onVerify={handleStepUpVerify}
