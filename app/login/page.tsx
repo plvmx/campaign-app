@@ -403,7 +403,7 @@ export default function LoginPage() {
                 Set up two-factor authentication
               </h2>
               <p className="text-center text-sm text-gray-600 dark:text-gray-400">
-                Add an extra layer of security to your account using an authenticator app or a text message code.
+                Add an extra layer of security to your account using an authenticator app.
               </p>
               {mfaStepError && (
                 <div className="rounded-md bg-red-50 p-3 text-sm text-red-800 dark:bg-red-900/20 dark:text-red-200">
@@ -431,7 +431,7 @@ export default function LoginPage() {
                 Check your inbox
               </h2>
               <p className="text-center text-sm text-gray-600 dark:text-gray-400">
-                We sent a sign-in link to your email. Click it to choose and set up your authentication method.
+                We sent a sign-in link to your email. Click it to set up your authenticator app.
               </p>
               <button
                 onClick={handleMfaStepDone}
