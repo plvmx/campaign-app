@@ -3,9 +3,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import QRCode from 'react-qr-code';
 import { emailConfirmSupabase } from '@/lib/emailConfirmSupabaseClient';
-import { toE164AuMobile } from '@/lib/services/campaignInterestSmsService';
-import { isValidMobile } from '@/lib/validation';
-import { getErrorMessage } from '@/lib/errorUtils';
 
 const GIVE_UP_AFTER_MS = 8000;
 // Bounds how long the real-identity session (proven via the magic link) can
@@ -25,10 +22,8 @@ const ABANDON_AFTER_MS = 5 * 60 * 1000;
 // (confirmed live, 2026-09-26: a leader with an existing /registry TOTP
 // factor got a "friendly name \"\" already exists" error here).
 const TOTP_FRIENDLY_NAME = 'AFJ Campaign App (Authenticator)';
-const PHONE_FRIENDLY_NAME = 'AFJ Campaign App (SMS)';
 
-type Screen = 'waiting' | 'expired' | 'cancelled' | 'step-up' | 'choose-method' | 'totp' | 'phone-number' | 'phone-code' | 'success';
-type FactorType = 'totp' | 'phone';
+type Screen = 'waiting' | 'expired' | 'cancelled' | 'step-up' | 'totp' | 'success';
 
 const inputClass =
   'mt-1 block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white';
@@ -41,29 +36,6 @@ const errorBannerClass = 'rounded-md bg-red-50 p-3 text-sm text-red-800 dark:bg-
 const bodyTextClass = 'text-center text-sm text-gray-600 dark:text-gray-400';
 const cardClass =
   'w-full max-w-md space-y-4 rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-blue-50 p-6 shadow-lg dark:bg-blue-900/20 sm:p-8';
-
-/** True for the "Phone provider not configured in this Supabase project" class of
- * error — approximate substring match, since no code path in this repo has ever
- * hit the real error shape yet (factorType: 'phone' is new territory here).
- * TODO: confirm the exact message/code once Phone MFA is dashboard-enabled. */
-function isPhoneProviderUnavailableError(message: string): boolean {
-  const lower = message.toLowerCase();
-  return lower.includes('phone') && (lower.includes('not enabled') || lower.includes('not configured') || lower.includes('disabled') || lower.includes('provider'));
-}
-
-/** Accepts either an already-E.164 number (light sanity check only) or the
- * app's usual local AU format, normalizing the latter via the same
- * isValidMobile/toE164AuMobile helpers every other phone-collecting form in
- * this app uses — the pre-fill already returns E.164, but a leader who edits
- * it back into local format (out of habit) shouldn't be sent straight to
- * Supabase's phone-factor enroll unvalidated. */
-function normalizePhoneForMfa(value: string): string | null {
-  const trimmed = value.trim();
-  if (trimmed.startsWith('+')) {
-    return /^\+\d{8,15}$/.test(trimmed) ? trimmed : null;
-  }
-  return isValidMobile(trimmed) ? toE164AuMobile(trimmed) : null;
-}
 
 function CodeEntryScreen({
   title, description, children, code, onCodeChange, onVerify, onBack, backLabel = '← Back', error, isBusy, disabled,
@@ -119,7 +91,6 @@ function CodeEntryScreen({
 export default function SetupMfaPage() {
   const [screen, setScreen] = useState<Screen>('waiting');
   const [accessToken, setAccessToken] = useState<string | null>(null);
-  const [userId, setUserId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
   const handledRef = useRef(false);
@@ -129,10 +100,6 @@ export default function SetupMfaPage() {
   const [totpUri, setTotpUri] = useState<string | null>(null);
   const [totpSecret, setTotpSecret] = useState<string | null>(null);
   const [totpCode, setTotpCode] = useState('');
-
-  const [phone, setPhone] = useState('');
-  const [phoneFactorId, setPhoneFactorId] = useState<string | null>(null);
-  const [phoneCode, setPhoneCode] = useState('');
 
   const [stepUpFactorId, setStepUpFactorId] = useState<string | null>(null);
   const [stepUpCode, setStepUpCode] = useState('');
@@ -158,7 +125,6 @@ export default function SetupMfaPage() {
       if (handledRef.current) return;
       handledRef.current = true;
       setAccessToken(session.access_token);
-      setUserId(session.user.id);
 
       // This app and /registry share one Supabase Auth user pool. If this
       // account already has ANY verified factor (from /registry, or a prior
@@ -169,11 +135,11 @@ export default function SetupMfaPage() {
       // live, 2026-09-26 (a bare enroll() call failed with "AAL2 required to
       // enroll a new factor"). Once that challenge succeeds, enrollment is
       // already satisfied — it's the same underlying Supabase Auth account,
-      // so a second, app-specific TOTP/SMS factor would just be a duplicate.
-      // (The step-up screen originally continued on to choose-method/enroll
-      // a fresh factor regardless; Peter reported this as confusing — being
-      // asked to scan a brand new QR code right after proving he already had
-      // one set up — confirmed live, 2026-09-26, fixed same day.)
+      // so a second, app-specific TOTP factor would just be a duplicate.
+      // (The step-up screen originally continued on to enroll a fresh factor
+      // regardless; Peter reported this as confusing — being asked to scan a
+      // brand new QR code right after proving he already had one set up —
+      // confirmed live, 2026-09-26, fixed same day.)
       const { data: aalData } = await emailConfirmSupabase.auth.mfa.getAuthenticatorAssuranceLevel();
       if (aalData && aalData.nextLevel === 'aal2' && aalData.currentLevel !== 'aal2') {
         const { data: factorsData } = await emailConfirmSupabase.auth.mfa.listFactors();
@@ -186,7 +152,10 @@ export default function SetupMfaPage() {
         }
       }
 
-      setScreen('choose-method');
+      // Authenticator app (TOTP) only — Peter's call, 2026-09-27: no SMS
+      // choice, so there's nothing to choose between and this goes straight
+      // to enrollment.
+      setScreen('totp');
       armAbandonTimer();
     }
 
@@ -210,15 +179,13 @@ export default function SetupMfaPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Shared stale-factor cleanup — Supabase rejects a second enroll() with a
-  // 422 "factor name conflict" once one unverified factor of that type
-  // already exists (both default to the same empty friendly_name). Scoped
-  // by factorType so cleaning up a stale TOTP attempt never touches an
-  // in-progress phone one, or vice versa.
-  async function unenrollStaleFactors(factorType: FactorType): Promise<string | null> {
+  // Stale-factor cleanup — Supabase rejects a second enroll() with a 422
+  // "factor name conflict" once one unverified TOTP factor already exists
+  // (both default to the same empty friendly_name).
+  async function unenrollStaleTotpFactors(): Promise<string | null> {
     const { data, error: listError } = await emailConfirmSupabase.auth.mfa.listFactors();
     if (listError) return listError.message;
-    const stale = data.all.filter((f) => f.factor_type === factorType && f.status !== 'verified');
+    const stale = data.all.filter((f) => f.factor_type === 'totp' && f.status !== 'verified');
     await Promise.all(stale.map((f) => emailConfirmSupabase.auth.mfa.unenroll({ factorId: f.id })));
     return null;
   }
@@ -231,7 +198,7 @@ export default function SetupMfaPage() {
     let cancelled = false;
 
     (async () => {
-      const cleanupError = await unenrollStaleFactors('totp');
+      const cleanupError = await unenrollStaleTotpFactors();
       if (cancelled) return;
       if (cleanupError) {
         setError(cleanupError);
@@ -287,12 +254,15 @@ export default function SetupMfaPage() {
     }
     // The existing verified factor already satisfies MFA for this account —
     // no separate app-specific factor needed. See the comment on the AAL2
-    // check above for why continuing to choose-method (as this originally
-    // did) was wrong.
+    // check above for why continuing on to enroll a fresh one (as this
+    // originally did) was wrong.
     await finishEnrollment();
   }
 
-  async function handleCancelStepUp() {
+  // Shared by both the step-up screen's Cancel and the totp screen's Back —
+  // there's only one enrollment method now, so "back" out of it just means
+  // abandoning setup for another time, same as cancelling step-up.
+  async function handleCancel() {
     clearAbandonTimer();
     await emailConfirmSupabase.auth.signOut();
     setScreen('cancelled');
@@ -303,74 +273,6 @@ export default function SetupMfaPage() {
     setIsBusy(true);
     setError(null);
     const { error: verifyError } = await emailConfirmSupabase.auth.mfa.challengeAndVerify({ factorId: totpFactorId, code: totpCode });
-    setIsBusy(false);
-    if (verifyError) {
-      setError(verifyError.message);
-      return;
-    }
-    await finishEnrollment();
-  }
-
-  async function choosePhoneMethod() {
-    setError(null);
-    setScreen('phone-number');
-    if (phone || !userId) return;
-    // Best-effort suggestion only — leave the field blank/editable if this
-    // fails or finds nothing, never block on it. Deferred until the leader
-    // actually picks this method, so the more common TOTP path never pays
-    // for a query it doesn't use.
-    try {
-      const { data } = await emailConfirmSupabase
-        .from('state_leaders')
-        .select('mobile')
-        .eq('user_id', userId)
-        .not('mobile', 'is', null)
-        .limit(1)
-        .maybeSingle();
-      const mobile = (data as { mobile: string | null } | null)?.mobile;
-      if (mobile) {
-        const e164 = toE164AuMobile(mobile);
-        if (e164) setPhone(e164);
-      }
-    } catch {
-      // ignore
-    }
-  }
-
-  async function handleSendPhoneCode() {
-    const normalized = normalizePhoneForMfa(phone);
-    if (!normalized) {
-      setError('Please enter a valid mobile number');
-      return;
-    }
-    setIsBusy(true);
-    setError(null);
-    try {
-      const cleanupError = await unenrollStaleFactors('phone');
-      if (cleanupError) throw new Error(cleanupError);
-
-      const { data, error: enrollError } = await emailConfirmSupabase.auth.mfa.enroll({ factorType: 'phone', phone: normalized, friendlyName: PHONE_FRIENDLY_NAME });
-      if (enrollError) throw enrollError;
-      setPhone(normalized);
-      setPhoneFactorId(data.id);
-      setScreen('phone-code');
-    } catch (err) {
-      const message = getErrorMessage(err, 'Failed to send code');
-      setError(
-        isPhoneProviderUnavailableError(message)
-          ? "Text-message sign-in isn't available yet — please use an authenticator app instead."
-          : message,
-      );
-    } finally {
-      setIsBusy(false);
-    }
-  }
-
-  async function handleVerifyPhone() {
-    if (!phoneFactorId) return;
-    setIsBusy(true);
-    setError(null);
-    const { error: verifyError } = await emailConfirmSupabase.auth.mfa.challengeAndVerify({ factorId: phoneFactorId, code: phoneCode });
     setIsBusy(false);
     if (verifyError) {
       setError(verifyError.message);
@@ -435,31 +337,12 @@ export default function SetupMfaPage() {
             code={stepUpCode}
             onCodeChange={setStepUpCode}
             onVerify={handleStepUpVerify}
-            onBack={handleCancelStepUp}
+            onBack={handleCancel}
             backLabel="Cancel"
             error={error}
             isBusy={isBusy}
             disabled={!stepUpFactorId}
           />
-        )}
-
-        {screen === 'choose-method' && (
-          <div className="space-y-4">
-            <h2 className="text-center text-xl font-bold text-gray-900 dark:text-gray-100">Set up two-factor authentication</h2>
-            <p className={bodyTextClass}>Choose how you&apos;d like to receive your sign-in codes.</p>
-            <button onClick={() => { setError(null); setScreen('totp'); }} className={primaryButtonClass}>Use an authenticator app</button>
-            {/* Supabase's Phone MFA factor type / SMS provider isn't connected
-                yet (see CLAUDE.md's "MFA enrollment (unenforced)" section) —
-                hide this option entirely until NEXT_PUBLIC_SMS_MFA_ENABLED=true
-                is set (Vercel env var, needs a redeploy), rather than relying
-                solely on the graceful in-flow error message for an option that
-                can't work yet. Read at render time (not module scope) so it
-                stays a plain build-time-inlined env check in production while
-                still being easy to flip per-test. */}
-            {process.env.NEXT_PUBLIC_SMS_MFA_ENABLED === 'true' && (
-              <button onClick={choosePhoneMethod} className={primaryButtonClass}>Use a text message</button>
-            )}
-          </div>
         )}
 
         {screen === 'totp' && (
@@ -469,7 +352,8 @@ export default function SetupMfaPage() {
             code={totpCode}
             onCodeChange={setTotpCode}
             onVerify={handleVerifyTotp}
-            onBack={() => { setError(null); setScreen('choose-method'); }}
+            onBack={handleCancel}
+            backLabel="Cancel"
             error={error}
             isBusy={isBusy}
             disabled={!totpFactorId}
@@ -486,43 +370,6 @@ export default function SetupMfaPage() {
               </p>
             )}
           </CodeEntryScreen>
-        )}
-
-        {screen === 'phone-number' && (
-          <div className="space-y-4">
-            <h2 className="text-center text-xl font-bold text-gray-900 dark:text-gray-100">Text message</h2>
-            <p className={bodyTextClass}>We&apos;ll send a code to this number.</p>
-            <div>
-              <label htmlFor="mfa-phone" className={labelClass}>Mobile number</label>
-              <input
-                id="mfa-phone"
-                type="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="+61412345678"
-                className={inputClass}
-              />
-            </div>
-            {error && <p role="alert" className={errorBannerClass}>{error}</p>}
-            <button onClick={handleSendPhoneCode} disabled={isBusy || !phone} className={primaryButtonClass}>
-              {isBusy ? 'Sending…' : 'Send code'}
-            </button>
-            <button onClick={() => { setError(null); setScreen('choose-method'); }} disabled={isBusy} className={secondaryButtonClass}>← Back</button>
-          </div>
-        )}
-
-        {screen === 'phone-code' && (
-          <CodeEntryScreen
-            title="Enter your code"
-            description={`We sent a code to ${phone}.`}
-            code={phoneCode}
-            onCodeChange={setPhoneCode}
-            onVerify={handleVerifyPhone}
-            onBack={() => { setError(null); setScreen('phone-number'); }}
-            error={error}
-            isBusy={isBusy}
-            disabled={!phoneFactorId}
-          />
         )}
       </div>
     </div>
