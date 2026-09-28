@@ -7,6 +7,19 @@ export const AUSTRALIAN_STATES = ['ACT', 'NSW', 'QLD', 'SA', 'TAS', 'VIC', 'WA',
 
 export type AustralianState = (typeof AUSTRALIAN_STATES)[number];
 
+/** Full display name for each state/territory code — shown alongside the
+ * code in the login flows' state/role pickers. */
+export const AUSTRALIAN_STATE_NAMES: Record<string, string> = {
+  ACT: 'Australian Capital Territory',
+  NSW: 'New South Wales',
+  NT: 'Northern Territory',
+  QLD: 'Queensland',
+  SA: 'South Australia',
+  TAS: 'Tasmania',
+  VIC: 'Victoria',
+  WA: 'Western Australia',
+};
+
 /** Default map view centered on Australia. */
 export const AUSTRALIA_MAP_CENTER: { lat: number; lng: number; zoom: number } = {
   lat: -25.2744,
