@@ -10,11 +10,11 @@ describe('getLeaderRoleLabel', () => {
     expect(getLeaderRoleLabel('SR', 'QLD')).toBe('State Reporter — QLD');
   });
 
-  it('labels a plain leader row (null admin) as just the state', () => {
-    expect(getLeaderRoleLabel(null, 'NSW')).toBe('NSW');
+  it('labels a plain leader row (null admin) as "Leader — <state>"', () => {
+    expect(getLeaderRoleLabel(null, 'NSW')).toBe('Leader — NSW');
   });
 
-  it('labels an unrecognized admin value (stray legacy data) as just the state, same as a plain leader', () => {
-    expect(getLeaderRoleLabel('some-recruiter-name', 'WA')).toBe('WA');
+  it('labels an unrecognized admin value (stray legacy data) the same as a plain leader', () => {
+    expect(getLeaderRoleLabel('some-recruiter-name', 'WA')).toBe('Leader — WA');
   });
 });
