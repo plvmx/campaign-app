@@ -17,6 +17,17 @@ export interface StateLeaderMatch {
   mfaEnrolledAt: string | null;
 }
 
+/** A state_leaders row belonging to a real-auth (email + MFA) session's
+ * user_id — the shape app/login/mfa/callback/page.tsx resolves to and picks
+ * a role from. Deliberately leaner than StateLeaderMatch (no pending/
+ * suggested email, no mobile) since this flow never needs those. */
+export interface AuthedLeaderRow {
+  id: string;
+  state: string;
+  leader: string;
+  admin: string | null;
+}
+
 /**
  * Normalize mobile number by removing spaces, dashes, parentheses, and other formatting
  * Handles country codes (e.g., +61) and Australian mobile numbers
@@ -94,6 +105,24 @@ export async function validateStateLeader(mobile: string, firstName: string): Pr
 }
 
 /**
+ * Sets the app_session cookie middleware.ts checks for every protected
+ * route. Not cryptographically verified — RLS remains the true security
+ * boundary. maxAgeSeconds is omitted for the mobile+name flow (a plain
+ * session cookie, cleared on browser close, matching today's behaviour) and
+ * set to a real duration for the real-auth+MFA flow (see
+ * completeLeaderAuthSignIn) — that flow has more per-login friction (email +
+ * TOTP code vs. one instant form), so a longer-lived cookie offsets it,
+ * since the underlying Supabase session/refresh token already supports
+ * staying signed in that long.
+ */
+function setAppSessionCookie(maxAgeSeconds?: number): void {
+  if (typeof document === 'undefined') return;
+  const secure = location.protocol === 'https:' ? '; Secure' : '';
+  const maxAge = maxAgeSeconds ? `; Max-Age=${maxAgeSeconds}` : '';
+  document.cookie = `app_session=1; path=/; SameSite=Lax${secure}${maxAge}`;
+}
+
+/**
  * Complete sign-in once a specific state_leaders record has been chosen.
  * Creates an anonymous Supabase session and writes user_profiles / user_roles.
  */
@@ -146,15 +175,66 @@ export async function completeSignIn(
     .eq('id', stateLeader.id);
   if (signInUpdateError) console.warn('Failed to update last_sign_in_at:', signInUpdateError);
 
-  // Set a session-indicator cookie so Next.js middleware can redirect
-  // unauthenticated requests before they reach protected pages. This cookie is
-  // not cryptographically verified — RLS remains the true security boundary.
-  if (typeof document !== 'undefined') {
-    const secure = location.protocol === 'https:' ? '; Secure' : '';
-    document.cookie = `app_session=1; path=/; SameSite=Lax${secure}`;
-  }
+  setAppSessionCookie();
 
   return { user: { id: authData.user.id, email: authData.user.email }, stateLeader };
+}
+
+const LEADER_AUTH_SESSION_MAX_AGE_SECONDS = 30 * 24 * 60 * 60; // 30 days
+
+/**
+ * Complete sign-in for the real-auth + MFA login path
+ * (app/login/mfa/callback/page.tsx), once the leader's chosen state_leaders
+ * row is known and the session is already a real, AAL2-verified one (never
+ * an anonymous sign-in — that already exists by the time this is called, so
+ * unlike completeSignIn() there's no signInAnonymously() step here).
+ *
+ * Writes the exact same user_profiles/user_roles shape completeSignIn()
+ * does, so every existing "who is this / are they admin" consumer
+ * (UserContext, campaignFilter.ts, the RLS is_admin() function, the admin
+ * API routes) keeps working completely unmodified — none of them care
+ * whether the underlying auth.users row is anonymous or real, only that
+ * user_profiles/user_roles exist for the current session's auth.uid().
+ *
+ * One behaviour completeSignIn() never needed: since this real user_id
+ * persists across logins (unlike a fresh anonymous user every time), a
+ * leader who picks a *different* role on a later login (e.g. their SR row
+ * instead of their AD row) must not keep a stale admin user_roles row from
+ * a previous choice — so a non-admin pick explicitly deletes any existing
+ * row rather than just never upserting one.
+ */
+export async function completeLeaderAuthSignIn(
+  row: AuthedLeaderRow,
+  userId: string,
+): Promise<void> {
+  const { error: profileError } = await supabase
+    .from('user_profiles')
+    .upsert(
+      { user_id: userId, name: row.leader.trim(), state: row.state },
+      { onConflict: 'user_id' },
+    );
+  if (profileError) console.warn('Failed to save user profile:', profileError);
+
+  if (row.admin === 'AD') {
+    const { error: roleError } = await supabase
+      .from('user_roles')
+      .upsert({ user_id: userId, role: 'admin' }, { onConflict: 'user_id' });
+    if (roleError) console.warn('Failed to grant admin role:', roleError);
+  } else {
+    const { error: roleDeleteError } = await supabase
+      .from('user_roles')
+      .delete()
+      .eq('user_id', userId);
+    if (roleDeleteError) console.warn('Failed to clear stale admin role:', roleDeleteError);
+  }
+
+  const { error: signInUpdateError } = await supabase
+    .from('state_leaders')
+    .update({ last_sign_in_at: new Date().toISOString() })
+    .eq('id', row.id);
+  if (signInUpdateError) console.warn('Failed to update last_sign_in_at:', signInUpdateError);
+
+  setAppSessionCookie(LEADER_AUTH_SESSION_MAX_AGE_SECONDS);
 }
 
 /**

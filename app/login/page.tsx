@@ -12,22 +12,12 @@ import { getRecentTWOLCampaignsForLeader } from '@/lib/services/campaignService'
 import { getTrainingCampaigns } from '@/lib/services/trainingInterestService';
 import { getCampaignInterestForLeader } from '@/lib/services/campaignInterestService';
 import { isRecognizedAdminStatus } from '@/lib/campaignFilter';
+import { AUSTRALIAN_STATE_NAMES } from '@/lib/constants';
 import type { Campaign } from '@/lib/types';
 
 type ActionChoice = 'record-past' | 'review-upcoming' | 'create-new' | 'campaign-rules' | 'training-interest' | 'campaign-interest';
 
 const STORAGE_KEYS = { mobile: 'login_mobile', firstName: 'login_firstName' };
-
-const STATE_NAMES: Record<string, string> = {
-  ACT: 'Australian Capital Territory',
-  NSW: 'New South Wales',
-  NT:  'Northern Territory',
-  QLD: 'Queensland',
-  SA:  'South Australia',
-  TAS: 'Tasmania',
-  VIC: 'Victoria',
-  WA:  'Western Australia',
-};
 
 export default function LoginPage() {
   const router = useRouter();
@@ -609,9 +599,9 @@ export default function LoginPage() {
                     ].join(' ')}
                   >
                     {match.state}
-                    {STATE_NAMES[match.state] && (
+                    {AUSTRALIAN_STATE_NAMES[match.state] && (
                       <span className="ml-2 text-sm font-normal opacity-90">
-                        — {STATE_NAMES[match.state]}
+                        — {AUSTRALIAN_STATE_NAMES[match.state]}
                       </span>
                     )}
                     {isSelected && (
@@ -688,6 +678,16 @@ export default function LoginPage() {
                 {isLoading ? 'Signing in...' : 'Sign In'}
               </button>
             </div>
+
+            {/* For leaders who've confirmed their email and set up an
+                authenticator app (see app/login/mfa/page.tsx) — mobile+name
+                stays the only option for everyone else. */}
+            <a
+              href="/login/mfa"
+              className="block text-center text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400"
+            >
+              Already set up two-factor authentication? Sign in with email instead
+            </a>
           </form>
         )}
       </div>
