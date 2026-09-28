@@ -4,6 +4,7 @@ import { ReactNode, Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { signOut } from '@/lib/auth';
+import { supabase } from '@/lib/supabaseClient';
 import Modal from '@/components/Modal';
 import { getUserAdminStatusAndMobile } from '@/lib/campaignFilter';
 
@@ -65,6 +66,11 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [adminStatus, setAdminStatus] = useState<string | null>(null);
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
+  // Only a leader signed in via the real-auth + MFA path (app/login/mfa)
+  // has more than one selectable role tied to their session — the
+  // mobile+name flow picks a state once, at login, via different
+  // credentials per role. Gates the "Switch Role" button below.
+  const [canSwitchRole, setCanSwitchRole] = useState(false);
 
   useEffect(() => {
     async function checkAdminAndSr() {
@@ -79,6 +85,10 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
       }
     }
     checkAdminAndSr();
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setCanSwitchRole(!!session && session.user.is_anonymous === false);
+    });
   }, []);
 
   const homeNavItem: NavItem    = { href: '/app',           label: 'Home',    icon: '🏠' };
@@ -116,12 +126,22 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
           <h1 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100 truncate">
             AFJ Campaign Activity System
           </h1>
-          <button
-            onClick={() => setShowSignOutConfirm(true)}
-            className="rounded-md px-3 py-1.5 text-base font-bold text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800 whitespace-nowrap border-2 border-gray-800 dark:border-gray-600"
-          >
-            Sign Out
-          </button>
+          <div className="flex items-center gap-2">
+            {canSwitchRole && (
+              <a
+                href="/login/mfa/callback"
+                className="rounded-md px-3 py-1.5 text-base font-bold text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800 whitespace-nowrap border-2 border-gray-800 dark:border-gray-600"
+              >
+                Switch Role
+              </a>
+            )}
+            <button
+              onClick={() => setShowSignOutConfirm(true)}
+              className="rounded-md px-3 py-1.5 text-base font-bold text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800 whitespace-nowrap border-2 border-gray-800 dark:border-gray-600"
+            >
+              Sign Out
+            </button>
+          </div>
         </div>
       </header>
 
