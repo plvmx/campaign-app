@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
-import { completeLeaderAuthSignIn, type AuthedLeaderRow } from '@/lib/auth';
+import { completeLeaderAuthSignIn, PREFERS_EMAIL_MFA_LOGIN_KEY, type AuthedLeaderRow } from '@/lib/auth';
 import { useUser } from '@/contexts/UserContext';
 import { getLeaderRoleLabel } from '@/lib/leaderRoleLabel';
 import { CodeEntryScreen, cardClass, bodyTextClass, primaryButtonClass, secondaryButtonClass } from '@/components/auth/CodeEntryScreen';
@@ -62,6 +62,13 @@ export default function LoginMfaCallbackPage() {
   async function finishSignIn(row: AuthedLeaderRow, uid: string) {
     setIsBusy(true);
     await completeLeaderAuthSignIn(row, uid);
+    // Remember on this device that this leader signs in via email + MFA, so
+    // app/login/page.tsx can skip straight to /login/mfa next time instead
+    // of showing the mobile+name form first (there's no session yet at that
+    // point to detect this any other way).
+    try {
+      localStorage.setItem(PREFERS_EMAIL_MFA_LOGIN_KEY, '1');
+    } catch { /* ignore (e.g. private browsing) */ }
     // Reload UserContext so it reads the profile just written, before
     // navigating — avoids a race where onAuthStateChange's own reload fires
     // before the upsert completes (same pattern app/login/page.tsx uses).

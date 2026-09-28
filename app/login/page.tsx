@@ -3,7 +3,7 @@
 import { useState, FormEvent, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { getSession, validateStateLeader, completeSignIn, type StateLeaderMatch } from '@/lib/auth';
+import { getSession, validateStateLeader, completeSignIn, PREFERS_EMAIL_MFA_LOGIN_KEY, type StateLeaderMatch } from '@/lib/auth';
 import { getErrorMessage } from '@/lib/errorUtils';
 import { isValidEmail } from '@/lib/validation';
 import { trackEvent } from '@/lib/analytics';
@@ -64,6 +64,17 @@ export default function LoginPage() {
         const session = await getSession();
         if (session) {
           router.push('/app');
+          return;
+        }
+        // No active session, but this device has signed in via email + MFA
+        // before — skip the mobile+name form and go straight there instead
+        // of making them click through to it every time. ?mode=mobile (set
+        // by /login/mfa's own "back to mobile+name" link) bypasses this
+        // just once, without touching the remembered preference — without
+        // it, that link would otherwise bounce straight back here forever.
+        const skipToMobileForm = new URLSearchParams(window.location.search).get('mode') === 'mobile';
+        if (!skipToMobileForm && localStorage.getItem(PREFERS_EMAIL_MFA_LOGIN_KEY)) {
+          router.push('/login/mfa');
           return;
         }
       } catch {

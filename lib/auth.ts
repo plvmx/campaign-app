@@ -1,5 +1,18 @@
 import { supabase } from './supabaseClient';
 
+/**
+ * Set in localStorage by app/login/mfa/callback/page.tsx right after a
+ * successful real-auth + MFA sign-in, and read by app/login/page.tsx on
+ * mount — lets a returning visitor with no *active* session skip straight
+ * to the email+MFA sign-in (app/login/mfa) instead of seeing the
+ * mobile+name form first, since there's no other way to know a not-yet-
+ * authenticated browser belongs to an MFA-enrolled leader. Never cleared on
+ * sign-out, matching this file's existing STORAGE_KEYS.mobile/firstName
+ * precedent (app/login/page.tsx) of remembering login preferences across
+ * sign-outs on the same device.
+ */
+export const PREFERS_EMAIL_MFA_LOGIN_KEY = 'afj_prefers_email_mfa_login';
+
 export interface User {
   id: string;
   email?: string;

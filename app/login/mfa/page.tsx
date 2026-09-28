@@ -109,7 +109,10 @@ export default function LoginMfaPage() {
             </button>
           </form>
         )}
-        <a href="/login" className="block text-center text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400">
+        {/* ?mode=mobile bypasses /login's own "prefers email+MFA" redirect
+            just this once, without clearing that remembered preference —
+            see app/login/page.tsx's checkExistingSession. */}
+        <a href="/login?mode=mobile" className="block text-center text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400">
           ← Back to mobile + name sign in
         </a>
       </div>
