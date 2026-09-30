@@ -2073,3 +2073,19 @@ migration (`scripts/add_nfc_to_registrant_edits_check.sql`) — written to
 look up the constraint's actual (Postgres-auto-generated) name via
 `pg_constraint` rather than guess it, since the original `CREATE TABLE`
 declared it inline with no explicit name.
+
+## The 66 remaining postcode conflicts resolved — sheet wins (2026-09-30)
+
+Peter's decision on the 66 conflicts left over from the 2026-09-25
+backfill above (the 67th, `carolinemusuka@gmail.com`, was already
+resolved by leaving the DB's `5024` in place — its sheet value `5208` is
+confirmed not a real postcode, see that entry): the sheet's postcode
+value wins whenever it disagrees with the DB's current value.
+
+`scripts/apply_postcode_conflicts_sept24_sheet.ts` re-fetched each of
+the 67 registrants' CURRENT postcode fresh rather than trusting the
+2026-09-25 snapshot (a manual `/registry/manage` edit could plausibly
+have already resolved one in the intervening 5 days — none had), excluded
+`carolinemusuka@gmail.com` by hardcoded email (the confirmed-invalid
+case), and overwrote the remaining 66. Backed up (pre-write state +
+intended patch) to `backups/` before writing, dry-run by default.
