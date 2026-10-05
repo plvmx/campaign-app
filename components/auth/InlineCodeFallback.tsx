@@ -35,7 +35,7 @@ export function InlineCodeFallback({ onVerify }: { onVerify: (code: string) => P
   if (!expanded) {
     return (
       <button type="button" onClick={() => setExpanded(true)} className={secondaryButtonClass}>
-        Link not working? Enter the code from the email instead
+        If the link is not working, click here to enter the code from the email instead
       </button>
     );
   }
