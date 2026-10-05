@@ -7,6 +7,7 @@ import { completeLeaderAuthSignIn, PREFERS_EMAIL_MFA_LOGIN_KEY, type AuthedLeade
 import { useUser } from '@/contexts/UserContext';
 import { getLeaderRoleLabel } from '@/lib/leaderRoleLabel';
 import { CodeEntryScreen, cardClass, bodyTextClass, primaryButtonClass, secondaryButtonClass } from '@/components/auth/CodeEntryScreen';
+import { EmailAndCodeFallback } from '@/components/auth/EmailAndCodeFallback';
 
 const GIVE_UP_AFTER_MS = 8000;
 
@@ -147,6 +148,18 @@ export default function LoginMfaCallbackPage() {
     if (userId) await resolveRole(rows, userId);
   }
 
+  // Recovery path when the link itself already failed (e.g. Apple Mail
+  // Privacy Protection silently consumed it before the leader ever tapped
+  // it — confirmed live, 2026-10-05). Just needs to call verifyOtp() and
+  // throw on failure; the onAuthStateChange listener registered in the
+  // effect above is still subscribed (the failed first attempt never ran
+  // handleSignedIn, so nothing blocks it firing again) and runs the exact
+  // same MFA-gate/role-resolution flow a working link would have.
+  async function handleRecoveryVerify(email: string, code: string) {
+    const { error } = await supabase.auth.verifyOtp({ email, token: code, type: 'email' });
+    if (error) throw error;
+  }
+
   async function handleCancel() {
     await supabase.auth.signOut();
     router.replace('/login/mfa');
@@ -169,6 +182,7 @@ export default function LoginMfaCallbackPage() {
           <h2 className="text-center text-xl font-bold text-gray-900 dark:text-gray-100">Link expired</h2>
           <p className={bodyTextClass}>This sign-in link is invalid or has expired.</p>
           <a href="/login/mfa" className={`${primaryButtonClass} block text-center`}>Back to sign in</a>
+          <EmailAndCodeFallback onVerify={handleRecoveryVerify} />
         </div>
       </div>
     );
