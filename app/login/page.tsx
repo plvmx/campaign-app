@@ -424,13 +424,20 @@ export default function LoginPage() {
               <p className="text-center text-sm text-gray-600 dark:text-gray-400">
                 We sent a confirmation link to <strong>{emailStep.value}</strong>. Click it to confirm your email.
               </p>
+              <InlineCodeFallback onVerify={handleEmailCodeVerify} />
+              {/* "Skip for now" here, not "Continue" — this button doesn't mean
+                  "I clicked the link," it means "I'll do this later." It used
+                  to say "Continue" and be styled as the big primary action,
+                  which read as "click here to proceed" — a leader did exactly
+                  that without ever opening the email (confirmed live,
+                  2026-10-05). Same label/styling as the Skip button on the
+                  'edit' phase above, since it's the identical action. */}
               <button
                 onClick={handleEmailStepDone}
-                className="w-full rounded-md bg-blue-600 px-4 py-3 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
+                className="w-full text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 disabled:opacity-50"
               >
-                Continue
+                Skip for now
               </button>
-              <InlineCodeFallback onVerify={handleEmailCodeVerify} />
             </div>
           )}
         </div>
@@ -478,13 +485,15 @@ export default function LoginPage() {
               <p className="text-center text-sm text-gray-600 dark:text-gray-400">
                 We sent a sign-in link to your email. Click it to set up your authenticator app.
               </p>
+              <InlineCodeFallback onVerify={handleMfaCodeVerify} />
+              {/* "Skip for now", not "Continue" — see the matching comment on
+                  the emailStep 'sent' block above for why. */}
               <button
                 onClick={handleMfaStepDone}
-                className="w-full rounded-md bg-blue-600 px-4 py-3 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
+                className="w-full text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 disabled:opacity-50"
               >
-                Continue
+                Skip for now
               </button>
-              <InlineCodeFallback onVerify={handleMfaCodeVerify} />
             </div>
           )}
         </div>
