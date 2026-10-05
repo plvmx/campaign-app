@@ -4,6 +4,7 @@ import { useEffect, useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import { cardClass, bodyTextClass, primaryButtonClass, inputClass, labelClass } from '@/components/auth/CodeEntryScreen';
+import { InlineCodeFallback } from '@/components/auth/InlineCodeFallback';
 
 /**
  * Email + magic-link entry point for leaders who've confirmed their email
@@ -72,6 +73,17 @@ export default function LoginMfaPage() {
     }
   }
 
+  // Same Apple-Mail-prefetch fallback as app/login/page.tsx's two code
+  // handlers — establishing the session via the same main client
+  // /login/mfa/callback/page.tsx already expects is enough; that page's own
+  // getSession() race cover picks it up and runs its normal AAL2-challenge/
+  // role-resolution flow unmodified.
+  async function handleCodeVerify(code: string) {
+    const { data, error } = await supabase.auth.verifyOtp({ email, token: code, type: 'email' });
+    if (error || !data.session) throw error ?? new Error('Invalid or expired code');
+    router.push('/login/mfa/callback');
+  }
+
   if (checkingSession) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8 dark:bg-gray-900">
@@ -87,9 +99,12 @@ export default function LoginMfaPage() {
       <div className={cardClass}>
         <h2 className="text-center text-xl font-bold text-gray-900 dark:text-gray-100">Sign in with email</h2>
         {sent ? (
-          <p className={bodyTextClass}>
-            If that address has two-factor authentication set up, a sign-in link is on its way — check your email.
-          </p>
+          <div className="space-y-4">
+            <p className={bodyTextClass}>
+              If that address has two-factor authentication set up, a sign-in link is on its way — check your email.
+            </p>
+            <InlineCodeFallback onVerify={handleCodeVerify} />
+          </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
