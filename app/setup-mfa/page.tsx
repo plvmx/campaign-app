@@ -9,6 +9,7 @@ import {
   bodyTextClass,
   cardClass,
 } from '@/components/auth/CodeEntryScreen';
+import { EmailAndCodeFallback } from '@/components/auth/EmailAndCodeFallback';
 
 const GIVE_UP_AFTER_MS = 8000;
 // Bounds how long the real-identity session (proven via the magic link) can
@@ -221,6 +222,18 @@ export default function SetupMfaPage() {
     setScreen('cancelled');
   }
 
+  // Recovery path when the link itself already failed (e.g. Apple Mail
+  // Privacy Protection silently consumed it before the leader ever tapped
+  // it — confirmed live, 2026-10-05). Just needs to call verifyOtp() and
+  // throw on failure; the onAuthStateChange listener registered in the
+  // sign-in-wait effect above is still subscribed (the failed first attempt
+  // never ran handleSignedIn, so nothing blocks it firing again) and runs
+  // the exact same AAL2-check/TOTP-enrollment flow a working link would have.
+  async function handleRecoveryVerify(email: string, code: string) {
+    const { error } = await emailConfirmSupabase.auth.verifyOtp({ email, token: code, type: 'email' });
+    if (error) throw error;
+  }
+
   async function handleVerifyTotp() {
     if (!totpFactorId) return;
     setIsBusy(true);
@@ -251,6 +264,7 @@ export default function SetupMfaPage() {
           <h2 className="text-center text-xl font-bold text-gray-900 dark:text-gray-100">Link expired</h2>
           <p className={bodyTextClass}>This confirmation link is invalid or has expired.</p>
           <a href="/login" className={`${primaryButtonClass} block text-center`}>Back to sign in</a>
+          <EmailAndCodeFallback onVerify={handleRecoveryVerify} />
         </div>
       </div>
     );

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { emailConfirmSupabase } from '@/lib/emailConfirmSupabaseClient';
+import { EmailAndCodeFallback } from '@/components/auth/EmailAndCodeFallback';
 
 const GIVE_UP_AFTER_MS = 8000;
 
@@ -88,6 +89,18 @@ export default function ConfirmEmailPage() {
     };
   }, []);
 
+  // Recovery path when the link itself already failed (e.g. Apple Mail
+  // Privacy Protection silently consumed it before the leader ever tapped
+  // it — confirmed live, 2026-10-05). Just needs to call verifyOtp() and
+  // throw on failure; the onAuthStateChange listener registered in the
+  // effect above is still subscribed (the failed first attempt never ran
+  // handleSignedIn, so nothing blocks it firing again) and runs the exact
+  // same confirm-email flow a working link would have.
+  async function handleRecoveryVerify(email: string, code: string) {
+    const { error } = await emailConfirmSupabase.auth.verifyOtp({ email, token: code, type: 'email' });
+    if (error) throw error;
+  }
+
   const cardClass =
     'w-full max-w-md space-y-4 rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-blue-50 p-6 shadow-lg dark:bg-blue-900/20 sm:p-8';
 
@@ -109,12 +122,15 @@ export default function ConfirmEmailPage() {
           </a>
         )}
         {status === 'error' && (
-          <a
-            href="/login"
-            className="block w-full rounded-md bg-blue-600 px-4 py-3 text-center text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
-          >
-            Back to sign in
-          </a>
+          <>
+            <a
+              href="/login"
+              className="block w-full rounded-md bg-blue-600 px-4 py-3 text-center text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
+            >
+              Back to sign in
+            </a>
+            <EmailAndCodeFallback onVerify={handleRecoveryVerify} />
+          </>
         )}
       </div>
     </div>
