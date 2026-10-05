@@ -4,6 +4,7 @@ import { useState, FormEvent, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { getSession, validateStateLeader, completeSignIn, PREFERS_EMAIL_MFA_LOGIN_KEY, type StateLeaderMatch } from '@/lib/auth';
+import { emailConfirmSupabase } from '@/lib/emailConfirmSupabaseClient';
 import { getErrorMessage } from '@/lib/errorUtils';
 import { isValidEmail } from '@/lib/validation';
 import { trackEvent } from '@/lib/analytics';
@@ -13,6 +14,7 @@ import { getTrainingCampaigns } from '@/lib/services/trainingInterestService';
 import { getCampaignInterestForLeader } from '@/lib/services/campaignInterestService';
 import { isRecognizedAdminStatus } from '@/lib/campaignFilter';
 import { AUSTRALIAN_STATE_NAMES } from '@/lib/constants';
+import { InlineCodeFallback } from '@/components/auth/InlineCodeFallback';
 import type { Campaign } from '@/lib/types';
 
 type ActionChoice = 'record-past' | 'review-upcoming' | 'create-new' | 'campaign-rules' | 'training-interest' | 'campaign-interest';
@@ -184,6 +186,35 @@ export default function LoginPage() {
     maybeShowMfaStep(match);
   };
 
+  // Fallback for a leader whose magic-link click never arrives server-side
+  // (seen live for Apple Mail users — Mail Privacy Protection silently
+  // pre-fetches, and thereby consumes, the one-time link before they ever
+  // tap it). Mirrors app/confirm-email/page.tsx's own request shape exactly,
+  // just driven by a typed code instead of a clicked link.
+  const handleEmailCodeVerify = async (code: string) => {
+    if (!emailStep) return;
+    const { data, error } = await emailConfirmSupabase.auth.verifyOtp({ email: emailStep.value, token: code, type: 'email' });
+    if (error || !data.session) throw error ?? new Error('Invalid or expired code');
+    try {
+      const res = await fetch('/api/auth/confirm-email', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${data.session.access_token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ leaderId: emailStep.match.id }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed to confirm email');
+    } finally {
+      await emailConfirmSupabase.auth.signOut();
+    }
+    // Unlike the across-tab link flow (where this page has no way to know
+    // confirmation happened elsewhere, so match.email stays stale until the
+    // next login), this path knows synchronously that it just succeeded —
+    // so it can proceed straight into the MFA offer this same sitting.
+    const confirmedMatch = { ...emailStep.match, email: emailStep.value };
+    setEmailStep(null);
+    await maybeShowMfaStep(confirmedMatch);
+  };
+
   // ── Post-email-step, pre-action-chooser: offer MFA setup if not already done ─
   const maybeShowMfaStep = async (match: StateLeaderMatch) => {
     // match.email is still null right after the email step exits (whether
@@ -222,6 +253,18 @@ export default function LoginPage() {
     const { match } = mfaStep;
     setMfaStep(null);
     checkRecentCampaign(match);
+  };
+
+  // Same Apple-Mail-prefetch fallback as handleEmailCodeVerify, for the MFA
+  // magic link. Establishing the session here via the same isolated client
+  // /setup-mfa itself uses is enough — that page's own getSession() race
+  // cover (built for "session already exists by the time the listener
+  // subscribes") picks it up and runs its normal TOTP/AAL2 flow unmodified.
+  const handleMfaCodeVerify = async (code: string) => {
+    if (!mfaStep?.match.email) return;
+    const { data, error } = await emailConfirmSupabase.auth.verifyOtp({ email: mfaStep.match.email, token: code, type: 'email' });
+    if (error || !data.session) throw error ?? new Error('Invalid or expired code');
+    router.push('/setup-mfa');
   };
 
   // ── Post-sign-in: show action chooser for regular leaders, or check recent TWOL for admins ─
@@ -387,6 +430,7 @@ export default function LoginPage() {
               >
                 Continue
               </button>
+              <InlineCodeFallback onVerify={handleEmailCodeVerify} />
             </div>
           )}
         </div>
@@ -440,6 +484,7 @@ export default function LoginPage() {
               >
                 Continue
               </button>
+              <InlineCodeFallback onVerify={handleMfaCodeVerify} />
             </div>
           )}
         </div>
