@@ -1,6 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import { normalizeOtpInput } from '@/lib/otpInput';
 
 // Shared styling + the 6-digit code entry screen used by every leader-facing
 // magic-link identity flow (app/setup-mfa/page.tsx, app/login/mfa/callback)
@@ -45,9 +46,8 @@ export function CodeEntryScreen({
           id="mfa-code"
           inputMode="numeric"
           pattern="[0-9]*"
-          maxLength={6}
           value={code}
-          onChange={(e) => onCodeChange(e.target.value)}
+          onChange={(e) => onCodeChange(normalizeOtpInput(e.target.value))}
           className={inputClass}
         />
       </div>

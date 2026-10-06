@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { getErrorMessage } from '@/lib/errorUtils';
+import { normalizeOtpInput } from '@/lib/otpInput';
 import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass, errorBannerClass } from '@/components/auth/CodeEntryScreen';
 
 /**
@@ -35,7 +36,7 @@ export function InlineCodeFallback({ onVerify }: { onVerify: (code: string) => P
   if (!expanded) {
     return (
       <button type="button" onClick={() => setExpanded(true)} className={secondaryButtonClass}>
-        If the link is not working, click here to enter the code from the email instead
+        If the link is not working, <span className="font-semibold underline">Click Here</span> to enter the code from the email instead
       </button>
     );
   }
@@ -60,9 +61,8 @@ export function InlineCodeFallback({ onVerify }: { onVerify: (code: string) => P
           id="inline-code-fallback"
           inputMode="numeric"
           pattern="[0-9]*"
-          maxLength={6}
           value={code}
-          onChange={(e) => setCode(e.target.value)}
+          onChange={(e) => setCode(normalizeOtpInput(e.target.value))}
           className={inputClass}
         />
       </div>

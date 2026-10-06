@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { getErrorMessage } from '@/lib/errorUtils';
+import { normalizeOtpInput } from '@/lib/otpInput';
 import { inputClass, labelClass, primaryButtonClass, errorBannerClass, bodyTextClass } from '@/components/auth/CodeEntryScreen';
 
 /**
@@ -66,9 +67,8 @@ export function EmailAndCodeFallback({ onVerify }: { onVerify: (email: string, c
           id="recovery-code"
           inputMode="numeric"
           pattern="[0-9]*"
-          maxLength={6}
           value={code}
-          onChange={(e) => setCode(e.target.value)}
+          onChange={(e) => setCode(normalizeOtpInput(e.target.value))}
           className={inputClass}
         />
       </div>
