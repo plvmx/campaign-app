@@ -189,25 +189,20 @@ describe('Campaign Dates Calculations', () => {
   });
 
   describe('getCampaignResultsRemovalDate', () => {
-    it('Thursday to Sunday: the Sunday after the current (displayed) week ends', () => {
-      // Displayed week is Mon 5 - Sun 11 Oct 2026 -> deleted Sunday 18 Oct
-      expect(formatDateForDb(getCampaignResultsRemovalDate(createDate(2026, 10, 8)))).toBe('2026-10-18');
-      expect(formatDateForDb(getCampaignResultsRemovalDate(createDate(2026, 10, 11)))).toBe('2026-10-18');
-    });
-
-    it('Monday to Wednesday: still the same Sunday, since the previous week is still displayed', () => {
-      // Mon 12 - Wed 14 Oct still show the 5-11 Oct week -> Sunday of the current week
-      expect(formatDateForDb(getCampaignResultsRemovalDate(createDate(2026, 10, 12)))).toBe('2026-10-18');
-      expect(formatDateForDb(getCampaignResultsRemovalDate(createDate(2026, 10, 14)))).toBe('2026-10-18');
-    });
-
-    it('moves on a week once the page switches over on Thursday', () => {
-      expect(formatDateForDb(getCampaignResultsRemovalDate(createDate(2026, 10, 15)))).toBe('2026-10-25');
+    it('returns the Sunday after the displayed week ends', () => {
+      // Displayed week Mon 5 - Sun 11 Oct 2026 -> deleted Sunday 18 Oct
+      expect(formatDateForDb(getCampaignResultsRemovalDate(createDate(2026, 10, 5)))).toBe('2026-10-18');
     });
 
     it('crosses a year boundary', () => {
-      // Thursday 24 Dec 2026: displayed week 21-27 Dec -> Sunday 3 Jan 2027
-      expect(formatDateForDb(getCampaignResultsRemovalDate(createDate(2026, 12, 24)))).toBe('2027-01-03');
+      // Displayed week 21-27 Dec 2026 -> Sunday 3 Jan 2027
+      expect(formatDateForDb(getCampaignResultsRemovalDate(createDate(2026, 12, 21)))).toBe('2027-01-03');
+    });
+
+    it('does not mutate the date it is given', () => {
+      const monday = createDate(2026, 10, 5);
+      getCampaignResultsRemovalDate(monday);
+      expect(formatDateForDb(monday)).toBe('2026-10-05');
     });
   });
 

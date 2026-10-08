@@ -231,16 +231,15 @@ export function formatShortDateWithOrdinal(date: Date): string {
 const FULL_DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 /**
- * The Sunday on which the names currently shown on the Campaign Results
- * public link are deleted: the Sunday *after* the displayed campaign week
- * ends. The page shows the week starting at `pastCampaignStart`
- * (app/api/public/campaign-results/route.ts), and the Sunday weekly refresh
- * deletes campaigns — and their results — dated before `pastCampaignStart`,
- * so a displayed week survives the refresh on its own closing Sunday and goes
- * on the next one (e.g. the 5-11 Oct week is deleted on Sunday 18 Oct).
+ * The Sunday on which a campaign week shown on the Campaign Results public
+ * link is deleted, given that week's Monday: the Sunday *after* the week
+ * ends. The Sunday weekly refresh deletes campaigns — and their results —
+ * dated before the Monday of the week it runs in, so a week survives the
+ * refresh on its own closing Sunday and goes on the next one (e.g. the
+ * 5-11 Oct week is deleted on Sunday 18 Oct).
  */
-export function getCampaignResultsRemovalDate(referenceDate: Date = new Date()): Date {
-  const removal = new Date(calculateCampaignDates(referenceDate).pastCampaignStart);
+export function getCampaignResultsRemovalDate(displayedWeekStart: Date): Date {
+  const removal = new Date(displayedWeekStart);
   removal.setDate(removal.getDate() + 13);
   return removal;
 }

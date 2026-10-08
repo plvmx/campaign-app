@@ -15,7 +15,7 @@
  * Deliberately does NOT use MobileLayout — that component resolves the
  * signed-in user's admin status and assumes a logged-in session.
  */
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import FullscreenImageViewer from '@/components/FullscreenImageViewer';
 import SaveImageButton from '@/components/SaveImageButton';
@@ -32,20 +32,13 @@ interface ResultPage {
   blob: Blob;
 }
 
-// The notice's removal date depends on the visitor's own clock, so it's read
-// client-side only (null during SSR/hydration) rather than risk a hydration
-// mismatch against the server's UTC clock. Around the Thursday switchover the
-// visitor's clock can run ahead of the server's choice of week, which only
-// ever names a later Sunday than the real deletion — never an earlier one.
-const subscribeNever = () => () => {};
-const getRemovalDateLabel = () => formatLongDateWithOrdinal(getCampaignResultsRemovalDate());
-const getServerRemovalDateLabel = () => null;
-
 export default function CampaignResultsClient() {
-  const removalDateLabel = useSyncExternalStore(subscribeNever, getRemovalDateLabel, getServerRemovalDateLabel);
   const [progress, setProgress] = useState('Loading campaign results…');
   const [error, setError] = useState<string | null>(null);
   const [pages, setPages] = useState<ResultPage[] | null>(null);
+  // The notice's removal date follows from which week the server chose to
+  // show, so it's only known once the results have loaded.
+  const [removalDateLabel, setRemovalDateLabel] = useState<string | null>(null);
   const [fullscreenPage, setFullscreenPage] = useState<number | null>(null);
   const objectUrlsRef = useRef<string[]>([]);
 
@@ -62,7 +55,9 @@ export default function CampaignResultsClient() {
         if (!res.ok) throw new Error(json?.error || 'Failed to load campaign results');
         if (cancelled) return;
 
-        const { rows } = json as CampaignResultsResponse;
+        const { rows, weekStart } = json as CampaignResultsResponse;
+        const [y, m, d] = weekStart.split('-').map(Number);
+        setRemovalDateLabel(formatLongDateWithOrdinal(getCampaignResultsRemovalDate(new Date(y, m - 1, d))));
         if (rows.length === 0) {
           setPages([]);
           return;
