@@ -21,7 +21,7 @@ import FullscreenImageViewer from '@/components/FullscreenImageViewer';
 import SaveImageButton from '@/components/SaveImageButton';
 import { getErrorMessage } from '@/lib/errorUtils';
 import { formatDownloadDate } from '@/lib/slideLayout';
-import { formatLongDateWithOrdinal, getCampaignResultsRemovalDate } from '@/lib/campaignDates';
+import { formatLongDateWithOrdinal, getCampaignResultsNoticeDate } from '@/lib/campaignDates';
 import { drawReportPage, canvasToJpegBlob } from '@/lib/reportCanvas';
 import { chunkReportRows } from '@/lib/reportGenerator';
 import type { CampaignResultsResponse } from '@/app/api/public/campaign-results/route';
@@ -36,9 +36,9 @@ export default function CampaignResultsClient() {
   const [progress, setProgress] = useState('Loading campaign results…');
   const [error, setError] = useState<string | null>(null);
   const [pages, setPages] = useState<ResultPage[] | null>(null);
-  // The notice's removal date follows from which week the server chose to
-  // show, so it's only known once the results have loaded.
-  const [removalDateLabel, setRemovalDateLabel] = useState<string | null>(null);
+  // The notice's date follows from which week the server chose to show, so
+  // it's only known once the results have loaded.
+  const [noticeDateLabel, setNoticeDateLabel] = useState<string | null>(null);
   const [fullscreenPage, setFullscreenPage] = useState<number | null>(null);
   const objectUrlsRef = useRef<string[]>([]);
 
@@ -57,7 +57,7 @@ export default function CampaignResultsClient() {
 
         const { rows, weekStart } = json as CampaignResultsResponse;
         const [y, m, d] = weekStart.split('-').map(Number);
-        setRemovalDateLabel(formatLongDateWithOrdinal(getCampaignResultsRemovalDate(new Date(y, m - 1, d))));
+        setNoticeDateLabel(formatLongDateWithOrdinal(getCampaignResultsNoticeDate(new Date(y, m - 1, d))));
         if (rows.length === 0) {
           setPages([]);
           return;
@@ -102,10 +102,10 @@ export default function CampaignResultsClient() {
           <p className="mt-1 text-sm text-red-900 dark:text-red-100">
             The first names listed on the screens below are presented STRICTLY for the purposes of prayer, and
             they will not be stored by AFJ in any form beyond{' '}
-            {removalDateLabel ? (
-              <span className="whitespace-nowrap font-bold">{removalDateLabel}</span>
+            {noticeDateLabel ? (
+              <span className="whitespace-nowrap font-bold">{noticeDateLabel}</span>
             ) : (
-              'the Sunday after these campaigns end'
+              'the end of next week'
             )}
             .
           </p>

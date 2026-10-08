@@ -3,7 +3,7 @@
  * Run with: npm test or jest
  */
 
-import { calculateCampaignDates, formatDateForDb, formatWeekRangeLabel, formatWeekDateRangeString, formatFortnightDateRangeString, formatShortDateWithOrdinal, formatLongDateWithOrdinal, getCampaignResultsRemovalDate, getFortnightDateRange, getDateRangeInclusive } from '../campaignDates';
+import { calculateCampaignDates, formatDateForDb, formatWeekRangeLabel, formatWeekDateRangeString, formatFortnightDateRangeString, formatShortDateWithOrdinal, formatLongDateWithOrdinal, getCampaignResultsNoticeDate, getFortnightDateRange, getDateRangeInclusive } from '../campaignDates';
 
 describe('Campaign Dates Calculations', () => {
   // Helper to create a date
@@ -188,21 +188,22 @@ describe('Campaign Dates Calculations', () => {
     });
   });
 
-  describe('getCampaignResultsRemovalDate', () => {
-    it('returns the Sunday after the displayed week ends', () => {
-      // Displayed week Mon 5 - Sun 11 Oct 2026 -> deleted Sunday 18 Oct
-      expect(formatDateForDb(getCampaignResultsRemovalDate(createDate(2026, 10, 5)))).toBe('2026-10-18');
+  describe('getCampaignResultsNoticeDate', () => {
+    it('returns the Sunday a week after the displayed week is deleted', () => {
+      // Displayed week Mon 28 Sep - Sun 4 Oct 2026: on screen until (and deleted on)
+      // Sunday 11 Oct, so the notice names the end of the following week, Sunday 18 Oct.
+      expect(formatDateForDb(getCampaignResultsNoticeDate(createDate(2026, 9, 28)))).toBe('2026-10-18');
     });
 
     it('crosses a year boundary', () => {
-      // Displayed week 21-27 Dec 2026 -> Sunday 3 Jan 2027
-      expect(formatDateForDb(getCampaignResultsRemovalDate(createDate(2026, 12, 21)))).toBe('2027-01-03');
+      // Displayed week 14-20 Dec 2026 -> Sunday 3 Jan 2027
+      expect(formatDateForDb(getCampaignResultsNoticeDate(createDate(2026, 12, 14)))).toBe('2027-01-03');
     });
 
     it('does not mutate the date it is given', () => {
-      const monday = createDate(2026, 10, 5);
-      getCampaignResultsRemovalDate(monday);
-      expect(formatDateForDb(monday)).toBe('2026-10-05');
+      const monday = createDate(2026, 9, 28);
+      getCampaignResultsNoticeDate(monday);
+      expect(formatDateForDb(monday)).toBe('2026-09-28');
     });
   });
 
