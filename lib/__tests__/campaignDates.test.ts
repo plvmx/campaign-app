@@ -3,7 +3,7 @@
  * Run with: npm test or jest
  */
 
-import { calculateCampaignDates, formatDateForDb, formatWeekRangeLabel, formatWeekDateRangeString, formatFortnightDateRangeString, formatShortDateWithOrdinal, getFortnightDateRange, getDateRangeInclusive } from '../campaignDates';
+import { calculateCampaignDates, formatDateForDb, formatWeekRangeLabel, formatWeekDateRangeString, formatFortnightDateRangeString, formatShortDateWithOrdinal, formatLongDateWithOrdinal, getCampaignResultsRemovalDate, getFortnightDateRange, getDateRangeInclusive } from '../campaignDates';
 
 describe('Campaign Dates Calculations', () => {
   // Helper to create a date
@@ -185,6 +185,41 @@ describe('Campaign Dates Calculations', () => {
       expect(formatShortDateWithOrdinal(createDate(2026, 3, 1))).toBe('Sun 1st Mar');
       expect(formatShortDateWithOrdinal(createDate(2026, 6, 2))).toBe('Tue 2nd Jun');
       expect(formatShortDateWithOrdinal(createDate(2026, 12, 21))).toBe('Mon 21st Dec');
+    });
+  });
+
+  describe('getCampaignResultsRemovalDate', () => {
+    it('Thursday to Sunday: the Sunday after the current (displayed) week ends', () => {
+      // Displayed week is Mon 5 - Sun 11 Oct 2026 -> deleted Sunday 18 Oct
+      expect(formatDateForDb(getCampaignResultsRemovalDate(createDate(2026, 10, 8)))).toBe('2026-10-18');
+      expect(formatDateForDb(getCampaignResultsRemovalDate(createDate(2026, 10, 11)))).toBe('2026-10-18');
+    });
+
+    it('Monday to Wednesday: still the same Sunday, since the previous week is still displayed', () => {
+      // Mon 12 - Wed 14 Oct still show the 5-11 Oct week -> Sunday of the current week
+      expect(formatDateForDb(getCampaignResultsRemovalDate(createDate(2026, 10, 12)))).toBe('2026-10-18');
+      expect(formatDateForDb(getCampaignResultsRemovalDate(createDate(2026, 10, 14)))).toBe('2026-10-18');
+    });
+
+    it('moves on a week once the page switches over on Thursday', () => {
+      expect(formatDateForDb(getCampaignResultsRemovalDate(createDate(2026, 10, 15)))).toBe('2026-10-25');
+    });
+
+    it('crosses a year boundary', () => {
+      // Thursday 24 Dec 2026: displayed week 21-27 Dec -> Sunday 3 Jan 2027
+      expect(formatDateForDb(getCampaignResultsRemovalDate(createDate(2026, 12, 24)))).toBe('2027-01-03');
+    });
+  });
+
+  describe('formatLongDateWithOrdinal', () => {
+    it('formats a date as "Dddd Dth Mon YYYY" — full day name, ordinal day, short month, full year', () => {
+      expect(formatLongDateWithOrdinal(createDate(2026, 10, 11))).toBe('Sunday 11th Oct 2026');
+    });
+
+    it('uses the correct ordinal suffix for each day', () => {
+      expect(formatLongDateWithOrdinal(createDate(2026, 3, 1))).toBe('Sunday 1st Mar 2026');
+      expect(formatLongDateWithOrdinal(createDate(2026, 6, 2))).toBe('Tuesday 2nd Jun 2026');
+      expect(formatLongDateWithOrdinal(createDate(2027, 1, 3))).toBe('Sunday 3rd Jan 2027');
     });
   });
 

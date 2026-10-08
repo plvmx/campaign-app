@@ -7,6 +7,11 @@ export interface ResultsLogRow {
   category_code: string;
 }
 
+/** Strips everything but the category from a row before it's logged — see logResultsSave. */
+function withoutNames(rows: ResultsLogRow[]): { category_code: string }[] {
+  return rows.map((row) => ({ category_code: row.category_code }));
+}
+
 /**
  * Fire-and-forget audit logger for the Record Results save flow.
  *
@@ -14,6 +19,13 @@ export interface ResultsLogRow {
  * log is diagnostic: when a leader reports "I entered names and they
  * disappeared", we can look up their campaign and see exactly what the client
  * attempted to send and whether the save succeeded.
+ *
+ * Names are deliberately NOT written to the log — only each attempted row's
+ * `category_code`. Recorded first names are shown publicly strictly for prayer
+ * with a promise that AFJ doesn't keep them beyond the week (see the notice on
+ * /public/campaign-results), and this table is never pruned, so a name logged
+ * here would outlive that promise indefinitely. The per-category counts are
+ * still enough to tell "the client never sent it" from "the save failed".
  *
  * The function never throws — logging failures must not break the save flow
  * the user just triggered.
@@ -48,8 +60,8 @@ export function logResultsSave(params: {
         campaign_id:       params.campaignId,
         user_id:           user.id,
         status:            params.status,
-        attempted_upserts: params.attemptedUpserts,
-        attempted_deletes: params.attemptedDeletes,
+        attempted_upserts: withoutNames(params.attemptedUpserts),
+        attempted_deletes: withoutNames(params.attemptedDeletes),
         error_message:     params.errorMessage ?? null,
         user_email:        user.email ?? null,
         user_name:         userName,

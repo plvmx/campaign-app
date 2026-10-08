@@ -228,6 +228,37 @@ export function formatShortDateWithOrdinal(date: Date): string {
   return `${dayName} ${day}${getOrdinalSuffix(day)} ${month}`;
 }
 
+const FULL_DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+/**
+ * The Sunday on which the names currently shown on the Campaign Results
+ * public link are deleted: the Sunday *after* the displayed campaign week
+ * ends. The page shows the week starting at `pastCampaignStart`
+ * (app/api/public/campaign-results/route.ts), and the Sunday weekly refresh
+ * deletes campaigns — and their results — dated before `pastCampaignStart`,
+ * so a displayed week survives the refresh on its own closing Sunday and goes
+ * on the next one (e.g. the 5-11 Oct week is deleted on Sunday 18 Oct).
+ */
+export function getCampaignResultsRemovalDate(referenceDate: Date = new Date()): Date {
+  const removal = new Date(calculateCampaignDates(referenceDate).pastCampaignStart);
+  removal.setDate(removal.getDate() + 13);
+  return removal;
+}
+
+/**
+ * Format a single date as "Sunday 11th Oct 2026" — full day name, ordinal
+ * day, short month, full year. Used where a date is read as part of a
+ * sentence (e.g. the Campaign Results public link's notice) rather than as a
+ * compact label. Fixed name tables rather than toLocaleString(), same
+ * ICU-consistency reason as the formatters above.
+ */
+export function formatLongDateWithOrdinal(date: Date): string {
+  const dayName = FULL_DAY_NAMES[date.getDay()];
+  const day = date.getDate();
+  const month = SHORT_MONTH_NAMES[date.getMonth()];
+  return `${dayName} ${day}${getOrdinalSuffix(day)} ${month} ${date.getFullYear()}`;
+}
+
 /**
  * Get the current campaign dates as formatted strings
  */
