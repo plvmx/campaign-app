@@ -15,12 +15,13 @@
  * Deliberately does NOT use MobileLayout — that component resolves the
  * signed-in user's admin status and assumes a logged-in session.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import FullscreenImageViewer from '@/components/FullscreenImageViewer';
 import SaveImageButton from '@/components/SaveImageButton';
 import { getErrorMessage } from '@/lib/errorUtils';
 import { formatDownloadDate } from '@/lib/slideLayout';
+import { formatLongDateWithOrdinal, getEndOfWeekSunday } from '@/lib/campaignDates';
 import { drawReportPage, canvasToJpegBlob } from '@/lib/reportCanvas';
 import { chunkReportRows } from '@/lib/reportGenerator';
 import type { CampaignResultsResponse } from '@/app/api/public/campaign-results/route';
@@ -31,7 +32,15 @@ interface ResultPage {
   blob: Blob;
 }
 
+// The notice's "end of this week" date depends on the visitor's own clock, so
+// it's read client-side only (null during SSR/hydration) — the server runs in
+// UTC and would otherwise name the wrong Sunday for part of an Australian Monday.
+const subscribeNever = () => () => {};
+const getWeekEndLabel = () => formatLongDateWithOrdinal(getEndOfWeekSunday());
+const getServerWeekEndLabel = () => null;
+
 export default function CampaignResultsClient() {
+  const weekEndLabel = useSyncExternalStore(subscribeNever, getWeekEndLabel, getServerWeekEndLabel);
   const [progress, setProgress] = useState('Loading campaign results…');
   const [error, setError] = useState<string | null>(null);
   const [pages, setPages] = useState<ResultPage[] | null>(null);
@@ -88,6 +97,23 @@ export default function CampaignResultsClient() {
   return (
     <div className="min-h-screen bg-gray-100 p-4 dark:bg-gray-950">
       <div className="mx-auto max-w-4xl">
+        <div
+          role="note"
+          className="mb-4 rounded-lg border-2 border-red-700 bg-red-50 p-4 dark:border-red-500 dark:bg-red-900/20"
+        >
+          <h2 className="text-base font-bold text-red-800 dark:text-red-200">IMPORTANT NOTICE</h2>
+          <p className="mt-1 text-sm text-red-900 dark:text-red-100">
+            The first names listed on the screens below are presented STRICTLY for the purposes of prayer, and
+            they will not be stored by AFJ in any form beyond the end of this week
+            {weekEndLabel && (
+              <>
+                {' '}or <span className="whitespace-nowrap font-bold">{weekEndLabel}</span>
+              </>
+            )}
+            .
+          </p>
+        </div>
+
         <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">Campaign Results</h1>
         <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
           Results recorded for the past week&apos;s campaigns, all states.

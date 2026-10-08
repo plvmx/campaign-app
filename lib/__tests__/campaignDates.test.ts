@@ -3,7 +3,7 @@
  * Run with: npm test or jest
  */
 
-import { calculateCampaignDates, formatDateForDb, formatWeekRangeLabel, formatWeekDateRangeString, formatFortnightDateRangeString, formatShortDateWithOrdinal, getFortnightDateRange, getDateRangeInclusive } from '../campaignDates';
+import { calculateCampaignDates, formatDateForDb, formatWeekRangeLabel, formatWeekDateRangeString, formatFortnightDateRangeString, formatShortDateWithOrdinal, formatLongDateWithOrdinal, getEndOfWeekSunday, getFortnightDateRange, getDateRangeInclusive } from '../campaignDates';
 
 describe('Campaign Dates Calculations', () => {
   // Helper to create a date
@@ -185,6 +185,36 @@ describe('Campaign Dates Calculations', () => {
       expect(formatShortDateWithOrdinal(createDate(2026, 3, 1))).toBe('Sun 1st Mar');
       expect(formatShortDateWithOrdinal(createDate(2026, 6, 2))).toBe('Tue 2nd Jun');
       expect(formatShortDateWithOrdinal(createDate(2026, 12, 21))).toBe('Mon 21st Dec');
+    });
+  });
+
+  describe('getEndOfWeekSunday', () => {
+    it('returns the Sunday ending the Monday-start week containing the date', () => {
+      // Thursday, October 8, 2026 -> Sunday, October 11, 2026
+      expect(formatDateForDb(getEndOfWeekSunday(createDate(2026, 10, 8)))).toBe('2026-10-11');
+      // Monday, October 5, 2026 -> same Sunday
+      expect(formatDateForDb(getEndOfWeekSunday(createDate(2026, 10, 5)))).toBe('2026-10-11');
+    });
+
+    it('returns the date itself when it is already a Sunday, not the following one', () => {
+      expect(formatDateForDb(getEndOfWeekSunday(createDate(2026, 10, 11)))).toBe('2026-10-11');
+    });
+
+    it('crosses a month/year boundary', () => {
+      // Wednesday, December 30, 2026 -> Sunday, January 3, 2027
+      expect(formatDateForDb(getEndOfWeekSunday(createDate(2026, 12, 30)))).toBe('2027-01-03');
+    });
+  });
+
+  describe('formatLongDateWithOrdinal', () => {
+    it('formats a date as "Dddd Dth Mon YYYY" — full day name, ordinal day, short month, full year', () => {
+      expect(formatLongDateWithOrdinal(createDate(2026, 10, 11))).toBe('Sunday 11th Oct 2026');
+    });
+
+    it('uses the correct ordinal suffix for each day', () => {
+      expect(formatLongDateWithOrdinal(createDate(2026, 3, 1))).toBe('Sunday 1st Mar 2026');
+      expect(formatLongDateWithOrdinal(createDate(2026, 6, 2))).toBe('Tuesday 2nd Jun 2026');
+      expect(formatLongDateWithOrdinal(createDate(2027, 1, 3))).toBe('Sunday 3rd Jan 2027');
     });
   });
 
