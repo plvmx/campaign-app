@@ -107,7 +107,7 @@ export default function CampaignResultsClient() {
             they will not be stored by AFJ in any form beyond the end of this week
             {weekEndLabel && (
               <>
-                {' '}or <span className="whitespace-nowrap font-bold">{weekEndLabel}</span>
+                {' '}<span className="whitespace-nowrap font-bold">({weekEndLabel})</span>
               </>
             )}
             .
