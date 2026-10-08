@@ -3,7 +3,7 @@
  * Run with: npm test or jest
  */
 
-import { calculateCampaignDates, formatDateForDb, formatWeekRangeLabel, formatWeekDateRangeString, formatFortnightDateRangeString, formatShortDateWithOrdinal, formatLongDateWithOrdinal, getEndOfWeekSunday, getFortnightDateRange, getDateRangeInclusive } from '../campaignDates';
+import { calculateCampaignDates, formatDateForDb, formatWeekRangeLabel, formatWeekDateRangeString, formatFortnightDateRangeString, formatShortDateWithOrdinal, formatLongDateWithOrdinal, getCampaignResultsRemovalDate, getFortnightDateRange, getDateRangeInclusive } from '../campaignDates';
 
 describe('Campaign Dates Calculations', () => {
   // Helper to create a date
@@ -188,21 +188,26 @@ describe('Campaign Dates Calculations', () => {
     });
   });
 
-  describe('getEndOfWeekSunday', () => {
-    it('returns the Sunday ending the Monday-start week containing the date', () => {
-      // Thursday, October 8, 2026 -> Sunday, October 11, 2026
-      expect(formatDateForDb(getEndOfWeekSunday(createDate(2026, 10, 8)))).toBe('2026-10-11');
-      // Monday, October 5, 2026 -> same Sunday
-      expect(formatDateForDb(getEndOfWeekSunday(createDate(2026, 10, 5)))).toBe('2026-10-11');
+  describe('getCampaignResultsRemovalDate', () => {
+    it('Thursday to Sunday: the Sunday after the current (displayed) week ends', () => {
+      // Displayed week is Mon 5 - Sun 11 Oct 2026 -> deleted Sunday 18 Oct
+      expect(formatDateForDb(getCampaignResultsRemovalDate(createDate(2026, 10, 8)))).toBe('2026-10-18');
+      expect(formatDateForDb(getCampaignResultsRemovalDate(createDate(2026, 10, 11)))).toBe('2026-10-18');
     });
 
-    it('returns the date itself when it is already a Sunday, not the following one', () => {
-      expect(formatDateForDb(getEndOfWeekSunday(createDate(2026, 10, 11)))).toBe('2026-10-11');
+    it('Monday to Wednesday: still the same Sunday, since the previous week is still displayed', () => {
+      // Mon 12 - Wed 14 Oct still show the 5-11 Oct week -> Sunday of the current week
+      expect(formatDateForDb(getCampaignResultsRemovalDate(createDate(2026, 10, 12)))).toBe('2026-10-18');
+      expect(formatDateForDb(getCampaignResultsRemovalDate(createDate(2026, 10, 14)))).toBe('2026-10-18');
     });
 
-    it('crosses a month/year boundary', () => {
-      // Wednesday, December 30, 2026 -> Sunday, January 3, 2027
-      expect(formatDateForDb(getEndOfWeekSunday(createDate(2026, 12, 30)))).toBe('2027-01-03');
+    it('moves on a week once the page switches over on Thursday', () => {
+      expect(formatDateForDb(getCampaignResultsRemovalDate(createDate(2026, 10, 15)))).toBe('2026-10-25');
+    });
+
+    it('crosses a year boundary', () => {
+      // Thursday 24 Dec 2026: displayed week 21-27 Dec -> Sunday 3 Jan 2027
+      expect(formatDateForDb(getCampaignResultsRemovalDate(createDate(2026, 12, 24)))).toBe('2027-01-03');
     });
   });
 

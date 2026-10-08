@@ -21,7 +21,7 @@ import FullscreenImageViewer from '@/components/FullscreenImageViewer';
 import SaveImageButton from '@/components/SaveImageButton';
 import { getErrorMessage } from '@/lib/errorUtils';
 import { formatDownloadDate } from '@/lib/slideLayout';
-import { formatLongDateWithOrdinal, getEndOfWeekSunday } from '@/lib/campaignDates';
+import { formatLongDateWithOrdinal, getCampaignResultsRemovalDate } from '@/lib/campaignDates';
 import { drawReportPage, canvasToJpegBlob } from '@/lib/reportCanvas';
 import { chunkReportRows } from '@/lib/reportGenerator';
 import type { CampaignResultsResponse } from '@/app/api/public/campaign-results/route';
@@ -32,15 +32,17 @@ interface ResultPage {
   blob: Blob;
 }
 
-// The notice's "end of this week" date depends on the visitor's own clock, so
-// it's read client-side only (null during SSR/hydration) — the server runs in
-// UTC and would otherwise name the wrong Sunday for part of an Australian Monday.
+// The notice's removal date depends on the visitor's own clock, so it's read
+// client-side only (null during SSR/hydration) rather than risk a hydration
+// mismatch against the server's UTC clock. Around the Thursday switchover the
+// visitor's clock can run ahead of the server's choice of week, which only
+// ever names a later Sunday than the real deletion — never an earlier one.
 const subscribeNever = () => () => {};
-const getWeekEndLabel = () => formatLongDateWithOrdinal(getEndOfWeekSunday());
-const getServerWeekEndLabel = () => null;
+const getRemovalDateLabel = () => formatLongDateWithOrdinal(getCampaignResultsRemovalDate());
+const getServerRemovalDateLabel = () => null;
 
 export default function CampaignResultsClient() {
-  const weekEndLabel = useSyncExternalStore(subscribeNever, getWeekEndLabel, getServerWeekEndLabel);
+  const removalDateLabel = useSyncExternalStore(subscribeNever, getRemovalDateLabel, getServerRemovalDateLabel);
   const [progress, setProgress] = useState('Loading campaign results…');
   const [error, setError] = useState<string | null>(null);
   const [pages, setPages] = useState<ResultPage[] | null>(null);
@@ -104,11 +106,11 @@ export default function CampaignResultsClient() {
           <h2 className="text-base font-bold text-red-800 dark:text-red-200">IMPORTANT NOTICE</h2>
           <p className="mt-1 text-sm text-red-900 dark:text-red-100">
             The first names listed on the screens below are presented STRICTLY for the purposes of prayer, and
-            they will not be stored by AFJ in any form beyond the end of this week
-            {weekEndLabel && (
-              <>
-                {' '}<span className="whitespace-nowrap font-bold">({weekEndLabel})</span>
-              </>
+            they will not be stored by AFJ in any form beyond{' '}
+            {removalDateLabel ? (
+              <span className="whitespace-nowrap font-bold">{removalDateLabel}</span>
+            ) : (
+              'the Sunday after these campaigns end'
             )}
             .
           </p>
