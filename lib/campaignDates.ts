@@ -231,18 +231,19 @@ export function formatShortDateWithOrdinal(date: Date): string {
 const FULL_DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 /**
- * The Sunday on which the names currently shown on the Campaign Results
- * public link are deleted: the Sunday *after* the displayed campaign week
- * ends. The page shows the week starting at `pastCampaignStart`
- * (app/api/public/campaign-results/route.ts), and the Sunday weekly refresh
- * deletes campaigns — and their results — dated before `pastCampaignStart`,
- * so a displayed week survives the refresh on its own closing Sunday and goes
- * on the next one (e.g. the 5-11 Oct week is deleted on Sunday 18 Oct).
+ * The Sunday named in the Campaign Results public link's notice ("will not be
+ * stored by AFJ in any form beyond …"), given the Monday of the week being
+ * displayed: the end of the week *after* the one in which that week is on
+ * screen. A displayed week is actually deleted a week earlier than this, by
+ * the Sunday refresh that ends its time on screen (e.g. the 28 Sep - 4 Oct
+ * week is shown until, and deleted on, Sunday 11 Oct — the notice says
+ * Sunday 18 Oct). The extra week is deliberate (Peter, 2026-10-09): it gives
+ * people time to delete any copies they downloaded themselves.
  */
-export function getCampaignResultsRemovalDate(referenceDate: Date = new Date()): Date {
-  const removal = new Date(calculateCampaignDates(referenceDate).pastCampaignStart);
-  removal.setDate(removal.getDate() + 13);
-  return removal;
+export function getCampaignResultsNoticeDate(displayedWeekStart: Date): Date {
+  const noticeDate = new Date(displayedWeekStart);
+  noticeDate.setDate(noticeDate.getDate() + 20);
+  return noticeDate;
 }
 
 /**

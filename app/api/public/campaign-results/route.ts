@@ -5,16 +5,18 @@
  * AdminQuickActions' "Campaign Results" button — but:
  *  - runs server-side with the service role, since anonymous visitors have
  *    no RLS access to `campaigns`/`results`
- *  - always covers the past campaign week, all states — no SR/admin
- *    state filtering, since there's no logged-in user to derive one from
- *  - caches the result briefly, since every caller gets the same "all
- *    states, current past week" data
+ *  - covers the week the last Weekly Refresh kept, all states, and keeps
+ *    showing it until the next refresh — see
+ *    lib/services/publicCampaignResultsService.ts. No SR/admin state
+ *    filtering, since there's no logged-in user to derive one from
+ *  - caches the result briefly, since every caller gets the same data
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { enforceOrigin } from '@/lib/corsUtils';
 import { createRateLimiter, getClientIp } from '@/lib/rateLimit';
-import { calculateCampaignDates, formatDateForDb } from '@/lib/campaignDates';
+import { formatDateForDb } from '@/lib/campaignDates';
+import { getDisplayedResultsWeekStart, getLastSuccessfulWeeklyRefreshAt } from '@/lib/services/publicCampaignResultsService';
 import { fetchReportRows, type ReportRow } from '@/lib/reportGenerator';
 
 // Generous limit — this is a read-only, public-safe endpoint; the rate limit
@@ -23,14 +25,17 @@ const rateLimiter = createRateLimiter({ windowMs: 60 * 1000, maxAttempts: 30 });
 
 export interface CampaignResultsResponse {
   rows: ReportRow[];
+  /** Monday (YYYY-MM-DD) of the campaign week `rows` covers. */
+  weekStart: string;
 }
 
 // ---------------------------------------------------------------------------
 // Short-lived in-memory cache — one entry, since the response is identical
-// for every caller (all states, current past week).
+// for every caller (all states, same week). Purely time-based: which week is
+// shown depends on the refresh log, so there's no cheap key to compare first.
 // ---------------------------------------------------------------------------
 const CACHE_TTL_MS = 60 * 1000;
-let cache: { key: string; expiresAt: number; response: CampaignResultsResponse } | null = null;
+let cache: { expiresAt: number; response: CampaignResultsResponse } | null = null;
 
 export async function GET(request: NextRequest) {
   const corsBlock = enforceOrigin(request);
@@ -47,16 +52,15 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
 
-    const { pastCampaignStart } = calculateCampaignDates();
-    const pastEnd = new Date(pastCampaignStart);
-    pastEnd.setDate(pastEnd.getDate() + 6);
-    const startDate = formatDateForDb(pastCampaignStart);
-    const endDate = formatDateForDb(pastEnd);
-    const cacheKey = startDate;
-
-    if (cache && cache.key === cacheKey && cache.expiresAt > Date.now()) {
+    if (cache && cache.expiresAt > Date.now()) {
       return NextResponse.json(cache.response);
     }
+
+    const weekStart = getDisplayedResultsWeekStart(await getLastSuccessfulWeeklyRefreshAt(supabaseAdmin));
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekEnd.getDate() + 6);
+    const startDate = formatDateForDb(weekStart);
+    const endDate = formatDateForDb(weekEnd);
 
     let rows: ReportRow[] = [];
     try {
@@ -72,8 +76,8 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const response: CampaignResultsResponse = { rows };
-    cache = { key: cacheKey, expiresAt: Date.now() + CACHE_TTL_MS, response };
+    const response: CampaignResultsResponse = { rows, weekStart: startDate };
+    cache = { expiresAt: Date.now() + CACHE_TTL_MS, response };
 
     return NextResponse.json(response);
   } catch (err) {
