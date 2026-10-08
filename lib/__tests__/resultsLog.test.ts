@@ -58,7 +58,7 @@ describe('logResultsSave', () => {
       campaign_id: 'c1',
       user_id: 'user-1',
       status: 'SUCCESS',
-      attempted_upserts: [{ first_name: 'Alice', category_code: 'TM' }],
+      attempted_upserts: [{ category_code: 'TM' }],
       attempted_deletes: [],
       error_message: null,
       user_email: 'leader@example.com',
@@ -97,8 +97,29 @@ describe('logResultsSave', () => {
 
     await vi.waitFor(() => expect(builder.insert).toHaveBeenCalled());
     expect(builder.insert).toHaveBeenCalledWith(
-      expect.objectContaining({ attempted_deletes: [{ first_name: 'Alice', category_code: 'TM' }] }),
+      expect.objectContaining({ attempted_deletes: [{ category_code: 'TM' }] }),
     );
+  });
+
+  it('never writes a recorded first name to the log — category codes only', async () => {
+    const builder = makeInsertBuilder();
+    mockFrom.mockReturnValue(builder);
+
+    logResultsSave({
+      campaignId: 'c1',
+      status: 'SUCCESS',
+      attemptedUpserts: [
+        { first_name: 'Zebedee', category_code: 'F' },
+        { first_name: 'Quentin', category_code: 'SP' },
+      ],
+      attemptedDeletes: [{ first_name: 'Ignatius', category_code: 'P' }],
+    });
+
+    await vi.waitFor(() => expect(builder.insert).toHaveBeenCalled());
+    const logged = builder.insert.mock.calls[0][0];
+    expect(logged.attempted_upserts).toEqual([{ category_code: 'F' }, { category_code: 'SP' }]);
+    expect(logged.attempted_deletes).toEqual([{ category_code: 'P' }]);
+    expect(JSON.stringify(logged)).not.toMatch(/Zebedee|Quentin|Ignatius/);
   });
 
   it('never calls Supabase when there is no authenticated user', async () => {

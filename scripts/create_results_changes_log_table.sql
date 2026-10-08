@@ -13,8 +13,8 @@ CREATE TABLE IF NOT EXISTS results_changes_log (
   campaign_id UUID REFERENCES campaigns(id) ON DELETE SET NULL,
   user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
   status TEXT NOT NULL CHECK (status IN ('SUCCESS', 'ERROR')),
-  attempted_upserts JSONB,   -- array of { first_name, category_code } the client tried to upsert
-  attempted_deletes JSONB,   -- array of { first_name, category_code } the client tried to delete
+  attempted_upserts JSONB,   -- array of { category_code } the client tried to upsert (no names — see lib/resultsLog.ts)
+  attempted_deletes JSONB,   -- array of { category_code } the client tried to delete (no names)
   error_message TEXT,        -- populated when status = 'ERROR'
   user_email TEXT,           -- denormalized for easier querying
   user_name TEXT,            -- from user_profiles
@@ -27,8 +27,8 @@ CREATE INDEX IF NOT EXISTS idx_results_changes_log_created_at ON results_changes
 CREATE INDEX IF NOT EXISTS idx_results_changes_log_status     ON results_changes_log(status);
 
 COMMENT ON TABLE  results_changes_log IS 'Audit trail of every Record Results save attempt (success or failure), so name-loss reports can be diagnosed against ground truth.';
-COMMENT ON COLUMN results_changes_log.attempted_upserts IS 'JSONB array of {first_name, category_code} the client attempted to upsert in this save batch.';
-COMMENT ON COLUMN results_changes_log.attempted_deletes IS 'JSONB array of {first_name, category_code} the client attempted to delete in this save batch.';
+COMMENT ON COLUMN results_changes_log.attempted_upserts IS 'JSONB array of {category_code} the client attempted to upsert in this save batch. Names are deliberately not logged.';
+COMMENT ON COLUMN results_changes_log.attempted_deletes IS 'JSONB array of {category_code} the client attempted to delete in this save batch. Names are deliberately not logged.';
 COMMENT ON COLUMN results_changes_log.error_message    IS 'Error string from the failed save operation (only set when status = ERROR).';
 
 -- RLS: allow authenticated users to insert their own log rows; reads are admin-only via service role.
