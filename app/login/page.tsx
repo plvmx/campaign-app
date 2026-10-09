@@ -422,7 +422,7 @@ export default function LoginPage() {
                 Check your inbox
               </h2>
               <p className="text-center text-sm text-gray-600 dark:text-gray-400">
-                We sent a confirmation link to <strong>{emailStep.value}</strong>. Click it to confirm your email.
+                We have sent an email to <strong>{emailStep.value}</strong>. Open that email and click the <strong>CONFIRM NOW</strong> link in it to confirm your email address. If you can&apos;t see it, check your Junk or Spam folder.
               </p>
               <InlineCodeFallback onVerify={handleEmailCodeVerify} />
               {/* "Skip for now" here, not "Continue" — this button doesn't mean
@@ -483,7 +483,7 @@ export default function LoginPage() {
                 Check your inbox
               </h2>
               <p className="text-center text-sm text-gray-600 dark:text-gray-400">
-                We sent a sign-in link to your email. Click it to set up your authenticator app.
+                We have sent an email to your email address. Open that email and click the <strong>CONFIRM NOW</strong> link in it to continue setting up your authenticator app. If you can&apos;t see it, check your Junk or Spam folder.
               </p>
               <InlineCodeFallback onVerify={handleMfaCodeVerify} />
               {/* "Skip for now", not "Continue" — see the matching comment on

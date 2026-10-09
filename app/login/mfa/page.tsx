@@ -101,7 +101,7 @@ export default function LoginMfaPage() {
         {sent ? (
           <div className="space-y-4">
             <p className={bodyTextClass}>
-              If that address has two-factor authentication set up, a sign-in link is on its way — check your email.
+              If that address has two-factor authentication set up, we have sent it an email. Open that email and click the <strong>CONFIRM NOW</strong> link in it to sign in. If you can&apos;t see it, check your Junk or Spam folder.
             </p>
             <InlineCodeFallback onVerify={handleCodeVerify} />
           </div>
