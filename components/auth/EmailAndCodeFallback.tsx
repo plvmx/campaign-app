@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { getErrorMessage } from '@/lib/errorUtils';
-import { normalizeOtpInput } from '@/lib/otpInput';
+import { normalizeOtpInput, EMAIL_OTP_MIN_LENGTH, EMAIL_OTP_MAX_LENGTH } from '@/lib/otpInput';
 import { inputClass, labelClass, primaryButtonClass, errorBannerClass, bodyTextClass } from '@/components/auth/CodeEntryScreen';
 
 /**
@@ -62,18 +62,18 @@ export function EmailAndCodeFallback({ onVerify }: { onVerify: (email: string, c
         />
       </div>
       <div>
-        <label htmlFor="recovery-code" className={labelClass}>6-digit code</label>
+        <label htmlFor="recovery-code" className={labelClass}>Code from the email</label>
         <input
           id="recovery-code"
           inputMode="numeric"
           pattern="[0-9]*"
           value={code}
-          onChange={(e) => setCode(normalizeOtpInput(e.target.value))}
+          onChange={(e) => setCode(normalizeOtpInput(e.target.value, EMAIL_OTP_MAX_LENGTH))}
           className={inputClass}
         />
       </div>
       {error && <p role="alert" className={errorBannerClass}>{error}</p>}
-      <button onClick={handleVerify} disabled={isBusy || !email || code.length < 6} className={primaryButtonClass}>
+      <button onClick={handleVerify} disabled={isBusy || !email || code.length < EMAIL_OTP_MIN_LENGTH} className={primaryButtonClass}>
         {isBusy ? 'Verifying…' : 'Verify code'}
       </button>
     </div>
