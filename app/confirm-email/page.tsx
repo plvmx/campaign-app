@@ -3,10 +3,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { emailConfirmSupabase } from '@/lib/emailConfirmSupabaseClient';
 import { EmailAndCodeFallback } from '@/components/auth/EmailAndCodeFallback';
+import { primaryButtonClass, secondaryButtonClass, bodyTextClass, cardClass } from '@/components/auth/CodeEntryScreen';
+import { MfaEnrollmentFlow, MFA_ABANDON_AFTER_MS, type MfaEnrollmentOutcome } from '@/components/auth/MfaEnrollmentFlow';
 
 const GIVE_UP_AFTER_MS = 8000;
 
-type Status = 'pending' | 'success' | 'error';
+// 'confirmed' = email confirmed, leader is choosing whether to set up 2FA now;
+// 'enrolling' = running MfaEnrollmentFlow; 'done' = finished/declined/timed
+// out (the session is signed out by then, whichever way it got here).
+type Status = 'pending' | 'confirmed' | 'enrolling' | 'done' | 'error';
 
 /**
  * Magic-link confirmation landing page for the leader self-serve
@@ -29,13 +34,26 @@ type Status = 'pending' | 'success' | 'error';
 export default function ConfirmEmailPage() {
   const [status, setStatus] = useState<Status>('pending');
   const [message, setMessage] = useState<string | null>(null);
+  const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [doneKind, setDoneKind] = useState<MfaEnrollmentOutcome | 'skipped' | 'timed-out'>('skipped');
   const handledRef = useRef(false);
+  const choiceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function clearChoiceTimer() {
+    if (choiceTimerRef.current) {
+      clearTimeout(choiceTimerRef.current);
+      choiceTimerRef.current = null;
+    }
+  }
 
   useEffect(() => {
     async function handleSignedIn(session: { access_token: string }) {
       if (handledRef.current) return;
       handledRef.current = true;
 
+      // The session is only kept alive on the one path where the leader is
+      // then offered 2FA setup; every other path signs it out here.
+      let keepSession = false;
       try {
         // leaderId travels as a query param on the magic-link redirect (set by
         // propose-email/route.ts) so confirm-email/route.ts can scope its
@@ -49,8 +67,15 @@ export default function ConfirmEmailPage() {
         });
         const json = await res.json();
         if (res.ok) {
-          setStatus('success');
+          keepSession = true;
+          setAccessToken(session.access_token);
+          setStatus('confirmed');
           setMessage(`Your email (${json.email}) has been confirmed.`);
+          choiceTimerRef.current = setTimeout(async () => {
+            await emailConfirmSupabase.auth.signOut();
+            setDoneKind('timed-out');
+            setStatus('done');
+          }, MFA_ABANDON_AFTER_MS);
         } else {
           setStatus('error');
           setMessage(json.error || 'Something went wrong confirming your email.');
@@ -59,7 +84,7 @@ export default function ConfirmEmailPage() {
         setStatus('error');
         setMessage('Something went wrong confirming your email.');
       } finally {
-        await emailConfirmSupabase.auth.signOut();
+        if (!keepSession) await emailConfirmSupabase.auth.signOut();
       }
     }
 
@@ -86,8 +111,25 @@ export default function ConfirmEmailPage() {
     return () => {
       subscription.unsubscribe();
       clearTimeout(giveUp);
+      clearChoiceTimer();
     };
   }, []);
+
+  async function handleSkip() {
+    clearChoiceTimer();
+    await emailConfirmSupabase.auth.signOut();
+    window.location.assign('/app');
+  }
+
+  function handleSetUpNow() {
+    clearChoiceTimer();
+    setStatus('enrolling');
+  }
+
+  function handleEnrollmentDone(outcome: MfaEnrollmentOutcome) {
+    setDoneKind(outcome);
+    setStatus('done');
+  }
 
   // Recovery path when the link itself already failed (e.g. Apple Mail
   // Privacy Protection silently consumed it before the leader ever tapped
@@ -101,35 +143,64 @@ export default function ConfirmEmailPage() {
     if (error) throw error;
   }
 
-  const cardClass =
-    'w-full max-w-md space-y-4 rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-blue-50 p-6 shadow-lg dark:bg-blue-900/20 sm:p-8';
+  const doneHeading =
+    doneKind === 'success' ? 'Two-factor authentication is set up' : 'Email confirmed';
+  const doneText =
+    doneKind === 'success'
+      ? "You're all set — no further action needed today."
+      : doneKind === 'expired' || doneKind === 'timed-out'
+        ? 'For your security this page timed out. Your email is confirmed — you can set up two-factor authentication another time.'
+        : 'No problem — your email is confirmed, and you can set up two-factor authentication another time.';
+
+  const continueNote = (
+    <p className={bodyTextClass}>
+      If you are taken to a sign-in screen, go back to the AFJ app where you started signing in — your email is already confirmed.
+    </p>
+  );
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8 dark:bg-gray-900">
       <div className={cardClass}>
-        <h2 className="text-center text-xl font-bold text-gray-900 dark:text-gray-100">
-          {status === 'success' ? 'Email confirmed' : status === 'error' ? 'Confirmation failed' : 'Confirming your email…'}
-        </h2>
-        {message && (
-          <p className="text-center text-sm text-gray-600 dark:text-gray-400">{message}</p>
-        )}
-        {status === 'success' && (
-          <a
-            href="/app"
-            className="block w-full rounded-md bg-blue-600 px-4 py-3 text-center text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
-          >
-            Continue
-          </a>
-        )}
-        {status === 'error' && (
+        {status === 'enrolling' && accessToken ? (
+          <MfaEnrollmentFlow accessToken={accessToken} onDone={handleEnrollmentDone} />
+        ) : (
           <>
-            <a
-              href="/login"
-              className="block w-full rounded-md bg-blue-600 px-4 py-3 text-center text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
-            >
-              Back to sign in
-            </a>
-            <EmailAndCodeFallback onVerify={handleRecoveryVerify} />
+            <h2 className="text-center text-xl font-bold text-gray-900 dark:text-gray-100">
+              {status === 'confirmed'
+                ? 'Email confirmed'
+                : status === 'done'
+                  ? doneHeading
+                  : status === 'error'
+                    ? 'Confirmation failed'
+                    : 'Confirming your email…'}
+            </h2>
+            {status === 'done' ? (
+              <p className="text-center text-sm text-gray-600 dark:text-gray-400">{doneText}</p>
+            ) : (
+              message && <p className="text-center text-sm text-gray-600 dark:text-gray-400">{message}</p>
+            )}
+            {status === 'confirmed' && (
+              <>
+                <p className={bodyTextClass}>
+                  Would you also like to set up two-factor authentication now? It adds extra security to your account and takes about two minutes.
+                </p>
+                <button onClick={handleSetUpNow} className={primaryButtonClass}>Set up two-factor authentication</button>
+                <button onClick={handleSkip} className={secondaryButtonClass}>Skip for now</button>
+                {continueNote}
+              </>
+            )}
+            {status === 'done' && (
+              <>
+                <a href="/app" className={`${primaryButtonClass} block text-center`}>Continue</a>
+                {continueNote}
+              </>
+            )}
+            {status === 'error' && (
+              <>
+                <a href="/login" className={`${primaryButtonClass} block text-center`}>Back to sign in</a>
+                <EmailAndCodeFallback onVerify={handleRecoveryVerify} />
+              </>
+            )}
           </>
         )}
       </div>
