@@ -314,20 +314,29 @@ CREATE POLICY "app_settings: authenticated can read"
 
 -- =============================================================================
 -- user_profiles
--- Users may only read and write their own profile row.
+-- Users may only READ their own profile row. name/state are *identity*
+-- (public.is_admin() and every leader-ownership policy match on them), so the
+-- browser must never write them — app/api/auth/grant-session-access writes
+-- them with the service role after verifying the caller. Writes are revoked
+-- at the grant level (RLS alone can't restrict columns); the service role
+-- bypasses both. See scripts/lock_down_user_profiles_and_roles.sql.
 -- =============================================================================
 ALTER TABLE user_profiles ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "user_profiles: users manage own row" ON user_profiles;
-CREATE POLICY "user_profiles: users manage own row"
-  ON user_profiles FOR ALL TO authenticated
-  USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+DROP POLICY IF EXISTS "user_profiles: users read own row" ON user_profiles;
+CREATE POLICY "user_profiles: users read own row"
+  ON user_profiles FOR SELECT TO authenticated
+  USING (user_id = auth.uid());
+
+REVOKE INSERT, UPDATE ON user_profiles FROM authenticated, anon;
 
 
 -- =============================================================================
 -- user_roles
 -- Read-only for authenticated users (own row only).
--- Writes via service role only (set during completeSignIn).
+-- Writes via service role only (app/api/auth/grant-session-access). Note: nothing
+-- actually reads this table for authorization — public.is_admin() uses user_profiles.
 -- =============================================================================
 ALTER TABLE user_roles ENABLE ROW LEVEL SECURITY;
 

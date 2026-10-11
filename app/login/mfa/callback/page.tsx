@@ -6,7 +6,8 @@ import { supabase } from '@/lib/supabaseClient';
 import { completeLeaderAuthSignIn, PREFERS_EMAIL_MFA_LOGIN_KEY, type AuthedLeaderRow } from '@/lib/auth';
 import { useUser } from '@/contexts/UserContext';
 import { getLeaderRoleLabel } from '@/lib/leaderRoleLabel';
-import { CodeEntryScreen, cardClass, bodyTextClass, primaryButtonClass, secondaryButtonClass } from '@/components/auth/CodeEntryScreen';
+import { CodeEntryScreen, cardClass, bodyTextClass, primaryButtonClass, secondaryButtonClass, errorBannerClass } from '@/components/auth/CodeEntryScreen';
+import { getErrorMessage } from '@/lib/errorUtils';
 import { EmailAndCodeFallback } from '@/components/auth/EmailAndCodeFallback';
 
 const GIVE_UP_AFTER_MS = 8000;
@@ -42,7 +43,6 @@ export default function LoginMfaCallbackPage() {
   const [error, setError] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
 
-  const [userId, setUserId] = useState<string | null>(null);
   const [rows, setRows] = useState<AuthedLeaderRow[]>([]);
   const [factorId, setFactorId] = useState<string | null>(null);
   const [code, setCode] = useState('');
@@ -50,9 +50,9 @@ export default function LoginMfaCallbackPage() {
   // Resolves sign-in once the account is known to be at aal2 (either
   // already, or right after a successful challenge): a single matching row
   // signs straight in, more than one shows a role picker.
-  async function resolveRole(candidateRows: AuthedLeaderRow[], uid: string) {
+  async function resolveRole(candidateRows: AuthedLeaderRow[]) {
     if (candidateRows.length === 1) {
-      await finishSignIn(candidateRows[0], uid);
+      await finishSignIn(candidateRows[0]);
       return;
     }
     setIsBusy(false);
@@ -60,9 +60,18 @@ export default function LoginMfaCallbackPage() {
     setScreen('role-picker');
   }
 
-  async function finishSignIn(row: AuthedLeaderRow, uid: string) {
+  async function finishSignIn(row: AuthedLeaderRow) {
     setIsBusy(true);
-    await completeLeaderAuthSignIn(row, uid);
+    setError(null);
+    try {
+      await completeLeaderAuthSignIn(row);
+    } catch (err) {
+      // The server refused (or the request failed) — stay on this screen with
+      // a message rather than navigating on as if signed in.
+      setIsBusy(false);
+      setError(getErrorMessage(err, 'Failed to complete sign-in. Please try again.'));
+      return;
+    }
     // Remember on this device that this leader signs in via email + MFA, so
     // app/login/page.tsx can skip straight to /login/mfa next time instead
     // of showing the mobile+name form first (there's no session yet at that
@@ -72,7 +81,7 @@ export default function LoginMfaCallbackPage() {
     } catch { /* ignore (e.g. private browsing) */ }
     // Reload UserContext so it reads the profile just written, before
     // navigating — avoids a race where onAuthStateChange's own reload fires
-    // before the upsert completes (same pattern app/login/page.tsx uses).
+    // before the server's write is visible (same pattern app/login/page.tsx uses).
     await refreshUser();
     router.replace('/app');
   }
@@ -81,7 +90,6 @@ export default function LoginMfaCallbackPage() {
     async function handleSignedIn(session: { user: { id: string } }) {
       if (handledRef.current) return;
       handledRef.current = true;
-      setUserId(session.user.id);
 
       const { data, error: rowsError } = await supabase
         .from('state_leaders')
@@ -96,7 +104,7 @@ export default function LoginMfaCallbackPage() {
 
       const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
       if (aalData?.currentLevel === 'aal2') {
-        await resolveRole(candidateRows, session.user.id);
+        await resolveRole(candidateRows);
         return;
       }
 
@@ -145,7 +153,7 @@ export default function LoginMfaCallbackPage() {
       setError(verifyError.message);
       return;
     }
-    if (userId) await resolveRole(rows, userId);
+    await resolveRole(rows);
   }
 
   // Recovery path when the link itself already failed (e.g. Apple Mail
@@ -222,11 +230,12 @@ export default function LoginMfaCallbackPage() {
           <div className="space-y-4">
             <h2 className="text-center text-xl font-bold text-gray-900 dark:text-gray-100">Which role are you signing in as?</h2>
             <p className={bodyTextClass}>You have more than one role on file.</p>
+            {error && <p role="alert" className={errorBannerClass}>{error}</p>}
             <div className="flex flex-col gap-3">
               {rows.map((row) => (
                 <button
                   key={row.id}
-                  onClick={() => userId && finishSignIn(row, userId)}
+                  onClick={() => finishSignIn(row)}
                   disabled={isBusy}
                   className={primaryButtonClass}
                 >

@@ -136,11 +136,42 @@ function setAppSessionCookie(maxAgeSeconds?: number): void {
 }
 
 /**
+ * Asks the server to write this session's user_profiles / user_roles rows
+ * (app/api/auth/grant-session-access). The browser used to write them itself,
+ * but user_roles' RLS then had to let any signed-in session write its own
+ * `admin` row — so the server now verifies entitlement first. Throws if the
+ * server refuses, so a failed grant can't look like a successful sign-in.
+ */
+async function requestSessionAccess(
+  body:
+    | { method: 'mobile-name'; leaderId: string; mobile: string; firstName: string }
+    | { method: 'real-auth'; leaderId: string },
+): Promise<void> {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('No active session');
+
+  const res = await fetch('/api/auth/grant-session-access', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const json = await res.json().catch(() => ({}));
+    throw new Error(
+      res.status === 403
+        ? 'Sign-in could not be verified. Please check your details and try again.'
+        : (json as { error?: string }).error || 'Failed to complete sign-in. Please try again.',
+    );
+  }
+}
+
+/**
  * Complete sign-in once a specific state_leaders record has been chosen.
  * Creates an anonymous Supabase session and writes user_profiles / user_roles.
  */
 export async function completeSignIn(
   stateLeader: StateLeaderMatch,
+  credentials: { mobile: string; firstName: string },
 ): Promise<{ user: User; stateLeader: StateLeaderMatch }> {
   // Sign out any existing stale session first. Without this, every login on the
   // same device creates a fresh anonymous auth user that is never cleaned up.
@@ -164,21 +195,19 @@ export async function completeSignIn(
     throw new Error('Failed to create user session');
   }
 
-  // Store name + active state in user_profiles
-  const { error: profileError } = await supabase
-    .from('user_profiles')
-    .upsert(
-      { user_id: authData.user.id, name: stateLeader.leader.trim(), state: stateLeader.state },
-      { onConflict: 'user_id' },
-    );
-  if (profileError) console.warn('Failed to save user profile:', profileError);
-
-  // Grant admin role only for full admins (not SR)
-  if (stateLeader.admin === 'AD') {
-    const { error: roleError } = await supabase
-      .from('user_roles')
-      .upsert({ user_id: authData.user.id, role: 'admin' }, { onConflict: 'user_id' });
-    if (roleError) console.warn('Failed to grant admin role:', roleError);
+  // The server re-verifies the mobile+name pair before writing this session's
+  // user_profiles / user_roles rows (see requestSessionAccess). If it refuses,
+  // don't leave a half-signed-in anonymous session behind.
+  try {
+    await requestSessionAccess({
+      method: 'mobile-name',
+      leaderId: stateLeader.id,
+      mobile: credentials.mobile,
+      firstName: credentials.firstName,
+    });
+  } catch (err) {
+    await supabase.auth.signOut();
+    throw err;
   }
 
   // Record sign-in timestamp
@@ -202,8 +231,9 @@ const LEADER_AUTH_SESSION_MAX_AGE_SECONDS = 30 * 24 * 60 * 60; // 30 days
  * an anonymous sign-in — that already exists by the time this is called, so
  * unlike completeSignIn() there's no signInAnonymously() step here).
  *
- * Writes the exact same user_profiles/user_roles shape completeSignIn()
- * does, so every existing "who is this / are they admin" consumer
+ * Has the server write the exact same user_profiles/user_roles shape
+ * completeSignIn() does (requestSessionAccess — the server checks the session
+ * is this row's bound user_id and at aal2), so every existing "who is this / are they admin" consumer
  * (UserContext, campaignFilter.ts, the RLS is_admin() function, the admin
  * API routes) keeps working completely unmodified — none of them care
  * whether the underlying auth.users row is anonymous or real, only that
@@ -216,30 +246,8 @@ const LEADER_AUTH_SESSION_MAX_AGE_SECONDS = 30 * 24 * 60 * 60; // 30 days
  * a previous choice — so a non-admin pick explicitly deletes any existing
  * row rather than just never upserting one.
  */
-export async function completeLeaderAuthSignIn(
-  row: AuthedLeaderRow,
-  userId: string,
-): Promise<void> {
-  const { error: profileError } = await supabase
-    .from('user_profiles')
-    .upsert(
-      { user_id: userId, name: row.leader.trim(), state: row.state },
-      { onConflict: 'user_id' },
-    );
-  if (profileError) console.warn('Failed to save user profile:', profileError);
-
-  if (row.admin === 'AD') {
-    const { error: roleError } = await supabase
-      .from('user_roles')
-      .upsert({ user_id: userId, role: 'admin' }, { onConflict: 'user_id' });
-    if (roleError) console.warn('Failed to grant admin role:', roleError);
-  } else {
-    const { error: roleDeleteError } = await supabase
-      .from('user_roles')
-      .delete()
-      .eq('user_id', userId);
-    if (roleDeleteError) console.warn('Failed to clear stale admin role:', roleDeleteError);
-  }
+export async function completeLeaderAuthSignIn(row: AuthedLeaderRow): Promise<void> {
+  await requestSessionAccess({ method: 'real-auth', leaderId: row.id });
 
   const { error: signInUpdateError } = await supabase
     .from('state_leaders')
@@ -264,7 +272,7 @@ export async function signInWithMobileAndName(
   if (matches.length === 0) {
     throw new Error('No matching record found. Please check your mobile number and first name.');
   }
-  return completeSignIn(matches[0]);
+  return completeSignIn(matches[0], { mobile, firstName });
 }
 
 export async function sendMagicLink(email: string) {

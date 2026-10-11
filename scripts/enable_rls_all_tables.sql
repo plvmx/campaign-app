@@ -167,6 +167,9 @@ CREATE POLICY "Authenticated users can delete state_places"
 
 -- =============================================================================
 -- 9. user_roles (user_id -> role mapping for permissions)
+-- WARNING (2026-10-11): these open policies are SUPERSEDED — they let any
+-- signed-in session write its own role. Do not re-run this section on a live
+-- database; use scripts/lock_down_user_profiles_and_roles.sql instead.
 -- =============================================================================
 ALTER TABLE user_roles ENABLE ROW LEVEL SECURITY;
 
