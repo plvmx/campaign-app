@@ -455,7 +455,7 @@ export default function LoginPage() {
                 Set up two-factor authentication
               </h2>
               <p className="text-center text-sm text-gray-600 dark:text-gray-400">
-                Add an extra layer of security to your account using an authenticator app.
+                Add an extra layer of security to your account using an authenticator app. You will need a free authenticator app on your phone, such as Google Authenticator or Microsoft Authenticator.
               </p>
               {mfaStepError && (
                 <div className="rounded-md bg-red-50 p-3 text-sm text-red-800 dark:bg-red-900/20 dark:text-red-200">

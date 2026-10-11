@@ -65,7 +65,10 @@ export async function POST(request: NextRequest) {
     const { error: otpError } = await supabaseAdmin.auth.signInWithOtp({
       email: match.email,
       options: {
-        shouldCreateUser: false, // must already exist — created during email confirmation
+        // Not false: a row whose email was entered by an admin (which counts
+        // as confirmed) may have no auth account yet — verified mobile+name
+        // plus that row's own email is enough authority to create it.
+        shouldCreateUser: true,
         emailRedirectTo: redirectUrl.toString(),
       },
     });

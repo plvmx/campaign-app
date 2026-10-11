@@ -12,6 +12,11 @@
  * before completing enrollment) could mark mfa_enrolled_at without ever
  * having a real factor enrolled.
  *
+ * Before stamping mfa_enrolled_at, completeMfaEnrollment() also binds user_id
+ * on any still-unbound row whose email is this session's own address (see
+ * lib/services/mfaEnrollmentService.ts for why — admin-entered emails never
+ * got a user_id otherwise).
+ *
  * UPDATE ... WHERE user_id = $user.id (no leaderId): MFA enrollment is a
  * property of the person/account, not any one state_leaders row. Safe to
  * scope by user_id alone here — unlike propose/confirm-email, which had
@@ -28,6 +33,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { enforceOrigin } from '@/lib/corsUtils';
 import { createRateLimiter, getClientIp } from '@/lib/rateLimit';
+import { completeMfaEnrollment } from '@/lib/services/mfaEnrollmentService';
 
 const rateLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, maxAttempts: 20 });
 
@@ -60,20 +66,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No verified MFA factor found for this session' }, { status: 403 });
     }
 
-    const { error: updateError, count } = await supabaseAdmin
-      .from('state_leaders')
-      .update({ mfa_enrolled_at: new Date().toISOString() }, { count: 'exact' })
-      .eq('user_id', user.id);
-
-    if (updateError) {
-      console.error('complete-mfa-setup: failed to write mfa_enrolled_at:', updateError);
-      return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
-    }
-    if (!count) {
-      // user_id never got bound to a state_leaders row — shouldn't happen
-      // via the normal /setup-mfa flow, but don't silently report success.
-      return NextResponse.json({ error: 'No matching leader record found for this account' }, { status: 404 });
-    }
+    const result = await completeMfaEnrollment(supabaseAdmin, { userId: user.id, email: user.email });
+    if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
 
     return NextResponse.json({ ok: true });
   } catch (err) {
