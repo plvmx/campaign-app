@@ -9,6 +9,8 @@ import { getStateColor } from '@/lib/stateColors';
 import { AUSTRALIAN_STATES } from '@/lib/constants';
 import { getErrorMessage } from '@/lib/errorUtils';
 import { isValidEmail } from '@/lib/validation';
+import { isRecognizedAdminStatus } from '@/lib/campaignFilter';
+import { requestMfaReset } from '@/lib/services/mfaResetClient';
 import {
   type StateLeader,
   getStateLeaders,
@@ -167,6 +169,22 @@ export default function StateLeadersPage() {
       await fetchStateLeaders();
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Failed to delete state leader'));
+    }
+  };
+
+  const handleResetMfa = async (item: StateLeader) => {
+    const asAdmin = isRecognizedAdminStatus(item.admin) ? ' as an admin' : '';
+    if (!confirm(`Reset two-factor authentication for ${item.leader} (${item.state})?\n\nThey will be signed out and must set up 2FA again before they can sign in${asAdmin}.`)) {
+      return;
+    }
+
+    try {
+      setError(null);
+      await requestMfaReset(item.id);
+      setSuccess(`Two-factor authentication reset for ${item.leader} (${item.state}). They will need to set it up again.`);
+      await fetchStateLeaders();
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to reset two-factor authentication'));
     }
   };
 
@@ -447,10 +465,19 @@ export default function StateLeadersPage() {
                         {item.admin && (
                           <div className={`text-xs ${stateColor.text} opacity-60 mt-1`}>
                             Admin: {item.admin}
+                            {isRecognizedAdminStatus(item.admin) && !item.mfa_enrolled_at && ' · 2FA not set up — cannot sign in yet'}
                           </div>
                         )}
                       </div>
                       <div className="flex gap-2">
+                        {item.mfa_enrolled_at && (
+                          <button
+                            onClick={() => handleResetMfa(item)}
+                            className="rounded-md bg-amber-100 px-3 py-1 text-sm font-medium text-amber-800 hover:bg-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:hover:bg-amber-900/50"
+                          >
+                            Reset 2FA
+                          </button>
+                        )}
                         <button
                           onClick={() => handleEdit(item)}
                           className="rounded-md bg-blue-100 px-3 py-1 text-sm font-medium text-blue-700 hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50"

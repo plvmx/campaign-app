@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
       aal: getAalFromJwt(token),
       request: grantRequest,
     });
-    if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
+    if (!result.ok) return NextResponse.json({ error: result.error, code: result.code }, { status: result.status });
 
     return NextResponse.json({ ok: true });
   } catch (err) {
