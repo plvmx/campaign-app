@@ -156,11 +156,13 @@ async function requestSessionAccess(
     body: JSON.stringify(body),
   });
   if (!res.ok) {
-    const json = await res.json().catch(() => ({}));
+    const json = (await res.json().catch(() => ({}))) as { error?: string; code?: string };
     throw new Error(
-      res.status === 403
-        ? 'Sign-in could not be verified. Please check your details and try again.'
-        : (json as { error?: string }).error || 'Failed to complete sign-in. Please try again.',
+      json.code === 'mfa_required'
+        ? json.error ?? 'Admin accounts must sign in with email and two-factor authentication.'
+        : res.status === 403
+          ? 'Sign-in could not be verified. Please check your details and try again.'
+          : json.error || 'Failed to complete sign-in. Please try again.',
     );
   }
 }

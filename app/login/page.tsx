@@ -15,6 +15,7 @@ import { getCampaignInterestForLeader } from '@/lib/services/campaignInterestSer
 import { isRecognizedAdminStatus } from '@/lib/campaignFilter';
 import { AUSTRALIAN_STATE_NAMES } from '@/lib/constants';
 import { InlineCodeFallback } from '@/components/auth/InlineCodeFallback';
+import { getAdminLoginGate, type AdminLoginGate } from '@/lib/adminLoginGate';
 import type { Campaign } from '@/lib/types';
 
 type ActionChoice = 'record-past' | 'review-upcoming' | 'create-new' | 'campaign-rules' | 'training-interest' | 'campaign-interest';
@@ -58,6 +59,13 @@ export default function LoginPage() {
   const [mfaStep, setMfaStep] = useState<{ match: StateLeaderMatch; phase: 'offer' | 'sent' } | null>(null);
   const [mfaStepError, setMfaStepError] = useState<string | null>(null);
   const [mfaStepSubmitting, setMfaStepSubmitting] = useState(false);
+  // Admins (AD/SR) may not sign in with mobile+name at all — they must use
+  // email + an authenticator code. Set when an *already enrolled* admin
+  // matched here and needs pointing at /login/mfa; an unenrolled admin is
+  // instead walked through the same email/MFA-setup steps as everyone else,
+  // minus the "skip" (emailStep/mfaStep below, `mandatory`). No app session
+  // is ever created on this path.
+  const [adminSignInMatch, setAdminSignInMatch] = useState<StateLeaderMatch | null>(null);
 
   // Check if user is already signed in
   useEffect(() => {
@@ -126,7 +134,10 @@ export default function LoginPage() {
         localStorage.setItem(STORAGE_KEYS.firstName, firstName.trim());
       } catch { /* ignore */ }
 
-      if (matches.length === 1) {
+      const singleMatchGate = matches.length === 1 ? getAdminLoginGate(matches[0]) : null;
+      if (singleMatchGate) {
+        startAdminGate(matches[0], singleMatchGate);
+      } else if (matches.length === 1) {
         // Single state — sign in immediately, no extra step
         await completeSignIn(matches[0], { mobile, firstName });
         // Reload the UserContext so it reads the profile that was just written
@@ -142,6 +153,51 @@ export default function LoginPage() {
       setError(getErrorMessage(err, 'Failed to authenticate. Please check your mobile number and first name.'));
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // ── Admin (AD/SR) match: never sign in here — send to email sign-in, or make them set up 2FA first ─
+  const startAdminGate = (match: StateLeaderMatch, gate: AdminLoginGate) => {
+    setError(null);
+    if (gate === 'sign-in-with-email') {
+      setAdminSignInMatch(match);
+      return;
+    }
+    if (match.email) {
+      setMfaStep({ match, phase: 'offer' });
+    } else {
+      setEmailStep({ match, value: match.pendingEmail ?? match.suggestedEmail ?? '', phase: 'edit' });
+    }
+  };
+
+  // The original tab can't see that a leader confirmed their email (or even
+  // finished 2FA) in the other tab/page, so for admins — who have no "skip"
+  // — re-check where they are and move them to the right next screen.
+  const handleAdminProgressCheck = async () => {
+    const currentMatch = emailStep?.match ?? mfaStep?.match;
+    if (!currentMatch) return;
+    setEmailStepError(null);
+    setMfaStepError(null);
+    setEmailStepSubmitting(true);
+    setMfaStepSubmitting(true);
+    try {
+      const matches = await validateStateLeader(mobile.trim(), firstName.trim());
+      const fresh = matches.find((m) => m.id === currentMatch.id);
+      const gate = fresh ? getAdminLoginGate(fresh) : null;
+      if (!fresh || !gate) throw new Error('Could not check your progress. Please try again.');
+      if (gate === 'set-up-2fa' && !fresh.email) {
+        throw new Error("We can't see that your email has been confirmed yet. Please click the CONFIRM NOW link in the email, then try again.");
+      }
+      setEmailStep(null);
+      setMfaStep(null);
+      startAdminGate(fresh, gate);
+    } catch (err: unknown) {
+      const message = getErrorMessage(err, 'Could not check your progress. Please try again.');
+      setEmailStepError(message);
+      setMfaStepError(message);
+    } finally {
+      setEmailStepSubmitting(false);
+      setMfaStepSubmitting(false);
     }
   };
 
@@ -337,6 +393,13 @@ export default function LoginPage() {
     setIsLoading(true);
     setSelectedStateId(match.id);
     try {
+      const gate = getAdminLoginGate(match);
+      if (gate) {
+        setPendingMatches(null);
+        setSelectedStateId(null);
+        startAdminGate(match, gate);
+        return;
+      }
       await completeSignIn(match, { mobile, firstName });
       await refreshUser();
       trackEvent('sign_in', { state: match.state });
@@ -376,6 +439,38 @@ export default function LoginPage() {
     return `${place} ${day}${suffix} ${month} ${formattedTime} ... Yes?`;
   }
 
+  const emailStepMandatory = emailStep ? getAdminLoginGate(emailStep.match) !== null : false;
+  const mfaStepMandatory = mfaStep ? getAdminLoginGate(mfaStep.match) !== null : false;
+
+  if (adminSignInMatch) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8 dark:bg-gray-900">
+        <div className={cardClass}>
+          <div className="space-y-4">
+            <h2 className="text-center text-xl font-bold text-gray-900 dark:text-gray-100">
+              Sign in with your email
+            </h2>
+            <p className="text-center text-sm text-gray-600 dark:text-gray-400">
+              Admin accounts sign in with your email address and a code from your authenticator app — not your mobile number.
+            </p>
+            <button
+              onClick={() => router.push('/login/mfa')}
+              className="w-full rounded-md bg-blue-600 px-4 py-3 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
+            >
+              Sign in with email
+            </button>
+            <button
+              onClick={() => setAdminSignInMatch(null)}
+              className="w-full text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 disabled:opacity-50"
+            >
+              Back
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (emailStep) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8 dark:bg-gray-900">
@@ -386,7 +481,9 @@ export default function LoginPage() {
                 Add your email
               </h2>
               <p className="text-center text-sm text-gray-600 dark:text-gray-400">
-                We&apos;re moving towards secure email sign-in for leaders. Please confirm or add your email address.
+                {emailStepMandatory
+                  ? 'Admin accounts must use two-factor authentication, which starts with confirming your email address.'
+                  : "We're moving towards secure email sign-in for leaders. Please confirm or add your email address."}
               </p>
               {emailStepError && (
                 <div className="rounded-md bg-red-50 p-3 text-sm text-red-800 dark:bg-red-900/20 dark:text-red-200">
@@ -408,13 +505,15 @@ export default function LoginPage() {
               >
                 {emailStepSubmitting ? 'Sending…' : 'Continue'}
               </button>
-              <button
-                onClick={handleEmailStepDone}
-                disabled={emailStepSubmitting}
-                className="w-full text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 disabled:opacity-50"
-              >
-                Skip for now
-              </button>
+              {!emailStepMandatory && (
+                <button
+                  onClick={handleEmailStepDone}
+                  disabled={emailStepSubmitting}
+                  className="w-full text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 disabled:opacity-50"
+                >
+                  Skip for now
+                </button>
+              )}
             </div>
           ) : (
             <div className="space-y-4">
@@ -432,12 +531,29 @@ export default function LoginPage() {
                   that without ever opening the email (confirmed live,
                   2026-10-05). Same label/styling as the Skip button on the
                   'edit' phase above, since it's the identical action. */}
-              <button
-                onClick={handleEmailStepDone}
-                className="w-full text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 disabled:opacity-50"
-              >
-                Skip for now
-              </button>
+              {emailStepMandatory ? (
+                <>
+                  {emailStepError && (
+                    <div className="rounded-md bg-red-50 p-3 text-sm text-red-800 dark:bg-red-900/20 dark:text-red-200">
+                      {emailStepError}
+                    </div>
+                  )}
+                  <button
+                    onClick={handleAdminProgressCheck}
+                    disabled={emailStepSubmitting}
+                    className="w-full rounded-md bg-blue-600 px-4 py-3 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 border-2 border-gray-800 dark:border-gray-600"
+                  >
+                    {emailStepSubmitting ? 'Checking…' : "I've confirmed my email — continue"}
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={handleEmailStepDone}
+                  className="w-full text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 disabled:opacity-50"
+                >
+                  Skip for now
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -452,10 +568,11 @@ export default function LoginPage() {
           {mfaStep.phase === 'offer' ? (
             <div className="space-y-4">
               <h2 className="text-center text-xl font-bold text-gray-900 dark:text-gray-100">
-                Set up two-factor authentication
+                {mfaStepMandatory ? 'Two-factor authentication is required' : 'Set up two-factor authentication'}
               </h2>
               <p className="text-center text-sm text-gray-600 dark:text-gray-400">
-                Add an extra layer of security to your account using an authenticator app. You will need a free authenticator app on your phone, such as Google Authenticator or Microsoft Authenticator.
+                {mfaStepMandatory ? 'Admin accounts must use two-factor authentication. ' : 'Add an extra layer of security to your account using an authenticator app. '}
+                You will need a free authenticator app on your phone, such as Google Authenticator or Microsoft Authenticator.
               </p>
               {mfaStepError && (
                 <div className="rounded-md bg-red-50 p-3 text-sm text-red-800 dark:bg-red-900/20 dark:text-red-200">
@@ -469,13 +586,15 @@ export default function LoginPage() {
               >
                 {mfaStepSubmitting ? 'Sending…' : 'Set up now'}
               </button>
-              <button
-                onClick={handleMfaStepDone}
-                disabled={mfaStepSubmitting}
-                className="w-full text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 disabled:opacity-50"
-              >
-                Skip for now
-              </button>
+              {!mfaStepMandatory && (
+                <button
+                  onClick={handleMfaStepDone}
+                  disabled={mfaStepSubmitting}
+                  className="w-full text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 disabled:opacity-50"
+                >
+                  Skip for now
+                </button>
+              )}
             </div>
           ) : (
             <div className="space-y-4">
@@ -487,13 +606,28 @@ export default function LoginPage() {
               </p>
               <InlineCodeFallback onVerify={handleMfaCodeVerify} />
               {/* "Skip for now", not "Continue" — see the matching comment on
-                  the emailStep 'sent' block above for why. */}
-              <button
-                onClick={handleMfaStepDone}
-                className="w-full text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 disabled:opacity-50"
-              >
-                Skip for now
-              </button>
+                  the emailStep 'sent' block above for why. Admins have no skip:
+                  once set up they sign in with email. */}
+              {mfaStepMandatory ? (
+                <>
+                  <p className="text-center text-sm text-gray-600 dark:text-gray-400">
+                    When you have finished setting up two-factor authentication, come back here and sign in with your email.
+                  </p>
+                  <button
+                    onClick={() => router.push('/login/mfa')}
+                    className="w-full rounded-md bg-blue-600 px-4 py-3 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
+                  >
+                    Sign in with email
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={handleMfaStepDone}
+                  className="w-full text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 disabled:opacity-50"
+                >
+                  Skip for now
+                </button>
+              )}
             </div>
           )}
         </div>

@@ -1,11 +1,12 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { findVerifiedStateLeaders } from '@/lib/services/leaderVerificationService';
+import { isRecognizedAdminStatus } from '@/lib/campaignFilter';
 
 export type GrantRequest =
   | { method: 'mobile-name'; leaderId: string; mobile: string; firstName: string }
   | { method: 'real-auth'; leaderId: string };
 
-export type GrantResult = { ok: true } | { ok: false; status: number; error: string };
+export type GrantResult = { ok: true } | { ok: false; status: number; error: string; code?: 'mfa_required' };
 
 interface GrantedLeader {
   leader: string;
@@ -42,7 +43,8 @@ export function getAalFromJwt(token: string): string | null {
  * Two ways to prove entitlement:
  * - 'mobile-name': the legacy login. Re-verifies the typed mobile+first name
  *   against state_leaders on the server (a bare leaderId is never trusted)
- *   and that the chosen leaderId is one of the verified matches.
+ *   and that the chosen leaderId is one of the verified matches. Refused
+ *   outright (code 'mfa_required') for an AD or SR row.
  * - 'real-auth': the email + MFA login. The session's user must be the
  *   state_leaders row's bound user_id AND the token must be at aal2.
  *
@@ -67,6 +69,17 @@ export async function grantSessionAccess(
     const matches = await verifyLeaders(request.mobile, request.firstName);
     leader = matches.find((m) => m.id === request.leaderId) ?? null;
     if (!leader) return { ok: false, status: 403, error: 'No matching leader found' };
+    // Admins (AD and SR) must use email + an authenticator code — mobile+name
+    // alone, which anyone who knows an admin's number and first name could
+    // supply, never yields an admin identity (mandatory 2FA, 2026-10-12).
+    if (isRecognizedAdminStatus(leader.admin)) {
+      return {
+        ok: false,
+        status: 403,
+        code: 'mfa_required',
+        error: 'Admin accounts must sign in with email and two-factor authentication.',
+      };
+    }
   } else {
     const { data, error } = await client
       .from('state_leaders')

@@ -74,6 +74,27 @@ describe('completeSignIn', () => {
   });
 });
 
+describe('completeSignIn — admin refusal', () => {
+  beforeEach(() => {
+    mockSignOut.mockReset().mockResolvedValue({ error: null });
+    mockSignInAnonymously.mockReset().mockResolvedValue({ data: { user: { id: 'anon-1' } }, error: null });
+    mockGetSession.mockReset()
+      .mockResolvedValueOnce({ data: { session: null } })
+      .mockResolvedValue({ data: { session: { access_token: 'tok-1' } } });
+    mockFrom.mockReset();
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false, status: 403,
+      json: async () => ({ error: 'Admin accounts must sign in with email and two-factor authentication.', code: 'mfa_required' }),
+    });
+  });
+  afterEach(() => { global.fetch = originalFetch; });
+
+  it('surfaces the server\'s "admins must use email + 2FA" message and signs out', async () => {
+    await expect(completeSignIn(MATCH, CREDS)).rejects.toThrow(/two-factor authentication/i);
+    expect(mockSignOut).toHaveBeenCalled();
+  });
+});
+
 describe('completeLeaderAuthSignIn', () => {
   beforeEach(() => {
     mockGetSession.mockReset().mockResolvedValue({ data: { session: { access_token: 'tok-2' } } });

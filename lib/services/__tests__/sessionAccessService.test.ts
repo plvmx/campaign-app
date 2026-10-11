@@ -8,6 +8,8 @@ import type { VerifiedStateLeaderRow } from '../leaderVerificationService';
 // outright — it is injected per test, so these exercise only the grant
 // decision + writes.
 vi.mock('@/lib/services/leaderVerificationService', () => ({ findVerifiedStateLeaders: vi.fn() }));
+// campaignFilter (isRecognizedAdminStatus) imports the browser supabase client.
+vi.mock('@/lib/supabaseClient', () => ({ supabase: { auth: {}, from: vi.fn() } }));
 
 const LEADER_AD: VerifiedStateLeaderRow = {
   id: 'sl-ad', state: 'VIC', leader: 'Peter_AD ', mobile: '0400000000', admin: 'AD',
@@ -33,19 +35,39 @@ const mobileName = (leaderId: string) => ({ method: 'mobile-name' as const, lead
 describe('grantSessionAccess — mobile-name', () => {
   beforeEach(() => makeClient());
 
-  it('writes the profile and grants admin for a verified AD leader', async () => {
+  it('REFUSES mobile+name for an AD leader (mandatory 2FA) and writes nothing', async () => {
     const result = await grantSessionAccess(client, {
       userId: 'user-1', aal: 'aal1', request: mobileName('sl-ad'),
       verifyLeaders: vi.fn().mockResolvedValue([LEADER_AD]),
     });
 
+    expect(result).toMatchObject({ ok: false, status: 403, code: 'mfa_required' });
+    expect(builders.user_profiles.upsert).not.toHaveBeenCalled();
+    expect(builders.user_roles.upsert).not.toHaveBeenCalled();
+  });
+
+  it('REFUSES mobile+name for an SR leader too', async () => {
+    const result = await grantSessionAccess(client, {
+      userId: 'user-1', aal: 'aal1', request: mobileName('sl-sr'),
+      verifyLeaders: vi.fn().mockResolvedValue([{ ...LEADER_AD, id: 'sl-sr', leader: 'Peter_SR', admin: 'SR' }]),
+    });
+
+    expect(result).toMatchObject({ ok: false, status: 403, code: 'mfa_required' });
+    expect(builders.user_profiles.upsert).not.toHaveBeenCalled();
+  });
+
+  it('writes the profile and clears any admin role for a verified plain leader', async () => {
+    const result = await grantSessionAccess(client, {
+      userId: 'user-1', aal: 'aal1', request: mobileName('sl-plain'),
+      verifyLeaders: vi.fn().mockResolvedValue([LEADER_PLAIN]),
+    });
+
     expect(result).toEqual({ ok: true });
     expect(builders.user_profiles.upsert).toHaveBeenCalledWith(
-      { user_id: 'user-1', name: 'Peter_AD', state: 'VIC' },
+      { user_id: 'user-1', name: 'Peter', state: 'VIC' },
       { onConflict: 'user_id' },
     );
-    expect(builders.user_roles.upsert).toHaveBeenCalledWith({ user_id: 'user-1', role: 'admin' }, { onConflict: 'user_id' });
-    expect(builders.user_roles.delete).not.toHaveBeenCalled();
+    expect(builders.user_roles.delete).toHaveBeenCalled();
   });
 
   it('clears any admin role (instead of granting) for a verified non-AD leader', async () => {
@@ -84,8 +106,8 @@ describe('grantSessionAccess — mobile-name', () => {
   it('fails (500) rather than reporting success when the role write errors', async () => {
     makeClient({ user_roles: makeQueryBuilder({ data: null, error: { message: 'boom' } }) });
     const result = await grantSessionAccess(client, {
-      userId: 'user-1', aal: 'aal1', request: mobileName('sl-ad'),
-      verifyLeaders: vi.fn().mockResolvedValue([LEADER_AD]),
+      userId: 'user-1', aal: 'aal1', request: mobileName('sl-plain'),
+      verifyLeaders: vi.fn().mockResolvedValue([LEADER_PLAIN]),
     });
     expect(result).toMatchObject({ ok: false, status: 500 });
   });
