@@ -182,7 +182,7 @@ export default function ConfirmEmailPage() {
             {status === 'confirmed' && (
               <>
                 <p className={bodyTextClass}>
-                  Would you also like to set up two-factor authentication now? It adds extra security to your account and takes about two minutes.
+                  Would you also like to set up two-factor authentication now? It adds extra security to your account and takes about two minutes. You will need a free authenticator app on your phone, such as Google Authenticator or Microsoft Authenticator.
                 </p>
                 <button onClick={handleSetUpNow} className={primaryButtonClass}>Set up two-factor authentication</button>
                 <button onClick={handleSkip} className={secondaryButtonClass}>Skip for now</button>

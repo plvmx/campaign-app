@@ -164,7 +164,7 @@ describe('SetupMfaPage', () => {
       fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
 
       await waitFor(() => expect(mockSignOut).toHaveBeenCalled());
-      expect(await screen.findByText(/no problem/i)).toBeInTheDocument();
+      expect(await screen.findByText(/was not set up/i)).toBeInTheDocument();
       expect(screen.getByRole('link', { name: /back to sign in/i })).toHaveAttribute('href', '/login');
     });
   });
@@ -216,7 +216,7 @@ describe('SetupMfaPage', () => {
       fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
 
       await waitFor(() => expect(mockSignOut).toHaveBeenCalled());
-      expect(await screen.findByText(/no problem/i)).toBeInTheDocument();
+      expect(await screen.findByText(/was not set up/i)).toBeInTheDocument();
       expect(screen.getByRole('link', { name: /back to sign in/i })).toHaveAttribute('href', '/login');
     });
   });

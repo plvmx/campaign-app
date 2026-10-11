@@ -237,12 +237,12 @@ export function MfaEnrollmentFlow({
   return (
     <CodeEntryScreen
       title="Authenticator app"
-      description="Scan the code below with an authenticator app (e.g. Google Authenticator, 1Password, Authy), then enter the 6-digit code it shows."
+      description="You need a free authenticator app on your phone — for example Google Authenticator or Microsoft Authenticator (install one from your phone's app store first if you don't have one). Open it, choose to add an account or scan a QR code, scan the code below, then type the 6-digit number it shows."
       code={totpCode}
       onCodeChange={setTotpCode}
       onVerify={handleVerifyTotp}
       onBack={handleCancel}
-      backLabel="Cancel"
+      backLabel="Cancel — I'll do this later"
       error={error}
       isBusy={isBusy}
       disabled={!totpFactorId}

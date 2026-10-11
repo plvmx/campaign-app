@@ -97,8 +97,8 @@ export default function SetupMfaPage() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8 dark:bg-gray-900">
         <div className={cardClass}>
-          <h2 className="text-center text-xl font-bold text-gray-900 dark:text-gray-100">No problem</h2>
-          <p className={bodyTextClass}>You can set up two-factor authentication another time.</p>
+          <h2 className="text-center text-xl font-bold text-gray-900 dark:text-gray-100">Two-factor authentication was not set up</h2>
+          <p className={bodyTextClass}>Nothing has been changed. You can try again any time — just sign in and choose &quot;Set up now&quot; when asked.</p>
           <a href="/login" className={`${primaryButtonClass} block text-center`}>Back to sign in</a>
         </div>
       </div>
