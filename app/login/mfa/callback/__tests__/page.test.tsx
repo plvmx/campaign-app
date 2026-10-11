@@ -74,7 +74,12 @@ const TWO_ROWS = [
   { id: 'sl-2', state: 'QLD', leader: 'Peter', admin: 'SR', mfa_enrolled_at: '2026-09-01T00:00:00Z' },
 ];
 
+const originalFetch = global.fetch;
+
 async function signIn() {
+  // completeLeaderAuthSignIn() reads the live session's access token to call
+  // the server-side grant route.
+  mockGetSession.mockResolvedValue({ data: { session: { access_token: 'tok-abc', user: { id: 'user-1' } } } });
   render(<LoginMfaCallbackPage />);
   await act(async () => { authChangeCallback!('SIGNED_IN', SESSION); });
 }
@@ -90,6 +95,7 @@ describe('LoginMfaCallbackPage', () => {
     mockListFactors.mockReset().mockResolvedValue({ data: { totp: [{ id: 'totp-factor-1', status: 'verified' }] } });
     mockChallengeAndVerify.mockReset().mockResolvedValue({ error: null });
     mockReplace.mockReset();
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
     mockRefreshUser.mockReset().mockResolvedValue(undefined);
 
     stateLeadersBuilder = makeTableBuilder();
@@ -108,6 +114,7 @@ describe('LoginMfaCallbackPage', () => {
   });
 
   afterEach(() => {
+    global.fetch = originalFetch;
     cleanup();
     vi.useRealTimers();
   });
@@ -145,10 +152,18 @@ describe('LoginMfaCallbackPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /verify and continue/i }));
 
     await waitFor(() => expect(mockChallengeAndVerify).toHaveBeenCalledWith({ factorId: 'totp-factor-1', code: '123456' }));
-    await waitFor(() => expect(userProfilesBuilder.upsert).toHaveBeenCalledWith(
-      { user_id: 'user-1', name: 'Peter', state: 'VIC' },
-      { onConflict: 'user_id' },
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledWith(
+      '/api/auth/grant-session-access',
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({ Authorization: 'Bearer tok-abc' }),
+        body: JSON.stringify({ method: 'real-auth', leaderId: 'sl-1' }),
+      }),
     ));
+    // The browser must no longer write these itself — user_roles is
+    // service-role-only now (see lib/services/sessionAccessService.ts).
+    expect(userProfilesBuilder.upsert).not.toHaveBeenCalled();
+    expect(userRolesBuilder.upsert).not.toHaveBeenCalled();
     await waitFor(() => expect(mockRefreshUser).toHaveBeenCalled());
     expect(mockReplace).toHaveBeenCalledWith('/app');
   });
@@ -171,7 +186,7 @@ describe('LoginMfaCallbackPage', () => {
     expect(screen.getByRole('button', { name: /State Reporter — QLD/ })).toBeInTheDocument();
   });
 
-  it('grants admin (upserts user_roles) when the picked row is AD', async () => {
+  it('asks the server to grant the picked AD row — the browser itself never writes user_roles', async () => {
     stateLeadersBuilder.eq.mockImplementation(() => Promise.resolve({ data: TWO_ROWS, error: null }));
     await signIn();
     await screen.findByLabelText(/6-digit code/i);
@@ -180,12 +195,16 @@ describe('LoginMfaCallbackPage', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Admin' }));
 
-    await waitFor(() => expect(userRolesBuilder.upsert).toHaveBeenCalledWith({ user_id: 'user-1', role: 'admin' }, { onConflict: 'user_id' }));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledWith(
+      '/api/auth/grant-session-access',
+      expect.objectContaining({ body: JSON.stringify({ method: 'real-auth', leaderId: 'sl-1' }) }),
+    ));
+    expect(userRolesBuilder.upsert).not.toHaveBeenCalled();
     expect(userRolesBuilder.delete).not.toHaveBeenCalled();
     await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/app'));
   });
 
-  it('deletes any existing user_roles row (not left stale) when the picked row is not AD', async () => {
+  it('asks the server to grant the picked non-AD row (the server clears any stale admin role)', async () => {
     stateLeadersBuilder.eq.mockImplementation(() => Promise.resolve({ data: TWO_ROWS, error: null }));
     await signIn();
     await screen.findByLabelText(/6-digit code/i);
@@ -194,9 +213,25 @@ describe('LoginMfaCallbackPage', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: /State Reporter — QLD/ }));
 
-    await waitFor(() => expect(userRolesBuilder.delete).toHaveBeenCalled());
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledWith(
+      '/api/auth/grant-session-access',
+      expect.objectContaining({ body: JSON.stringify({ method: 'real-auth', leaderId: 'sl-2' }) }),
+    ));
+    expect(userRolesBuilder.delete).not.toHaveBeenCalled();
     expect(userRolesBuilder.upsert).not.toHaveBeenCalled();
     await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/app'));
+  });
+
+  it('shows an error and does not navigate on if the server refuses the grant', async () => {
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({ ok: false, status: 403, json: async () => ({ error: 'Not authorised for this leader' }) });
+    await signIn();
+    await screen.findByLabelText(/6-digit code/i);
+    fireEvent.change(screen.getByLabelText(/6-digit code/i), { target: { value: '123456' } });
+    fireEvent.click(screen.getByRole('button', { name: /verify and continue/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/could not be verified/i);
+    expect(mockReplace).not.toHaveBeenCalled();
+    expect(mockRefreshUser).not.toHaveBeenCalled();
   });
 
   it('cancelling the challenge signs out and returns to /login/mfa', async () => {

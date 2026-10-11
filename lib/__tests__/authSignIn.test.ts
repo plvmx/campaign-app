@@ -1,0 +1,100 @@
+/**
+ * completeSignIn / completeLeaderAuthSignIn no longer write user_profiles or
+ * user_roles from the browser — they ask /api/auth/grant-session-access to
+ * (see lib/services/sessionAccessService.ts for why). These tests pin that:
+ * the browser must never touch user_roles, and a refused grant must not
+ * leave a half-signed-in session behind.
+ */
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+
+const mockGetSession = vi.fn();
+const mockSignOut = vi.fn();
+const mockSignInAnonymously = vi.fn();
+const mockFrom = vi.fn();
+
+vi.mock('@/lib/supabaseClient', () => ({
+  supabase: {
+    auth: {
+      getSession: (...a: unknown[]) => mockGetSession(...a),
+      signOut: (...a: unknown[]) => mockSignOut(...a),
+      signInAnonymously: (...a: unknown[]) => mockSignInAnonymously(...a),
+    },
+    from: (...a: unknown[]) => mockFrom(...a),
+  },
+}));
+
+import { completeSignIn, completeLeaderAuthSignIn, type StateLeaderMatch } from '../auth';
+
+const MATCH: StateLeaderMatch = {
+  id: 'sl-1', state: 'VIC', leader: 'Peter', mobile: null, admin: 'AD',
+  email: null, pendingEmail: null, suggestedEmail: null, mfaEnrolledAt: null,
+};
+const CREDS = { mobile: '0400 000 000', firstName: 'Peter' };
+const originalFetch = global.fetch;
+
+describe('completeSignIn', () => {
+  beforeEach(() => {
+    mockSignOut.mockReset().mockResolvedValue({ error: null });
+    mockSignInAnonymously.mockReset().mockResolvedValue({ data: { user: { id: 'anon-1' } }, error: null });
+    // first call: stale-session check (none); second: token lookup after anon sign-in
+    mockGetSession.mockReset()
+      .mockResolvedValueOnce({ data: { session: null } })
+      .mockResolvedValue({ data: { session: { access_token: 'tok-1' } } });
+    const updateBuilder = { update: vi.fn().mockReturnThis(), eq: vi.fn().mockResolvedValue({ error: null }) };
+    mockFrom.mockReset().mockReturnValue(updateBuilder);
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
+  });
+  afterEach(() => { global.fetch = originalFetch; });
+
+  it('asks the server to grant access with the typed credentials and the new session token', async () => {
+    await completeSignIn(MATCH, CREDS);
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      '/api/auth/grant-session-access',
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({ Authorization: 'Bearer tok-1' }),
+        body: JSON.stringify({ method: 'mobile-name', leaderId: 'sl-1', mobile: '0400 000 000', firstName: 'Peter' }),
+      }),
+    );
+  });
+
+  it('never writes user_roles or user_profiles from the browser', async () => {
+    await completeSignIn(MATCH, CREDS);
+    const tables = mockFrom.mock.calls.map((c) => c[0]);
+    expect(tables).not.toContain('user_roles');
+    expect(tables).not.toContain('user_profiles');
+  });
+
+  it('signs out and throws if the server refuses, instead of leaving an un-roled anonymous session', async () => {
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({ ok: false, status: 403, json: async () => ({ error: 'No matching leader found' }) });
+
+    await expect(completeSignIn(MATCH, CREDS)).rejects.toThrow(/could not be verified/i);
+    expect(mockSignOut).toHaveBeenCalled();
+  });
+});
+
+describe('completeLeaderAuthSignIn', () => {
+  beforeEach(() => {
+    mockGetSession.mockReset().mockResolvedValue({ data: { session: { access_token: 'tok-2' } } });
+    const updateBuilder = { update: vi.fn().mockReturnThis(), eq: vi.fn().mockResolvedValue({ error: null }) };
+    mockFrom.mockReset().mockReturnValue(updateBuilder);
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
+  });
+  afterEach(() => { global.fetch = originalFetch; });
+
+  it('asks the server to grant the real-auth session, never writing user_roles itself', async () => {
+    await completeLeaderAuthSignIn({ id: 'sl-1', state: 'VIC', leader: 'Peter', admin: 'AD' });
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      '/api/auth/grant-session-access',
+      expect.objectContaining({ body: JSON.stringify({ method: 'real-auth', leaderId: 'sl-1' }) }),
+    );
+    expect(mockFrom.mock.calls.map((c) => c[0])).not.toContain('user_roles');
+  });
+
+  it('throws when the server refuses', async () => {
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({ ok: false, status: 403, json: async () => ({}) });
+    await expect(completeLeaderAuthSignIn({ id: 'sl-1', state: 'VIC', leader: 'Peter', admin: 'AD' })).rejects.toThrow();
+  });
+});

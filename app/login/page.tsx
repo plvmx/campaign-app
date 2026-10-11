@@ -128,7 +128,7 @@ export default function LoginPage() {
 
       if (matches.length === 1) {
         // Single state — sign in immediately, no extra step
-        await completeSignIn(matches[0]);
+        await completeSignIn(matches[0], { mobile, firstName });
         // Reload the UserContext so it reads the profile that was just written
         // (avoids a race where onAuthStateChange fires before the profile upsert completes)
         await refreshUser();
@@ -337,7 +337,7 @@ export default function LoginPage() {
     setIsLoading(true);
     setSelectedStateId(match.id);
     try {
-      await completeSignIn(match);
+      await completeSignIn(match, { mobile, firstName });
       await refreshUser();
       trackEvent('sign_in', { state: match.state });
       await maybeShowEmailStep(match);

@@ -2,7 +2,6 @@
 
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
 import type { UserProfile } from '@/lib/types';
-import { upsertUserProfile } from '@/lib/userProfile';
 import { getAuthenticatedUser } from '@/lib/services/authService';
 import { supabase } from '@/lib/supabaseClient';
 
@@ -18,7 +17,6 @@ interface UserContextValue {
   /** Re-fetch user/profile/admin data (e.g. after profile creation or role change). */
   refresh: () => Promise<void>;
   /** Allow pages to update the profile in context (e.g. after first-login onboarding). */
-  updateProfile: (profile: UserProfile | null) => void;
 }
 
 const UserContext = createContext<UserContextValue | null>(null);
@@ -96,7 +94,6 @@ export function UserProvider({ children }: { children: ReactNode }) {
       userMobile,
       isLoading,
       refresh: load,
-      updateProfile: setUserProfile,
     }}>
       {children}
     </UserContext.Provider>
@@ -108,7 +105,3 @@ export function useUser(): UserContextValue {
   if (!ctx) throw new Error('useUser must be used within a UserProvider');
   return ctx;
 }
-
-// Re-export helpers that pages need alongside the context, so they don't need
-// a separate import for the profile upsert during onboarding.
-export { upsertUserProfile };

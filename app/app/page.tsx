@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import MobileLayout from '@/components/MobileLayout';
 import LoadingSpinner from '@/components/LoadingSpinner';
-import { useUser, upsertUserProfile } from '@/contexts/UserContext';
+import { useUser } from '@/contexts/UserContext';
 import { fetchCampaignData } from '@/lib/campaignLog';
 import { getErrorMessage } from '@/lib/errorUtils';
 import type { Campaign, LeaderShareOwner } from '@/lib/types';
@@ -12,7 +12,6 @@ import { deleteCampaign, updateCampaign, getCampaignsForUser } from '@/lib/servi
 import { getCampaignInterestCounts } from '@/lib/services/campaignInterestService';
 import { trackEvent } from '@/lib/analytics';
 import { getCampaignCategories } from '@/lib/services/dropdownService';
-import { getUserStateCode } from '@/lib/location';
 import { getUserAdminStatusAndMobile } from '@/lib/campaignFilter';
 import { getSlideViewEnabled, type SlideViewRole } from '@/lib/appSettings';
 import { combinePlaceAndSite } from '@/lib/placeSite';
@@ -37,7 +36,6 @@ function AppPageContent() {
     userLeader: contextUserLeader,
     userMobile: contextUserMobile,
     isLoading: isUserLoading,
-    updateProfile: updateContextProfile,
   } = useUser();
 
   // Auth / role state — local copies kept in sync after each refetch
@@ -196,22 +194,6 @@ function AppPageContent() {
           : 'leaders';
         const svEnabled = await getSlideViewEnabled(slideRole);
         setSlideViewEnabled(svEnabled);
-
-        // First-login onboarding
-        if (!contextUserProfile) {
-          const pendingFirstName = sessionStorage.getItem('pendingFirstName');
-          if (pendingFirstName) {
-            try {
-              let stateCode: string | null = null;
-              try { const { stateCode: sc } = await getUserStateCode(); stateCode = sc; } catch {}
-              const newProfile = await upsertUserProfile({ name: pendingFirstName, state: stateCode });
-              updateContextProfile(newProfile);
-              sessionStorage.removeItem('pendingFirstName');
-            } catch (profileError) {
-              console.error('Error creating user profile:', profileError);
-            }
-          }
-        }
 
         // Handle URL params
         const filterParam = searchParams.get('filter');
