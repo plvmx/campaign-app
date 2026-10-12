@@ -356,6 +356,8 @@ export default function LoginPage() {
     if (!mfaStep?.match.email) return;
     const { data, error } = await emailConfirmSupabase.auth.verifyOtp({ email: mfaStep.match.email, token: code, type: 'email' });
     if (error || !data.session) throw error ?? new Error('Invalid or expired code');
+    // Leaving this screen for good — don't let /login restore it later (lib/pendingLoginStep.ts).
+    clearPendingLoginStep();
     router.push('/setup-mfa');
   };
 

@@ -7,15 +7,20 @@
  * restored on load instead of redirecting.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
 
 const mockPush = vi.fn();
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush, replace: vi.fn() }) }));
+// One stable object, like the real Next.js router — a fresh object per render would re-run /login's on-load check.
+const mockRouter = { push: mockPush, replace: vi.fn() };
+vi.mock('next/navigation', () => ({ useRouter: () => mockRouter }));
 vi.mock('next/image', () => ({ default: () => null }));
 vi.mock('@/contexts/UserContext', () => ({ useUser: () => ({ refresh: vi.fn() }) }));
 vi.mock('@/lib/analytics', () => ({ trackEvent: vi.fn() }));
 vi.mock('@/lib/supabaseClient', () => ({ supabase: { auth: {}, from: vi.fn() } }));
-vi.mock('@/lib/emailConfirmSupabaseClient', () => ({ emailConfirmSupabase: { auth: {} } }));
+const mockVerifyOtp = vi.fn();
+vi.mock('@/lib/emailConfirmSupabaseClient', () => ({
+  emailConfirmSupabase: { auth: { verifyOtp: (...a: unknown[]) => mockVerifyOtp(...a) } },
+}));
 
 const mockGetSession = vi.fn();
 vi.mock('@/lib/auth', async (importOriginal) => ({
@@ -38,6 +43,7 @@ beforeEach(() => {
   localStorage.clear();
   mockPush.mockReset();
   mockGetSession.mockReset().mockResolvedValue(SESSION);
+  mockVerifyOtp.mockReset();
 });
 afterEach(() => cleanup());
 
@@ -90,5 +96,19 @@ describe('LoginPage — restoring "Check your inbox" after a reload', () => {
 
     expect(await screen.findByText(/check your inbox/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /i've confirmed my email/i })).toBeInTheDocument();
+  });
+
+  it('forgets the remembered screen once the typed code succeeds, so coming back to /login is not stuck on it', async () => {
+    mockVerifyOtp.mockResolvedValue({ data: { session: { access_token: 'tok' } }, error: null });
+    savePendingLoginStep({ kind: 'mfa', match: { ...PLAIN, email: 'jack@example.com' } });
+    render(<LoginPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /click here/i }));
+    fireEvent.change(screen.getByLabelText(/code from the email/i), { target: { value: '12345678' } });
+    fireEvent.click(screen.getByRole('button', { name: /verify code/i }));
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/setup-mfa'));
+    expect(mockVerifyOtp).toHaveBeenCalledWith({ email: 'jack@example.com', token: '12345678', type: 'email' });
+    expect(readPendingLoginStep()).toBeNull();
   });
 });
