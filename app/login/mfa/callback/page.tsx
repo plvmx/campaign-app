@@ -11,6 +11,7 @@ import { getErrorMessage } from '@/lib/errorUtils';
 import { describeMfaVerifyError } from '@/lib/mfaErrors';
 import { EmailAndCodeFallback } from '@/components/auth/EmailAndCodeFallback';
 import { TapToContinue } from '@/components/auth/TapToContinue';
+import { clearPendingLoginStep } from '@/lib/pendingLoginStep';
 import { readTokenHashFromUrl, stripTokenHashFromUrl } from '@/lib/magicLinkToken';
 
 const GIVE_UP_AFTER_MS = 8000;
@@ -77,6 +78,8 @@ export default function LoginMfaCallbackPage() {
       setError(getErrorMessage(err, 'Failed to complete sign-in. Please try again.'));
       return;
     }
+    // A signed-in leader must not later be shown someone else's remembered /login step.
+    clearPendingLoginStep();
     // Remember on this device that this leader signs in via email + MFA, so
     // app/login/page.tsx can skip straight to /login/mfa next time instead
     // of showing the mobile+name form first (there's no session yet at that

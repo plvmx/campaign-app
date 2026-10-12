@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, FormEvent, useEffect } from 'react';
+import { useState, FormEvent, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { getSession, validateStateLeader, completeSignIn, PREFERS_EMAIL_MFA_LOGIN_KEY, type StateLeaderMatch } from '@/lib/auth';
@@ -16,6 +16,7 @@ import { isRecognizedAdminStatus } from '@/lib/campaignFilter';
 import { AUSTRALIAN_STATE_NAMES } from '@/lib/constants';
 import { InlineCodeFallback } from '@/components/auth/InlineCodeFallback';
 import { getAdminLoginGate, type AdminLoginGate } from '@/lib/adminLoginGate';
+import { clearPendingLoginStep, readPendingLoginStep, savePendingLoginStep } from '@/lib/pendingLoginStep';
 import type { Campaign } from '@/lib/types';
 
 type ActionChoice = 'record-past' | 'review-upcoming' | 'create-new' | 'campaign-rules' | 'training-interest' | 'campaign-interest';
@@ -67,11 +68,31 @@ export default function LoginPage() {
   // is ever created on this path.
   const [adminSignInMatch, setAdminSignInMatch] = useState<StateLeaderMatch | null>(null);
 
+  // Set once the on-load restore check below has finished, so the persist
+  // effect doesn't clear a remembered step before it has been read.
+  const restoreSettledRef = useRef(false);
+
   // Check if user is already signed in
   useEffect(() => {
     async function checkExistingSession() {
       try {
+        // Read before anything else: a "Check your inbox" screen that was open
+        // when the page reloaded (see lib/pendingLoginStep.ts).
+        const pending = readPendingLoginStep();
         const session = await getSession();
+        // Put the leader back on that screen rather than bouncing a signed-in
+        // leader to /app — they had left to fetch the emailed code. A plain
+        // leader needs their session still to be there (their "skip" leads to
+        // the signed-in action chooser); an admin has no session on this path.
+        if (pending && (session || getAdminLoginGate(pending.match))) {
+          if (pending.kind === 'email') {
+            setEmailStep({ match: pending.match, value: pending.value, phase: 'sent' });
+          } else {
+            setMfaStep({ match: pending.match, phase: 'sent' });
+          }
+          return;
+        }
+        if (pending) clearPendingLoginStep();
         if (session) {
           router.push('/app');
           return;
@@ -90,11 +111,24 @@ export default function LoginPage() {
       } catch {
         // No session — continue to login form
       } finally {
+        restoreSettledRef.current = true;
         setCheckingSession(false);
       }
     }
     checkExistingSession();
   }, [router]);
+
+  // Remember the "Check your inbox" screen while it is showing, and forget it
+  // as soon as the leader moves past it (skip, confirmed, signed in, ...).
+  useEffect(() => {
+    if (emailStep?.phase === 'sent') {
+      savePendingLoginStep({ kind: 'email', match: emailStep.match, value: emailStep.value });
+    } else if (mfaStep?.phase === 'sent') {
+      savePendingLoginStep({ kind: 'mfa', match: mfaStep.match });
+    } else if (restoreSettledRef.current) {
+      clearPendingLoginStep();
+    }
+  }, [emailStep, mfaStep]);
 
   // Load remembered credentials from localStorage
   useEffect(() => {
@@ -114,6 +148,8 @@ export default function LoginPage() {
     e.preventDefault();
     setError(null);
     setIsLoading(true);
+    // A fresh sign-in attempt supersedes any step remembered from before.
+    clearPendingLoginStep();
 
     try {
       if (!mobile.trim() || !firstName.trim()) {
