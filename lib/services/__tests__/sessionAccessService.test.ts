@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { makeQueryBuilder, type MockQueryBuilder } from './supabaseMock';
-import { getAalFromJwt, grantSessionAccess } from '../sessionAccessService';
+import { getAalFromJwt, grantSessionAccess, revokeSessionAccess } from '../sessionAccessService';
 import type { VerifiedStateLeaderRow } from '../leaderVerificationService';
 
 // findVerifiedStateLeaders (and the supabase clients it imports) are replaced
@@ -160,5 +160,23 @@ describe('getAalFromJwt', () => {
     expect(getAalFromJwt(makeJwt({ sub: 'x' }))).toBeNull();
     expect(getAalFromJwt('not-a-jwt')).toBeNull();
     expect(getAalFromJwt('a.%%%.c')).toBeNull();
+  });
+});
+
+describe('revokeSessionAccess', () => {
+  it('deletes the session\'s profile and role rows', async () => {
+    makeClient();
+    const result = await revokeSessionAccess(client, 'user-1');
+
+    expect(result).toEqual({ ok: true });
+    expect(builders.user_profiles.delete).toHaveBeenCalled();
+    expect(builders.user_profiles.eq).toHaveBeenCalledWith('user_id', 'user-1');
+    expect(builders.user_roles.delete).toHaveBeenCalled();
+    expect(builders.user_roles.eq).toHaveBeenCalledWith('user_id', 'user-1');
+  });
+
+  it('reports failure when a delete errors', async () => {
+    makeClient({ user_profiles: makeQueryBuilder({ data: null, error: { message: 'boom' } }) });
+    expect(await revokeSessionAccess(client, 'user-1')).toMatchObject({ ok: false });
   });
 });

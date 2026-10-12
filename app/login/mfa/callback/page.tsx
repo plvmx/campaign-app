@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
-import { completeLeaderAuthSignIn, PREFERS_EMAIL_MFA_LOGIN_KEY, type AuthedLeaderRow } from '@/lib/auth';
+import { completeLeaderAuthSignIn, signOutClearingAccess, PREFERS_EMAIL_MFA_LOGIN_KEY, type AuthedLeaderRow } from '@/lib/auth';
 import { useUser } from '@/contexts/UserContext';
 import { getLeaderRoleLabel } from '@/lib/leaderRoleLabel';
 import { CodeEntryScreen, cardClass, bodyTextClass, primaryButtonClass, secondaryButtonClass, errorBannerClass } from '@/components/auth/CodeEntryScreen';
@@ -169,7 +169,7 @@ export default function LoginMfaCallbackPage() {
   }
 
   async function handleCancel() {
-    await supabase.auth.signOut();
+    await signOutClearingAccess();
     router.replace('/login/mfa');
   }
 

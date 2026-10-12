@@ -115,3 +115,26 @@ export async function grantSessionAccess(
 
   return { ok: true };
 }
+
+/**
+ * Removes a session's user_profiles / user_roles rows — the counterpart to
+ * grantSessionAccess, called on sign-out. Those rows *are* the session's app
+ * identity (RLS is_admin() and the app read them), so leaving them behind
+ * after sign-out meant every mobile+name login — each a brand-new anonymous
+ * account — left a permanent admin-looking identity (1,458 had piled up by
+ * 2026-10-12). A real-auth account's rows are simply rewritten at its next
+ * sign-in. Injected client, always supabaseAdmin.
+ */
+export async function revokeSessionAccess(
+  client: SupabaseClient,
+  userId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  for (const table of ['user_profiles', 'user_roles'] as const) {
+    const { error } = await client.from(table).delete().eq('user_id', userId);
+    if (error) {
+      console.error(`revoke-session-access: failed to clear ${table}:`, error);
+      return { ok: false, error: 'Internal server error' };
+    }
+  }
+  return { ok: true };
+}
