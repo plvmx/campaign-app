@@ -78,3 +78,17 @@ describe('Admin hub — Campaign Report Cleanup link', () => {
     expect(mockPush).toHaveBeenCalledWith('/admin/campaign-reports-cleanup');
   });
 });
+
+describe('Admin hub — Registry Lookup link', () => {
+  it('is the first card and links to /admin/check-registration', async () => {
+    render(<AdminPage />);
+
+    await waitFor(() => expect(screen.getByText('Registry Lookup')).toBeInTheDocument());
+
+    const cardHeadings = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent?.trim());
+    expect(cardHeadings.indexOf('Registry Lookup')).toBeLessThan(cardHeadings.indexOf('Results Metrics'));
+
+    screen.getByRole('button', { name: 'Check if a Person is Registered' }).click();
+    expect(mockPush).toHaveBeenCalledWith('/admin/check-registration');
+  });
+});

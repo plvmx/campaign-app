@@ -28,13 +28,14 @@ const ROUTES: Array<[string, () => Promise<{ POST: (r: NextRequest) => Promise<R
   ['geocode-place', () => import('../geocode-place/route')],
   ['invalidate-user-session', () => import('../invalidate-user-session/route')],
   ['campaign-reports/derived-fields', () => import('../campaign-reports/derived-fields/route')],
+  ['check-registration', () => import('../check-registration/route')],
 ];
 
 function makeRequest(name: string, token?: string) {
   return new NextRequest(`http://localhost/api/admin/${name}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-    body: JSON.stringify({ key: 'campaign_logging_enabled', value: 'true', address: 'x', state: 'VIC', place: 'x', leader: 'x', id: 'x' }),
+    body: JSON.stringify({ key: 'campaign_logging_enabled', value: 'true', address: 'x', state: 'VIC', place: 'x', leader: 'x', id: 'x', email: 'a@example.com' }),
   });
 }
 

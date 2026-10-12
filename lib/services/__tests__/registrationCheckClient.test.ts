@@ -5,7 +5,7 @@ vi.mock('@/lib/supabaseClient', () => ({
 }));
 
 import { supabase } from '@/lib/supabaseClient';
-import { requestRegistrationCheck } from '../registrationCheckClient';
+import { requestAdminRegistrationLookup, requestRegistrationCheck } from '../registrationCheckClient';
 
 const mockGetSession = vi.mocked(supabase.auth.getSession);
 const originalFetch = global.fetch;
@@ -59,5 +59,36 @@ describe('requestRegistrationCheck', () => {
       ok: false, status: 500, json: async () => { throw new Error('not json'); },
     } as unknown as Response);
     await expect(requestRegistrationCheck(INPUT)).rejects.toThrow(/\(500\)/);
+  });
+});
+
+describe('requestAdminRegistrationLookup', () => {
+  const CONTACT = { email: 'alice@example.com', mobile: null };
+
+  it('throws without calling the API when there is no session', async () => {
+    mockSession(null);
+    await expect(requestAdminRegistrationLookup(CONTACT)).rejects.toThrow(/not signed in/);
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('posts the contact details to the admin API with a bearer token', async () => {
+    mockSession({ access_token: 'tok-123' });
+    const result = { registered: true, matchedOn: ['email'] };
+    vi.mocked(global.fetch).mockResolvedValue({ ok: true, json: async () => result } as Response);
+
+    expect(await requestAdminRegistrationLookup(CONTACT)).toEqual(result);
+    expect(global.fetch).toHaveBeenCalledWith('/api/admin/check-registration', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer tok-123' },
+      body: JSON.stringify(CONTACT),
+    });
+  });
+
+  it("throws the API's own error message (e.g. 2FA required)", async () => {
+    mockSession({ access_token: 'tok-123' });
+    vi.mocked(global.fetch).mockResolvedValue({
+      ok: false, status: 403, json: async () => ({ error: 'Two-factor sign-in is required for this action' }),
+    } as Response);
+    await expect(requestAdminRegistrationLookup(CONTACT)).rejects.toThrow('Two-factor sign-in is required');
   });
 });
