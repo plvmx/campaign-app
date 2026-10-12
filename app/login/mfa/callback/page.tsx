@@ -8,6 +8,7 @@ import { useUser } from '@/contexts/UserContext';
 import { getLeaderRoleLabel } from '@/lib/leaderRoleLabel';
 import { CodeEntryScreen, cardClass, bodyTextClass, primaryButtonClass, secondaryButtonClass, errorBannerClass } from '@/components/auth/CodeEntryScreen';
 import { getErrorMessage } from '@/lib/errorUtils';
+import { describeMfaVerifyError } from '@/lib/mfaErrors';
 import { EmailAndCodeFallback } from '@/components/auth/EmailAndCodeFallback';
 
 const GIVE_UP_AFTER_MS = 8000;
@@ -150,7 +151,7 @@ export default function LoginMfaCallbackPage() {
     const { error: verifyError } = await supabase.auth.mfa.challengeAndVerify({ factorId, code });
     if (verifyError) {
       setIsBusy(false);
-      setError(verifyError.message);
+      setError(describeMfaVerifyError(verifyError));
       return;
     }
     await resolveRole(rows);
