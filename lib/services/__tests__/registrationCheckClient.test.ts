@@ -73,7 +73,7 @@ describe('requestAdminRegistrationLookup', () => {
 
   it('posts the contact details to the admin API with a bearer token', async () => {
     mockSession({ access_token: 'tok-123' });
-    const result = { registered: true, matchedOn: ['email'] };
+    const result = { registered: true, matchedOn: ['email'], registrants: [] };
     vi.mocked(global.fetch).mockResolvedValue({ ok: true, json: async () => result } as Response);
 
     expect(await requestAdminRegistrationLookup(CONTACT)).toEqual(result);

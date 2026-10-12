@@ -10,6 +10,7 @@ import { requestAdminRegistrationLookup } from '@/lib/services/registrationCheck
 import {
   parseContactLookupInput,
   type ContactLookupResult,
+  type RegistrantDetails,
   type RegistrationMatchField,
 } from '@/lib/services/registrationCheckService';
 
@@ -58,6 +59,66 @@ function ResultCard({ checked }: { checked: CheckedResult }) {
           </li>
         ))}
       </ul>
+      {result.registrants.length > 1 && (
+        <p className="mt-2 text-sm font-semibold">
+          {result.registrants.length} different registrations match — check which one is the person you mean.
+        </p>
+      )}
+      <div className="mt-3 space-y-3">
+        {result.registrants.map((registrant) => (
+          <RegistrantCard key={registrant.id} registrant={registrant} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+const BLANK = '—';
+
+function formatDate(iso: string | null, withTime = false): string {
+  if (!iso) return BLANK;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  return withTime
+    ? date.toLocaleString('en-AU', { dateStyle: 'medium', timeStyle: 'short' })
+    : date.toLocaleDateString('en-AU', { dateStyle: 'medium' });
+}
+
+function RegistrantCard({ registrant }: { registrant: RegistrantDetails }) {
+  const name = [registrant.firstName, registrant.lastName].filter(Boolean).join(' ') || '(no name on file)';
+  const rows: [string, string][] = [
+    ['Email', registrant.email ?? BLANK],
+    ['Mobile', registrant.phone ?? BLANK],
+    ['State', registrant.state ?? BLANK],
+    ['Postcode', registrant.postcode ?? BLANK],
+    ['Registered', formatDate(registrant.registeredAt)],
+    ['Webinar session', formatDate(registrant.webinarSessionAt, true)],
+    ['Webinar attended', registrant.webinarAttended ?? BLANK],
+    ['Code agreed', registrant.codeOfConductAgreed ?? BLANK],
+    ['Date agreed', formatDate(registrant.codeOfConductAgreedAt)],
+  ];
+
+  return (
+    <div className="rounded-md border-2 border-gray-800 bg-white p-3 text-gray-900 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
+      <h3 className="text-base font-bold">{name}</h3>
+      <p className="text-xs text-gray-600 dark:text-gray-400">
+        Matched on {registrant.matchedOn.map((field) => MATCH_FIELD_LABELS[field]).join(' and ')}
+      </p>
+      {(registrant.unsubscribed === 'Yes' || registrant.nfc === 'Yes') && (
+        <p className="mt-2 rounded border border-amber-600 bg-amber-50 px-2 py-1 text-sm font-semibold text-amber-900 dark:border-amber-500 dark:bg-amber-900/20 dark:text-amber-100">
+          {[registrant.unsubscribed === 'Yes' && 'Unsubscribed', registrant.nfc === 'Yes' && 'No Further Contact']
+            .filter(Boolean)
+            .join(' · ')}
+        </p>
+      )}
+      <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+        {rows.map(([label, value]) => (
+          <div key={label} className="contents">
+            <dt className="font-medium text-gray-600 dark:text-gray-400">{label}</dt>
+            <dd className="break-words">{value}</dd>
+          </div>
+        ))}
+      </dl>
     </div>
   );
 }
@@ -154,7 +215,7 @@ export default function AdminCheckRegistrationPage() {
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Registry Lookup</h1>
           <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
             Check whether a person is already registered with AFJ. Enter their mobile number, their email
-            address, or both.
+            address, or both. If they are registered, their registration details are shown.
           </p>
         </div>
 
