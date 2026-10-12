@@ -136,6 +136,28 @@ function setAppSessionCookie(maxAgeSeconds?: number): void {
 }
 
 /**
+ * Signs the current session out *and* has the server delete its
+ * user_profiles / user_roles rows (app/api/auth/revoke-session-access), so a
+ * signed-out session leaves no app identity behind. The delete is
+ * best-effort — it must never stop the sign-out itself. Returns the sign-out
+ * error, if any.
+ */
+export async function signOutClearingAccess(): Promise<{ error: Error | null }> {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
+      await fetch('/api/auth/revoke-session-access', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+    }
+  } catch (err) {
+    console.warn('Failed to clear session access before sign-out:', err);
+  }
+  return supabase.auth.signOut();
+}
+
+/**
  * Asks the server to write this session's user_profiles / user_roles rows
  * (app/api/auth/grant-session-access). The browser used to write them itself,
  * but user_roles' RLS then had to let any signed-in session write its own
@@ -179,7 +201,7 @@ export async function completeSignIn(
   // same device creates a fresh anonymous auth user that is never cleaned up.
   const { data: { session: existingSession } } = await supabase.auth.getSession();
   if (existingSession) {
-    await supabase.auth.signOut();
+    await signOutClearingAccess();
   }
 
   const { data: authData, error: authError } = await supabase.auth.signInAnonymously();
@@ -293,7 +315,7 @@ export async function sendMagicLink(email: string) {
 }
 
 export async function signOut() {
-  const { error } = await supabase.auth.signOut();
+  const { error } = await signOutClearingAccess();
   if (error) throw error;
   // Clear the session-indicator cookie set on login.
   if (typeof document !== 'undefined') {

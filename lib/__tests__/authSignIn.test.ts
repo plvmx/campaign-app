@@ -23,7 +23,7 @@ vi.mock('@/lib/supabaseClient', () => ({
   },
 }));
 
-import { completeSignIn, completeLeaderAuthSignIn, type StateLeaderMatch } from '../auth';
+import { completeSignIn, completeLeaderAuthSignIn, signOut, type StateLeaderMatch } from '../auth';
 
 const MATCH: StateLeaderMatch = {
   id: 'sl-1', state: 'VIC', leader: 'Peter', mobile: null, admin: 'AD',
@@ -117,5 +117,53 @@ describe('completeLeaderAuthSignIn', () => {
   it('throws when the server refuses', async () => {
     (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({ ok: false, status: 403, json: async () => ({}) });
     await expect(completeLeaderAuthSignIn({ id: 'sl-1', state: 'VIC', leader: 'Peter', admin: 'AD' })).rejects.toThrow();
+  });
+});
+
+describe('signing out clears the session\'s app identity', () => {
+  beforeEach(() => {
+    mockSignOut.mockReset().mockResolvedValue({ error: null });
+    mockGetSession.mockReset().mockResolvedValue({ data: { session: { access_token: 'tok-3' } } });
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
+  });
+  afterEach(() => { global.fetch = originalFetch; });
+
+  it('asks the server to delete the profile/role rows, with the session token, before signing out', async () => {
+    const order: string[] = [];
+    (global.fetch as ReturnType<typeof vi.fn>).mockImplementation(async () => { order.push('revoke'); return { ok: true }; });
+    mockSignOut.mockImplementation(async () => { order.push('signOut'); return { error: null }; });
+
+    await signOut();
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      '/api/auth/revoke-session-access',
+      expect.objectContaining({ method: 'POST', headers: { Authorization: 'Bearer tok-3' } }),
+    );
+    expect(order).toEqual(['revoke', 'signOut']);
+  });
+
+  it('still signs out if clearing the identity fails (best-effort)', async () => {
+    (global.fetch as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('network down'));
+    await expect(signOut()).resolves.toBeUndefined();
+    expect(mockSignOut).toHaveBeenCalled();
+  });
+
+  it('does not call the server when there is no session', async () => {
+    mockGetSession.mockResolvedValue({ data: { session: null } });
+    await signOut();
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(mockSignOut).toHaveBeenCalled();
+  });
+
+  it('also clears the old session\'s identity when a new login replaces it', async () => {
+    mockSignInAnonymously.mockReset().mockResolvedValue({ data: { user: { id: 'anon-2' } }, error: null });
+    const updateBuilder = { update: vi.fn().mockReturnThis(), eq: vi.fn().mockResolvedValue({ error: null }) };
+    mockFrom.mockReset().mockReturnValue(updateBuilder);
+
+    await completeSignIn({ id: 'sl-9', state: 'VIC', leader: 'Peter', mobile: null, admin: null, email: null, pendingEmail: null, suggestedEmail: null, mfaEnrolledAt: null }, CREDS);
+
+    const urls = (global.fetch as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0]);
+    expect(urls[0]).toBe('/api/auth/revoke-session-access');
+    expect(urls).toContain('/api/auth/grant-session-access');
   });
 });
