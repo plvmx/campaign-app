@@ -407,7 +407,7 @@ function AppPageContent() {
 
           {/* Admin Quick Actions */}
           {contextAdminStatus === 'AD' && (
-            <AdminQuickActions adminStatus={contextAdminStatus} userState={contextUserState} />
+            <AdminQuickActions />
           )}
 
           {/* Date filter + Add Campaign */}

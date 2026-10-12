@@ -428,7 +428,7 @@ export default function AdminPage() {
               Single Week Campaigns
             </h2>
             <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-              Generate the same landscape campaign list as the &quot;Week 1 Campaigns&quot; Admin Quick Action, for an explicit date range and state
+              Generate the landscape &quot;A.F.J UPCOMING CAMPAIGNS&quot; list for an explicit date range and state
             </p>
             <button
               onClick={() => router.push('/admin/generate-week-campaigns')}

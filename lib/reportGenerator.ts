@@ -182,14 +182,3 @@ export async function downloadReportRows(rows: ReportRow[], stateSuffix?: string
   URL.revokeObjectURL(url);
 }
 
-/**
- * Full pipeline: fetch campaigns + results for `startDate`–`endDate`,
- * render to JPEG pages, package as ZIP, and trigger a browser download.
- */
-export async function generateAndDownloadReport(options: GenerateReportOptions): Promise<void> {
-  const rows = await fetchReportRows(options);
-  const explicitState = options.stateFilter && options.stateFilter.trim()
-    ? options.stateFilter.toUpperCase().trim()
-    : null;
-  await downloadReportRows(rows, explicitState);
-}
