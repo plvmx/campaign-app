@@ -575,7 +575,7 @@ This page is the core of the application. Here is what each part does:
 ```
 ┌─────────────────────────────────────────────────────┐
 │  AdminQuickActions (admin only)                      │
-│  — Buttons: Generate Slides, Report, Arise, Refresh  │
+│  — Button: Check if a Person is Registered           │
 ├─────────────────────────────────────────────────────┤
 │  Expand/Collapse: [+ Add New Campaign]               │
 │  └── CampaignCreateForm (when expanded)              │

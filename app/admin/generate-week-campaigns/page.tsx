@@ -13,10 +13,9 @@ import { getErrorMessage } from '@/lib/errorUtils';
 import { AUSTRALIAN_STATES, type AustralianState } from '@/lib/constants';
 
 /**
- * Generates the same landscape "A.F.J UPCOMING CAMPAIGNS" JPEG as the
- * "Week 1 Campaigns" Admin Quick Action, but for an explicit Start Date, End
- * Date, and State chosen here instead of the quick action's fixed fortnight
- * window. See lib/ariseGenerator.ts.
+ * Generates the landscape "A.F.J UPCOMING CAMPAIGNS" JPEG (the former
+ * "Week 1 Campaigns" Admin Quick Action, retired 2026-10-12) for an explicit
+ * Start Date, End Date, and State. See lib/ariseGenerator.ts.
  */
 export default function GenerateWeekCampaignsPage() {
   const router = useRouter();
@@ -136,7 +135,7 @@ export default function GenerateWeekCampaignsPage() {
             Single Week Campaigns
           </h1>
           <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-            Generates the same landscape campaign list as the &quot;Week 1 Campaigns&quot; Admin Quick Action, for the date range and state chosen below.
+            Generates the landscape &quot;A.F.J UPCOMING CAMPAIGNS&quot; list for the date range and state chosen below.
           </p>
         </div>
 
