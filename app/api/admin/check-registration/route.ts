@@ -1,12 +1,14 @@
 /**
- * Admin-only: is anyone already registered under this email or mobile? A
- * contact-only version of the leader check (no name asked for or compared) —
- * see lib/services/registrationCheckService.ts. Caller must be a full admin
- * (AD) who signed in with 2FA (lib/services/adminCallerService.ts).
+ * Admin-only: who, if anyone, is already registered under this email or
+ * mobile? A contact-only version of the leader check (no name asked for or
+ * compared) that — unlike it — returns the matching registry records; see
+ * lib/services/registrationCheckService.ts. That is personal data, so the
+ * caller must be a full admin (AD) who signed in with 2FA
+ * (lib/services/adminCallerService.ts) — do not loosen this gate.
  *
  * POST body: { email?, mobile? }  (at least one)
  * Authorization: Bearer <supabase_access_token>
- * Response: { registered: boolean, matchedOn: ('email' | 'mobile')[] }
+ * Response: { registered: boolean, matchedOn: ('email' | 'mobile')[], registrants: RegistrantDetails[] }
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
@@ -43,7 +45,9 @@ export async function POST(request: NextRequest) {
     const parsed = parseContactLookupInput(await request.json().catch(() => null));
     if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
 
-    return NextResponse.json(await lookupRegistrationByContact(supabaseAdmin, parsed.input));
+    return NextResponse.json(await lookupRegistrationByContact(supabaseAdmin, parsed.input), {
+      headers: { 'Cache-Control': 'no-store' },
+    });
   } catch (err) {
     console.error('[admin/check-registration] exception:', err);
     return NextResponse.json({ error: 'The check could not be completed. Please try again.' }, { status: 500 });

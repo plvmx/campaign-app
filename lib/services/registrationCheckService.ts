@@ -12,9 +12,11 @@ import { normalizePhone } from '@/lib/registryPipeline/phone';
  * - A contact detail (email and/or mobile) is REQUIRED and matched exactly.
  *   A name on its own never matches anything — names aren't unique, and a
  *   name-only search would let anyone browse the registry by guessing.
- * - Nothing stored in the registry is ever returned. The answer is one of
- *   three statuses plus which of the caller's OWN typed contact details
- *   matched; the stored name, state, other contact detail etc. stay put.
+ * - The LEADER check never returns anything stored in the registry. Its
+ *   answer is one of three statuses plus which of the caller's OWN typed
+ *   contact details matched; the stored name, state, other contact detail
+ *   etc. stay put. (The admin lookup further down is the one exception: a
+ *   full admin signed in with 2FA is shown the matching record.)
  * - An unsubscribed / No Further Contact registrant still reads as
  *   "registered" (they are) with no hint of either flag.
  *
@@ -51,10 +53,37 @@ export interface RegistrationCheckResult {
 /** The admin lookup's input: contact details only, at least one of them. */
 export type ContactLookupInput = Pick<RegistrationCheckInput, 'email' | 'mobile'>;
 
+/** One matching registry.registrants row, as shown to a full admin. */
+export interface RegistrantDetails {
+  id: string;
+  firstName: string | null;
+  lastName: string | null;
+  email: string | null;
+  phone: string | null;
+  state: string | null;
+  postcode: string | null;
+  registeredAt: string | null;
+  webinarSessionAt: string | null;
+  webinarAttended: string | null;
+  codeOfConductAgreed: string | null;
+  codeOfConductAgreedAt: string | null;
+  /** 'Yes' or null — see the registry schema notes in CLAUDE.md. */
+  unsubscribed: string | null;
+  /** No Further Contact: 'Yes' or null. */
+  nfc: string | null;
+  /** Which of the typed contact details THIS record was found under. */
+  matchedOn: RegistrationMatchField[];
+}
+
 export interface ContactLookupResult {
   registered: boolean;
   /** Which of the typed contact details a registrant was found under. */
   matchedOn: RegistrationMatchField[];
+  /**
+   * The matching records. Usually one; more when the email and the mobile
+   * belong to different registrants, or several registrants share a mobile.
+   */
+  registrants: RegistrantDetails[];
 }
 
 export type ParsedContactLookupInput =
@@ -145,25 +174,47 @@ interface RegistrantNameRow {
   last_name: string | null;
 }
 
+interface RegistrantDetailRow extends RegistrantNameRow {
+  id: string;
+  email: string | null;
+  phone: string | null;
+  state: string | null;
+  postcode: string | null;
+  registered_at: string | null;
+  webinar_session_at: string | null;
+  webinar_attended: string | null;
+  code_of_conduct_agreed: string | null;
+  code_of_conduct_agreed_at: string | null;
+  unsubscribed: string | null;
+  nfc: string | null;
+}
+
+// What each version is allowed to read. The leader check compares names and
+// nothing else, so it never even fetches the rest of the row.
+const NAME_COLUMNS = 'first_name, last_name';
+const DETAIL_COLUMNS =
+  'id, first_name, last_name, email, phone, state, postcode, registered_at, webinar_session_at, webinar_attended, code_of_conduct_agreed, code_of_conduct_agreed_at, unsubscribed, nfc';
+
 // registry.registrants.email is unique, but phone is not (a household can
-// share one) — a small cap is plenty to find a name match among them.
+// share one) — a small cap is plenty for both a name match and a display list.
 const MAX_ROWS_PER_FIELD = 10;
 
-async function findRegistrantNames(
+async function findRegistrantRows<T>(
   client: SupabaseClient,
+  columns: string,
   column: 'email' | 'phone',
   value: string,
-): Promise<RegistrantNameRow[]> {
+): Promise<T[]> {
   const { data, error } = await client
     .schema('registry')
     .from('registrants')
-    .select('first_name, last_name')
+    .select(columns)
     .eq(column, value)
     .limit(MAX_ROWS_PER_FIELD);
   if (error) {
     throw new Error(`Registry lookup by ${column} failed: ${error.message ?? 'unknown error'} (${error.code ?? 'no code'})`);
   }
-  return (data as RegistrantNameRow[] | null) ?? [];
+  return (data as T[] | null) ?? [];
 }
 
 /**
@@ -172,22 +223,23 @@ async function findRegistrantNames(
  * the same normalizePhone() the pipeline uses). Throws on a query error —
  * "not registered" must never be the answer to "the lookup broke".
  */
-async function findRegistrantsByContact(
+async function findRegistrantsByContact<T>(
   client: SupabaseClient,
+  columns: string,
   input: ContactLookupInput,
-): Promise<{ rows: RegistrantNameRow[]; matchedOn: RegistrationMatchField[] }> {
+): Promise<{ emailRows: T[]; phoneRows: T[]; matchedOn: RegistrationMatchField[] }> {
   const email = input.email ? input.email.trim().toLowerCase() : null;
   const phone = normalizePhone(input.mobile);
 
   const [emailRows, phoneRows] = await Promise.all([
-    email ? findRegistrantNames(client, 'email', email) : Promise.resolve([]),
-    phone ? findRegistrantNames(client, 'phone', phone) : Promise.resolve([]),
+    email ? findRegistrantRows<T>(client, columns, 'email', email) : Promise.resolve([]),
+    phone ? findRegistrantRows<T>(client, columns, 'phone', phone) : Promise.resolve([]),
   ]);
 
   const matchedOn: RegistrationMatchField[] = [];
   if (emailRows.length > 0) matchedOn.push('email');
   if (phoneRows.length > 0) matchedOn.push('mobile');
-  return { rows: [...emailRows, ...phoneRows], matchedOn };
+  return { emailRows, phoneRows, matchedOn };
 }
 
 /**
@@ -198,30 +250,68 @@ export async function checkRegistration(
   client: SupabaseClient,
   input: RegistrationCheckInput,
 ): Promise<RegistrationCheckResult> {
-  const { rows, matchedOn } = await findRegistrantsByContact(client, input);
+  const { emailRows, phoneRows, matchedOn } = await findRegistrantsByContact<RegistrantNameRow>(client, NAME_COLUMNS, input);
   if (matchedOn.length === 0) return { status: 'not_registered', matchedOn };
 
   const firstName = normalizeNameForMatch(input.firstName);
   const lastName = normalizeNameForMatch(input.lastName);
-  const nameMatches = rows.some(
+  const nameMatches = [...emailRows, ...phoneRows].some(
     (row) => normalizeNameForMatch(row.first_name) === firstName && normalizeNameForMatch(row.last_name) === lastName,
   );
 
   return { status: nameMatches ? 'registered' : 'name_mismatch', matchedOn };
 }
 
+function toRegistrantDetails(row: RegistrantDetailRow, matchedOn: RegistrationMatchField[]): RegistrantDetails {
+  return {
+    id: row.id,
+    firstName: row.first_name,
+    lastName: row.last_name,
+    email: row.email,
+    phone: row.phone,
+    state: row.state,
+    postcode: row.postcode,
+    registeredAt: row.registered_at,
+    webinarSessionAt: row.webinar_session_at,
+    webinarAttended: row.webinar_attended,
+    codeOfConductAgreed: row.code_of_conduct_agreed,
+    codeOfConductAgreedAt: row.code_of_conduct_agreed_at,
+    unsubscribed: row.unsubscribed,
+    nfc: row.nfc,
+    matchedOn,
+  };
+}
+
 /**
- * The admin version (/admin/check-registration, full admins signed in with
- * 2FA): is anyone already registered under this email or mobile? No name is
- * asked for or compared, and — like the leader version — nothing stored in
- * the registry is returned.
+ * The admin version (/admin/check-registration): who, if anyone, is already
+ * registered under this email or mobile? No name is asked for or compared.
+ *
+ * Unlike the leader check this DOES return the matching records — the same
+ * fields the /registry/manage console shows. That is only acceptable because
+ * its one caller, POST /api/admin/check-registration, admits full admins
+ * signed in with 2FA and nobody else (verifyAdminCaller); never call it from
+ * a route with a weaker gate. A record found under both the email and the
+ * mobile is returned once, email matches first.
  */
 export async function lookupRegistrationByContact(
   client: SupabaseClient,
   input: ContactLookupInput,
 ): Promise<ContactLookupResult> {
-  const { matchedOn } = await findRegistrantsByContact(client, input);
-  return { registered: matchedOn.length > 0, matchedOn };
+  const { emailRows, phoneRows, matchedOn } = await findRegistrantsByContact<RegistrantDetailRow>(
+    client,
+    DETAIL_COLUMNS,
+    input,
+  );
+
+  const byId = new Map<string, RegistrantDetails>();
+  for (const row of emailRows) byId.set(row.id, toRegistrantDetails(row, ['email']));
+  for (const row of phoneRows) {
+    const existing = byId.get(row.id);
+    if (existing) existing.matchedOn.push('mobile');
+    else byId.set(row.id, toRegistrantDetails(row, ['mobile']));
+  }
+
+  return { registered: matchedOn.length > 0, matchedOn, registrants: [...byId.values()] };
 }
 
 /**

@@ -176,34 +176,73 @@ describe('parseContactLookupInput', () => {
 describe('lookupRegistrationByContact', () => {
   const CONTACT = { email: 'Alice@Example.com', mobile: '0412 345 678' };
 
-  it('is registered when either contact detail is on file, whatever the name', async () => {
-    const { client, builders } = makeRegistryClient({ phone: [{ first_name: 'Bao', last_name: 'Tran' }] });
+  const detailRow = (overrides: Record<string, unknown> = {}) => ({
+    id: 'r-alice', first_name: 'Alice', last_name: 'Nguyen', email: 'alice@example.com', phone: '+61412345678',
+    state: 'VIC', postcode: '3000', registered_at: '2026-09-12T03:00:00Z',
+    webinar_session_at: '2026-09-20T09:30:00Z', webinar_attended: 'Yes',
+    code_of_conduct_agreed: 'Yes', code_of_conduct_agreed_at: '2026-09-13T00:00:00Z',
+    unsubscribed: null, nfc: null,
+    ...overrides,
+  });
+  // The fake client only cares that rows are objects; its NameRow typing is for the leader tests.
+  const rows = (...items: Record<string, unknown>[]) => items as unknown as NameRow[];
 
-    expect(await lookupRegistrationByContact(client, CONTACT)).toEqual({ registered: true, matchedOn: ['mobile'] });
+  it('returns the matching record, mapped to the display shape', async () => {
+    const { client, builders } = makeRegistryClient({ email: rows(detailRow()) });
+
+    expect(await lookupRegistrationByContact(client, { email: CONTACT.email, mobile: null })).toEqual({
+      registered: true,
+      matchedOn: ['email'],
+      registrants: [{
+        id: 'r-alice', firstName: 'Alice', lastName: 'Nguyen', email: 'alice@example.com', phone: '+61412345678',
+        state: 'VIC', postcode: '3000', registeredAt: '2026-09-12T03:00:00Z',
+        webinarSessionAt: '2026-09-20T09:30:00Z', webinarAttended: 'Yes',
+        codeOfConductAgreed: 'Yes', codeOfConductAgreedAt: '2026-09-13T00:00:00Z',
+        unsubscribed: null, nfc: null, matchedOn: ['email'],
+      }],
+    });
     expect(builders[0].eq).toHaveBeenCalledWith('email', 'alice@example.com');
+    expect(builders[0].select.mock.calls[0][0]).toContain('postcode');
+  });
+
+  it('returns a record found under both the email and the mobile once', async () => {
+    const { client, builders } = makeRegistryClient({ email: rows(detailRow()), phone: rows(detailRow()) });
+    const result = await lookupRegistrationByContact(client, CONTACT);
+
+    expect(result.matchedOn).toEqual(['email', 'mobile']);
+    expect(result.registrants).toHaveLength(1);
+    expect(result.registrants[0].matchedOn).toEqual(['email', 'mobile']);
     expect(builders[1].eq).toHaveBeenCalledWith('phone', '+61412345678');
   });
 
-  it('reports both details when both are on file', async () => {
-    const { client } = makeRegistryClient({ email: [ALICE], phone: [ALICE] });
-    expect(await lookupRegistrationByContact(client, CONTACT)).toEqual({ registered: true, matchedOn: ['email', 'mobile'] });
+  it('returns both records when the email and the mobile belong to different people', async () => {
+    const { client } = makeRegistryClient({
+      email: rows(detailRow()),
+      phone: rows(detailRow({ id: 'r-bao', first_name: 'Bao', email: 'bao@example.com' })),
+    });
+    const result = await lookupRegistrationByContact(client, CONTACT);
+
+    expect(result.registrants.map((r) => [r.id, r.matchedOn])).toEqual([
+      ['r-alice', ['email']],
+      ['r-bao', ['mobile']],
+    ]);
   });
 
-  it('is not registered when nothing matches', async () => {
+  it('returns every registrant sharing a mobile', async () => {
+    const { client } = makeRegistryClient({ phone: rows(detailRow(), detailRow({ id: 'r-bao', first_name: 'Bao' })) });
+    const result = await lookupRegistrationByContact(client, { email: null, mobile: CONTACT.mobile });
+    expect(result.registrants.map((r) => r.id)).toEqual(['r-alice', 'r-bao']);
+  });
+
+  it('is not registered, with no records, when nothing matches', async () => {
     const { client } = makeRegistryClient({});
-    expect(await lookupRegistrationByContact(client, CONTACT)).toEqual({ registered: false, matchedOn: [] });
+    expect(await lookupRegistrationByContact(client, CONTACT)).toEqual({ registered: false, matchedOn: [], registrants: [] });
   });
 
   it('only queries the detail that was supplied', async () => {
-    const { client, builders } = makeRegistryClient({ email: [ALICE] });
+    const { client, builders } = makeRegistryClient({ email: rows(detailRow()) });
     await lookupRegistrationByContact(client, { email: 'alice@example.com', mobile: null });
     expect(builders).toHaveLength(1);
-  });
-
-  it('never returns anything stored in the registry', async () => {
-    const { client } = makeRegistryClient({ email: [{ first_name: 'Bao', last_name: 'Tran' }] });
-    const result = await lookupRegistrationByContact(client, CONTACT);
-    expect(Object.keys(result).sort()).toEqual(['matchedOn', 'registered']);
   });
 
   it('throws on a query error rather than answering "not registered"', async () => {
