@@ -4,6 +4,8 @@ import { makeQueryBuilder, type MockQueryBuilder } from './supabaseMock';
 import {
   checkRegistration,
   isSessionForStateLeader,
+  lookupRegistrationByContact,
+  parseContactLookupInput,
   normalizeNameForMatch,
   parseRegistrationCheckInput,
 } from '../registrationCheckService';
@@ -147,6 +149,66 @@ describe('checkRegistration', () => {
   it('throws on a query error rather than answering "not registered"', async () => {
     const { client } = makeRegistryClient({}, { message: 'permission denied for schema registry', code: '42501' });
     await expect(checkRegistration(client, INPUT)).rejects.toThrow(/permission denied.*42501/);
+  });
+});
+
+describe('parseContactLookupInput', () => {
+  it('trims both fields and turns a blank one into null', () => {
+    expect(parseContactLookupInput({ email: ' alice@example.com ', mobile: ' ' })).toEqual({
+      ok: true, input: { email: 'alice@example.com', mobile: null },
+    });
+    expect(parseContactLookupInput({ mobile: '0412 345 678' })).toEqual({
+      ok: true, input: { email: null, mobile: '0412 345 678' },
+    });
+  });
+
+  it.each([
+    ['neither field', { email: '', mobile: '' }],
+    ['a malformed email', { email: 'not-an-email' }],
+    ['a too-short mobile', { mobile: '0412' }],
+    ['non-string fields', { email: ['a@b.co'], mobile: 412345678 }],
+    ['a non-object body', null],
+  ])('rejects %s', (_label, body) => {
+    expect(parseContactLookupInput(body).ok).toBe(false);
+  });
+});
+
+describe('lookupRegistrationByContact', () => {
+  const CONTACT = { email: 'Alice@Example.com', mobile: '0412 345 678' };
+
+  it('is registered when either contact detail is on file, whatever the name', async () => {
+    const { client, builders } = makeRegistryClient({ phone: [{ first_name: 'Bao', last_name: 'Tran' }] });
+
+    expect(await lookupRegistrationByContact(client, CONTACT)).toEqual({ registered: true, matchedOn: ['mobile'] });
+    expect(builders[0].eq).toHaveBeenCalledWith('email', 'alice@example.com');
+    expect(builders[1].eq).toHaveBeenCalledWith('phone', '+61412345678');
+  });
+
+  it('reports both details when both are on file', async () => {
+    const { client } = makeRegistryClient({ email: [ALICE], phone: [ALICE] });
+    expect(await lookupRegistrationByContact(client, CONTACT)).toEqual({ registered: true, matchedOn: ['email', 'mobile'] });
+  });
+
+  it('is not registered when nothing matches', async () => {
+    const { client } = makeRegistryClient({});
+    expect(await lookupRegistrationByContact(client, CONTACT)).toEqual({ registered: false, matchedOn: [] });
+  });
+
+  it('only queries the detail that was supplied', async () => {
+    const { client, builders } = makeRegistryClient({ email: [ALICE] });
+    await lookupRegistrationByContact(client, { email: 'alice@example.com', mobile: null });
+    expect(builders).toHaveLength(1);
+  });
+
+  it('never returns anything stored in the registry', async () => {
+    const { client } = makeRegistryClient({ email: [{ first_name: 'Bao', last_name: 'Tran' }] });
+    const result = await lookupRegistrationByContact(client, CONTACT);
+    expect(Object.keys(result).sort()).toEqual(['matchedOn', 'registered']);
+  });
+
+  it('throws on a query error rather than answering "not registered"', async () => {
+    const { client } = makeRegistryClient({}, { message: 'boom', code: '42501' });
+    await expect(lookupRegistrationByContact(client, CONTACT)).rejects.toThrow(/boom/);
   });
 });
 

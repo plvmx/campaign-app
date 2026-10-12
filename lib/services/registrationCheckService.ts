@@ -48,6 +48,19 @@ export interface RegistrationCheckResult {
   matchedOn: RegistrationMatchField[];
 }
 
+/** The admin lookup's input: contact details only, at least one of them. */
+export type ContactLookupInput = Pick<RegistrationCheckInput, 'email' | 'mobile'>;
+
+export interface ContactLookupResult {
+  registered: boolean;
+  /** Which of the typed contact details a registrant was found under. */
+  matchedOn: RegistrationMatchField[];
+}
+
+export type ParsedContactLookupInput =
+  | { ok: true; input: ContactLookupInput }
+  | { ok: false; error: string };
+
 export type ParsedRegistrationCheckInput =
   | { ok: true; input: RegistrationCheckInput }
   | { ok: false; error: string };
@@ -62,6 +75,21 @@ const MIN_PHONE_DIGITS = 8;
 const MAX_PHONE_DIGITS = 15;
 
 const asTrimmedString = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
+
+/** The message for the first problem with a (trimmed) email/mobile pair, or null if usable. */
+function validateContactDetails(email: string, mobile: string): string | null {
+  if (!email && !mobile) return 'Enter an email address or a mobile number (or both).';
+  if (email && (email.length > MAX_EMAIL_LENGTH || !EMAIL_PATTERN.test(email))) {
+    return 'That email address does not look right.';
+  }
+  if (mobile) {
+    const digits = mobile.replace(/\D/g, '').length;
+    if (digits < MIN_PHONE_DIGITS || digits > MAX_PHONE_DIGITS) {
+      return 'That mobile number does not look right.';
+    }
+  }
+  return null;
+}
 
 /**
  * Validates and cleans a check request. Shared by the page (inline errors
@@ -80,18 +108,26 @@ export function parseRegistrationCheckInput(body: unknown): ParsedRegistrationCh
   if (firstName.length > MAX_NAME_LENGTH || lastName.length > MAX_NAME_LENGTH) {
     return { ok: false, error: 'That name is too long.' };
   }
-  if (!email && !mobile) return { ok: false, error: 'Enter an email address or a mobile number (or both).' };
-  if (email && (email.length > MAX_EMAIL_LENGTH || !EMAIL_PATTERN.test(email))) {
-    return { ok: false, error: 'That email address does not look right.' };
-  }
-  if (mobile) {
-    const digits = mobile.replace(/\D/g, '').length;
-    if (digits < MIN_PHONE_DIGITS || digits > MAX_PHONE_DIGITS) {
-      return { ok: false, error: 'That mobile number does not look right.' };
-    }
-  }
+  const contactError = validateContactDetails(email, mobile);
+  if (contactError) return { ok: false, error: contactError };
 
   return { ok: true, input: { firstName, lastName, email: email || null, mobile: mobile || null } };
+}
+
+/**
+ * Validates and cleans a contact-only lookup (the admin version — no name).
+ * Shared by /admin/check-registration and its API route, same as above.
+ */
+export function parseContactLookupInput(body: unknown): ParsedContactLookupInput {
+  if (!body || typeof body !== 'object') return { ok: false, error: 'Invalid request' };
+  const b = body as Record<string, unknown>;
+
+  const email = asTrimmedString(b.email);
+  const mobile = asTrimmedString(b.mobile);
+  const contactError = validateContactDetails(email, mobile);
+  if (contactError) return { ok: false, error: contactError };
+
+  return { ok: true, input: { email: email || null, mobile: mobile || null } };
 }
 
 /** Case-, accent- and spacing-insensitive form of a name, for comparison only. */
@@ -131,16 +167,15 @@ async function findRegistrantNames(
 }
 
 /**
- * Looks the person up by email and/or mobile (both exact: email lower-cased,
- * the way the pipeline stores it; mobile normalized to E.164 by the same
- * normalizePhone() the pipeline uses), then compares names.
- * Throws on a query error — "not registered" must never be the answer to
- * "the lookup broke".
+ * Every registrant filed under this email and/or mobile (both exact: email
+ * lower-cased, the way the pipeline stores it; mobile normalized to E.164 by
+ * the same normalizePhone() the pipeline uses). Throws on a query error —
+ * "not registered" must never be the answer to "the lookup broke".
  */
-export async function checkRegistration(
+async function findRegistrantsByContact(
   client: SupabaseClient,
-  input: RegistrationCheckInput,
-): Promise<RegistrationCheckResult> {
+  input: ContactLookupInput,
+): Promise<{ rows: RegistrantNameRow[]; matchedOn: RegistrationMatchField[] }> {
   const email = input.email ? input.email.trim().toLowerCase() : null;
   const phone = normalizePhone(input.mobile);
 
@@ -152,15 +187,41 @@ export async function checkRegistration(
   const matchedOn: RegistrationMatchField[] = [];
   if (emailRows.length > 0) matchedOn.push('email');
   if (phoneRows.length > 0) matchedOn.push('mobile');
+  return { rows: [...emailRows, ...phoneRows], matchedOn };
+}
+
+/**
+ * The leader version: looks the person up by contact detail, then compares
+ * names (see RegistrationStatus).
+ */
+export async function checkRegistration(
+  client: SupabaseClient,
+  input: RegistrationCheckInput,
+): Promise<RegistrationCheckResult> {
+  const { rows, matchedOn } = await findRegistrantsByContact(client, input);
   if (matchedOn.length === 0) return { status: 'not_registered', matchedOn };
 
   const firstName = normalizeNameForMatch(input.firstName);
   const lastName = normalizeNameForMatch(input.lastName);
-  const nameMatches = [...emailRows, ...phoneRows].some(
+  const nameMatches = rows.some(
     (row) => normalizeNameForMatch(row.first_name) === firstName && normalizeNameForMatch(row.last_name) === lastName,
   );
 
   return { status: nameMatches ? 'registered' : 'name_mismatch', matchedOn };
+}
+
+/**
+ * The admin version (/admin/check-registration, full admins signed in with
+ * 2FA): is anyone already registered under this email or mobile? No name is
+ * asked for or compared, and — like the leader version — nothing stored in
+ * the registry is returned.
+ */
+export async function lookupRegistrationByContact(
+  client: SupabaseClient,
+  input: ContactLookupInput,
+): Promise<ContactLookupResult> {
+  const { matchedOn } = await findRegistrantsByContact(client, input);
+  return { registered: matchedOn.length > 0, matchedOn };
 }
 
 /**
