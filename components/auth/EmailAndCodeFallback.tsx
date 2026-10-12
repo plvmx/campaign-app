@@ -48,8 +48,11 @@ export function EmailAndCodeFallback({ onVerify }: { onVerify: (email: string, c
   }
 
   return (
-    <div className="space-y-3 border-t-2 border-gray-200 pt-4 dark:border-gray-700">
-      <p className={bodyTextClass}>Or enter your email and the code from that email to try again:</p>
+    <div className="space-y-3">
+      <p className={bodyTextClass}>
+        <strong>You can still carry on.</strong> Type your email address below, and the code from the same email — the
+        number shown underneath the CONFIRM NOW link.
+      </p>
       <div>
         <label htmlFor="recovery-email" className={labelClass}>Email address</label>
         <input
@@ -62,7 +65,7 @@ export function EmailAndCodeFallback({ onVerify }: { onVerify: (email: string, c
         />
       </div>
       <div>
-        <label htmlFor="recovery-code" className={labelClass}>Code from the email</label>
+        <label htmlFor="recovery-code" className={labelClass}>Code from the email (shown under CONFIRM NOW)</label>
         <input
           id="recovery-code"
           inputMode="numeric"

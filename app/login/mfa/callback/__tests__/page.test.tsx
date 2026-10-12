@@ -123,7 +123,7 @@ describe('LoginMfaCallbackPage', () => {
     vi.useFakeTimers();
     render(<LoginMfaCallbackPage />);
     await act(async () => { await vi.advanceTimersByTimeAsync(8000); });
-    expect(screen.getByText(/link expired/i)).toBeInTheDocument();
+    expect(screen.getByText(/that link has already been used/i)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /back to sign in/i })).toHaveAttribute('href', '/login/mfa');
   });
 

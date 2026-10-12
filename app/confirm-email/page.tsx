@@ -104,7 +104,7 @@ export default function ConfirmEmailPage() {
     const giveUp = setTimeout(() => {
       if (!handledRef.current) {
         setStatus('error');
-        setMessage('This confirmation link is invalid or has expired.');
+        setMessage('The link has expired, or it was already used — some email programs open links automatically, which uses them up.');
       }
     }, GIVE_UP_AFTER_MS);
 
@@ -197,8 +197,8 @@ export default function ConfirmEmailPage() {
             )}
             {status === 'error' && (
               <>
-                <a href="/login" className={`${primaryButtonClass} block text-center`}>Back to sign in</a>
                 <EmailAndCodeFallback onVerify={handleRecoveryVerify} />
+                <a href="/login" className={`${secondaryButtonClass} block text-center`}>Back to sign in</a>
               </>
             )}
           </>
