@@ -11,8 +11,8 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
-import { normalizeName } from '@/lib/auth';
 import { enforceOrigin } from '@/lib/corsUtils';
+import { verifyAdminCaller } from '@/lib/services/adminCallerService';
 import { geocodeAddress } from '@/lib/geocoding';
 
 export async function POST(request: NextRequest) {
@@ -30,34 +30,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token);
-  if (userError || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  const { data: profile } = await supabaseAdmin
-    .from('user_profiles')
-    .select('name, state')
-    .eq('user_id', user.id)
-    .single();
-
-  if (!profile?.name || !profile?.state) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
-
-  const normalizedState = profile.state.toUpperCase().trim();
-  const normalizedName  = normalizeName(profile.name);
-
-  const { data: leaderRows } = await supabaseAdmin
-    .from('state_leaders')
-    .select('admin')
-    .eq('state', normalizedState)
-    .ilike('leader', normalizedName)
-    .limit(1);
-
-  const adminStatus = leaderRows?.[0]?.admin ?? null;
-  if (adminStatus !== 'AD') {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  // Full admin (AD) signed in with 2FA — shared check, see lib/services/adminCallerService.ts.
+  const caller = await verifyAdminCaller(supabaseAdmin, token);
+  if (!caller.ok) {
+    return NextResponse.json({ error: caller.error }, { status: caller.status });
   }
 
   let body: { address?: unknown };
