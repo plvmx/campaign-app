@@ -10,13 +10,15 @@ import { CodeEntryScreen, cardClass, bodyTextClass, primaryButtonClass, secondar
 import { getErrorMessage } from '@/lib/errorUtils';
 import { describeMfaVerifyError } from '@/lib/mfaErrors';
 import { EmailAndCodeFallback } from '@/components/auth/EmailAndCodeFallback';
+import { TapToContinue } from '@/components/auth/TapToContinue';
+import { readTokenHashFromUrl, stripTokenHashFromUrl } from '@/lib/magicLinkToken';
 
 const GIVE_UP_AFTER_MS = 8000;
 
 const NOT_ENROLLED_MESSAGE =
   "Two-factor authentication isn't set up for this account yet — please sign in with your mobile number and name instead.";
 
-type Screen = 'waiting' | 'expired' | 'not-enrolled' | 'challenge' | 'role-picker';
+type Screen = 'waiting' | 'tap' | 'expired' | 'not-enrolled' | 'challenge' | 'role-picker';
 
 /**
  * Magic-link callback for the real-auth + MFA leader login path
@@ -43,6 +45,8 @@ export default function LoginMfaCallbackPage() {
   const [screen, setScreen] = useState<Screen>('waiting');
   const [error, setError] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
+  // Scanner-proof link: the token is only used when the person taps the button (lib/magicLinkToken.ts).
+  const [tokenHash, setTokenHash] = useState<string | null>(null);
 
   const [rows, setRows] = useState<AuthedLeaderRow[]>([]);
   const [factorId, setFactorId] = useState<string | null>(null);
@@ -133,16 +137,44 @@ export default function LoginMfaCallbackPage() {
       if (session) handleSignedIn(session);
     });
 
-    const giveUp = setTimeout(() => {
-      if (!handledRef.current) setScreen('expired');
-    }, GIVE_UP_AFTER_MS);
+    // A token in the URL means "wait for the person to tap"; the give-up
+    // clock only starts once they do (handleTap).
+    const urlTokenHash = readTokenHashFromUrl();
+    if (urlTokenHash) {
+      Promise.resolve().then(() => {
+        setTokenHash(urlTokenHash);
+        setScreen('tap');
+      });
+    }
+    const giveUp = urlTokenHash
+      ? null
+      : setTimeout(() => {
+          if (!handledRef.current) setScreen('expired');
+        }, GIVE_UP_AFTER_MS);
 
     return () => {
       subscription.unsubscribe();
-      clearTimeout(giveUp);
+      if (giveUp) clearTimeout(giveUp);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function handleTap() {
+    if (!tokenHash) return;
+    const token = tokenHash;
+    setTokenHash(null);
+    setScreen('waiting');
+    stripTokenHashFromUrl();
+    const { error: verifyError } = await supabase.auth.verifyOtp({ token_hash: token, type: 'email' });
+    if (verifyError) {
+      setScreen('expired');
+      return;
+    }
+    // SIGNED_IN reaches the listener above; if it somehow never does, don't hang.
+    setTimeout(() => {
+      if (!handledRef.current) setScreen('expired');
+    }, GIVE_UP_AFTER_MS);
+  }
 
   async function handleVerify() {
     if (!factorId) return;
@@ -179,6 +211,22 @@ export default function LoginMfaCallbackPage() {
       <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8 dark:bg-gray-900">
         <div className={cardClass}>
           <h2 className="text-center text-xl font-bold text-gray-900 dark:text-gray-100">Signing you in…</h2>
+        </div>
+      </div>
+    );
+  }
+
+  if (screen === 'tap') {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8 dark:bg-gray-900">
+        <div className={cardClass}>
+          <TapToContinue
+            title="Sign in"
+            description="Tap the button below to finish signing in."
+            buttonLabel="Continue"
+            isBusy={false}
+            onTap={handleTap}
+          />
         </div>
       </div>
     );

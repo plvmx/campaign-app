@@ -62,7 +62,8 @@ export default function LoginMfaPage() {
         email,
         options: {
           shouldCreateUser: false,
-          emailRedirectTo: `${origin}/login/mfa/callback`,
+          // ?via=email: the email template appends &token_hash=... (lib/magicLinkToken.ts)
+          emailRedirectTo: `${origin}/login/mfa/callback?via=email`,
         },
       });
     } catch (err) {

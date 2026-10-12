@@ -70,7 +70,8 @@ export default function RegistryLoginPage() {
         email,
         options: {
           shouldCreateUser: false,
-          emailRedirectTo: `${origin}/registry/auth/callback`,
+          // ?via=email: the email template appends &token_hash=... (lib/magicLinkToken.ts)
+          emailRedirectTo: `${origin}/registry/auth/callback?via=email`,
         },
       });
     } catch (err) {

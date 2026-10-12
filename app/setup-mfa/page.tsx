@@ -5,10 +5,12 @@ import { emailConfirmSupabase } from '@/lib/emailConfirmSupabaseClient';
 import { primaryButtonClass, secondaryButtonClass, bodyTextClass, cardClass } from '@/components/auth/CodeEntryScreen';
 import { EmailAndCodeFallback } from '@/components/auth/EmailAndCodeFallback';
 import { MfaEnrollmentFlow, type MfaEnrollmentOutcome } from '@/components/auth/MfaEnrollmentFlow';
+import { TapToContinue } from '@/components/auth/TapToContinue';
+import { readTokenHashFromUrl, stripTokenHashFromUrl } from '@/lib/magicLinkToken';
 
 const GIVE_UP_AFTER_MS = 8000;
 
-type Screen = 'waiting' | 'expired' | 'cancelled' | 'enrolling' | 'success';
+type Screen = 'waiting' | 'tap' | 'expired' | 'cancelled' | 'enrolling' | 'success';
 
 /**
  * MFA enrollment landing page for the leader self-serve flow (see
@@ -25,6 +27,9 @@ type Screen = 'waiting' | 'expired' | 'cancelled' | 'enrolling' | 'success';
 export default function SetupMfaPage() {
   const [screen, setScreen] = useState<Screen>('waiting');
   const [accessToken, setAccessToken] = useState<string | null>(null);
+  // Scanner-proof link: the email carries ?token_hash=… and the token is only
+  // used when the person taps the button (lib/magicLinkToken.ts).
+  const [tokenHash, setTokenHash] = useState<string | null>(null);
   const handledRef = useRef(false);
 
   // Sign-in wait — identical pattern to app/confirm-email/page.tsx.
@@ -44,15 +49,43 @@ export default function SetupMfaPage() {
       if (session) handleSignedIn(session);
     });
 
-    const giveUp = setTimeout(() => {
-      if (!handledRef.current) setScreen('expired');
-    }, GIVE_UP_AFTER_MS);
+    // A token in the URL means "wait for the person to tap"; the give-up
+    // clock only starts once they do (handleTap).
+    const urlTokenHash = readTokenHashFromUrl();
+    if (urlTokenHash) {
+      Promise.resolve().then(() => {
+        setTokenHash(urlTokenHash);
+        setScreen('tap');
+      });
+    }
+    const giveUp = urlTokenHash
+      ? null
+      : setTimeout(() => {
+          if (!handledRef.current) setScreen('expired');
+        }, GIVE_UP_AFTER_MS);
 
     return () => {
       subscription.unsubscribe();
-      clearTimeout(giveUp);
+      if (giveUp) clearTimeout(giveUp);
     };
   }, []);
+
+  async function handleTap() {
+    if (!tokenHash) return;
+    const token = tokenHash;
+    setTokenHash(null);
+    setScreen('waiting');
+    stripTokenHashFromUrl();
+    const { error } = await emailConfirmSupabase.auth.verifyOtp({ token_hash: token, type: 'email' });
+    if (error) {
+      setScreen('expired');
+      return;
+    }
+    // SIGNED_IN reaches the listener above; if it somehow never does, don't hang.
+    setTimeout(() => {
+      if (!handledRef.current) setScreen('expired');
+    }, GIVE_UP_AFTER_MS);
+  }
 
   function handleEnrollmentDone(outcome: MfaEnrollmentOutcome) {
     setScreen(outcome);
@@ -75,6 +108,22 @@ export default function SetupMfaPage() {
       <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8 dark:bg-gray-900">
         <div className={cardClass}>
           <h2 className="text-center text-xl font-bold text-gray-900 dark:text-gray-100">Signing you in…</h2>
+        </div>
+      </div>
+    );
+  }
+
+  if (screen === 'tap') {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8 dark:bg-gray-900">
+        <div className={cardClass}>
+          <TapToContinue
+            title="Set up two-factor authentication"
+            description="Tap the button below to continue setting up your authenticator app."
+            buttonLabel="Continue"
+            isBusy={false}
+            onTap={handleTap}
+          />
         </div>
       </div>
     );

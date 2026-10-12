@@ -5,13 +5,17 @@ import { emailConfirmSupabase } from '@/lib/emailConfirmSupabaseClient';
 import { EmailAndCodeFallback } from '@/components/auth/EmailAndCodeFallback';
 import { primaryButtonClass, secondaryButtonClass, bodyTextClass, cardClass } from '@/components/auth/CodeEntryScreen';
 import { MfaEnrollmentFlow, MFA_ABANDON_AFTER_MS, type MfaEnrollmentOutcome } from '@/components/auth/MfaEnrollmentFlow';
+import { TapToContinue } from '@/components/auth/TapToContinue';
+import { readTokenHashFromUrl, stripTokenHashFromUrl } from '@/lib/magicLinkToken';
 
 const GIVE_UP_AFTER_MS = 8000;
+const LINK_USED_MESSAGE =
+  'The link has expired, or it was already used — some email programs open links automatically, which uses them up.';
 
 // 'confirmed' = email confirmed, leader is choosing whether to set up 2FA now;
 // 'enrolling' = running MfaEnrollmentFlow; 'done' = finished/declined/timed
 // out (the session is signed out by then, whichever way it got here).
-type Status = 'pending' | 'confirmed' | 'enrolling' | 'done' | 'error';
+type Status = 'pending' | 'tap' | 'confirmed' | 'enrolling' | 'done' | 'error';
 
 /**
  * Magic-link confirmation landing page for the leader self-serve
@@ -35,6 +39,8 @@ export default function ConfirmEmailPage() {
   const [status, setStatus] = useState<Status>('pending');
   const [message, setMessage] = useState<string | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
+  // Scanner-proof link: the token is only used when the person taps the button (lib/magicLinkToken.ts).
+  const [tokenHash, setTokenHash] = useState<string | null>(null);
   const [doneKind, setDoneKind] = useState<MfaEnrollmentOutcome | 'skipped' | 'timed-out'>('skipped');
   const handledRef = useRef(false);
   const choiceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -101,19 +107,51 @@ export default function ConfirmEmailPage() {
 
     // Nothing to wait for if the link was invalid/expired/already used —
     // the SDK won't produce a session or an event in that case.
-    const giveUp = setTimeout(() => {
-      if (!handledRef.current) {
-        setStatus('error');
-        setMessage('The link has expired, or it was already used — some email programs open links automatically, which uses them up.');
-      }
-    }, GIVE_UP_AFTER_MS);
+    // A token in the URL means "wait for the person to tap"; the give-up
+    // clock only starts once they do (handleTap).
+    const urlTokenHash = readTokenHashFromUrl();
+    if (urlTokenHash) {
+      Promise.resolve().then(() => {
+        setTokenHash(urlTokenHash);
+        setStatus('tap');
+      });
+    }
+    const giveUp = urlTokenHash
+      ? null
+      : setTimeout(() => {
+          if (!handledRef.current) {
+            setStatus('error');
+            setMessage(LINK_USED_MESSAGE);
+          }
+        }, GIVE_UP_AFTER_MS);
 
     return () => {
       subscription.unsubscribe();
-      clearTimeout(giveUp);
+      if (giveUp) clearTimeout(giveUp);
       clearChoiceTimer();
     };
   }, []);
+
+  async function handleTap() {
+    if (!tokenHash) return;
+    const token = tokenHash;
+    setTokenHash(null);
+    setStatus('pending');
+    stripTokenHashFromUrl();
+    const { error } = await emailConfirmSupabase.auth.verifyOtp({ token_hash: token, type: 'email' });
+    if (error) {
+      setStatus('error');
+      setMessage(LINK_USED_MESSAGE);
+      return;
+    }
+    // SIGNED_IN reaches the listener above; if it somehow never does, don't hang.
+    setTimeout(() => {
+      if (!handledRef.current) {
+        setStatus('error');
+        setMessage(LINK_USED_MESSAGE);
+      }
+    }, GIVE_UP_AFTER_MS);
+  }
 
   async function handleSkip() {
     clearChoiceTimer();
@@ -141,6 +179,22 @@ export default function ConfirmEmailPage() {
   async function handleRecoveryVerify(email: string, code: string) {
     const { error } = await emailConfirmSupabase.auth.verifyOtp({ email, token: code, type: 'email' });
     if (error) throw error;
+  }
+
+  if (status === 'tap') {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8 dark:bg-gray-900">
+        <div className={cardClass}>
+          <TapToContinue
+            title="Confirm your email"
+            description="Tap the button below to confirm your email address."
+            buttonLabel="Confirm my email"
+            isBusy={false}
+            onTap={handleTap}
+          />
+        </div>
+      </div>
+    );
   }
 
   const doneHeading =
