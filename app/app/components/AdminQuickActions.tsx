@@ -1,110 +1,14 @@
 'use client';
-import { useState } from 'react';
-import { supabase } from '@/lib/supabaseClient';
-import { calculateCampaignDates, formatDateForDb } from '@/lib/campaignDates';
-import { generateAndDownloadSlides } from '@/lib/slideGenerator';
-import { generateAndDownloadReport } from '@/lib/reportGenerator';
-import { generateAndDownloadAriseList } from '@/lib/ariseGenerator';
-import { trackEvent } from '@/lib/analytics';
-import { AUSTRALIAN_STATES } from '@/lib/constants';
+import { useRouter } from 'next/navigation';
 
-interface Props {
-  adminStatus: string | null;
-  userState: string | null;
-}
-
-const ALL_STATES = 'ALL';
-
-export default function AdminQuickActions({ adminStatus, userState }: Props) {
-  const [isGeneratingSlides, setIsGeneratingSlides] = useState(false);
-  const [isGeneratingLeaderSlides, setIsGeneratingLeaderSlides] = useState(false);
-  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
-  const [isGeneratingArise, setIsGeneratingArise] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [progress, setProgress] = useState('');
-  const [downloadState, setDownloadState] = useState<string>(ALL_STATES);
-
-  const stateFilter = downloadState === ALL_STATES ? null : downloadState;
-
-  const isAnyGenerating = isGeneratingSlides || isGeneratingLeaderSlides || isGeneratingReport || isGeneratingArise;
-
-  const btnClass = (isThis: boolean) =>
-    `rounded-md px-4 py-2 text-sm font-bold text-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600 cursor-pointer ${
-      isThis
-        ? 'bg-gray-400 cursor-not-allowed'
-        : isAnyGenerating
-        ? 'bg-purple-600 opacity-40 cursor-not-allowed'
-        : 'bg-purple-600 hover:bg-purple-700'
-    }`;
-
-  const handleSlides = async () => {
-    setIsGeneratingSlides(true);
-    setError(null);
-    setProgress('');
-    try {
-      const { upcomingCampaignStart } = calculateCampaignDates();
-      await generateAndDownloadSlides({ supabase, startDate: upcomingCampaignStart, adminStatus, userState, stateFilter, onProgress: setProgress });
-      trackEvent('generate_slides', { state: stateFilter ?? userState });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to generate campaign lists');
-    } finally {
-      setIsGeneratingSlides(false);
-    }
-  };
-
-  const handleLeaderSlides = async () => {
-    setIsGeneratingLeaderSlides(true);
-    setError(null);
-    setProgress('');
-    try {
-      const { upcomingCampaignStart } = calculateCampaignDates();
-      await generateAndDownloadSlides({ supabase, startDate: upcomingCampaignStart, adminStatus, userState, stateFilter, hideMobile: true, onProgress: setProgress });
-      trackEvent('generate_leader_slides', { state: stateFilter ?? userState });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to generate leader campaign lists');
-    } finally {
-      setIsGeneratingLeaderSlides(false);
-    }
-  };
-
-  const handleReport = async () => {
-    setIsGeneratingReport(true);
-    setError(null);
-    setProgress('');
-    try {
-      const { pastCampaignStart } = calculateCampaignDates();
-      const pastEnd = new Date(pastCampaignStart);
-      pastEnd.setDate(pastEnd.getDate() + 6);
-      await generateAndDownloadReport({
-        supabase,
-        startDate: formatDateForDb(pastCampaignStart),
-        endDate: formatDateForDb(pastEnd),
-        adminStatus,
-        userState,
-        stateFilter,
-      });
-      trackEvent('generate_report', { state: stateFilter ?? userState });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to generate campaign results');
-    } finally {
-      setIsGeneratingReport(false);
-    }
-  };
-
-  const handleArise = async () => {
-    setIsGeneratingArise(true);
-    setError(null);
-    setProgress('');
-    try {
-      const { upcomingCampaignStart } = calculateCampaignDates();
-      await generateAndDownloadAriseList({ supabase, startDate: upcomingCampaignStart, adminStatus, userState, stateFilter, onProgress: setProgress });
-      trackEvent('generate_week1', { state: stateFilter ?? userState });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to generate Week 1 Campaigns list');
-    } finally {
-      setIsGeneratingArise(false);
-    }
-  };
+/**
+ * Shortcut box shown to full admins at the top of the main feed. Its original
+ * download buttons (Campaign Lists, Leader Campaign Lists, Campaign Results,
+ * Week 1 Campaigns) and their All States filter were retired 2026-10-12 —
+ * the same outputs remain available from the Admin console's generate pages.
+ */
+export default function AdminQuickActions() {
+  const router = useRouter();
 
   return (
     <div className="mt-4 rounded-lg border-2 border-purple-300 bg-purple-50 p-3 dark:border-purple-700 dark:bg-purple-900/20">
@@ -112,33 +16,13 @@ export default function AdminQuickActions({ adminStatus, userState }: Props) {
         Admin Quick Actions
       </p>
       <div className="flex flex-wrap gap-2">
-        <button onClick={handleSlides} disabled={isAnyGenerating} className={btnClass(isGeneratingSlides)}>
-          {isGeneratingSlides ? 'Generating…' : 'Campaign Lists'}
-        </button>
-        <button onClick={handleLeaderSlides} disabled={isAnyGenerating} className={btnClass(isGeneratingLeaderSlides)}>
-          {isGeneratingLeaderSlides ? 'Generating…' : 'Leader Campaign Lists'}
-        </button>
-        <button onClick={handleReport} disabled={isAnyGenerating} className={btnClass(isGeneratingReport)}>
-          {isGeneratingReport ? 'Generating…' : 'Campaign Results'}
-        </button>
-        <button onClick={handleArise} disabled={isAnyGenerating} className={btnClass(isGeneratingArise)}>
-          {isGeneratingArise ? 'Generating…' : 'Week 1 Campaigns'}
-        </button>
-        <select
-          value={downloadState}
-          onChange={e => setDownloadState(e.target.value)}
-          disabled={isAnyGenerating}
-          aria-label="Filter downloads by state"
-          className="rounded-md border-2 border-gray-800 bg-white px-3 py-2 text-sm font-bold text-purple-900 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 disabled:opacity-40 dark:border-gray-600 dark:bg-gray-800 dark:text-purple-200"
+        <button
+          onClick={() => router.push('/admin/check-registration')}
+          className="rounded-md bg-purple-600 px-4 py-2 text-sm font-bold text-white hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600 cursor-pointer"
         >
-          <option value={ALL_STATES}>All States</option>
-          {AUSTRALIAN_STATES.map(state => (
-            <option key={state} value={state}>{state}</option>
-          ))}
-        </select>
+          Check if a Person is Registered
+        </button>
       </div>
-      {progress && !error && <p className="mt-2 text-xs text-purple-700 dark:text-purple-300">{progress}</p>}
-      {error && <p className="mt-2 text-xs font-medium text-red-600 dark:text-red-400">⚠ {error}</p>}
     </div>
   );
 }
