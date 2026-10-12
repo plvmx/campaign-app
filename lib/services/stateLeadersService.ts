@@ -107,6 +107,11 @@ export async function createStateLeader(input: {
   }
 }
 
+/** Same address, ignoring case and surrounding spaces; two empties are the same. */
+function isSameEmail(a: string | null, b: string | null): boolean {
+  return (a ?? '').trim().toLowerCase() === (b ?? '').trim().toLowerCase();
+}
+
 export async function updateStateLeader(
   id: string,
   input: { state: string; leader: string; mobile: string | null; admin: string | null; email: string | null },
@@ -117,17 +122,28 @@ export async function updateStateLeader(
   const { data: existing, error: fetchError } = await supabase.from('state_leaders').select('email').eq('id', id).single();
   if (fetchError) console.warn('Failed to fetch existing email before update:', fetchError);
 
-  const { error } = await supabase.from('state_leaders').update(input).eq('id', id);
+  const previousEmail = (existing as { email: string | null } | null)?.email ?? null;
+  // When an admin changes or removes a leader's email, everything that
+  // vouched for the *old* address must go with it: the confirmation, the tie
+  // to that address's sign-in account (user_id — otherwise the previous
+  // address's owner could still sign in as this leader by email), and the 2FA
+  // enrolment that belongs to that account. The leader then confirms again
+  // (or the new address is bound when they finish 2FA setup). Skipped when the
+  // pre-fetch failed — we can't tell whether the email really changed, and
+  // wiping a working sign-in on a guess would be worse.
+  const emailChanged = !fetchError && !isSameEmail(previousEmail, input.email);
+  const payload = emailChanged
+    ? { ...input, email_confirmed_at: null, user_id: null, mfa_enrolled_at: null }
+    : input;
+
+  const { error } = await supabase.from('state_leaders').update(payload).eq('id', id);
   if (error) throw error;
 
   // Skip the audit comparison entirely when the pre-fetch itself failed —
   // defaulting to "no previous email" in that case would risk logging a false
   // change (e.g. reporting old_email: null when it was never actually null).
-  if (!fetchError) {
-    const previousEmail = (existing as { email: string | null } | null)?.email ?? null;
-    if (previousEmail !== input.email) {
-      await recordEmailChange(id, previousEmail, input.email, 'admin');
-    }
+  if (!fetchError && previousEmail !== input.email) {
+    await recordEmailChange(id, previousEmail, input.email, 'admin');
   }
 }
 

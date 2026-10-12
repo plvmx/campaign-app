@@ -333,6 +333,11 @@ export default function StateLeadersPage() {
                 className="mt-1 block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
                 placeholder="Enter email address"
               />
+              {editingId && (
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  Changing or removing the email resets this leader&apos;s email confirmation and two-factor setup — they will need to set them up again.
+                </p>
+              )}
             </div>
             <div>
               <label htmlFor="admin" className="block text-sm font-medium text-gray-700 dark:text-gray-300">

@@ -177,6 +177,50 @@ describe('updateStateLeader', () => {
     expect(builder.update).not.toHaveBeenCalled();
   });
 
+  describe('changing or removing the email resets what vouched for the old address', () => {
+    function setup(previousEmail: string | null) {
+      const builder = makeQueryBuilder({ data: null, error: null });
+      builder.single.mockResolvedValueOnce({ data: { email: previousEmail }, error: null });
+      mockFrom.mockReturnValue(builder);
+      return builder;
+    }
+    const base = { state: 'NT', leader: 'PVTester', mobile: null, admin: null };
+
+    it('removing the email clears the confirmation, the sign-in account link and the 2FA enrolment', async () => {
+      const builder = setup('old@example.com');
+      await updateStateLeader('l1', { ...base, email: null });
+      expect(builder.update).toHaveBeenCalledWith({ ...base, email: null, email_confirmed_at: null, user_id: null, mfa_enrolled_at: null });
+    });
+
+    it('switching to a different address does the same, so the old address\'s account can no longer sign in as this leader', async () => {
+      const builder = setup('old@example.com');
+      await updateStateLeader('l1', { ...base, email: 'new@example.com' });
+      expect(builder.update).toHaveBeenCalledWith({ ...base, email: 'new@example.com', email_confirmed_at: null, user_id: null, mfa_enrolled_at: null });
+    });
+
+    it('leaves them alone when the email is unchanged (e.g. only the mobile was edited)', async () => {
+      const builder = setup('same@example.com');
+      await updateStateLeader('l1', { ...base, mobile: '0400000000', email: 'same@example.com' });
+      expect(builder.update).toHaveBeenCalledWith({ ...base, mobile: '0400000000', email: 'same@example.com' });
+    });
+
+    it('treats a change of letter case only as unchanged', async () => {
+      const builder = setup('Same@Example.com');
+      await updateStateLeader('l1', { ...base, email: 'same@example.com' });
+      expect(builder.update).toHaveBeenCalledWith({ ...base, email: 'same@example.com' });
+    });
+
+    it('does not wipe a working sign-in when it cannot tell whether the email changed (pre-fetch failed)', async () => {
+      const builder = makeQueryBuilder({ data: null, error: null });
+      builder.single.mockResolvedValueOnce({ data: null, error: { code: '500', message: 'fetch boom' } });
+      mockFrom.mockReturnValue(builder);
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      await updateStateLeader('l1', { ...base, email: 'new@example.com' });
+      expect(builder.update).toHaveBeenCalledWith({ ...base, email: 'new@example.com' });
+      warnSpy.mockRestore();
+    });
+  });
+
   it('does not record an audit row if the pre-update email fetch fails (avoids a false entry)', async () => {
     const stateLeadersBuilder = makeQueryBuilder({ data: null, error: null }); // update succeeds
     stateLeadersBuilder.single.mockResolvedValueOnce({ data: null, error: { code: '500', message: 'fetch boom' } });
