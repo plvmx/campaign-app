@@ -1,10 +1,12 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { registrySupabase } from '@/lib/registrySupabaseClient';
 import { getRegistryAccessState, setRegistryAuthCookie, setRegistrySessionCookie, signOutOfRegistry } from '@/lib/registryAuth';
-import { RegistryAuthLayout, registryBodyTextClass } from '@/components/registry/RegistryAuthLayout';
+import { RegistryAuthLayout, registryBodyTextClass, registryPrimaryButtonClass } from '@/components/registry/RegistryAuthLayout';
+import { TapToContinue } from '@/components/auth/TapToContinue';
+import { readTokenHashFromUrl, stripTokenHashFromUrl } from '@/lib/magicLinkToken';
 
 const ROUTE_FOR_RESULT = {
   unauthenticated: '/registry/login?error=auth_failed',
@@ -36,6 +38,8 @@ const GIVE_UP_AFTER_MS = 8000;
 export default function RegistryAuthCallbackPage() {
   const router = useRouter();
   const handledRef = useRef(false);
+  // Scanner-proof link: the token is only used when the person taps the button (lib/magicLinkToken.ts).
+  const [tokenHash, setTokenHash] = useState<string | null>(null);
 
   useEffect(() => {
     async function handleSignedIn() {
@@ -74,15 +78,54 @@ export default function RegistryAuthCallbackPage() {
     // Nothing to wait for if the link was invalid/expired/already used —
     // the SDK won't produce a session or an event in that case, so without
     // this the visitor would be stuck on "Signing you in..." forever.
-    const giveUp = setTimeout(() => {
-      if (!handledRef.current) router.replace('/registry/login?error=auth_failed');
-    }, GIVE_UP_AFTER_MS);
+    // A token in the URL means "wait for the person to tap"; the give-up
+    // clock only starts once they do (handleTap).
+    const urlTokenHash = readTokenHashFromUrl();
+    if (urlTokenHash) Promise.resolve().then(() => setTokenHash(urlTokenHash));
+    const giveUp = urlTokenHash
+      ? null
+      : setTimeout(() => {
+          if (!handledRef.current) router.replace('/registry/login?error=auth_failed');
+        }, GIVE_UP_AFTER_MS);
 
     return () => {
       subscription.unsubscribe();
-      clearTimeout(giveUp);
+      if (giveUp) clearTimeout(giveUp);
     };
   }, [router]);
+
+  async function handleTap() {
+    if (!tokenHash) return;
+    const token = tokenHash;
+    setTokenHash(null);
+    stripTokenHashFromUrl();
+    const { error } = await registrySupabase.auth.verifyOtp({ token_hash: token, type: 'email' });
+    if (error) {
+      router.replace('/registry/login?error=auth_failed');
+      return;
+    }
+    // SIGNED_IN reaches the listener above; if it somehow never does, don't hang.
+    setTimeout(() => {
+      if (!handledRef.current) router.replace('/registry/login?error=auth_failed');
+    }, GIVE_UP_AFTER_MS);
+  }
+
+  if (tokenHash) {
+    return (
+      <RegistryAuthLayout title="AFJ Registry">
+        <TapToContinue
+          title="Sign in"
+          description="Tap the button below to finish signing in."
+          buttonLabel="Continue"
+          isBusy={false}
+          onTap={handleTap}
+          titleClassName="text-center text-lg font-semibold text-gray-900 dark:text-gray-100"
+          bodyClassName={registryBodyTextClass}
+          buttonClassName={registryPrimaryButtonClass}
+        />
+      </RegistryAuthLayout>
+    );
+  }
 
   return (
     <RegistryAuthLayout title="AFJ Registry">

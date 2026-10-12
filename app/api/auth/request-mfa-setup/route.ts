@@ -61,6 +61,8 @@ export async function POST(request: NextRequest) {
     }
 
     const redirectUrl = new URL('/setup-mfa', request.nextUrl.origin);
+    // Always carries a query so the email template can append &token_hash=... (lib/magicLinkToken.ts)
+    redirectUrl.searchParams.set('via', 'email');
 
     const { error: otpError } = await supabaseAdmin.auth.signInWithOtp({
       email: match.email,
