@@ -114,9 +114,9 @@ export default function RegistryAuthCallbackPage() {
     return (
       <RegistryAuthLayout title="AFJ Registry">
         <TapToContinue
-          title="Sign in"
+          title="One last step"
           description="Tap the button below to finish signing in."
-          buttonLabel="Continue"
+          buttonLabel="Finish signing in"
           isBusy={false}
           onTap={handleTap}
           titleClassName="text-center text-lg font-semibold text-gray-900 dark:text-gray-100"

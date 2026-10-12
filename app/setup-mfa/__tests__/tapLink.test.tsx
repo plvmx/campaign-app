@@ -48,7 +48,7 @@ afterEach(() => { cleanup(); vi.useRealTimers(); window.history.replaceState(nul
 describe('SetupMfaPage — tap-to-continue link', () => {
   it('shows a button and does NOT use the token on load', async () => {
     render(<SetupMfaPage />);
-    expect(await screen.findByRole('button', { name: /continue/i })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /continue setting up/i })).toBeInTheDocument();
     expect(mockVerifyOtp).not.toHaveBeenCalled();
   });
 
@@ -56,13 +56,13 @@ describe('SetupMfaPage — tap-to-continue link', () => {
     vi.useFakeTimers();
     render(<SetupMfaPage />);
     await act(async () => { await vi.advanceTimersByTimeAsync(30000); });
-    expect(screen.getByRole('button', { name: /continue/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /continue setting up/i })).toBeInTheDocument();
     expect(screen.queryByText(/already been used/i)).not.toBeInTheDocument();
   });
 
   it('uses the token only on tap, and removes it from the address bar', async () => {
     render(<SetupMfaPage />);
-    fireEvent.click(await screen.findByRole('button', { name: /continue/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /continue setting up/i }));
 
     await waitFor(() => expect(mockVerifyOtp).toHaveBeenCalledWith({ token_hash: 'hash-1', type: 'email' }));
     expect(window.location.search).not.toContain('token_hash');
@@ -70,7 +70,7 @@ describe('SetupMfaPage — tap-to-continue link', () => {
 
   it('carries on to the QR code once the tap signs the person in', async () => {
     render(<SetupMfaPage />);
-    fireEvent.click(await screen.findByRole('button', { name: /continue/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /continue setting up/i }));
     await waitFor(() => expect(mockVerifyOtp).toHaveBeenCalled());
 
     await act(async () => { authChangeCallback!('SIGNED_IN', { access_token: 'tok', user: { id: 'u1' } }); });
@@ -80,7 +80,7 @@ describe('SetupMfaPage — tap-to-continue link', () => {
   it('falls back to the email + code form if the token was already used', async () => {
     mockVerifyOtp.mockResolvedValue({ error: { message: 'Token has expired or is invalid' } });
     render(<SetupMfaPage />);
-    fireEvent.click(await screen.findByRole('button', { name: /continue/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /continue setting up/i }));
 
     expect(await screen.findByText(/that link has already been used/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/code from the email/i)).toBeInTheDocument();

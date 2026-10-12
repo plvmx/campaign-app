@@ -118,9 +118,9 @@ export default function SetupMfaPage() {
       <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8 dark:bg-gray-900">
         <div className={cardClass}>
           <TapToContinue
-            title="Set up two-factor authentication"
-            description="Tap the button below to continue setting up your authenticator app."
-            buttonLabel="Continue"
+            title="One last step"
+            description="Tap the button below to finish and carry on setting up your authenticator app."
+            buttonLabel="Continue setting up"
             isBusy={false}
             onTap={handleTap}
           />

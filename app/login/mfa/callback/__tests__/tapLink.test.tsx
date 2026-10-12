@@ -48,7 +48,7 @@ afterEach(() => { cleanup(); vi.useRealTimers(); window.history.replaceState(nul
 describe('LoginMfaCallbackPage — tap-to-continue link', () => {
   it('shows a button and does NOT use the token on load', async () => {
     render(<LoginMfaCallbackPage />);
-    expect(await screen.findByRole('button', { name: /continue/i })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /finish signing in/i })).toBeInTheDocument();
     expect(mockVerifyOtp).not.toHaveBeenCalled();
   });
 
@@ -56,13 +56,13 @@ describe('LoginMfaCallbackPage — tap-to-continue link', () => {
     vi.useFakeTimers();
     render(<LoginMfaCallbackPage />);
     await act(async () => { await vi.advanceTimersByTimeAsync(30000); });
-    expect(screen.getByRole('button', { name: /continue/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /finish signing in/i })).toBeInTheDocument();
     expect(screen.queryByText(/already been used/i)).not.toBeInTheDocument();
   });
 
   it('uses the token only on tap, removes it from the address bar, then goes on to the authenticator challenge', async () => {
     render(<LoginMfaCallbackPage />);
-    fireEvent.click(await screen.findByRole('button', { name: /continue/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /finish signing in/i }));
     await waitFor(() => expect(mockVerifyOtp).toHaveBeenCalledWith({ token_hash: 'hash-3', type: 'email' }));
     expect(window.location.search).not.toContain('token_hash');
 
@@ -73,7 +73,7 @@ describe('LoginMfaCallbackPage — tap-to-continue link', () => {
   it('falls back to the email + code form if the token was already used', async () => {
     mockVerifyOtp.mockResolvedValue({ error: { message: 'Token has expired or is invalid' } });
     render(<LoginMfaCallbackPage />);
-    fireEvent.click(await screen.findByRole('button', { name: /continue/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /finish signing in/i }));
     expect(await screen.findByText(/that link has already been used/i)).toBeInTheDocument();
   });
 });

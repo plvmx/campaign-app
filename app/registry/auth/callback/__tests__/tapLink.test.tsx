@@ -45,7 +45,7 @@ afterEach(() => { cleanup(); vi.useRealTimers(); window.history.replaceState(nul
 describe('RegistryAuthCallbackPage — tap-to-continue link', () => {
   it('shows a button and does NOT use the token on load', async () => {
     render(<RegistryAuthCallbackPage />);
-    expect(await screen.findByRole('button', { name: /continue/i })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /finish signing in/i })).toBeInTheDocument();
     expect(mockVerifyOtp).not.toHaveBeenCalled();
   });
 
@@ -53,13 +53,13 @@ describe('RegistryAuthCallbackPage — tap-to-continue link', () => {
     vi.useFakeTimers();
     render(<RegistryAuthCallbackPage />);
     await act(async () => { await vi.advanceTimersByTimeAsync(30000); });
-    expect(screen.getByRole('button', { name: /continue/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /finish signing in/i })).toBeInTheDocument();
     expect(mockReplace).not.toHaveBeenCalled();
   });
 
   it('uses the token only on tap, then carries on once signed in', async () => {
     render(<RegistryAuthCallbackPage />);
-    fireEvent.click(await screen.findByRole('button', { name: /continue/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /finish signing in/i }));
     await waitFor(() => expect(mockVerifyOtp).toHaveBeenCalledWith({ token_hash: 'hash-4', type: 'email' }));
     expect(window.location.search).not.toContain('token_hash');
 
@@ -70,7 +70,7 @@ describe('RegistryAuthCallbackPage — tap-to-continue link', () => {
   it('sends the person to the login error page if the token was already used', async () => {
     mockVerifyOtp.mockResolvedValue({ error: { message: 'Token has expired or is invalid' } });
     render(<RegistryAuthCallbackPage />);
-    fireEvent.click(await screen.findByRole('button', { name: /continue/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /finish signing in/i }));
     await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/registry/login?error=auth_failed'));
   });
 });
