@@ -101,8 +101,21 @@ describe('SetupMfaPage', () => {
     vi.useFakeTimers();
     render(<SetupMfaPage />);
     await act(async () => { await vi.advanceTimersByTimeAsync(8000); });
-    expect(screen.getByText(/link expired/i)).toBeInTheDocument();
+    expect(screen.getByText(/that link has already been used/i)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /back to sign in/i })).toHaveAttribute('href', '/login');
+  });
+
+  it('makes the email + code form the main way forward on a used/expired link (some email programs pre-open links)', async () => {
+    vi.useFakeTimers();
+    render(<SetupMfaPage />);
+    await act(async () => { await vi.advanceTimersByTimeAsync(8000); });
+    expect(screen.getByText(/you can still carry on/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/email address/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/code from the email/i)).toBeInTheDocument();
+    // the form comes before the "Back to sign in" link
+    const form = screen.getByText(/you can still carry on/i);
+    const back = screen.getByRole('link', { name: /back to sign in/i });
+    expect(form.compareDocumentPosition(back) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('signs out and expires the session if enrollment is left abandoned mid-flow (bounds the lingering-session window)', async () => {
@@ -114,7 +127,7 @@ describe('SetupMfaPage', () => {
     await act(async () => { await vi.advanceTimersByTimeAsync(5 * 60 * 1000); });
 
     expect(mockSignOut).toHaveBeenCalled();
-    expect(screen.getByText(/link expired/i)).toBeInTheDocument();
+    expect(screen.getByText(/that link has already been used/i)).toBeInTheDocument();
   });
 
   describe('Step-up (account already has a verified factor elsewhere)', () => {

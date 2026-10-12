@@ -188,10 +188,10 @@ export default function LoginMfaCallbackPage() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8 dark:bg-gray-900">
         <div className={cardClass}>
-          <h2 className="text-center text-xl font-bold text-gray-900 dark:text-gray-100">Link expired</h2>
-          <p className={bodyTextClass}>This sign-in link is invalid or has expired.</p>
-          <a href="/login/mfa" className={`${primaryButtonClass} block text-center`}>Back to sign in</a>
+          <h2 className="text-center text-xl font-bold text-gray-900 dark:text-gray-100">That link has already been used</h2>
+          <p className={bodyTextClass}>The link has expired, or it was already used — some email programs open links automatically, which uses them up.</p>
           <EmailAndCodeFallback onVerify={handleRecoveryVerify} />
+          <a href="/login/mfa" className={`${secondaryButtonClass} block text-center`}>Back to sign in</a>
         </div>
       </div>
     );

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { emailConfirmSupabase } from '@/lib/emailConfirmSupabaseClient';
-import { primaryButtonClass, bodyTextClass, cardClass } from '@/components/auth/CodeEntryScreen';
+import { primaryButtonClass, secondaryButtonClass, bodyTextClass, cardClass } from '@/components/auth/CodeEntryScreen';
 import { EmailAndCodeFallback } from '@/components/auth/EmailAndCodeFallback';
 import { MfaEnrollmentFlow, type MfaEnrollmentOutcome } from '@/components/auth/MfaEnrollmentFlow';
 
@@ -84,10 +84,10 @@ export default function SetupMfaPage() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8 dark:bg-gray-900">
         <div className={cardClass}>
-          <h2 className="text-center text-xl font-bold text-gray-900 dark:text-gray-100">Link expired</h2>
-          <p className={bodyTextClass}>This confirmation link is invalid or has expired.</p>
-          <a href="/login" className={`${primaryButtonClass} block text-center`}>Back to sign in</a>
+          <h2 className="text-center text-xl font-bold text-gray-900 dark:text-gray-100">That link has already been used</h2>
+          <p className={bodyTextClass}>The link has expired, or it was already used — some email programs open links automatically, which uses them up.</p>
           <EmailAndCodeFallback onVerify={handleRecoveryVerify} />
+          <a href="/login" className={`${secondaryButtonClass} block text-center`}>Back to sign in</a>
         </div>
       </div>
     );
