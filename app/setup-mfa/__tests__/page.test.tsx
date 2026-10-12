@@ -210,6 +210,21 @@ describe('SetupMfaPage', () => {
       expect(await screen.findByRole('link', { name: /continue/i })).toHaveAttribute('href', '/app');
     });
 
+    it('explains what to check when the typed code is rejected, instead of Supabase\'s raw message', async () => {
+      mockChallengeAndVerify.mockResolvedValue({ error: { message: 'Invalid TOTP code entered', code: 'mfa_verification_failed' } });
+      await signIn();
+      await screen.findByTestId('qrcode');
+
+      fireEvent.change(screen.getByLabelText(/6-digit code/i), { target: { value: '000000' } });
+      fireEvent.click(screen.getByRole('button', { name: /verify and continue/i }));
+
+      const alert = await screen.findByRole('alert');
+      expect(alert).toHaveTextContent(/newest "AFJ Campaign App" entry/);
+      expect(alert).toHaveTextContent(/date and time/i);
+      expect(alert).not.toHaveTextContent(/TOTP/);
+      expect(global.fetch).not.toHaveBeenCalledWith('/api/auth/complete-mfa-setup', expect.anything());
+    });
+
     it('cancelling signs out and shows a "no problem" screen', async () => {
       await signIn();
 

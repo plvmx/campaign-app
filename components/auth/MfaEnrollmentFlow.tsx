@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import QRCode from 'react-qr-code';
 import { emailConfirmSupabase } from '@/lib/emailConfirmSupabaseClient';
+import { describeMfaVerifyError } from '@/lib/mfaErrors';
 import { CodeEntryScreen, bodyTextClass } from '@/components/auth/CodeEntryScreen';
 
 // Bounds how long the real-identity session (proven via the magic link) can
@@ -183,7 +184,7 @@ export function MfaEnrollmentFlow({
     const { error: verifyError } = await emailConfirmSupabase.auth.mfa.challengeAndVerify({ factorId: stepUpFactorId, code: stepUpCode });
     setIsBusy(false);
     if (verifyError) {
-      setError(verifyError.message);
+      setError(describeMfaVerifyError(verifyError));
       return;
     }
     // The existing verified factor already satisfies MFA for this account —
@@ -198,7 +199,7 @@ export function MfaEnrollmentFlow({
     const { error: verifyError } = await emailConfirmSupabase.auth.mfa.challengeAndVerify({ factorId: totpFactorId, code: totpCode });
     setIsBusy(false);
     if (verifyError) {
-      setError(verifyError.message);
+      setError(describeMfaVerifyError(verifyError));
       return;
     }
     await finishEnrollment();
@@ -237,7 +238,7 @@ export function MfaEnrollmentFlow({
   return (
     <CodeEntryScreen
       title="Authenticator app"
-      description="You need a free authenticator app on your phone — for example Google Authenticator or Microsoft Authenticator (install one from your phone's app store first if you don't have one). Open it, choose to add an account or scan a QR code, scan the code below, then type the 6-digit number it shows."
+      description="You need a free authenticator app on your phone — for example Google Authenticator or Microsoft Authenticator (install one from your phone's app store first if you don't have one). Open it, choose to add an account or scan a QR code, scan the code below, then type the 6-digit number it shows. If you set up AFJ in your app on an earlier try, delete that old entry first — only the one from this page will work."
       code={totpCode}
       onCodeChange={setTotpCode}
       onVerify={handleVerifyTotp}
