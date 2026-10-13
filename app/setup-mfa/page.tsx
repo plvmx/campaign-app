@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { emailConfirmSupabase } from '@/lib/emailConfirmSupabaseClient';
-import { primaryButtonClass, secondaryButtonClass, bodyTextClass, cardClass } from '@/components/auth/CodeEntryScreen';
+import { primaryButtonClass, secondaryButtonClass, bodyTextClass, cardClass, headingClass } from '@/components/auth/CodeEntryScreen';
 import { EmailAndCodeFallback } from '@/components/auth/EmailAndCodeFallback';
 import { MfaEnrollmentFlow, type MfaEnrollmentOutcome } from '@/components/auth/MfaEnrollmentFlow';
 import { TapToContinue } from '@/components/auth/TapToContinue';
@@ -109,7 +109,7 @@ export default function SetupMfaPage() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8 dark:bg-gray-900">
         <div className={cardClass}>
-          <h2 className="text-center text-xl font-bold text-gray-900 dark:text-gray-100">Signing you in…</h2>
+          <h2 className={headingClass}>Signing you in…</h2>
         </div>
       </div>
     );
@@ -137,7 +137,7 @@ export default function SetupMfaPage() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8 dark:bg-gray-900">
         <div className={cardClass}>
-          <h2 className="text-center text-xl font-bold text-gray-900 dark:text-gray-100">That link has already been used</h2>
+          <h2 className={headingClass}>That link has already been used</h2>
           <p className={bodyTextClass}>The link has expired, or it was already used — some email programs open links automatically, which uses them up.</p>
           <EmailAndCodeFallback onVerify={handleRecoveryVerify} />
           <a href="/login" className={`${secondaryButtonClass} block text-center`}>Back to sign in</a>
@@ -151,7 +151,7 @@ export default function SetupMfaPage() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8 dark:bg-gray-900">
         <div className={cardClass}>
-          <h2 className="text-center text-xl font-bold text-gray-900 dark:text-gray-100">Two-factor authentication was not set up</h2>
+          <h2 className={headingClass}>Two-factor authentication was not set up</h2>
           <p className={bodyTextClass}>Nothing has been changed. You can try again any time — just sign in and choose &quot;Set up now&quot; when asked.</p>
           <a href="/login" className={`${primaryButtonClass} block text-center`}>Back to sign in</a>
         </div>
@@ -163,7 +163,7 @@ export default function SetupMfaPage() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8 dark:bg-gray-900">
         <div className={cardClass}>
-          <h2 className="text-center text-xl font-bold text-gray-900 dark:text-gray-100">Two-factor authentication is set up</h2>
+          <h2 className={headingClass}>Two-factor authentication is set up</h2>
           <p className={bodyTextClass}>You&apos;re all set — no further action needed today.</p>
           <a href="/app" className={`${primaryButtonClass} block text-center`}>Continue</a>
         </div>

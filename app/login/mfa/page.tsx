@@ -3,7 +3,7 @@
 import { useEffect, useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
-import { cardClass, bodyTextClass, primaryButtonClass, inputClass, labelClass } from '@/components/auth/CodeEntryScreen';
+import { cardClass, bodyTextClass, primaryButtonClass, secondaryButtonClass, inputClass, labelClass, headingClass } from '@/components/auth/CodeEntryScreen';
 import { InlineCodeFallback } from '@/components/auth/InlineCodeFallback';
 import { GetHelp } from '@/components/auth/GetHelp';
 
@@ -90,7 +90,7 @@ export default function LoginMfaPage() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8 dark:bg-gray-900">
         <div className={cardClass}>
-          <h2 className="text-center text-xl font-bold text-gray-900 dark:text-gray-100">Checking sign-in status…</h2>
+          <h2 className={headingClass}>Checking sign-in status…</h2>
         </div>
       </div>
     );
@@ -99,7 +99,7 @@ export default function LoginMfaPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8 dark:bg-gray-900">
       <div className={cardClass}>
-        <h2 className="text-center text-xl font-bold text-gray-900 dark:text-gray-100">Sign in with email</h2>
+        <h2 className={headingClass}>Sign in with email</h2>
         {sent ? (
           <div className="space-y-4">
             <p className={bodyTextClass}>
@@ -130,7 +130,7 @@ export default function LoginMfaPage() {
         {/* ?mode=mobile bypasses /login's own "prefers email+MFA" redirect
             just this once, without clearing that remembered preference —
             see app/login/page.tsx's checkExistingSession. */}
-        <a href="/login?mode=mobile" className="block text-center text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400">
+        <a href="/login?mode=mobile" className={`${secondaryButtonClass} block text-center`}>
           ← Back to mobile + name sign in
         </a>
       </div>

@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { getErrorMessage } from '@/lib/errorUtils';
 import { startTwoFactorSignIn } from '@/lib/twoFactorSetup';
 import { GetHelp } from '@/components/auth/GetHelp';
-import { primaryButtonClass, bodyTextClass, errorBannerClass } from '@/components/auth/CodeEntryScreen';
+import { primaryButtonClass, bodyTextClass, errorBannerClass, headingClass } from '@/components/auth/CodeEntryScreen';
 
 /**
  * Wraps any screen that shows other people's personal details (names, mobile
@@ -60,8 +60,8 @@ export default function RequireTwoFactorForMemberDetails({ children }: { childre
 
   return (
     <MobileLayout>
-      <div className="mx-auto max-w-md space-y-4 p-4">
-        <h1 className="text-center text-xl font-bold text-gray-900 dark:text-gray-100">Extra security needed</h1>
+      <div className="mx-auto max-w-xl space-y-6 p-4">
+        <h1 className={headingClass}>Extra security needed</h1>
         <p className={bodyTextClass}>
           To protect the personal details of people who register interest, you need two-factor authentication (a code from an
           authenticator app on your phone) before you can see them. It takes about two minutes to set up.
