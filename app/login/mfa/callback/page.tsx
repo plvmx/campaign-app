@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
-import { completeLeaderAuthSignIn, signOutClearingAccess, PREFERS_EMAIL_MFA_LOGIN_KEY, type AuthedLeaderRow } from '@/lib/auth';
+import { rememberEmailLogin } from '@/lib/emailLoginPreference';
+import { completeLeaderAuthSignIn, signOutClearingAccess, type AuthedLeaderRow } from '@/lib/auth';
 import { useUser } from '@/contexts/UserContext';
 import { getLeaderRoleLabel } from '@/lib/leaderRoleLabel';
 import { CodeEntryScreen, cardClass, bodyTextClass, primaryButtonClass, secondaryButtonClass, errorBannerClass } from '@/components/auth/CodeEntryScreen';
@@ -81,13 +82,11 @@ export default function LoginMfaCallbackPage() {
     }
     // A signed-in leader must not later be shown someone else's remembered /login step.
     clearPendingLoginStep();
-    // Remember on this device that this leader signs in via email + MFA, so
-    // app/login/page.tsx can skip straight to /login/mfa next time instead
-    // of showing the mobile+name form first (there's no session yet at that
-    // point to detect this any other way).
-    try {
-      localStorage.setItem(PREFERS_EMAIL_MFA_LOGIN_KEY, '1');
-    } catch { /* ignore (e.g. private browsing) */ }
+    // Remember on this device that someone signs in via email + MFA, so
+    // app/login/page.tsx can skip straight to /login/mfa where that makes
+    // sense (always for an admin; only from "extra security needed" for a plain
+    // leader — see lib/emailLoginPreference.ts).
+    rememberEmailLogin(row.admin);
     // Reload UserContext so it reads the profile just written, before
     // navigating — avoids a race where onAuthStateChange's own reload fires
     // before the server's write is visible (same pattern app/login/page.tsx uses).
