@@ -3,7 +3,8 @@
 import { useState, FormEvent, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { getSession, validateStateLeader, completeSignIn, PREFERS_EMAIL_MFA_LOGIN_KEY, type StateLeaderMatch } from '@/lib/auth';
+import { shouldSkipToEmailLogin } from '@/lib/emailLoginPreference';
+import { getSession, validateStateLeader, completeSignIn, type StateLeaderMatch } from '@/lib/auth';
 import { emailConfirmSupabase } from '@/lib/emailConfirmSupabaseClient';
 import { getErrorMessage } from '@/lib/errorUtils';
 import { isValidEmail } from '@/lib/validation';
@@ -102,19 +103,21 @@ export default function LoginPage() {
           return;
         }
         if (pending) clearPendingLoginStep();
-        if (new URLSearchParams(window.location.search).get('require2fa') === '1') setRequireTwoFactor(true);
+        const requires2fa = new URLSearchParams(window.location.search).get('require2fa') === '1';
+        if (requires2fa) setRequireTwoFactor(true);
         if (session) {
           router.push('/app');
           return;
         }
         // No active session, but this device has signed in via email + MFA
-        // before — skip the mobile+name form and go straight there instead
-        // of making them click through to it every time. ?mode=mobile (set
+        // before — for an admin (who can't use mobile+name), or a plain
+        // leader sent here by "extra security needed", skip the mobile+name
+        // form and go straight there (lib/emailLoginPreference.ts). ?mode=mobile (set
         // by /login/mfa's own "back to mobile+name" link) bypasses this
         // just once, without touching the remembered preference — without
         // it, that link would otherwise bounce straight back here forever.
         const skipToMobileForm = new URLSearchParams(window.location.search).get('mode') === 'mobile';
-        if (!skipToMobileForm && localStorage.getItem(PREFERS_EMAIL_MFA_LOGIN_KEY)) {
+        if (!skipToMobileForm && shouldSkipToEmailLogin({ requireTwoFactor: requires2fa })) {
           router.push('/login/mfa');
           return;
         }
