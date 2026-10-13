@@ -268,7 +268,7 @@ export function MfaEnrollmentFlow({
   return (
     <CodeEntryScreen
       title="Authenticator app"
-      description="You need a free authenticator app on your phone — for example Google Authenticator or Microsoft Authenticator (install one from your phone's app store first if you don't have one). On this phone, tap the Add to my authenticator app button below; on a computer, scan the code with the app instead. Then type the 6-digit number the app shows. If you set up AFJ in your app on an earlier try, delete that old entry first — only the one from this page will work."
+      description="You need a free authenticator app on your phone — for example Google Authenticator or Microsoft Authenticator (install one from your phone's app store first if you don't have one). Add AFJ to the app using ONE of the two ways below, then type the 6-digit number the app shows. If you set up AFJ in your app on an earlier try, delete that old entry first — only the one from this page will work."
       code={totpCode}
       onCodeChange={setTotpCode}
       onVerify={handleVerifyTotp}
@@ -292,17 +292,32 @@ export function MfaEnrollmentFlow({
         </ul>
       </details>
       {totpUri && (
-        <a href={totpUri} className={`${primaryButtonClass} block text-center`}>Add to my authenticator app</a>
+        <div className="space-y-3 rounded-md border-2 border-gray-800 p-3 dark:border-gray-600">
+          <p className="text-center font-bold text-gray-900 dark:text-gray-100">Way 1 — on your phone</p>
+          <p className={bodyTextClass}>
+            Use this if you are looking at this page <strong>on your phone</strong>. <strong>This button only works on a phone</strong> — it
+            does nothing on a computer.
+          </p>
+          <a href={totpUri} className={`${primaryButtonClass} block text-center`}>Add to my authenticator app</a>
+        </div>
       )}
       {totpUri && (
-        <div className="mx-auto w-fit rounded-md border-2 border-gray-800 bg-white p-4 dark:border-gray-600">
-          <QRCode value={totpUri} size={200} />
+        <div className="space-y-3 rounded-md border-2 border-gray-800 p-3 dark:border-gray-600">
+          <p className="text-center font-bold text-gray-900 dark:text-gray-100">Way 2 — on a computer: scan the square code</p>
+          <p className={bodyTextClass}>
+            Use this if you are looking at this page <strong>on a computer</strong>. Open the authenticator app on your phone, choose
+            Add (the + button), then <strong>Scan a QR code</strong> and point your phone&apos;s camera at the square below. (A code
+            shown on your phone&apos;s own screen can&apos;t be scanned — use Way 1 there.)
+          </p>
+          <div className="mx-auto w-fit rounded-md border-2 border-gray-800 bg-white p-4 dark:border-gray-600">
+            <QRCode value={totpUri} size={200} />
+          </div>
         </div>
       )}
       {totpSecret && (
         <div className="space-y-2">
           <p className={bodyTextClass}>
-            Neither working? In the app choose &quot;enter a setup key&quot;, pick <strong>Time based</strong>, and use this key:<br />
+            Neither way working? In the app choose &quot;enter a setup key&quot;, pick <strong>Time based</strong>, and use this key:<br />
             <code className="mt-1 inline-block break-all rounded bg-gray-200 px-2 py-1 text-gray-900 dark:bg-gray-800 dark:text-gray-100">{totpSecret}</code>
           </p>
           <CopyKeyButton secret={totpSecret} />

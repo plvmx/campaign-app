@@ -146,6 +146,17 @@ describe('MfaEnrollmentFlow — setting up on the phone you are using', () => {
   });
 });
 
+describe('MfaEnrollmentFlow — phone button versus computer QR code', () => {
+  it('labels the two ways, saying the button only works on a phone and a computer should scan the code', async () => {
+    render(<MfaEnrollmentFlow accessToken="tok" onDone={vi.fn()} />);
+    await screen.findByTestId('qrcode');
+    expect(screen.getByText(/way 1 — on your phone/i)).toBeInTheDocument();
+    expect(screen.getByText(/this button only works on a phone/i)).toBeInTheDocument();
+    expect(screen.getByText(/way 2 — on a computer: scan the square code/i)).toBeInTheDocument();
+    expect(screen.getByText(/scan a qr code/i)).toBeInTheDocument();
+  });
+});
+
 describe('MfaEnrollmentFlow — guidance for people who are not computer-literate', () => {
   it('shows where in the process they are, and how to get help', async () => {
     render(<MfaEnrollmentFlow accessToken="tok" onDone={vi.fn()} />);
