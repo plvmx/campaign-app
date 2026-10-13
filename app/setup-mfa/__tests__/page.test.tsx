@@ -124,7 +124,7 @@ describe('SetupMfaPage', () => {
     await act(async () => { authChangeCallback!('SIGNED_IN', SESSION); });
     expect(screen.getByRole('heading', { name: /authenticator app/i })).toBeInTheDocument();
 
-    await act(async () => { await vi.advanceTimersByTimeAsync(5 * 60 * 1000); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(15 * 60 * 1000); });
 
     expect(mockSignOut).toHaveBeenCalled();
     expect(screen.getByText(/that link has already been used/i)).toBeInTheDocument();
