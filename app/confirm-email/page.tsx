@@ -6,6 +6,8 @@ import { EmailAndCodeFallback } from '@/components/auth/EmailAndCodeFallback';
 import { primaryButtonClass, secondaryButtonClass, bodyTextClass, cardClass } from '@/components/auth/CodeEntryScreen';
 import { MfaEnrollmentFlow, MFA_ABANDON_AFTER_MS, type MfaEnrollmentOutcome } from '@/components/auth/MfaEnrollmentFlow';
 import { TapToContinue } from '@/components/auth/TapToContinue';
+import { GetHelp } from '@/components/auth/GetHelp';
+import { SetupStep } from '@/components/auth/SetupStep';
 import { readTokenHashFromUrl, stripTokenHashFromUrl } from '@/lib/magicLinkToken';
 
 const GIVE_UP_AFTER_MS = 8000;
@@ -185,6 +187,7 @@ export default function ConfirmEmailPage() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8 dark:bg-gray-900">
         <div className={cardClass}>
+          <SetupStep n={1} label="Confirm your email" />
           <TapToContinue
             title="One last step"
             description="Tap the button below to finish confirming your email address."
@@ -192,6 +195,7 @@ export default function ConfirmEmailPage() {
             isBusy={false}
             onTap={handleTap}
           />
+          <GetHelp step="the link from my email (confirming my email)" />
         </div>
       </div>
     );
@@ -253,6 +257,7 @@ export default function ConfirmEmailPage() {
               <>
                 <EmailAndCodeFallback onVerify={handleRecoveryVerify} />
                 <a href="/login" className={`${secondaryButtonClass} block text-center`}>Back to sign in</a>
+                <GetHelp step="the link in my email had already been used (confirming my email)" />
               </>
             )}
           </>

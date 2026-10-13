@@ -65,7 +65,7 @@ export function EmailAndCodeFallback({ onVerify }: { onVerify: (email: string, c
         />
       </div>
       <div>
-        <label htmlFor="recovery-code" className={labelClass}>Code from the email (shown under CONFIRM NOW)</label>
+        <label htmlFor="recovery-code" className={labelClass}>Code from the email (the long number under CONFIRM NOW)</label>
         <input
           id="recovery-code"
           inputMode="numeric"

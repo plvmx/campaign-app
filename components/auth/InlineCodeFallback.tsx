@@ -56,7 +56,7 @@ export function InlineCodeFallback({ onVerify }: { onVerify: (code: string) => P
   return (
     <div className="space-y-2">
       <div>
-        <label htmlFor="inline-code-fallback" className={labelClass}>Code from the email</label>
+        <label htmlFor="inline-code-fallback" className={labelClass}>Code from the email (the long number under CONFIRM NOW)</label>
         <input
           id="inline-code-fallback"
           inputMode="numeric"

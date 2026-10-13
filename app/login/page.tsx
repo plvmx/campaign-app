@@ -15,6 +15,8 @@ import { getCampaignInterestForLeader } from '@/lib/services/campaignInterestSer
 import { isRecognizedAdminStatus } from '@/lib/campaignFilter';
 import { AUSTRALIAN_STATE_NAMES } from '@/lib/constants';
 import { InlineCodeFallback } from '@/components/auth/InlineCodeFallback';
+import { GetHelp } from '@/components/auth/GetHelp';
+import { SetupStep } from '@/components/auth/SetupStep';
 import { getAdminLoginGate, type AdminLoginGate } from '@/lib/adminLoginGate';
 import { clearPendingLoginStep, readPendingLoginStep, savePendingLoginStep } from '@/lib/pendingLoginStep';
 import type { Campaign } from '@/lib/types';
@@ -485,6 +487,7 @@ export default function LoginPage() {
       <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8 dark:bg-gray-900">
         <div className={cardClass}>
           <div className="space-y-4">
+            <SetupStep n={3} label="Sign in" />
             <h2 className="text-center text-xl font-bold text-gray-900 dark:text-gray-100">
               Sign in with your email
             </h2>
@@ -503,6 +506,7 @@ export default function LoginPage() {
             >
               Back
             </button>
+            <GetHelp step="signing in with my email" who={`${adminSignInMatch.leader} (${adminSignInMatch.state})`} />
           </div>
         </div>
       </div>
@@ -513,6 +517,7 @@ export default function LoginPage() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8 dark:bg-gray-900">
         <div className={cardClass}>
+          <SetupStep n={1} label="Confirm your email" />
           {emailStep.phase === 'edit' ? (
             <div className="space-y-4">
               <h2 className="text-center text-xl font-bold text-gray-900 dark:text-gray-100">
@@ -594,6 +599,7 @@ export default function LoginPage() {
               )}
             </div>
           )}
+          <GetHelp step="confirming my email" who={`${emailStep.match.leader} (${emailStep.match.state})`} />
         </div>
       </div>
     );
@@ -603,6 +609,7 @@ export default function LoginPage() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8 dark:bg-gray-900">
         <div className={cardClass}>
+          <SetupStep n={2} label="Set up two-factor authentication" />
           {mfaStep.phase === 'offer' ? (
             <div className="space-y-4">
               <h2 className="text-center text-xl font-bold text-gray-900 dark:text-gray-100">
@@ -668,6 +675,7 @@ export default function LoginPage() {
               )}
             </div>
           )}
+          <GetHelp step="setting up two-factor authentication" who={`${mfaStep.match.leader} (${mfaStep.match.state})`} />
         </div>
       </div>
     );
