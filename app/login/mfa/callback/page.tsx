@@ -7,7 +7,7 @@ import { rememberEmailLogin } from '@/lib/emailLoginPreference';
 import { completeLeaderAuthSignIn, signOutClearingAccess, type AuthedLeaderRow } from '@/lib/auth';
 import { useUser } from '@/contexts/UserContext';
 import { getLeaderRoleLabel } from '@/lib/leaderRoleLabel';
-import { CodeEntryScreen, cardClass, bodyTextClass, primaryButtonClass, secondaryButtonClass, errorBannerClass } from '@/components/auth/CodeEntryScreen';
+import { CodeEntryScreen, cardClass, bodyTextClass, primaryButtonClass, secondaryButtonClass, errorBannerClass, headingClass } from '@/components/auth/CodeEntryScreen';
 import { getErrorMessage } from '@/lib/errorUtils';
 import { describeMfaVerifyError } from '@/lib/mfaErrors';
 import { EmailAndCodeFallback } from '@/components/auth/EmailAndCodeFallback';
@@ -213,7 +213,7 @@ export default function LoginMfaCallbackPage() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8 dark:bg-gray-900">
         <div className={cardClass}>
-          <h2 className="text-center text-xl font-bold text-gray-900 dark:text-gray-100">Signing you in…</h2>
+          <h2 className={headingClass}>Signing you in…</h2>
         </div>
       </div>
     );
@@ -239,7 +239,7 @@ export default function LoginMfaCallbackPage() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8 dark:bg-gray-900">
         <div className={cardClass}>
-          <h2 className="text-center text-xl font-bold text-gray-900 dark:text-gray-100">That link has already been used</h2>
+          <h2 className={headingClass}>That link has already been used</h2>
           <p className={bodyTextClass}>The link has expired, or it was already used — some email programs open links automatically, which uses them up.</p>
           <EmailAndCodeFallback onVerify={handleRecoveryVerify} />
           <a href="/login/mfa" className={`${secondaryButtonClass} block text-center`}>Back to sign in</a>
@@ -253,7 +253,7 @@ export default function LoginMfaCallbackPage() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8 dark:bg-gray-900">
         <div className={cardClass}>
-          <h2 className="text-center text-xl font-bold text-gray-900 dark:text-gray-100">Not set up yet</h2>
+          <h2 className={headingClass}>Not set up yet</h2>
           <p className={bodyTextClass}>{NOT_ENROLLED_MESSAGE}</p>
           <a href="/login" className={`${primaryButtonClass} block text-center`}>Back to sign in</a>
         </div>
@@ -282,7 +282,7 @@ export default function LoginMfaCallbackPage() {
 
         {screen === 'role-picker' && (
           <div className="space-y-4">
-            <h2 className="text-center text-xl font-bold text-gray-900 dark:text-gray-100">Which role are you signing in as?</h2>
+            <h2 className={headingClass}>Which role are you signing in as?</h2>
             <p className={bodyTextClass}>You have more than one role on file.</p>
             {error && <p role="alert" className={errorBannerClass}>{error}</p>}
             <div className="flex flex-col gap-3">

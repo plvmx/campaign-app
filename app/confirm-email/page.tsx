@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { emailConfirmSupabase } from '@/lib/emailConfirmSupabaseClient';
 import { EmailAndCodeFallback } from '@/components/auth/EmailAndCodeFallback';
-import { primaryButtonClass, secondaryButtonClass, bodyTextClass, cardClass } from '@/components/auth/CodeEntryScreen';
+import { primaryButtonClass, secondaryButtonClass, bodyTextClass, cardClass, headingClass } from '@/components/auth/CodeEntryScreen';
 import { MfaEnrollmentFlow, MFA_ABANDON_AFTER_MS, type MfaEnrollmentOutcome } from '@/components/auth/MfaEnrollmentFlow';
 import { TapToContinue } from '@/components/auth/TapToContinue';
 import { GetHelp } from '@/components/auth/GetHelp';
@@ -223,7 +223,7 @@ export default function ConfirmEmailPage() {
           <MfaEnrollmentFlow accessToken={accessToken} onDone={handleEnrollmentDone} />
         ) : (
           <>
-            <h2 className="text-center text-xl font-bold text-gray-900 dark:text-gray-100">
+            <h2 className={headingClass}>
               {status === 'confirmed'
                 ? 'Email confirmed'
                 : status === 'done'

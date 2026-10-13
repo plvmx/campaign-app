@@ -16,6 +16,7 @@ import { hasCampaignInterestForLeader } from '@/lib/services/campaignInterestSer
 import { isRecognizedAdminStatus } from '@/lib/campaignFilter';
 import { AUSTRALIAN_STATE_NAMES } from '@/lib/constants';
 import { InlineCodeFallback } from '@/components/auth/InlineCodeFallback';
+import { cardClass as setupCardClass, bodyTextClass, headingClass, errorBannerClass, primaryButtonClass, secondaryButtonClass, inputClass } from '@/components/auth/CodeEntryScreen';
 import { GetHelp } from '@/components/auth/GetHelp';
 import { SetupStep } from '@/components/auth/SetupStep';
 import { getAdminLoginGate, type AdminLoginGate } from '@/lib/adminLoginGate';
@@ -457,26 +458,26 @@ export default function LoginPage() {
   if (adminSignInMatch) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8 dark:bg-gray-900">
-        <div className={cardClass}>
-          <div className="space-y-4">
+        <div className={setupCardClass}>
+          <div className="space-y-6">
             <SetupStep n={3} label="Sign in" />
-            <h2 className="text-center text-xl font-bold text-gray-900 dark:text-gray-100">
+            <h2 className={headingClass}>
               Sign in with your email
             </h2>
-            <p className="text-center text-sm text-gray-600 dark:text-gray-400">
+            <p className={bodyTextClass}>
               {isRecognizedAdminStatus(adminSignInMatch.admin)
                 ? 'Admin accounts sign in with your email address and a code from your authenticator app — not your mobile number.'
                 : "To see other people's personal details, sign in with your email address and a code from your authenticator app."}
             </p>
             <button
               onClick={() => router.push('/login/mfa')}
-              className="w-full rounded-md bg-blue-600 px-4 py-3 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
+              className={primaryButtonClass}
             >
               Sign in with email
             </button>
             <button
               onClick={() => setAdminSignInMatch(null)}
-              className="w-full text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 disabled:opacity-50"
+              className={secondaryButtonClass}
             >
               Back
             </button>
@@ -490,20 +491,20 @@ export default function LoginPage() {
   if (emailStep) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8 dark:bg-gray-900">
-        <div className={cardClass}>
+        <div className={setupCardClass}>
           <SetupStep n={1} label="Confirm your email" />
           {emailStep.phase === 'edit' ? (
-            <div className="space-y-4">
-              <h2 className="text-center text-xl font-bold text-gray-900 dark:text-gray-100">
+            <div className="space-y-6">
+              <h2 className={headingClass}>
                 Add your email
               </h2>
-              <p className="text-center text-sm text-gray-600 dark:text-gray-400">
+              <p className={bodyTextClass}>
                 {isRecognizedAdminStatus(emailStep.match.admin)
                   ? 'Admin accounts must use two-factor authentication, which starts with confirming your email address.'
                   : "To see other people's personal details you need two-factor authentication, which starts with confirming your email address."}
               </p>
               {emailStepError && (
-                <div className="rounded-md bg-red-50 p-3 text-sm text-red-800 dark:bg-red-900/20 dark:text-red-200">
+                <div className={errorBannerClass}>
                   {emailStepError}
                 </div>
               )}
@@ -512,35 +513,35 @@ export default function LoginPage() {
                 autoComplete="email"
                 value={emailStep.value}
                 onChange={(e) => setEmailStep({ ...emailStep, value: e.target.value })}
-                className="mt-1 block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
+                className={inputClass}
                 placeholder="you@example.com"
               />
               <button
                 onClick={handleEmailContinue}
                 disabled={emailStepSubmitting}
-                className="w-full rounded-md bg-blue-600 px-4 py-3 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 border-2 border-gray-800 dark:border-gray-600"
+                className={primaryButtonClass}
               >
                 {emailStepSubmitting ? 'Sending…' : 'Continue'}
               </button>
             </div>
           ) : (
-            <div className="space-y-4">
-              <h2 className="text-center text-xl font-bold text-gray-900 dark:text-gray-100">
+            <div className="space-y-6">
+              <h2 className={headingClass}>
                 Check your inbox
               </h2>
-              <p className="text-center text-sm text-gray-600 dark:text-gray-400">
+              <p className={bodyTextClass}>
                 We have sent an email to <strong>{emailStep.value}</strong>. Open that email and click the <strong>CONFIRM NOW</strong> link in it to confirm your email address. If you can&apos;t see it, check your Junk or Spam folder.
               </p>
               <InlineCodeFallback onVerify={handleEmailCodeVerify} />
               {emailStepError && (
-                <div className="rounded-md bg-red-50 p-3 text-sm text-red-800 dark:bg-red-900/20 dark:text-red-200">
+                <div className={errorBannerClass}>
                   {emailStepError}
                 </div>
               )}
               <button
                 onClick={handleAdminProgressCheck}
                 disabled={emailStepSubmitting}
-                className="w-full rounded-md bg-blue-600 px-4 py-3 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 border-2 border-gray-800 dark:border-gray-600"
+                className={primaryButtonClass}
               >
                 {emailStepSubmitting ? 'Checking…' : "I've confirmed my email — continue"}
               </button>
@@ -555,47 +556,47 @@ export default function LoginPage() {
   if (mfaStep) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8 dark:bg-gray-900">
-        <div className={cardClass}>
+        <div className={setupCardClass}>
           <SetupStep n={2} label="Set up two-factor authentication" />
           {mfaStep.phase === 'offer' ? (
-            <div className="space-y-4">
-              <h2 className="text-center text-xl font-bold text-gray-900 dark:text-gray-100">
+            <div className="space-y-6">
+              <h2 className={headingClass}>
                 Two-factor authentication is required
               </h2>
-              <p className="text-center text-sm text-gray-600 dark:text-gray-400">
+              <p className={bodyTextClass}>
                 {isRecognizedAdminStatus(mfaStep.match.admin)
                   ? 'Admin accounts must use two-factor authentication. '
                   : "To see other people's personal details you need two-factor authentication. "}
                 You will need a free authenticator app on your phone, such as Google Authenticator or Microsoft Authenticator.
               </p>
               {mfaStepError && (
-                <div className="rounded-md bg-red-50 p-3 text-sm text-red-800 dark:bg-red-900/20 dark:text-red-200">
+                <div className={errorBannerClass}>
                   {mfaStepError}
                 </div>
               )}
               <button
                 onClick={handleMfaContinue}
                 disabled={mfaStepSubmitting}
-                className="w-full rounded-md bg-blue-600 px-4 py-3 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 border-2 border-gray-800 dark:border-gray-600"
+                className={primaryButtonClass}
               >
                 {mfaStepSubmitting ? 'Sending…' : 'Set up now'}
               </button>
             </div>
           ) : (
-            <div className="space-y-4">
-              <h2 className="text-center text-xl font-bold text-gray-900 dark:text-gray-100">
+            <div className="space-y-6">
+              <h2 className={headingClass}>
                 Check your inbox
               </h2>
-              <p className="text-center text-sm text-gray-600 dark:text-gray-400">
+              <p className={bodyTextClass}>
                 We have sent an email to your email address. Open that email and click the <strong>CONFIRM NOW</strong> link in it to continue setting up your authenticator app. If you can&apos;t see it, check your Junk or Spam folder.
               </p>
               <InlineCodeFallback onVerify={handleMfaCodeVerify} />
-              <p className="text-center text-sm text-gray-600 dark:text-gray-400">
+              <p className={bodyTextClass}>
                 When you have finished setting up two-factor authentication, come back here and sign in with your email.
               </p>
               <button
                 onClick={() => router.push('/login/mfa')}
-                className="w-full rounded-md bg-blue-600 px-4 py-3 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
+                className={primaryButtonClass}
               >
                 Sign in with email
               </button>
@@ -799,7 +800,7 @@ export default function LoginPage() {
               Enter your mobile number and first name<br />to sign in
             </p>
             {requireTwoFactor && (
-              <p className="rounded-md bg-blue-50 p-3 text-center text-sm text-blue-900 dark:bg-blue-900/20 dark:text-blue-200">
+              <p className="rounded-md bg-blue-50 p-4 text-center text-lg font-medium text-blue-900 dark:bg-blue-900/20 dark:text-blue-200">
                 You will then be taken through two-factor authentication — needed to see other people&apos;s personal details.
               </p>
             )}
@@ -860,7 +861,7 @@ export default function LoginPage() {
                 stays the only option for everyone else. */}
             <a
               href="/login/mfa"
-              className="block text-center text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400"
+              className={`${secondaryButtonClass} block text-center`}
             >
               Already set up two-factor authentication? Sign in with email instead
             </a>

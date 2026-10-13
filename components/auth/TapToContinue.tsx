@@ -1,6 +1,6 @@
 'use client';
 
-import { bodyTextClass, primaryButtonClass } from '@/components/auth/CodeEntryScreen';
+import { bodyTextClass, headingClass, primaryButtonClass } from '@/components/auth/CodeEntryScreen';
 
 /**
  * The "tap to continue" step of a scanner-proof magic link (see
@@ -15,7 +15,7 @@ export function TapToContinue({
   buttonLabel,
   isBusy,
   onTap,
-  titleClassName = 'text-center text-xl font-bold text-gray-900 dark:text-gray-100',
+  titleClassName = headingClass,
   bodyClassName = bodyTextClass,
   buttonClassName = primaryButtonClass,
 }: {
@@ -29,7 +29,7 @@ export function TapToContinue({
   buttonClassName?: string;
 }) {
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <h2 className={titleClassName}>{title}</h2>
       <p className={bodyClassName}>{description}</p>
       <button onClick={onTap} disabled={isBusy} className={buttonClassName}>

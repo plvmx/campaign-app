@@ -5,7 +5,7 @@ import QRCode from 'react-qr-code';
 import { emailConfirmSupabase } from '@/lib/emailConfirmSupabaseClient';
 import { describeMfaVerifyError } from '@/lib/mfaErrors';
 import { clearPendingTotpEnrollment, readPendingTotpEnrollment, savePendingTotpEnrollment } from '@/lib/pendingTotpEnrollment';
-import { CodeEntryScreen, bodyTextClass, primaryButtonClass, secondaryButtonClass } from '@/components/auth/CodeEntryScreen';
+import { CodeEntryScreen, bodyTextClass, primaryButtonClass, secondaryButtonClass, headingClass } from '@/components/auth/CodeEntryScreen';
 import { GetHelp } from '@/components/auth/GetHelp';
 import { SetupStep } from '@/components/auth/SetupStep';
 import { AUTHENTICATOR_STORE_LINKS } from '@/lib/authenticatorApps';
@@ -244,7 +244,7 @@ export function MfaEnrollmentFlow({
   }
 
   if (screen === 'checking') {
-    return <h2 className="text-center text-xl font-bold text-gray-900 dark:text-gray-100">Getting ready…</h2>;
+    return <h2 className={headingClass}>Getting ready…</h2>;
   }
 
   if (screen === 'step-up') {
@@ -280,7 +280,7 @@ export function MfaEnrollmentFlow({
       stepBadge={<SetupStep n={2} label="Set up your authenticator app" />}
       help={<GetHelp />}
     >
-      <details className="rounded-md border-2 border-gray-300 p-3 text-sm text-gray-700 dark:border-gray-600 dark:text-gray-300">
+      <details className="rounded-md border-2 border-gray-300 p-4 text-lg text-gray-800 dark:border-gray-600 dark:text-gray-200">
         <summary className="cursor-pointer font-semibold">I don&apos;t have an authenticator app yet</summary>
         <p className="mt-2">Install one (free), then come back to this page:</p>
         <ul className="mt-2 list-disc space-y-1 pl-5">
@@ -292,7 +292,7 @@ export function MfaEnrollmentFlow({
         </ul>
       </details>
       {totpUri && (
-        <div className="space-y-3 rounded-md border-2 border-gray-800 p-3 dark:border-gray-600">
+        <div className="space-y-4 rounded-md border-2 border-gray-800 p-4 dark:border-gray-600">
           <p className="text-center font-bold text-gray-900 dark:text-gray-100">Way 1 — on your phone</p>
           <p className={bodyTextClass}>
             Use this if you are looking at this page <strong>on your phone</strong>. <strong>This button only works on a phone</strong> — it
@@ -302,7 +302,7 @@ export function MfaEnrollmentFlow({
         </div>
       )}
       {totpUri && (
-        <div className="space-y-3 rounded-md border-2 border-gray-800 p-3 dark:border-gray-600">
+        <div className="space-y-4 rounded-md border-2 border-gray-800 p-4 dark:border-gray-600">
           <p className="text-center font-bold text-gray-900 dark:text-gray-100">Way 2 — on a computer: scan the square code</p>
           <p className={bodyTextClass}>
             Use this if you are looking at this page <strong>on a computer</strong>. Open the authenticator app on your phone, choose
@@ -310,7 +310,7 @@ export function MfaEnrollmentFlow({
             shown on your phone&apos;s own screen can&apos;t be scanned — use Way 1 there.)
           </p>
           <div className="mx-auto w-fit rounded-md border-2 border-gray-800 bg-white p-4 dark:border-gray-600">
-            <QRCode value={totpUri} size={200} />
+            <QRCode value={totpUri} size={240} />
           </div>
         </div>
       )}
@@ -318,7 +318,7 @@ export function MfaEnrollmentFlow({
         <div className="space-y-2">
           <p className={bodyTextClass}>
             Neither way working? In the app choose &quot;enter a setup key&quot;, pick <strong>Time based</strong>, and use this key:<br />
-            <code className="mt-1 inline-block break-all rounded bg-gray-200 px-2 py-1 text-gray-900 dark:bg-gray-800 dark:text-gray-100">{totpSecret}</code>
+            <code className="mt-1 inline-block break-all rounded bg-gray-200 px-2 py-1 text-2xl text-gray-900 dark:bg-gray-800 dark:text-gray-100">{totpSecret}</code>
           </p>
           <CopyKeyButton secret={totpSecret} />
         </div>
