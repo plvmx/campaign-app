@@ -62,8 +62,13 @@ export default function TwoFactorGuidePage() {
 
       <Step n={3} title="Add AFJ to the app">
         <p>
-          On the app&apos;s setup screen, tap <strong>Add to my authenticator app</strong>. Your authenticator app should open and add
-          AFJ by itself.
+          <strong>On your phone:</strong> on the app&apos;s setup screen, tap <strong>Add to my authenticator app</strong>. Your
+          authenticator app should open and add AFJ by itself. (This button only works on a phone.)
+        </p>
+        <p>
+          <strong>On a computer:</strong> that button does nothing. Instead open the authenticator app on your phone, choose{' '}
+          <strong>Add</strong> (the + button), then <strong>Scan a QR code</strong>, and point your phone&apos;s camera at the square
+          code on the computer screen.
         </p>
         <p>If nothing happens, do this instead:</p>
         <ol className="list-decimal space-y-2 pl-6">
