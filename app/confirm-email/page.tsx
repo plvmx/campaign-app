@@ -195,7 +195,7 @@ export default function ConfirmEmailPage() {
             isBusy={false}
             onTap={handleTap}
           />
-          <GetHelp step="the link from my email (confirming my email)" />
+          <GetHelp />
         </div>
       </div>
     );
@@ -257,7 +257,7 @@ export default function ConfirmEmailPage() {
               <>
                 <EmailAndCodeFallback onVerify={handleRecoveryVerify} />
                 <a href="/login" className={`${secondaryButtonClass} block text-center`}>Back to sign in</a>
-                <GetHelp step="the link in my email had already been used (confirming my email)" />
+                <GetHelp />
               </>
             )}
           </>

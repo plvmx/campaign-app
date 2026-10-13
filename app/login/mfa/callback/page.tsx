@@ -243,7 +243,7 @@ export default function LoginMfaCallbackPage() {
           <p className={bodyTextClass}>The link has expired, or it was already used — some email programs open links automatically, which uses them up.</p>
           <EmailAndCodeFallback onVerify={handleRecoveryVerify} />
           <a href="/login/mfa" className={`${secondaryButtonClass} block text-center`}>Back to sign in</a>
-          <GetHelp step="the link in my email had already been used (signing in)" />
+          <GetHelp />
         </div>
       </div>
     );
@@ -276,7 +276,7 @@ export default function LoginMfaCallbackPage() {
             error={error}
             isBusy={isBusy}
             disabled={!factorId}
-            help={<GetHelp step="typing the 6-digit code from my authenticator app (signing in)" />}
+            help={<GetHelp />}
           />
         )}
 

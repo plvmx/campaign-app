@@ -480,7 +480,7 @@ export default function LoginPage() {
             >
               Back
             </button>
-            <GetHelp step="signing in with my email" who={`${adminSignInMatch.leader} (${adminSignInMatch.state})`} />
+            <GetHelp />
           </div>
         </div>
       </div>
@@ -546,7 +546,7 @@ export default function LoginPage() {
               </button>
             </div>
           )}
-          <GetHelp step="confirming my email" who={`${emailStep.match.leader} (${emailStep.match.state})`} />
+          <GetHelp />
         </div>
       </div>
     );
@@ -601,7 +601,7 @@ export default function LoginPage() {
               </button>
             </div>
           )}
-          <GetHelp step="setting up two-factor authentication" who={`${mfaStep.match.leader} (${mfaStep.match.state})`} />
+          <GetHelp />
         </div>
       </div>
     );

@@ -71,7 +71,7 @@ export default function RequireTwoFactorForMemberDetails({ children }: { childre
         <button onClick={handleContinue} disabled={busy} className={`${primaryButtonClass} disabled:opacity-50`}>
           {busy ? 'Please wait…' : 'Set up two-factor authentication'}
         </button>
-        <GetHelp step="setting up two-factor authentication to see member details" />
+        <GetHelp />
       </div>
     </MobileLayout>
   );
