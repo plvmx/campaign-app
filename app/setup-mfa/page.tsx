@@ -6,6 +6,8 @@ import { primaryButtonClass, secondaryButtonClass, bodyTextClass, cardClass } fr
 import { EmailAndCodeFallback } from '@/components/auth/EmailAndCodeFallback';
 import { MfaEnrollmentFlow, type MfaEnrollmentOutcome } from '@/components/auth/MfaEnrollmentFlow';
 import { TapToContinue } from '@/components/auth/TapToContinue';
+import { GetHelp } from '@/components/auth/GetHelp';
+import { SetupStep } from '@/components/auth/SetupStep';
 import { readTokenHashFromUrl, stripTokenHashFromUrl } from '@/lib/magicLinkToken';
 
 const GIVE_UP_AFTER_MS = 8000;
@@ -117,6 +119,7 @@ export default function SetupMfaPage() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8 dark:bg-gray-900">
         <div className={cardClass}>
+          <SetupStep n={2} label="Set up your authenticator app" />
           <TapToContinue
             title="One last step"
             description="Tap the button below to finish and carry on setting up your authenticator app."
@@ -124,6 +127,7 @@ export default function SetupMfaPage() {
             isBusy={false}
             onTap={handleTap}
           />
+          <GetHelp step="the link from my email (setting up my authenticator app)" />
         </div>
       </div>
     );
@@ -137,6 +141,7 @@ export default function SetupMfaPage() {
           <p className={bodyTextClass}>The link has expired, or it was already used — some email programs open links automatically, which uses them up.</p>
           <EmailAndCodeFallback onVerify={handleRecoveryVerify} />
           <a href="/login" className={`${secondaryButtonClass} block text-center`}>Back to sign in</a>
+          <GetHelp step="the link in my email had already been used (setting up my authenticator app)" />
         </div>
       </div>
     );

@@ -145,3 +145,27 @@ describe('MfaEnrollmentFlow — setting up on the phone you are using', () => {
     expect(screen.getByText(/time based/i)).toBeInTheDocument();
   });
 });
+
+describe('MfaEnrollmentFlow — guidance for people who are not computer-literate', () => {
+  it('shows where in the process they are, and how to get help', async () => {
+    render(<MfaEnrollmentFlow accessToken="tok" onDone={vi.fn()} />);
+    await screen.findByTestId('qrcode');
+    expect(screen.getByText(/step 2 of 3: set up your authenticator app/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /open the step-by-step guide/i })).toHaveAttribute('href', '/help/2fa');
+  });
+
+  it('labels the code box so it cannot be confused with the long number in the email', async () => {
+    render(<MfaEnrollmentFlow accessToken="tok" onDone={vi.fn()} />);
+    await screen.findByTestId('qrcode');
+    expect(screen.getByLabelText(/6-digit code from your authenticator app \(not from the email\)/i)).toBeInTheDocument();
+  });
+
+  it('offers app-store links for someone who has no authenticator app yet', async () => {
+    render(<MfaEnrollmentFlow accessToken="tok" onDone={vi.fn()} />);
+    await screen.findByTestId('qrcode');
+    expect(screen.getByText(/i don't have an authenticator app yet/i)).toBeInTheDocument();
+    const hrefs = screen.getAllByRole('link').map((a) => a.getAttribute('href') ?? '');
+    expect(hrefs.some((h) => h.startsWith('https://apps.apple.com/'))).toBe(true);
+    expect(hrefs.some((h) => h.startsWith('https://play.google.com/'))).toBe(true);
+  });
+});

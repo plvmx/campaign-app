@@ -21,7 +21,7 @@ export const cardClass =
   'w-full max-w-md space-y-4 rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-blue-50 p-6 shadow-lg dark:bg-blue-900/20 sm:p-8';
 
 export function CodeEntryScreen({
-  title, description, children, code, onCodeChange, onVerify, onBack, backLabel = '← Back', error, isBusy, disabled,
+  title, description, children, code, onCodeChange, onVerify, onBack, backLabel = '← Back', error, isBusy, disabled, stepBadge, help,
 }: {
   title: string;
   description: string;
@@ -34,14 +34,19 @@ export function CodeEntryScreen({
   error: string | null;
   isBusy: boolean;
   disabled: boolean;
+  /** e.g. <SetupStep n={2} .../> shown above the title */
+  stepBadge?: ReactNode;
+  /** e.g. <GetHelp .../> shown at the very bottom */
+  help?: ReactNode;
 }) {
   return (
     <div className="space-y-4">
+      {stepBadge}
       <h2 className="text-center text-xl font-bold text-gray-900 dark:text-gray-100">{title}</h2>
       <p className={bodyTextClass}>{description}</p>
       {children}
       <div>
-        <label htmlFor="mfa-code" className={labelClass}>6-digit code</label>
+        <label htmlFor="mfa-code" className={labelClass}>6-digit code from your authenticator app (not from the email)</label>
         <input
           id="mfa-code"
           inputMode="numeric"
@@ -56,6 +61,7 @@ export function CodeEntryScreen({
         {isBusy ? 'Verifying…' : 'Verify and continue'}
       </button>
       <button onClick={onBack} disabled={isBusy} className={secondaryButtonClass}>{backLabel}</button>
+      {help}
     </div>
   );
 }

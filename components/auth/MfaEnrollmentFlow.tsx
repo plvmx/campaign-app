@@ -6,6 +6,9 @@ import { emailConfirmSupabase } from '@/lib/emailConfirmSupabaseClient';
 import { describeMfaVerifyError } from '@/lib/mfaErrors';
 import { clearPendingTotpEnrollment, readPendingTotpEnrollment, savePendingTotpEnrollment } from '@/lib/pendingTotpEnrollment';
 import { CodeEntryScreen, bodyTextClass, primaryButtonClass, secondaryButtonClass } from '@/components/auth/CodeEntryScreen';
+import { GetHelp } from '@/components/auth/GetHelp';
+import { SetupStep } from '@/components/auth/SetupStep';
+import { AUTHENTICATOR_STORE_LINKS } from '@/lib/authenticatorApps';
 
 // Bounds how long the real-identity session (proven via the magic link) can
 // sit idle mid-enrollment before it's discarded — this session's only job
@@ -257,6 +260,7 @@ export function MfaEnrollmentFlow({
         error={error}
         isBusy={isBusy}
         disabled={!stepUpFactorId}
+        help={<GetHelp step="proving my identity with my existing authenticator app" />}
       />
     );
   }
@@ -273,7 +277,20 @@ export function MfaEnrollmentFlow({
       error={error}
       isBusy={isBusy}
       disabled={!totpFactorId}
+      stepBadge={<SetupStep n={2} label="Set up your authenticator app" />}
+      help={<GetHelp step="setting up my authenticator app" />}
     >
+      <details className="rounded-md border-2 border-gray-300 p-3 text-sm text-gray-700 dark:border-gray-600 dark:text-gray-300">
+        <summary className="cursor-pointer font-semibold">I don&apos;t have an authenticator app yet</summary>
+        <p className="mt-2">Install one (free), then come back to this page:</p>
+        <ul className="mt-2 list-disc space-y-1 pl-5">
+          {AUTHENTICATOR_STORE_LINKS.map((l) => (
+            <li key={l.href}>
+              <a href={l.href} target="_blank" rel="noopener noreferrer" className="font-semibold text-blue-700 underline dark:text-blue-300">{l.label}</a>
+            </li>
+          ))}
+        </ul>
+      </details>
       {totpUri && (
         <a href={totpUri} className={`${primaryButtonClass} block text-center`}>Add to my authenticator app</a>
       )}

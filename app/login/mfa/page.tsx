@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import { cardClass, bodyTextClass, primaryButtonClass, inputClass, labelClass } from '@/components/auth/CodeEntryScreen';
 import { InlineCodeFallback } from '@/components/auth/InlineCodeFallback';
+import { GetHelp } from '@/components/auth/GetHelp';
 
 /**
  * Email + magic-link entry point for leaders who've confirmed their email
@@ -105,6 +106,7 @@ export default function LoginMfaPage() {
               If that address has two-factor authentication set up, we have sent it an email. Open that email and click the <strong>CONFIRM NOW</strong> link in it to sign in. If you can&apos;t see it, check your Junk or Spam folder.
             </p>
             <InlineCodeFallback onVerify={handleCodeVerify} />
+            <GetHelp step="waiting for my sign-in email" />
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">

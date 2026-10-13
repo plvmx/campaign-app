@@ -55,6 +55,9 @@ describe('LoginPage — restoring "Check your inbox" after a reload', () => {
     expect(await screen.findByText(/check your inbox/i)).toBeInTheDocument();
     expect(screen.getByText('jack@example.com')).toBeInTheDocument();
     expect(mockPush).not.toHaveBeenCalled();
+    // and the person can see where they are and get help
+    expect(screen.getByText(/step 1 of 3: confirm your email/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /open the step-by-step guide/i })).toBeInTheDocument();
   });
 
   it('does the same for the 2FA-setup "Check your inbox" screen', async () => {
