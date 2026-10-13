@@ -131,7 +131,9 @@ describe('LoginMfaCallbackPage', () => {
     stateLeadersBuilder.eq.mockImplementation(() => Promise.resolve({ data: [], error: null }));
     await signIn();
     expect(await screen.findByText(/not set up yet/i)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /back to sign in/i })).toHaveAttribute('href', '/login');
+    // The way out must go to the mobile+name form, not bare /login, which a device that remembers
+    // email sign-in would redirect straight back here (PVTester stuck after a 2FA reset, 2026-10-14).
+    expect(screen.getByRole('link', { name: /back to sign in/i })).toHaveAttribute('href', '/login?mode=mobile');
   });
 
   it('shows the "not set up yet" fallback when mfa_enrolled_at is set but no verified TOTP factor exists (data drift)', async () => {

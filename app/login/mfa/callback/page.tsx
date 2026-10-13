@@ -255,7 +255,9 @@ export default function LoginMfaCallbackPage() {
         <div className={cardClass}>
           <h2 className={headingClass}>Not set up yet</h2>
           <p className={bodyTextClass}>{NOT_ENROLLED_MESSAGE}</p>
-          <a href="/login" className={`${primaryButtonClass} block text-center`}>Back to sign in</a>
+          {/* ?mode=mobile: the message above says to use mobile + name, and without it a device that
+              remembers email sign-in (lib/emailLoginPreference.ts) would bounce straight back here. */}
+          <a href="/login?mode=mobile" className={`${primaryButtonClass} block text-center`}>Back to sign in</a>
         </div>
       </div>
     );
