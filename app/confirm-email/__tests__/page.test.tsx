@@ -257,14 +257,14 @@ describe('ConfirmEmailPage', () => {
       expect(await screen.findByText(/your email is confirmed, and you can set up two-factor authentication another time/i)).toBeInTheDocument();
     });
 
-    it('signs out after 5 minutes of sitting on the choice screen (bounds the lingering-session window)', async () => {
+    it('signs out after 15 minutes of sitting on the choice screen (bounds the lingering-session window)', async () => {
       vi.useFakeTimers();
       render(<ConfirmEmailPage />);
       await act(async () => { authChangeCallback!('SIGNED_IN', { access_token: 'tok-123' }); });
       expect(screen.getByRole('button', { name: /skip for now/i })).toBeInTheDocument();
       expect(mockSignOut).not.toHaveBeenCalled();
 
-      await act(async () => { await vi.advanceTimersByTimeAsync(5 * 60 * 1000); });
+      await act(async () => { await vi.advanceTimersByTimeAsync(15 * 60 * 1000); });
 
       expect(mockSignOut).toHaveBeenCalled();
       expect(screen.getByRole('link', { name: /continue/i })).toHaveAttribute('href', '/app');
