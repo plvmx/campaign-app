@@ -7,21 +7,19 @@ afterEach(() => { cleanup(); vi.unstubAllEnvs(); });
 
 describe('GetHelp', () => {
   it('always links to the step-by-step guide (opens in a new tab so the setup page is not lost)', () => {
-    render(<GetHelp step="confirming my email" />);
+    render(<GetHelp />);
     const link = screen.getByRole('link', { name: /open the step-by-step guide/i });
     expect(link).toHaveAttribute('href', '/help/2fa');
     expect(link).toHaveAttribute('target', '_blank');
-    expect(screen.queryByRole('link', { name: /text us for help/i })).not.toBeInTheDocument();
   });
 
-  it('adds a pre-filled text-message link when a support number is configured', () => {
+  it('tells leaders to ask in the AFJ TWOL Leaders WhatsApp group, in bold, with no text-message link (sms: does nothing on a PC)', () => {
     vi.stubEnv('NEXT_PUBLIC_SUPPORT_MOBILE', '0429 028 464');
-    render(<GetHelp step="typing the code from my app" who="Jack (NSW)" />);
-    const href = screen.getByRole('link', { name: /text us for help/i }).getAttribute('href') ?? '';
-    expect(href.startsWith('sms:+61429028464?&body=')).toBe(true);
-    const body = decodeURIComponent(href.split('&body=')[1]);
-    expect(body).toContain('Jack (NSW)');
-    expect(body).toContain('typing the code from my app');
+    render(<GetHelp />);
+    const bold = screen.getByText('ask for help on the AFJ TWOL Leaders WhatsApp group');
+    expect(bold.tagName).toBe('STRONG');
+    expect(screen.queryByRole('link', { name: /text us for help/i })).not.toBeInTheDocument();
+    expect(document.querySelector('a[href^="sms:"]')).toBeNull();
   });
 });
 

@@ -36,7 +36,7 @@ export function CodeEntryScreen({
   disabled: boolean;
   /** e.g. <SetupStep n={2} .../> shown above the title */
   stepBadge?: ReactNode;
-  /** e.g. <GetHelp .../> shown at the very bottom */
+  /** e.g. <GetHelp /> shown at the very bottom */
   help?: ReactNode;
 }) {
   return (
