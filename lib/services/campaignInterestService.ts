@@ -16,6 +16,7 @@
 import { supabase } from '@/lib/supabaseClient';
 import type { Campaign } from '@/lib/types';
 import { getCampaignsForUser, type CampaignsForUserParams } from './campaignService';
+import { fetchInterestCounts } from './interestCountsClient';
 
 export type CampaignInterestType = 'in' | 'more';
 
@@ -93,21 +94,29 @@ export async function getCampaignInterestForLeader(params: CampaignsForUserParam
   return ((data || []) as CampaignInterest[]).map(e => ({ ...e, campaign: campaignsById.get(e.campaign_id) ?? null }));
 }
 
-/** Count of campaign_interest rows per campaign id, for the given campaign ids. */
+/**
+ * Count of campaign_interest rows per campaign id, for the given campaign ids.
+ * Goes through the server (numbers only, for campaigns the caller can see)
+ * rather than reading the table, because members' details need a 2FA-level
+ * session but a leader must still be able to see *that* people registered —
+ * see lib/services/interestCountsService.ts.
+ */
 export async function getCampaignInterestCounts(campaignIds: string[]): Promise<Map<string, number>> {
   if (campaignIds.length === 0) return new Map();
+  const { campaignInterest } = await fetchInterestCounts(campaignIds);
+  return new Map(Object.entries(campaignInterest));
+}
 
-  const { data, error } = await supabase
-    .from('campaign_interest')
-    .select('campaign_id')
-    .in('campaign_id', campaignIds);
-  if (error) throw error;
-
-  const counts = new Map<string, number>();
-  for (const row of (data || []) as { campaign_id: string }[]) {
-    counts.set(row.campaign_id, (counts.get(row.campaign_id) ?? 0) + 1);
-  }
-  return counts;
+/**
+ * Whether the given user leads any campaign that has registrations — without
+ * reading the registrations themselves, so it works for a session that hasn't
+ * passed 2FA. Drives the "Manage my Campaign Interest" button.
+ */
+export async function hasCampaignInterestForLeader(params: CampaignsForUserParams): Promise<boolean> {
+  const { campaigns } = await getCampaignsForUser(params);
+  if (campaigns.length === 0) return false;
+  const counts = await getCampaignInterestCounts(campaigns.map((c) => c.id));
+  return [...counts.values()].some((n) => n > 0);
 }
 
 /**

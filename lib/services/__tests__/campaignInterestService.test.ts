@@ -6,14 +6,17 @@ vi.mock('@/lib/supabaseClient', () => ({
 vi.mock('../campaignService', () => ({
   getCampaignsForUser: vi.fn(),
 }));
+vi.mock('../interestCountsClient', () => ({ fetchInterestCounts: vi.fn() }));
 
 import { supabase } from '@/lib/supabaseClient';
 import { makeQueryBuilder } from './supabaseMock';
 import { getCampaignsForUser } from '../campaignService';
+import { fetchInterestCounts } from '../interestCountsClient';
 import {
   getCampaignInterestList,
   getCampaignInterestForLeader,
   getCampaignInterestCounts,
+  hasCampaignInterestForLeader,
   setCampaignInterestContacted,
 } from '../campaignInterestService';
 import type { Campaign } from '@/lib/types';
@@ -146,33 +149,55 @@ describe('getCampaignInterestForLeader', () => {
   });
 });
 
-describe('getCampaignInterestCounts', () => {
-  it('returns an empty map without querying when there are no campaign ids', async () => {
-    const result = await getCampaignInterestCounts([]);
-    expect(result).toEqual(new Map());
+describe('hasCampaignInterestForLeader', () => {
+  const params = { adminStatus: null, userState: 'VIC', userLeader: 'Alice', userMobile: null, userId: 'u1' };
+
+  it('is true when any of the leader\'s campaigns has registrations, without reading the registrations themselves', async () => {
+    mockGetCampaignsForUser.mockResolvedValue({ campaigns: [makeCampaign({ id: 'c1' }), makeCampaign({ id: 'c2' })], sharedOwners: [] });
+    vi.mocked(fetchInterestCounts).mockResolvedValue({ campaignInterest: { c2: 3 }, trainingInterest: {} });
+
+    expect(await hasCampaignInterestForLeader(params)).toBe(true);
     expect(mockFrom).not.toHaveBeenCalled();
   });
 
-  it('counts rows per campaign id', async () => {
-    const builder = makeQueryBuilder({
-      data: [{ campaign_id: 'c1' }, { campaign_id: 'c1' }, { campaign_id: 'c2' }],
-      error: null,
-    });
-    mockFrom.mockReturnValueOnce(builder);
+  it('is false when there are none', async () => {
+    mockGetCampaignsForUser.mockResolvedValue({ campaigns: [makeCampaign({ id: 'c1' })], sharedOwners: [] });
+    vi.mocked(fetchInterestCounts).mockResolvedValue({ campaignInterest: {}, trainingInterest: {} });
+    expect(await hasCampaignInterestForLeader(params)).toBe(false);
+  });
+
+  it('is false (and asks nothing) when the leader has no campaigns', async () => {
+    mockGetCampaignsForUser.mockResolvedValue({ campaigns: [], sharedOwners: [] });
+    expect(await hasCampaignInterestForLeader(params)).toBe(false);
+    expect(fetchInterestCounts).not.toHaveBeenCalled();
+  });
+});
+
+describe('getCampaignInterestCounts', () => {
+  it('returns an empty map without calling the server when there are no campaign ids', async () => {
+    const result = await getCampaignInterestCounts([]);
+    expect(result).toEqual(new Map());
+    expect(fetchInterestCounts).not.toHaveBeenCalled();
+  });
+
+  it('gets numbers only from the server (never reads the 2FA-protected table directly) and returns them per campaign', async () => {
+    vi.mocked(fetchInterestCounts).mockResolvedValue({ campaignInterest: { c1: 2, c2: 1 }, trainingInterest: { c1: 2, c2: 1 } });
 
     const result = await getCampaignInterestCounts(['c1', 'c2']);
 
-    expect(builder.in).toHaveBeenCalledWith('campaign_id', ['c1', 'c2']);
+    expect(fetchInterestCounts).toHaveBeenCalledWith(['c1', 'c2']);
     expect(result.get('c1')).toBe(2);
     expect(result.get('c2')).toBe(1);
+    expect(mockFrom).not.toHaveBeenCalled();
   });
 
-  it('throws on error', async () => {
-    const error = { code: '500', message: 'boom' };
-    mockFrom.mockReturnValueOnce(makeQueryBuilder({ data: null, error }));
-    await expect(getCampaignInterestCounts(['c1'])).rejects.toEqual(error);
+  it('throws when the server call fails', async () => {
+    const error = new Error('boom');
+    vi.mocked(fetchInterestCounts).mockRejectedValue(error);
+    await expect(getCampaignInterestCounts(['c1'])).rejects.toBe(error);
   });
 });
+
 
 describe('setCampaignInterestContacted', () => {
   it('sets contacted=true with a contacted_at timestamp and returns it', async () => {

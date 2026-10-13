@@ -13,6 +13,7 @@ import { useEffect, useState, use as usePromise } from 'react';
 import { useRouter } from 'next/navigation';
 import MobileLayout from '@/components/MobileLayout';
 import LoadingSpinner from '@/components/LoadingSpinner';
+import RequireTwoFactorForMemberDetails from '@/components/auth/RequireTwoFactorForMemberDetails';
 import { useUser } from '@/contexts/UserContext';
 import { getCampaignById } from '@/lib/services/campaignService';
 import {
@@ -33,6 +34,14 @@ function formatDateTime(dateString: string): string {
 }
 
 export default function TrainingInterestDetailPage({ params }: { params: Promise<{ campaignId: string }> }) {
+  return (
+    <RequireTwoFactorForMemberDetails>
+      <TrainingInterestDetailContent params={params} />
+    </RequireTwoFactorForMemberDetails>
+  );
+}
+
+function TrainingInterestDetailContent({ params }: { params: Promise<{ campaignId: string }> }) {
   const { campaignId } = usePromise(params);
   const router = useRouter();
   const { user, isLoading: isUserLoading } = useUser();

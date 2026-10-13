@@ -27,4 +27,19 @@ describe('getAdminLoginGate', () => {
     expect(getAdminLoginGate({ admin: 'N', mfaEnrolledAt: null })).toBeNull();
     expect(getAdminLoginGate({ admin: '', mfaEnrolledAt: null })).toBeNull();
   });
+
+  describe('requireTwoFactor (a plain leader who needs 2FA to see member details)', () => {
+    it('makes an unenrolled plain leader set up 2FA', () => {
+      expect(getAdminLoginGate({ admin: null, mfaEnrolledAt: null }, { requireTwoFactor: true })).toBe('set-up-2fa');
+    });
+
+    it('sends an enrolled plain leader to email sign-in', () => {
+      expect(getAdminLoginGate({ admin: null, mfaEnrolledAt: '2026-10-01T00:00:00Z' }, { requireTwoFactor: true })).toBe('sign-in-with-email');
+    });
+
+    it('is off by default and when explicitly false', () => {
+      expect(getAdminLoginGate({ admin: null, mfaEnrolledAt: null }, {})).toBeNull();
+      expect(getAdminLoginGate({ admin: null, mfaEnrolledAt: null }, { requireTwoFactor: false })).toBeNull();
+    });
+  });
 });

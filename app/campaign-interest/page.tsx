@@ -22,6 +22,7 @@ import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import MobileLayout from '@/components/MobileLayout';
 import LoadingSpinner from '@/components/LoadingSpinner';
+import RequireTwoFactorForMemberDetails from '@/components/auth/RequireTwoFactorForMemberDetails';
 import CampaignInterestEntryList from '@/components/CampaignInterestEntryList';
 import { useUser } from '@/contexts/UserContext';
 import {
@@ -155,7 +156,9 @@ export default function CampaignInterestPage() {
         </MobileLayout>
       }
     >
-      <CampaignInterestPageContent />
+      <RequireTwoFactorForMemberDetails>
+        <CampaignInterestPageContent />
+      </RequireTwoFactorForMemberDetails>
     </Suspense>
   );
 }
