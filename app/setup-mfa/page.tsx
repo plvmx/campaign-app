@@ -127,7 +127,7 @@ export default function SetupMfaPage() {
             isBusy={false}
             onTap={handleTap}
           />
-          <GetHelp step="the link from my email (setting up my authenticator app)" />
+          <GetHelp />
         </div>
       </div>
     );
@@ -141,7 +141,7 @@ export default function SetupMfaPage() {
           <p className={bodyTextClass}>The link has expired, or it was already used — some email programs open links automatically, which uses them up.</p>
           <EmailAndCodeFallback onVerify={handleRecoveryVerify} />
           <a href="/login" className={`${secondaryButtonClass} block text-center`}>Back to sign in</a>
-          <GetHelp step="the link in my email had already been used (setting up my authenticator app)" />
+          <GetHelp />
         </div>
       </div>
     );

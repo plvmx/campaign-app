@@ -260,7 +260,7 @@ export function MfaEnrollmentFlow({
         error={error}
         isBusy={isBusy}
         disabled={!stepUpFactorId}
-        help={<GetHelp step="proving my identity with my existing authenticator app" />}
+        help={<GetHelp />}
       />
     );
   }
@@ -278,7 +278,7 @@ export function MfaEnrollmentFlow({
       isBusy={isBusy}
       disabled={!totpFactorId}
       stepBadge={<SetupStep n={2} label="Set up your authenticator app" />}
-      help={<GetHelp step="setting up my authenticator app" />}
+      help={<GetHelp />}
     >
       <details className="rounded-md border-2 border-gray-300 p-3 text-sm text-gray-700 dark:border-gray-600 dark:text-gray-300">
         <summary className="cursor-pointer font-semibold">I don&apos;t have an authenticator app yet</summary>
