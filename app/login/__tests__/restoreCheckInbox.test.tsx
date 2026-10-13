@@ -48,7 +48,8 @@ beforeEach(() => {
 afterEach(() => cleanup());
 
 describe('LoginPage — restoring "Check your inbox" after a reload', () => {
-  it('puts a signed-in leader back on the email "Check your inbox" screen instead of sending them to /app', async () => {
+  it('puts a leader back on the email "Check your inbox" screen (2FA required to see member details) after a reload', async () => {
+    mockGetSession.mockResolvedValue(null); // a plain leader on this path has been signed out (lib/twoFactorSetup.ts)
     savePendingLoginStep({ kind: 'email', match: PLAIN, value: 'jack@example.com' });
     render(<LoginPage />);
 
@@ -61,6 +62,7 @@ describe('LoginPage — restoring "Check your inbox" after a reload', () => {
   });
 
   it('does the same for the 2FA-setup "Check your inbox" screen', async () => {
+    mockGetSession.mockResolvedValue(null);
     savePendingLoginStep({ kind: 'mfa', match: { ...PLAIN, email: 'jack@example.com' } });
     render(<LoginPage />);
 
@@ -82,14 +84,23 @@ describe('LoginPage — restoring "Check your inbox" after a reload', () => {
     expect(readPendingLoginStep()).toBeNull();
   });
 
-  it('does not restore a plain leader\'s step when they are no longer signed in (its "skip" needs the session)', async () => {
+  it('drops a plain leader\'s remembered step if they are signed in (a stale one — they are not in the 2FA flow)', async () => {
+    savePendingLoginStep({ kind: 'email', match: PLAIN, value: 'jack@example.com' });
+    render(<LoginPage />);
+
+    await vi.waitFor(() => expect(mockPush).toHaveBeenCalledWith('/app'));
+    expect(screen.queryByText(/check your inbox/i)).not.toBeInTheDocument();
+    expect(readPendingLoginStep()).toBeNull();
+  });
+
+  it('restores a plain leader\'s step when they are signed out, with no skip option', async () => {
     mockGetSession.mockResolvedValue(null);
     savePendingLoginStep({ kind: 'email', match: PLAIN, value: 'jack@example.com' });
     render(<LoginPage />);
 
-    expect(await screen.findByRole('button', { name: /sign in/i })).toBeInTheDocument();
-    expect(screen.queryByText(/check your inbox/i)).not.toBeInTheDocument();
-    expect(readPendingLoginStep()).toBeNull();
+    expect(await screen.findByText(/check your inbox/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /i've confirmed my email/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /skip/i })).not.toBeInTheDocument();
   });
 
   it('restores an admin\'s step even with no session (admins never have one on this path)', async () => {
@@ -103,6 +114,7 @@ describe('LoginPage — restoring "Check your inbox" after a reload', () => {
 
   it('forgets the remembered screen once the typed code succeeds, so coming back to /login is not stuck on it', async () => {
     mockVerifyOtp.mockResolvedValue({ data: { session: { access_token: 'tok' } }, error: null });
+    mockGetSession.mockResolvedValue(null);
     savePendingLoginStep({ kind: 'mfa', match: { ...PLAIN, email: 'jack@example.com' } });
     render(<LoginPage />);
 

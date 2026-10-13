@@ -12,6 +12,7 @@
  * app/api/public/training-interest/[campaignId]/route.ts instead.
  */
 import { supabase } from '@/lib/supabaseClient';
+import { fetchInterestCounts } from './interestCountsClient';
 import type { Campaign } from '@/lib/types';
 import { getCampaignsForUser, type CampaignsForUserParams } from './campaignService';
 
@@ -57,18 +58,10 @@ export async function getTrainingCampaigns(params: CampaignsForUserParams): Prom
 /** Count of training_interest rows per campaign id, for the given campaign ids. */
 export async function getTrainingInterestCounts(campaignIds: string[]): Promise<Map<string, number>> {
   if (campaignIds.length === 0) return new Map();
-
-  const { data, error } = await supabase
-    .from('training_interest')
-    .select('campaign_id')
-    .in('campaign_id', campaignIds);
-  if (error) throw error;
-
-  const counts = new Map<string, number>();
-  for (const row of (data || []) as { campaign_id: string }[]) {
-    counts.set(row.campaign_id, (counts.get(row.campaign_id) ?? 0) + 1);
-  }
-  return counts;
+  // Numbers only, via the server — the registrations themselves need a 2FA-level session
+  // (lib/services/interestCountsService.ts).
+  const { trainingInterest } = await fetchInterestCounts(campaignIds);
+  return new Map(Object.entries(trainingInterest));
 }
 
 /** All interest registrations for one training campaign, newest first. */

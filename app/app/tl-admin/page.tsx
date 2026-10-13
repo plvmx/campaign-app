@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import MobileLayout from '@/components/MobileLayout';
 import LoadingSpinner from '@/components/LoadingSpinner';
@@ -8,10 +8,14 @@ import { useUser } from '@/contexts/UserContext';
 import { useCampaignDates } from '@/contexts/CampaignDatesContext';
 import { formatDateReadable } from '@/lib/campaignDates';
 import { isRecognizedAdminStatus } from '@/lib/campaignFilter';
+import { startTwoFactorSignIn } from '@/lib/twoFactorSetup';
+import { getErrorMessage } from '@/lib/errorUtils';
 
 export default function TLAdminPage() {
   const router = useRouter();
   const { dates } = useCampaignDates();
+  const [securityBusy, setSecurityBusy] = useState(false);
+  const [securityError, setSecurityError] = useState<string | null>(null);
   const { user, adminStatus, userState: contextUserState, userProfile, isLoading: isUserLoading } = useUser();
 
   // Derive access state from context — avoids setState-in-effect anti-pattern
@@ -63,6 +67,17 @@ export default function TLAdminPage() {
   }
 
   const stateToUse = derivedUserState ?? '';
+
+  const handleSetUpExtraSecurity = async () => {
+    setSecurityBusy(true);
+    setSecurityError(null);
+    try {
+      await startTwoFactorSignIn();
+    } catch (err: unknown) {
+      setSecurityError(getErrorMessage(err, 'Something went wrong. Please try again.'));
+      setSecurityBusy(false);
+    }
+  };
 
   return (
     <MobileLayout>
@@ -132,6 +147,27 @@ export default function TLAdminPage() {
               className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
             >
               Check if a Member is Registered
+            </button>
+          </div>
+
+          {/* Optional extra security — leaders are no longer asked at every sign-in; it is only
+              required to see other people's personal details (RequireTwoFactorForMemberDetails). */}
+          <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+              Extra Security
+            </h2>
+            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+              Optional. Set up two-factor authentication (a code from an authenticator app on your phone). It is needed to see the personal details of people who register interest in your campaigns. You will be signed out and asked to sign in again with your email.
+            </p>
+            {securityError && (
+              <p role="alert" className="mt-2 text-sm text-red-700 dark:text-red-300">{securityError}</p>
+            )}
+            <button
+              onClick={handleSetUpExtraSecurity}
+              disabled={securityBusy}
+              className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 border-2 border-gray-800 dark:border-gray-600"
+            >
+              {securityBusy ? 'Please wait…' : 'Set up extra security'}
             </button>
           </div>
         </div>

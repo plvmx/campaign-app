@@ -244,6 +244,12 @@ CREATE POLICY "campaign_messages: only admin can write"
 -- INSERT/DELETE policy for authenticated: public submissions go through the
 -- service role (anonymous visitors have no RLS access), same as
 -- training_interest.
+--
+-- Reading/updating ALSO requires the session to have passed 2FA
+-- ((auth.jwt() ->> 'aal') = 'aal2') — these rows are other people's personal
+-- details. Leaders still see HOW MANY registered via /api/leader/interest-counts
+-- (service role, numbers only). Applied live via
+-- scripts/require_mfa_for_member_details.sql.
 -- =============================================================================
 ALTER TABLE campaign_interest ENABLE ROW LEVEL SECURITY;
 
@@ -253,22 +259,25 @@ DROP POLICY IF EXISTS "campaign_interest: owner or shared leader or admin can re
 CREATE POLICY "campaign_interest: owner or shared leader or admin can read"
   ON campaign_interest FOR SELECT TO authenticated
   USING (
-    public.is_admin()
-    OR EXISTS (
-      SELECT 1 FROM campaigns c
-      JOIN user_profiles up ON up.user_id = auth.uid()
-      WHERE c.id = campaign_interest.campaign_id
-        AND up.state = c.state
-        AND lower(trim(up.name)) = lower(trim(c.leader))
-    )
-    OR EXISTS (
-      SELECT 1 FROM campaigns c
-      JOIN leader_shares ls ON ls.owner_state = c.state
-        AND lower(trim(ls.owner_leader)) = lower(trim(c.leader))
-      JOIN user_profiles up ON up.user_id = auth.uid()
-        AND ls.shared_with_state = up.state
-        AND lower(trim(ls.shared_with_leader)) = lower(trim(up.name))
-      WHERE c.id = campaign_interest.campaign_id
+    (auth.jwt() ->> 'aal') = 'aal2'
+    AND (
+      public.is_admin()
+      OR EXISTS (
+        SELECT 1 FROM campaigns c
+        JOIN user_profiles up ON up.user_id = auth.uid()
+        WHERE c.id = campaign_interest.campaign_id
+          AND up.state = c.state
+          AND lower(trim(up.name)) = lower(trim(c.leader))
+      )
+      OR EXISTS (
+        SELECT 1 FROM campaigns c
+        JOIN leader_shares ls ON ls.owner_state = c.state
+          AND lower(trim(ls.owner_leader)) = lower(trim(c.leader))
+        JOIN user_profiles up ON up.user_id = auth.uid()
+          AND ls.shared_with_state = up.state
+          AND lower(trim(ls.shared_with_leader)) = lower(trim(up.name))
+        WHERE c.id = campaign_interest.campaign_id
+      )
     )
   );
 
@@ -276,22 +285,25 @@ DROP POLICY IF EXISTS "campaign_interest: owner or shared leader or admin can up
 CREATE POLICY "campaign_interest: owner or shared leader or admin can update"
   ON campaign_interest FOR UPDATE TO authenticated
   USING (
-    public.is_admin()
-    OR EXISTS (
-      SELECT 1 FROM campaigns c
-      JOIN user_profiles up ON up.user_id = auth.uid()
-      WHERE c.id = campaign_interest.campaign_id
-        AND up.state = c.state
-        AND lower(trim(up.name)) = lower(trim(c.leader))
-    )
-    OR EXISTS (
-      SELECT 1 FROM campaigns c
-      JOIN leader_shares ls ON ls.owner_state = c.state
-        AND lower(trim(ls.owner_leader)) = lower(trim(c.leader))
-      JOIN user_profiles up ON up.user_id = auth.uid()
-        AND ls.shared_with_state = up.state
-        AND lower(trim(ls.shared_with_leader)) = lower(trim(up.name))
-      WHERE c.id = campaign_interest.campaign_id
+    (auth.jwt() ->> 'aal') = 'aal2'
+    AND (
+      public.is_admin()
+      OR EXISTS (
+        SELECT 1 FROM campaigns c
+        JOIN user_profiles up ON up.user_id = auth.uid()
+        WHERE c.id = campaign_interest.campaign_id
+          AND up.state = c.state
+          AND lower(trim(up.name)) = lower(trim(c.leader))
+      )
+      OR EXISTS (
+        SELECT 1 FROM campaigns c
+        JOIN leader_shares ls ON ls.owner_state = c.state
+          AND lower(trim(ls.owner_leader)) = lower(trim(c.leader))
+        JOIN user_profiles up ON up.user_id = auth.uid()
+          AND ls.shared_with_state = up.state
+          AND lower(trim(ls.shared_with_leader)) = lower(trim(up.name))
+        WHERE c.id = campaign_interest.campaign_id
+      )
     )
   );
 
@@ -458,22 +470,25 @@ DROP POLICY IF EXISTS "training_interest: owner or shared leader or admin can re
 CREATE POLICY "training_interest: owner or shared leader or admin can read"
   ON training_interest FOR SELECT TO authenticated
   USING (
-    public.is_admin()
-    OR EXISTS (
-      SELECT 1 FROM campaigns c
-      JOIN user_profiles up ON up.user_id = auth.uid()
-      WHERE c.id = training_interest.campaign_id
-        AND up.state = c.state
-        AND lower(trim(up.name)) = lower(trim(c.leader))
-    )
-    OR EXISTS (
-      SELECT 1 FROM campaigns c
-      JOIN leader_shares ls ON ls.owner_state = c.state
-        AND lower(trim(ls.owner_leader)) = lower(trim(c.leader))
-      JOIN user_profiles up ON up.user_id = auth.uid()
-        AND ls.shared_with_state = up.state
-        AND lower(trim(ls.shared_with_leader)) = lower(trim(up.name))
-      WHERE c.id = training_interest.campaign_id
+    (auth.jwt() ->> 'aal') = 'aal2'
+    AND (
+      public.is_admin()
+      OR EXISTS (
+        SELECT 1 FROM campaigns c
+        JOIN user_profiles up ON up.user_id = auth.uid()
+        WHERE c.id = training_interest.campaign_id
+          AND up.state = c.state
+          AND lower(trim(up.name)) = lower(trim(c.leader))
+      )
+      OR EXISTS (
+        SELECT 1 FROM campaigns c
+        JOIN leader_shares ls ON ls.owner_state = c.state
+          AND lower(trim(ls.owner_leader)) = lower(trim(c.leader))
+        JOIN user_profiles up ON up.user_id = auth.uid()
+          AND ls.shared_with_state = up.state
+          AND lower(trim(ls.shared_with_leader)) = lower(trim(up.name))
+        WHERE c.id = training_interest.campaign_id
+      )
     )
   );
 
@@ -481,22 +496,25 @@ DROP POLICY IF EXISTS "training_interest: owner or shared leader or admin can up
 CREATE POLICY "training_interest: owner or shared leader or admin can update"
   ON training_interest FOR UPDATE TO authenticated
   USING (
-    public.is_admin()
-    OR EXISTS (
-      SELECT 1 FROM campaigns c
-      JOIN user_profiles up ON up.user_id = auth.uid()
-      WHERE c.id = training_interest.campaign_id
-        AND up.state = c.state
-        AND lower(trim(up.name)) = lower(trim(c.leader))
-    )
-    OR EXISTS (
-      SELECT 1 FROM campaigns c
-      JOIN leader_shares ls ON ls.owner_state = c.state
-        AND lower(trim(ls.owner_leader)) = lower(trim(c.leader))
-      JOIN user_profiles up ON up.user_id = auth.uid()
-        AND ls.shared_with_state = up.state
-        AND lower(trim(ls.shared_with_leader)) = lower(trim(up.name))
-      WHERE c.id = training_interest.campaign_id
+    (auth.jwt() ->> 'aal') = 'aal2'
+    AND (
+      public.is_admin()
+      OR EXISTS (
+        SELECT 1 FROM campaigns c
+        JOIN user_profiles up ON up.user_id = auth.uid()
+        WHERE c.id = training_interest.campaign_id
+          AND up.state = c.state
+          AND lower(trim(up.name)) = lower(trim(c.leader))
+      )
+      OR EXISTS (
+        SELECT 1 FROM campaigns c
+        JOIN leader_shares ls ON ls.owner_state = c.state
+          AND lower(trim(ls.owner_leader)) = lower(trim(c.leader))
+        JOIN user_profiles up ON up.user_id = auth.uid()
+          AND ls.shared_with_state = up.state
+          AND lower(trim(ls.shared_with_leader)) = lower(trim(up.name))
+        WHERE c.id = training_interest.campaign_id
+      )
     )
   );
 
