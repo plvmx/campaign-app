@@ -236,6 +236,28 @@ describe('LoginMfaCallbackPage', () => {
     expect(mockRefreshUser).not.toHaveBeenCalled();
   });
 
+  it('shows the error (not a frozen "Signing you in…") when the server refuses a sign-in that needed no challenge', async () => {
+    mockGetAuthenticatorAssuranceLevel.mockResolvedValue({ data: { currentLevel: 'aal2', nextLevel: 'aal2' } });
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({ ok: false, status: 403, json: async () => ({ error: 'Not authorised for this leader' }) });
+    await signIn();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/could not be verified/i);
+    expect(screen.getByRole('link', { name: /back to sign in/i })).toHaveAttribute('href', '/login/mfa');
+    expect(mockReplace).not.toHaveBeenCalled();
+  });
+
+  it('offers a way out instead of freezing on "Signing you in…" if a step never finishes', async () => {
+    vi.useFakeTimers();
+    stateLeadersBuilder.eq.mockImplementation(() => new Promise(() => {}));
+    render(<LoginMfaCallbackPage />);
+    await act(async () => { authChangeCallback!('SIGNED_IN', SESSION); });
+    expect(screen.getByText(/signing you in/i)).toBeInTheDocument();
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(20000); });
+    expect(screen.getByText(/taking too long/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /start again/i })).toHaveAttribute('href', '/login/mfa');
+  });
+
   it('cancelling the challenge signs out and returns to /login/mfa', async () => {
     await signIn();
     await screen.findByLabelText(/6-digit code/i);

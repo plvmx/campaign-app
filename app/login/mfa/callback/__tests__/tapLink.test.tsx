@@ -8,6 +8,7 @@ import { render, screen, fireEvent, waitFor, cleanup, act } from '@testing-libra
 type AuthChangeCallback = (event: string, session: unknown) => void;
 let authChangeCallback: AuthChangeCallback | null = null;
 const mockVerifyOtp = vi.fn();
+const mockGetSession = vi.fn();
 
 vi.mock('@/lib/supabaseClient', () => ({
   supabase: {
@@ -16,7 +17,7 @@ vi.mock('@/lib/supabaseClient', () => ({
         authChangeCallback = cb;
         return { data: { subscription: { unsubscribe: vi.fn() } } };
       },
-      getSession: () => Promise.resolve({ data: { session: null } }),
+      getSession: () => mockGetSession(),
       signOut: () => Promise.resolve({ error: null }),
       verifyOtp: (...a: unknown[]) => mockVerifyOtp(...a),
       mfa: {
@@ -28,7 +29,8 @@ vi.mock('@/lib/supabaseClient', () => ({
     from: () => {
       const b: Record<string, unknown> = {};
       b.select = () => b;
-      b.eq = () => Promise.resolve({ data: [{ id: 'sl-1', state: 'VIC', leader: 'Peter', admin: null, mfa_enrolled_at: '2026-09-01T00:00:00Z' }], error: null });
+      // An older session saved on the device whose lookup stalls (as on the phone).
+      b.eq = (_col: string, userId: string) => userId === 'old-user' ? new Promise(() => {}) : Promise.resolve({ data: [{ id: 'sl-1', state: 'VIC', leader: 'Peter', admin: null, mfa_enrolled_at: '2026-09-01T00:00:00Z' }], error: null });
       return b;
     },
   },
@@ -41,6 +43,7 @@ import LoginMfaCallbackPage from '../page';
 beforeEach(() => {
   authChangeCallback = null;
   mockVerifyOtp.mockReset().mockResolvedValue({ error: null });
+  mockGetSession.mockReset().mockResolvedValue({ data: { session: null } });
   window.history.replaceState(null, '', '/login/mfa/callback?via=email&token_hash=hash-3&type=email');
 });
 afterEach(() => { cleanup(); vi.useRealTimers(); window.history.replaceState(null, '', '/'); });
@@ -65,6 +68,16 @@ describe('LoginMfaCallbackPage — tap-to-continue link', () => {
     fireEvent.click(await screen.findByRole('button', { name: /finish signing in/i }));
     await waitFor(() => expect(mockVerifyOtp).toHaveBeenCalledWith({ token_hash: 'hash-3', type: 'email' }));
     expect(window.location.search).not.toContain('token_hash');
+
+    await act(async () => { authChangeCallback!('SIGNED_IN', { user: { id: 'user-1' } }); });
+    expect(await screen.findByText(/enter your authenticator code/i)).toBeInTheDocument();
+  });
+
+  it('is not blocked by an older session already saved on the device (it used to freeze on "Signing you in…")', async () => {
+    mockGetSession.mockResolvedValue({ data: { session: { user: { id: 'old-user' } } } });
+    render(<LoginMfaCallbackPage />);
+    fireEvent.click(await screen.findByRole('button', { name: /finish signing in/i }));
+    await waitFor(() => expect(mockVerifyOtp).toHaveBeenCalled());
 
     await act(async () => { authChangeCallback!('SIGNED_IN', { user: { id: 'user-1' } }); });
     expect(await screen.findByText(/enter your authenticator code/i)).toBeInTheDocument();
