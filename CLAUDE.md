@@ -202,7 +202,7 @@ All database access goes through service modules in `lib/services/`. Pages and c
 | `/admin` | Admin panel hub |
 | `/admin/check-registration` | "Registry Lookup" — first card on the Admin hub. Mobile and/or Email → **Registered** (with the matching registration's details — every matching record if the email and mobile belong to different people, and an Unsubscribed / No Further Contact flag where set) / **Not Registered**. Full admins signed in with 2FA only (enforced by `POST /api/admin/check-registration` via `verifyAdminCaller`); the contact-only counterpart of `/app/check-registration` (which, unlike this, shows no registry data) |
 | `/admin/stuck-leaders` | Admin-only list of leaders who started but haven't finished email sign-in / 2FA setup (admins always, until enrolled), with the step they're at, last activity, a suggested next step and Call / Text-a-reminder links. See "Leaders who are stuck" under Auth & roles |
-| `/admin/state-leaders` | Manage leaders per state. Shows each admin's 2FA status and a "Reset 2FA" button on any leader with 2FA set up (see "Mandatory 2FA for admins") |
+| `/admin/state-leaders` | Manage leaders per state. Filters by state, role (`lib/stateLeaderRoleFilter.ts` — e.g. "Admins only (AD & SR)"), name and mobile. Shows each admin's 2FA status and a "Reset 2FA" button on any leader with 2FA set up (see "Mandatory 2FA for admins") |
 | `/admin/state-places` | Manage places per state |
 | `/admin/campaign-rules` | Manage recurring campaign rules |
 | `/admin/campaign-messages` | Manage per-date banner messages |
