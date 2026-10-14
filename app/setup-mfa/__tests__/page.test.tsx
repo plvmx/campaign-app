@@ -63,8 +63,15 @@ const originalFetch = global.fetch;
 
 async function signIn() {
   render(<SetupMfaPage />);
-  authChangeCallback!('SIGNED_IN', SESSION);
-  await waitFor(() => expect(screen.getByRole('heading', { name: /authenticator app/i })).toBeInTheDocument());
+  await act(async () => { authChangeCallback!('SIGNED_IN', SESSION); });
+  // Wait with a cheap text query, then assert the heading role once, outside
+  // the wait. The first getByRole in a test file is slow (~300ms cold: it
+  // lazily loads the accessibility machinery and computes styles for the
+  // whole tree), and inside waitFor it counted against the 1000ms budget and
+  // re-ran on every poll — so under a loaded full-suite run this first test
+  // timed out intermittently while passing alone.
+  await screen.findByText('Authenticator app');
+  expect(screen.getByRole('heading', { name: /authenticator app/i })).toBeInTheDocument();
 }
 
 describe('SetupMfaPage', () => {
