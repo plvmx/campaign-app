@@ -21,6 +21,7 @@
  * it just waits for the SDK to finish and fire SIGNED_IN.
  */
 import { createClient } from '@supabase/supabase-js';
+import { createNonBlockingAuthLock } from './supabaseLock';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -36,5 +37,6 @@ export const emailConfirmSupabase = createClient(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: true,
     detectSessionInUrl: true,
     storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+    lock: createNonBlockingAuthLock(), // never wait forever on a stuck tab — see lib/supabaseLock.ts
   },
 });
