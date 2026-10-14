@@ -15,11 +15,9 @@ import { TapToContinue } from '@/components/auth/TapToContinue';
 import { GetHelp } from '@/components/auth/GetHelp';
 import { clearPendingLoginStep } from '@/lib/pendingLoginStep';
 import { readTokenHashFromUrl, stripTokenHashFromUrl } from '@/lib/magicLinkToken';
+import { SigningInStuck, useStuckWatchdog } from '@/components/auth/SigningInStuck';
 
 const GIVE_UP_AFTER_MS = 8000;
-// Once a sign-in is under way, how long "Signing you in…" may show before the
-// page admits it is stuck and offers a way out instead of freezing.
-const STUCK_AFTER_MS = 20000;
 
 const NOT_ENROLLED_MESSAGE =
   "Two-factor authentication isn't set up for this account yet — please sign in with your mobile number and name instead.";
@@ -52,7 +50,6 @@ export default function LoginMfaCallbackPage() {
   // it used to, which left the tapped sign-in ignored and the page frozen on
   // "Signing you in…" (Peter_AD, 2026-10-14).
   const awaitingTapRef = useRef(false);
-  const screenRef = useRef<Screen>('waiting');
 
   const [screen, setScreen] = useState<Screen>('waiting');
   const [error, setError] = useState<string | null>(null);
@@ -64,14 +61,7 @@ export default function LoginMfaCallbackPage() {
   const [factorId, setFactorId] = useState<string | null>(null);
   const [code, setCode] = useState('');
 
-  useEffect(() => { screenRef.current = screen; }, [screen]);
-
-  // Never leave the person on "Signing you in…" indefinitely.
-  function startStuckWatchdog() {
-    setTimeout(() => {
-      if (screenRef.current === 'waiting') setScreen('stuck');
-    }, STUCK_AFTER_MS);
-  }
+  useStuckWatchdog(screen === 'waiting', () => setScreen('stuck'));
 
   // Resolves sign-in once the account is known to be at aal2 (either
   // already, or right after a successful challenge): a single matching row
@@ -116,7 +106,6 @@ export default function LoginMfaCallbackPage() {
     async function handleSignedIn(session: { user: { id: string } }) {
       if (handledRef.current || awaitingTapRef.current) return;
       handledRef.current = true;
-      startStuckWatchdog();
       try {
         await resolveSignedIn(session);
       } catch (err) {
@@ -259,10 +248,7 @@ export default function LoginMfaCallbackPage() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8 dark:bg-gray-900">
         <div className={cardClass}>
-          <h2 className={headingClass}>Signing in is taking too long</h2>
-          <p className={bodyTextClass}>Something got stuck. Please start signing in again — you will get a new email.</p>
-          <a href="/login/mfa" className={`${primaryButtonClass} block text-center`}>Start again</a>
-          <GetHelp />
+          <SigningInStuck restartHref="/login/mfa" />
         </div>
       </div>
     );

@@ -58,6 +58,7 @@ describe('LoginMfaCallbackPage — tap-to-continue link', () => {
   it('keeps waiting for the tap well past the old 8-second give-up', async () => {
     vi.useFakeTimers();
     render(<LoginMfaCallbackPage />);
+    await act(async () => {}); // let the page reach the tap screen first, as it does at once in a browser
     await act(async () => { await vi.advanceTimersByTimeAsync(30000); });
     expect(screen.getByRole('button', { name: /finish signing in/i })).toBeInTheDocument();
     expect(screen.queryByText(/already been used/i)).not.toBeInTheDocument();
