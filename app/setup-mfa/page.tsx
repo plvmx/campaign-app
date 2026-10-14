@@ -9,10 +9,11 @@ import { TapToContinue } from '@/components/auth/TapToContinue';
 import { GetHelp } from '@/components/auth/GetHelp';
 import { SetupStep } from '@/components/auth/SetupStep';
 import { readTokenHashFromUrl, stripTokenHashFromUrl } from '@/lib/magicLinkToken';
+import { SigningInStuck, useStuckWatchdog } from '@/components/auth/SigningInStuck';
 
 const GIVE_UP_AFTER_MS = 8000;
 
-type Screen = 'waiting' | 'tap' | 'expired' | 'cancelled' | 'enrolling' | 'success';
+type Screen = 'waiting' | 'tap' | 'expired' | 'stuck' | 'cancelled' | 'enrolling' | 'success';
 
 /**
  * MFA enrollment landing page for the leader self-serve flow (see
@@ -33,15 +34,26 @@ export default function SetupMfaPage() {
   // used when the person taps the button (lib/magicLinkToken.ts).
   const [tokenHash, setTokenHash] = useState<string | null>(null);
   const handledRef = useRef(false);
+  // While a link's token waits for the tap, a session already saved on this
+  // device must not claim the sign-in (the tapped one would then be ignored —
+  // see app/login/mfa/callback/page.tsx, 2026-10-14).
+  const awaitingTapRef = useRef(false);
+
+  useStuckWatchdog(screen === 'waiting', () => setScreen('stuck'));
 
   // Sign-in wait — identical pattern to app/confirm-email/page.tsx.
   useEffect(() => {
     function handleSignedIn(session: { access_token: string }) {
-      if (handledRef.current) return;
+      if (handledRef.current || awaitingTapRef.current) return;
       handledRef.current = true;
       setAccessToken(session.access_token);
       setScreen('enrolling');
     }
+
+    // A token in the URL means "wait for the person to tap"; the give-up
+    // clock only starts once they do (handleTap).
+    const urlTokenHash = readTokenHashFromUrl();
+    awaitingTapRef.current = Boolean(urlTokenHash);
 
     const { data: { subscription } } = emailConfirmSupabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN' && session) handleSignedIn(session);
@@ -51,9 +63,6 @@ export default function SetupMfaPage() {
       if (session) handleSignedIn(session);
     });
 
-    // A token in the URL means "wait for the person to tap"; the give-up
-    // clock only starts once they do (handleTap).
-    const urlTokenHash = readTokenHashFromUrl();
     if (urlTokenHash) {
       Promise.resolve().then(() => {
         setTokenHash(urlTokenHash);
@@ -78,6 +87,7 @@ export default function SetupMfaPage() {
     setTokenHash(null);
     setScreen('waiting');
     stripTokenHashFromUrl();
+    awaitingTapRef.current = false;
     const { error } = await emailConfirmSupabase.auth.verifyOtp({ token_hash: token, type: 'email' });
     if (error) {
       setScreen('expired');
@@ -110,6 +120,16 @@ export default function SetupMfaPage() {
       <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8 dark:bg-gray-900">
         <div className={cardClass}>
           <h2 className={headingClass}>Signing you in…</h2>
+        </div>
+      </div>
+    );
+  }
+
+  if (screen === 'stuck') {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8 dark:bg-gray-900">
+        <div className={cardClass}>
+          <SigningInStuck restartHref="/login" />
         </div>
       </div>
     );

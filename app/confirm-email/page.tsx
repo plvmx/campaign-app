@@ -9,6 +9,7 @@ import { TapToContinue } from '@/components/auth/TapToContinue';
 import { GetHelp } from '@/components/auth/GetHelp';
 import { SetupStep } from '@/components/auth/SetupStep';
 import { readTokenHashFromUrl, stripTokenHashFromUrl } from '@/lib/magicLinkToken';
+import { SigningInStuck, useStuckWatchdog } from '@/components/auth/SigningInStuck';
 
 const GIVE_UP_AFTER_MS = 8000;
 const LINK_USED_MESSAGE =
@@ -17,7 +18,7 @@ const LINK_USED_MESSAGE =
 // 'confirmed' = email confirmed, leader is choosing whether to set up 2FA now;
 // 'enrolling' = running MfaEnrollmentFlow; 'done' = finished/declined/timed
 // out (the session is signed out by then, whichever way it got here).
-type Status = 'pending' | 'tap' | 'confirmed' | 'enrolling' | 'done' | 'error';
+type Status = 'pending' | 'tap' | 'confirmed' | 'enrolling' | 'done' | 'error' | 'stuck';
 
 /**
  * Magic-link confirmation landing page for the leader self-serve
@@ -45,6 +46,10 @@ export default function ConfirmEmailPage() {
   const [tokenHash, setTokenHash] = useState<string | null>(null);
   const [doneKind, setDoneKind] = useState<MfaEnrollmentOutcome | 'skipped' | 'timed-out'>('skipped');
   const handledRef = useRef(false);
+  // While a link's token waits for the tap, a session already saved on this
+  // device must not claim the sign-in (the tapped one would then be ignored —
+  // see app/login/mfa/callback/page.tsx, 2026-10-14).
+  const awaitingTapRef = useRef(false);
   const choiceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function clearChoiceTimer() {
@@ -54,9 +59,11 @@ export default function ConfirmEmailPage() {
     }
   }
 
+  useStuckWatchdog(status === 'pending', () => setStatus('stuck'));
+
   useEffect(() => {
     async function handleSignedIn(session: { access_token: string }) {
-      if (handledRef.current) return;
+      if (handledRef.current || awaitingTapRef.current) return;
       handledRef.current = true;
 
       // The session is only kept alive on the one path where the leader is
@@ -96,6 +103,11 @@ export default function ConfirmEmailPage() {
       }
     }
 
+    // A token in the URL means "wait for the person to tap"; the give-up
+    // clock only starts once they do (handleTap).
+    const urlTokenHash = readTokenHashFromUrl();
+    awaitingTapRef.current = Boolean(urlTokenHash);
+
     const { data: { subscription } } = emailConfirmSupabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN' && session) handleSignedIn(session);
     });
@@ -109,9 +121,6 @@ export default function ConfirmEmailPage() {
 
     // Nothing to wait for if the link was invalid/expired/already used —
     // the SDK won't produce a session or an event in that case.
-    // A token in the URL means "wait for the person to tap"; the give-up
-    // clock only starts once they do (handleTap).
-    const urlTokenHash = readTokenHashFromUrl();
     if (urlTokenHash) {
       Promise.resolve().then(() => {
         setTokenHash(urlTokenHash);
@@ -140,6 +149,7 @@ export default function ConfirmEmailPage() {
     setTokenHash(null);
     setStatus('pending');
     stripTokenHashFromUrl();
+    awaitingTapRef.current = false;
     const { error } = await emailConfirmSupabase.auth.verifyOtp({ token_hash: token, type: 'email' });
     if (error) {
       setStatus('error');
@@ -181,6 +191,16 @@ export default function ConfirmEmailPage() {
   async function handleRecoveryVerify(email: string, code: string) {
     const { error } = await emailConfirmSupabase.auth.verifyOtp({ email, token: code, type: 'email' });
     if (error) throw error;
+  }
+
+  if (status === 'stuck') {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8 dark:bg-gray-900">
+        <div className={cardClass}>
+          <SigningInStuck restartHref="/login" />
+        </div>
+      </div>
+    );
   }
 
   if (status === 'tap') {

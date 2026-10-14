@@ -13,6 +13,7 @@ vi.mock('react-qr-code', () => ({ default: ({ value }: { value: string }) => <di
 type AuthChangeCallback = (event: string, session: unknown) => void;
 let authChangeCallback: AuthChangeCallback | null = null;
 const mockVerifyOtp = vi.fn();
+const mockGetSession = vi.fn();
 
 vi.mock('@/lib/emailConfirmSupabaseClient', () => ({
   emailConfirmSupabase: {
@@ -21,7 +22,7 @@ vi.mock('@/lib/emailConfirmSupabaseClient', () => ({
         authChangeCallback = cb;
         return { data: { subscription: { unsubscribe: vi.fn() } } };
       },
-      getSession: () => Promise.resolve({ data: { session: null } }),
+      getSession: () => mockGetSession(),
       signOut: () => Promise.resolve({ error: null }),
       verifyOtp: (...a: unknown[]) => mockVerifyOtp(...a),
       mfa: {
@@ -40,6 +41,7 @@ import SetupMfaPage from '../page';
 beforeEach(() => {
   authChangeCallback = null;
   mockVerifyOtp.mockReset().mockResolvedValue({ error: null });
+  mockGetSession.mockReset().mockResolvedValue({ data: { session: null } });
   window.history.replaceState(null, '', '/setup-mfa?via=email&token_hash=hash-1&type=email');
   global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
 });
@@ -55,6 +57,7 @@ describe('SetupMfaPage — tap-to-continue link', () => {
   it('keeps waiting for the tap well past the old 8-second give-up', async () => {
     vi.useFakeTimers();
     render(<SetupMfaPage />);
+    await act(async () => {}); // let the page reach the tap screen first, as it does at once in a browser
     await act(async () => { await vi.advanceTimersByTimeAsync(30000); });
     expect(screen.getByRole('button', { name: /continue setting up/i })).toBeInTheDocument();
     expect(screen.queryByText(/already been used/i)).not.toBeInTheDocument();
@@ -75,6 +78,30 @@ describe('SetupMfaPage — tap-to-continue link', () => {
 
     await act(async () => { authChangeCallback!('SIGNED_IN', { access_token: 'tok', user: { id: 'u1' } }); });
     expect(await screen.findByTestId('qrcode')).toBeInTheDocument();
+  });
+
+  it('is not taken over by an older session already saved on the device (it used to freeze on "Signing you in…")', async () => {
+    mockGetSession.mockResolvedValue({ data: { session: { access_token: 'old-tok', user: { id: 'u0' } } } });
+    render(<SetupMfaPage />);
+    fireEvent.click(await screen.findByRole('button', { name: /continue setting up/i }));
+    await waitFor(() => expect(mockVerifyOtp).toHaveBeenCalled());
+
+    await act(async () => { authChangeCallback!('SIGNED_IN', { access_token: 'tok', user: { id: 'u1' } }); });
+    expect(await screen.findByTestId('qrcode')).toBeInTheDocument();
+  });
+
+  it('offers a way out instead of freezing on "Signing you in…" if the sign-in never arrives', async () => {
+    vi.useFakeTimers();
+    mockVerifyOtp.mockReturnValue(new Promise(() => {}));
+    render(<SetupMfaPage />);
+    await act(async () => {});
+    fireEvent.click(screen.getByRole('button', { name: /continue setting up/i }));
+    await act(async () => {});
+    expect(screen.getByText(/signing you in/i)).toBeInTheDocument();
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(20000); });
+    expect(screen.getByText(/taking too long/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /start again/i })).toHaveAttribute('href', '/login');
   });
 
   it('falls back to the email + code form if the token was already used', async () => {
