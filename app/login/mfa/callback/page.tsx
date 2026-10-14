@@ -17,11 +17,14 @@ import { clearPendingLoginStep } from '@/lib/pendingLoginStep';
 import { readTokenHashFromUrl, stripTokenHashFromUrl } from '@/lib/magicLinkToken';
 
 const GIVE_UP_AFTER_MS = 8000;
+// Once a sign-in is under way, how long "Signing you in…" may show before the
+// page admits it is stuck and offers a way out instead of freezing.
+const STUCK_AFTER_MS = 20000;
 
 const NOT_ENROLLED_MESSAGE =
   "Two-factor authentication isn't set up for this account yet — please sign in with your mobile number and name instead.";
 
-type Screen = 'waiting' | 'tap' | 'expired' | 'not-enrolled' | 'challenge' | 'role-picker';
+type Screen = 'waiting' | 'tap' | 'expired' | 'stuck' | 'not-enrolled' | 'challenge' | 'role-picker';
 
 /**
  * Magic-link callback for the real-auth + MFA leader login path
@@ -44,6 +47,12 @@ export default function LoginMfaCallbackPage() {
   const router = useRouter();
   const { refresh: refreshUser } = useUser();
   const handledRef = useRef(false);
+  // True while a scanner-proof link's token is waiting for the tap. Until then
+  // a session already saved on this device must not claim the sign-in:
+  // it used to, which left the tapped sign-in ignored and the page frozen on
+  // "Signing you in…" (Peter_AD, 2026-10-14).
+  const awaitingTapRef = useRef(false);
+  const screenRef = useRef<Screen>('waiting');
 
   const [screen, setScreen] = useState<Screen>('waiting');
   const [error, setError] = useState<string | null>(null);
@@ -54,6 +63,15 @@ export default function LoginMfaCallbackPage() {
   const [rows, setRows] = useState<AuthedLeaderRow[]>([]);
   const [factorId, setFactorId] = useState<string | null>(null);
   const [code, setCode] = useState('');
+
+  useEffect(() => { screenRef.current = screen; }, [screen]);
+
+  // Never leave the person on "Signing you in…" indefinitely.
+  function startStuckWatchdog() {
+    setTimeout(() => {
+      if (screenRef.current === 'waiting') setScreen('stuck');
+    }, STUCK_AFTER_MS);
+  }
 
   // Resolves sign-in once the account is known to be at aal2 (either
   // already, or right after a successful challenge): a single matching row
@@ -96,9 +114,18 @@ export default function LoginMfaCallbackPage() {
 
   useEffect(() => {
     async function handleSignedIn(session: { user: { id: string } }) {
-      if (handledRef.current) return;
+      if (handledRef.current || awaitingTapRef.current) return;
       handledRef.current = true;
+      startStuckWatchdog();
+      try {
+        await resolveSignedIn(session);
+      } catch (err) {
+        console.error('leader email sign-in failed:', err);
+        setScreen('stuck');
+      }
+    }
 
+    async function resolveSignedIn(session: { user: { id: string } }) {
       const { data, error: rowsError } = await supabase
         .from('state_leaders')
         .select('id, state, leader, admin, mfa_enrolled_at')
@@ -130,6 +157,11 @@ export default function LoginMfaCallbackPage() {
       setScreen('challenge');
     }
 
+    // A token in the URL means "wait for the person to tap"; the give-up
+    // clock only starts once they do (handleTap).
+    const urlTokenHash = readTokenHashFromUrl();
+    awaitingTapRef.current = Boolean(urlTokenHash);
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN' && session) handleSignedIn(session);
     });
@@ -140,9 +172,6 @@ export default function LoginMfaCallbackPage() {
       if (session) handleSignedIn(session);
     });
 
-    // A token in the URL means "wait for the person to tap"; the give-up
-    // clock only starts once they do (handleTap).
-    const urlTokenHash = readTokenHashFromUrl();
     if (urlTokenHash) {
       Promise.resolve().then(() => {
         setTokenHash(urlTokenHash);
@@ -168,6 +197,7 @@ export default function LoginMfaCallbackPage() {
     setTokenHash(null);
     setScreen('waiting');
     stripTokenHashFromUrl();
+    awaitingTapRef.current = false;
     const { error: verifyError } = await supabase.auth.verifyOtp({ token_hash: token, type: 'email' });
     if (verifyError) {
       setScreen('expired');
@@ -214,6 +244,25 @@ export default function LoginMfaCallbackPage() {
       <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8 dark:bg-gray-900">
         <div className={cardClass}>
           <h2 className={headingClass}>Signing you in…</h2>
+          {error && (
+            <>
+              <p role="alert" className={errorBannerClass}>{error}</p>
+              <a href="/login/mfa" className={`${secondaryButtonClass} block text-center`}>Back to sign in</a>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (screen === 'stuck') {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8 dark:bg-gray-900">
+        <div className={cardClass}>
+          <h2 className={headingClass}>Signing in is taking too long</h2>
+          <p className={bodyTextClass}>Something got stuck. Please start signing in again — you will get a new email.</p>
+          <a href="/login/mfa" className={`${primaryButtonClass} block text-center`}>Start again</a>
+          <GetHelp />
         </div>
       </div>
     );
