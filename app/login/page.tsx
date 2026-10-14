@@ -4,7 +4,7 @@ import { useState, FormEvent, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { shouldSkipToEmailLogin } from '@/lib/emailLoginPreference';
-import { getSession, validateStateLeader, completeSignIn, type StateLeaderMatch } from '@/lib/auth';
+import { getVerifiedSession, validateStateLeader, completeSignIn, type StateLeaderMatch } from '@/lib/auth';
 import { emailConfirmSupabase } from '@/lib/emailConfirmSupabaseClient';
 import { getErrorMessage } from '@/lib/errorUtils';
 import { isValidEmail } from '@/lib/validation';
@@ -88,7 +88,7 @@ export default function LoginPage() {
         // Read before anything else: a "Check your inbox" screen that was open
         // when the page reloaded (see lib/pendingLoginStep.ts).
         const pending = readPendingLoginStep();
-        const session = await getSession();
+        const session = await getVerifiedSession();
         // Put the leader back on that screen rather than bouncing a signed-in
         // leader to /app — they had left to fetch the emailed code. A plain
         // leader (who has no app session on this path, same as an admin) is

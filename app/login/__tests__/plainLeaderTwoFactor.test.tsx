@@ -24,7 +24,7 @@ const mockValidate = vi.fn();
 const mockCompleteSignIn = vi.fn();
 vi.mock('@/lib/auth', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/auth')>()),
-  getSession: vi.fn().mockResolvedValue(null),
+  getVerifiedSession: vi.fn().mockResolvedValue(null),
   validateStateLeader: (...a: unknown[]) => mockValidate(...a),
   completeSignIn: (...a: unknown[]) => mockCompleteSignIn(...a),
 }));

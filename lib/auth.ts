@@ -1,3 +1,4 @@
+import { isAuthApiError } from '@supabase/supabase-js';
 import { supabase } from './supabaseClient';
 
 export interface User {
@@ -120,6 +121,11 @@ function setAppSessionCookie(maxAgeSeconds?: number): void {
   const secure = location.protocol === 'https:' ? '; Secure' : '';
   const maxAge = maxAgeSeconds ? `; Max-Age=${maxAgeSeconds}` : '';
   document.cookie = `app_session=1; path=/; SameSite=Lax${secure}${maxAge}`;
+}
+
+function clearAppSessionCookie(): void {
+  if (typeof document === 'undefined') return;
+  document.cookie = 'app_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
 }
 
 /**
@@ -305,9 +311,7 @@ export async function signOut() {
   const { error } = await signOutClearingAccess();
   if (error) throw error;
   // Clear the session-indicator cookie set on login.
-  if (typeof document !== 'undefined') {
-    document.cookie = 'app_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
-  }
+  clearAppSessionCookie();
 }
 
 export async function getCurrentUser(): Promise<User | null> {
@@ -320,6 +324,32 @@ export async function getSession() {
   const { data: { session }, error } = await supabase.auth.getSession();
   if (error) throw error;
   return session;
+}
+
+/**
+ * Like getSession(), but only returns the session if Supabase's server still
+ * accepts it. getSession() just reads the copy saved on the device, so a
+ * session the server has since rejected (banned — e.g. by
+ * scripts/revoke_admin_app_sessions.ts — deleted, or otherwise invalid) still
+ * looks signed in. /login used to send that to /app, whose own server check
+ * (UserContext → getUser()) sent it straight back to /login, forever — the
+ * phone just showed "Checking sign-in status…" (Peter_AD, 2026-10-14).
+ *
+ * A rejected session is cleared from this device (local sign-out only — the
+ * server has already disowned it) along with the app_session cookie. A
+ * network failure returns null without clearing anything, so a leader who is
+ * briefly offline isn't signed out.
+ */
+export async function getVerifiedSession() {
+  const session = await getSession();
+  if (!session) return null;
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (user && !error) return session;
+  if (!error || isAuthApiError(error)) {
+    await supabase.auth.signOut({ scope: 'local' });
+    clearAppSessionCookie();
+  }
+  return null;
 }
 
 

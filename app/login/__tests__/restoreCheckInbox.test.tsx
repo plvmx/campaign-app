@@ -25,7 +25,7 @@ vi.mock('@/lib/emailConfirmSupabaseClient', () => ({
 const mockGetSession = vi.fn();
 vi.mock('@/lib/auth', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/auth')>()),
-  getSession: (...a: unknown[]) => mockGetSession(...a),
+  getVerifiedSession: (...a: unknown[]) => mockGetSession(...a),
 }));
 
 import LoginPage from '../page';
