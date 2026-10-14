@@ -610,7 +610,7 @@ export default function LoginPage() {
 
   if (showActionChooser) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8 dark:bg-gray-900">
+      <div className="large-text flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8 dark:bg-gray-900">
         <div className={cardClass}>
           <div className="space-y-6">
             <h2 className="text-center text-xl font-bold text-gray-900 dark:text-gray-100">
@@ -669,7 +669,7 @@ export default function LoginPage() {
 
   if (recentCampaigns) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8 dark:bg-gray-900">
+      <div className="large-text flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8 dark:bg-gray-900">
         <div className={cardClass}>
           <div className="space-y-6">
             <h2 className="text-center text-xl font-bold text-gray-900 dark:text-gray-100">
@@ -710,7 +710,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8 dark:bg-gray-900">
+    <div className="large-text flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8 dark:bg-gray-900">
       <div className={cardClass}>
 
         {/* Logo + title (always shown) */}

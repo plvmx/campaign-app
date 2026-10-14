@@ -63,6 +63,8 @@ function MobileLayoutNavWithSearchParams({ pathname, navItems }: { pathname: str
 
 export default function MobileLayout({ children }: MobileLayoutProps) {
   const pathname = usePathname();
+  // Larger text everywhere except the admin screens (dense tables) — see `.large-text` in app/globals.css.
+  const largeText = !(pathname ?? '').startsWith('/admin');
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [adminStatus, setAdminStatus] = useState<string | null>(null);
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
@@ -146,7 +148,7 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto overflow-x-hidden pb-20">
+      <main className={`flex-1 overflow-y-auto overflow-x-hidden pb-20 ${largeText ? 'large-text' : ''}`}>
         {children}
       </main>
 

@@ -24,3 +24,22 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/*
+ * Larger text for leader- and public-facing screens (older leaders with reading
+ * difficulties — Peter, 2026-10-14). Put the `large-text` class on a wrapper and
+ * every Tailwind text size inside it goes up by roughly 4px. This is deliberately
+ * plain, UNLAYERED CSS: unlayered rules beat Tailwind's layered utilities, so it
+ * wins over the element's own `text-sm` (and over `sm:text-…` variants) without
+ * editing hundreds of class lists. Not applied to /admin (dense tables), the
+ * header/bottom-nav chrome, or the email/2FA setup screens (those already use
+ * large sizes explicitly — components/auth/CodeEntryScreen.tsx). Keep the scale
+ * in sync with components/__tests__/largeText.test.ts.
+ */
+.large-text .text-xs   { font-size: 1rem;     line-height: 1.5rem; }
+.large-text .text-sm   { font-size: 1.125rem; line-height: 1.75rem; }
+.large-text .text-base { font-size: 1.25rem;  line-height: 1.875rem; }
+.large-text .text-lg   { font-size: 1.375rem; line-height: 2rem; }
+.large-text .text-xl   { font-size: 1.5rem;   line-height: 2.125rem; }
+.large-text .text-2xl  { font-size: 1.75rem;  line-height: 2.25rem; }
+.large-text .text-3xl  { font-size: 2.125rem; line-height: 2.5rem; }
