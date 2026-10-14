@@ -511,8 +511,11 @@ function AppPageContent() {
 
           {/* Campaign list */}
           <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white shadow-sm dark:bg-gray-800 w-full overflow-hidden">
-            <div className="px-4 py-3 flex items-center justify-between gap-2">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 shrink-0">
+            {/* flex-wrap: with the larger text (`large-text`) the heading and the View/Edit toggle no
+                longer fit side by side on a phone, and the toggle ran off the screen — it now drops
+                to a second line instead. */}
+            <div className="px-4 py-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
                 {dateFilter === 'past' && `Past Campaigns (${filteredCampaigns.length})`}
                 {dateFilter === 'future' && `Future Campaigns (${filteredCampaigns.length})`}
               </h2>
