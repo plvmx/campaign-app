@@ -1,0 +1,11 @@
+<div style="font-family: Arial, Helvetica, sans-serif; font-size: 22px; line-height: 1.6; color: #111111; max-width: 600px;">
+  <p style="font-size: 22px;">Hello,</p>
+  <p style="font-size: 22px;">Please tap the big blue button below to continue with the AFJ Campaign App.</p>
+  <p>
+    <a href="{{ .RedirectTo }}&token_hash={{ .TokenHash }}&type=email"
+       style="display: block; background-color: #1d4ed8; color: #ffffff; font-size: 30px; font-weight: bold; text-align: center; text-decoration: none; padding: 20px 12px; border-radius: 8px;">CONFIRM NOW</a>
+  </p>
+  <p style="font-size: 22px;">If the button does not work, go back to the app and choose to type a code instead. Type this number:</p>
+  <p style="font-size: 36px; font-weight: bold; letter-spacing: 4px; text-align: center;">{{ .Token }}</p>
+  <p style="font-size: 18px; color: #444444;">If you did not ask for this email, you can ignore it.</p>
+</div>
