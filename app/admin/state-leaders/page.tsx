@@ -10,6 +10,11 @@ import { AUSTRALIAN_STATES } from '@/lib/constants';
 import { getErrorMessage } from '@/lib/errorUtils';
 import { isValidEmail } from '@/lib/validation';
 import { isRecognizedAdminStatus } from '@/lib/campaignFilter';
+import {
+  type StateLeaderRoleFilter,
+  STATE_LEADER_ROLE_FILTER_OPTIONS,
+  matchesStateLeaderRoleFilter,
+} from '@/lib/stateLeaderRoleFilter';
 import { requestMfaReset } from '@/lib/services/mfaResetClient';
 import {
   type StateLeader,
@@ -47,6 +52,7 @@ export default function StateLeadersPage() {
   const [filterState, setFilterState] = useState<string>('');
   const [filterName, setFilterName]   = useState<string>('');
   const [filterMobile, setFilterMobile] = useState<string>('');
+  const [filterRole, setFilterRole] = useState<StateLeaderRoleFilter>('');
 
   useEffect(() => {
     if (isUserLoading) return;
@@ -75,17 +81,23 @@ export default function StateLeadersPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterState, hasAccess]);
 
-  // Dropdown options derived from already-fetched data, scoped to the selected state.
+  // Dropdown options derived from already-fetched data, scoped to the selected state and role.
   // Must be declared before any early returns to satisfy Rules of Hooks.
-  const filterNameOptions = useMemo(() => {
-    const source = filterState ? stateLeaders.filter(sl => sl.state === filterState) : stateLeaders;
-    return [...new Set(source.map(sl => sl.leader))].sort();
-  }, [stateLeaders, filterState]);
+  const filterOptionSource = useMemo(
+    () => stateLeaders.filter(sl =>
+      (!filterState || sl.state === filterState) && matchesStateLeaderRoleFilter(sl.admin, filterRole)),
+    [stateLeaders, filterState, filterRole],
+  );
 
-  const filterMobileOptions = useMemo(() => {
-    const source = filterState ? stateLeaders.filter(sl => sl.state === filterState) : stateLeaders;
-    return [...new Set(source.map(sl => sl.mobile).filter((m): m is string => !!m))].sort();
-  }, [stateLeaders, filterState]);
+  const filterNameOptions = useMemo(
+    () => [...new Set(filterOptionSource.map(sl => sl.leader))].sort(),
+    [filterOptionSource],
+  );
+
+  const filterMobileOptions = useMemo(
+    () => [...new Set(filterOptionSource.map(sl => sl.mobile).filter((m): m is string => !!m))].sort(),
+    [filterOptionSource],
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -230,6 +242,7 @@ export default function StateLeadersPage() {
 
   const filteredLeaders = stateLeaders.filter((sl) => {
     if (filterState  && sl.state !== filterState) return false;
+    if (!matchesStateLeaderRoleFilter(sl.admin, filterRole)) return false;
     if (filterName   && !sl.leader.toLowerCase().includes(filterName.toLowerCase())) return false;
     if (filterMobile && !(sl.mobile ?? '').toLowerCase().includes(filterMobile.toLowerCase())) return false;
     return true;
@@ -379,7 +392,7 @@ export default function StateLeadersPage() {
         </div>
 
         {/* Filters */}
-        <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div>
             <label htmlFor="filter-state" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
               Filter by State
@@ -395,6 +408,21 @@ export default function StateLeadersPage() {
                 <option key={state} value={state}>
                   {state}
                 </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="filter-role" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Filter by Role
+            </label>
+            <select
+              id="filter-role"
+              value={filterRole}
+              onChange={(e) => { setFilterRole(e.target.value as StateLeaderRoleFilter); setFilterName(''); setFilterMobile(''); }}
+              className="mt-1 block w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
+            >
+              {STATE_LEADER_ROLE_FILTER_OPTIONS.map(({ value, label }) => (
+                <option key={value} value={value}>{label}</option>
               ))}
             </select>
           </div>
