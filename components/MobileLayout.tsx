@@ -19,6 +19,8 @@ type NavItem = {
   iconImage?: string;
   isSrAdmin?: boolean;
   isTlAdmin?: boolean;
+  /** Shown as bold text only (no icon), centred in the button. */
+  textOnly?: boolean;
 };
 
 function MobileLayoutNav({ pathname, navItems }: { pathname: string; navItems: NavItem[] }) {
@@ -42,12 +44,14 @@ function MobileLayoutNav({ pathname, navItems }: { pathname: string; navItems: N
                 : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100'
             }`}
           >
-            {'iconImage' in item && item.iconImage ? (
+            {item.textOnly ? (
+              <span className="text-center text-base font-extrabold leading-tight tracking-wide">{item.label}</span>
+            ) : 'iconImage' in item && item.iconImage ? (
               <img src={item.iconImage} alt="" className="h-6 w-6 object-contain" />
             ) : (
               <span className="text-xl">{item.icon}</span>
             )}
-            <span className="text-xs font-medium">{item.label}</span>
+            {!item.textOnly && <span className="text-xs font-medium">{item.label}</span>}
           </Link>
         );
       })}
@@ -98,17 +102,18 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
   const adminNavItem: NavItem   = { href: '/admin',         label: 'Admin',   icon: '⚙️' };
   const srAdminNavItem: NavItem = { href: '/app/sr-admin',  label: 'Admin',    icon: '⚙️', isSrAdmin: true };
   const tlAdminNavItem: NavItem = { href: '/app/tl-admin',  label: 'My Admin', icon: '⚙️', isTlAdmin: true };
+  const guideNavItem: NavItem   = { href: '/app/guide',     label: 'GUIDE ME', textOnly: true };
 
   // Full admins (AD): Home | Metrics | Admin
   // State reporters (SR): Home | SR Admin
-  // Team leaders: Home | TL Admin
+  // Team leaders: Home | Guide Me | TL Admin
   const navItems: NavItem[] = isAdmin === null
     ? []
     : isAdmin
       ? [homeNavItem, metricsNavItem, adminNavItem]
       : adminStatus === 'SR'
         ? [homeNavItem, srAdminNavItem]
-        : [homeNavItem, tlAdminNavItem];
+        : [homeNavItem, guideNavItem, tlAdminNavItem];
 
   const handleSignOut = async () => {
     setShowSignOutConfirm(false);
