@@ -7,9 +7,9 @@ async function authHeader(): Promise<Record<string, string>> {
   return { Authorization: `Bearer ${session.access_token}` };
 }
 
-/** Browser-side call to GET /api/leader/user-guide. Null when no guide has been uploaded yet. */
+/** Browser-side call to GET /api/public/user-guide (no sign-in needed). Null when no guide has been uploaded yet. */
 export async function fetchUserGuide(): Promise<UserGuideView | null> {
-  const res = await fetch('/api/leader/user-guide', { headers: await authHeader() });
+  const res = await fetch('/api/public/user-guide');
   const json = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error((json as { error?: string }).error || 'The guide could not be loaded');
   const { url, uploadedAt } = json as { url: string | null; uploadedAt?: string };
