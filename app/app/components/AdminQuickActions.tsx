@@ -1,6 +1,7 @@
 'use client';
 import { useRouter } from 'next/navigation';
 import { PUBLIC_LINKS } from '@/lib/publicLinks';
+import { withBackToApp } from '@/components/BackToAppBar';
 
 /** Public links offered as shortcuts, by their `lib/publicLinks.ts` slug. */
 const QUICK_PUBLIC_LINK_SLUGS = ['week1-campaigns', 'campaign-results'];
@@ -34,7 +35,7 @@ export default function AdminQuickActions() {
           Check if a Person is Registered
         </button>
         {QUICK_PUBLIC_LINKS.map((link) => (
-          <button key={link.slug} onClick={() => router.push(link.path)} className={BUTTON_CLASS}>
+          <button key={link.slug} onClick={() => router.push(withBackToApp(link.path))} className={BUTTON_CLASS}>
             {link.title}
           </button>
         ))}
