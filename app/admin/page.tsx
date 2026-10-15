@@ -327,7 +327,7 @@ export default function AdminPage() {
             </button>
           </div>
 
-          {/* CAS User Guide ("GUIDE ME" button) */}
+          {/* CAS User Guide ("OPEN GUIDE" button) */}
           <UserGuideUploadCard />
 
           {/* Leader Sharing */}

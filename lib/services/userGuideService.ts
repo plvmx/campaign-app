@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 /**
- * The CAS User Guide PDF that leaders open from the "GUIDE ME" button.
+ * The CAS User Guide PDF that leaders open from the "OPEN GUIDE" button.
  *
  * Kept in a **private** Supabase Storage bucket (the guide carries
  * screenshots and support phone numbers, so it isn't put on a public URL).

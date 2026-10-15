@@ -19,7 +19,7 @@ type NavItem = {
   iconImage?: string;
   isSrAdmin?: boolean;
   isTlAdmin?: boolean;
-  /** Shown as bold text only (no icon), centred in the button. */
+  /** Bold gold text only (no icon), one word per line, centred in the button. */
   textOnly?: boolean;
 };
 
@@ -45,7 +45,9 @@ function MobileLayoutNav({ pathname, navItems }: { pathname: string; navItems: N
             }`}
           >
             {item.textOnly ? (
-              <span className="text-center text-base font-extrabold leading-tight tracking-wide">{item.label}</span>
+              <span className="flex flex-col items-center text-center text-base font-extrabold leading-tight tracking-wide text-amber-500 dark:text-amber-400">
+                {item.label.split(' ').map((word) => <span key={word}>{word}</span>)}
+              </span>
             ) : 'iconImage' in item && item.iconImage ? (
               <img src={item.iconImage} alt="" className="h-6 w-6 object-contain" />
             ) : (
@@ -102,11 +104,11 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
   const adminNavItem: NavItem   = { href: '/admin',         label: 'Admin',   icon: '⚙️' };
   const srAdminNavItem: NavItem = { href: '/app/sr-admin',  label: 'Admin',    icon: '⚙️', isSrAdmin: true };
   const tlAdminNavItem: NavItem = { href: '/app/tl-admin',  label: 'My Admin', icon: '⚙️', isTlAdmin: true };
-  const guideNavItem: NavItem   = { href: '/app/guide',     label: 'GUIDE ME', textOnly: true };
+  const guideNavItem: NavItem   = { href: '/app/guide',     label: 'OPEN GUIDE', textOnly: true };
 
   // Full admins (AD): Home | Metrics | Admin
   // State reporters (SR): Home | SR Admin
-  // Team leaders: Home | Guide Me | TL Admin
+  // Team leaders: Home | Open Guide | TL Admin
   const navItems: NavItem[] = isAdmin === null
     ? []
     : isAdmin

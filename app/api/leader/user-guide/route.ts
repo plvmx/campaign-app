@@ -1,5 +1,5 @@
 /**
- * A short-lived link to the current CAS User Guide PDF, for the "GUIDE ME"
+ * A short-lived link to the current CAS User Guide PDF, for the "OPEN GUIDE"
  * button — see lib/services/userGuideService.ts. The guide lives in a
  * private bucket, so the caller must be proven to be a real state_leaders
  * row (any role), not merely signed in.
