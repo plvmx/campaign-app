@@ -32,6 +32,7 @@ const ROUTES: Array<[string, () => Promise<{ POST?: Handler; GET?: Handler }>, '
   ['stuck-leaders', () => import('../stuck-leaders/route'), 'GET'],
   ['reset-mfa', () => import('../reset-mfa/route'), 'POST'],
   ['check-registration', () => import('../check-registration/route'), 'POST'],
+  ['user-guide/upload-url', () => import('../user-guide/upload-url/route'), 'POST'],
 ];
 
 function makeRequest(name: string, token?: string, method: 'POST' | 'GET' = 'POST') {
