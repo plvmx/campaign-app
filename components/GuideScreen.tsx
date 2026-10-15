@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import OpenGuideLabel from '@/components/OpenGuideLabel';
 import PdfGuideViewer from '@/components/PdfGuideViewer';
 import { getErrorMessage } from '@/lib/errorUtils';
 import { fetchUserGuide } from '@/lib/services/userGuideClient';
@@ -86,16 +87,20 @@ export default function GuideScreen({ onClose }: { onClose: () => void }) {
 
 /**
  * The OPEN GUIDE button for the sign-in and "What do you want to do today?"
- * screens — same bold gold wording as the bottom-bar button.
+ * screens — deliberately low-key, styled exactly like the bottom-bar button
+ * (Peter, 2026-10-15): just the gold stacked label, no box.
  */
 export function OpenGuideButton({ onClick }: { onClick: () => void }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="w-full rounded-md border-2 border-gray-800 bg-white px-4 py-3 text-xl font-extrabold tracking-wide text-amber-500 hover:bg-amber-50 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 dark:border-gray-600 dark:bg-gray-800 dark:text-amber-400 dark:hover:bg-gray-700"
-    >
-      OPEN GUIDE
-    </button>
+    <div className="flex justify-center">
+      <button
+        type="button"
+        onClick={onClick}
+        aria-label="OPEN GUIDE"
+        className="rounded-md px-4 py-2 hover:bg-amber-50 focus:outline-none focus:ring-2 focus:ring-amber-500 dark:hover:bg-gray-800"
+      >
+        <OpenGuideLabel />
+      </button>
+    </div>
   );
 }

@@ -6,6 +6,7 @@ import { usePathname, useSearchParams } from 'next/navigation';
 import { signOut } from '@/lib/auth';
 import { supabase } from '@/lib/supabaseClient';
 import Modal from '@/components/Modal';
+import OpenGuideLabel from '@/components/OpenGuideLabel';
 import { getUserAdminStatusAndMobile } from '@/lib/campaignFilter';
 
 interface MobileLayoutProps {
@@ -19,7 +20,7 @@ type NavItem = {
   iconImage?: string;
   isSrAdmin?: boolean;
   isTlAdmin?: boolean;
-  /** Bold gold text only (no icon), one word per line, centred in the button. */
+  /** The OPEN GUIDE item: bold gold stacked label (OpenGuideLabel) instead of icon + label. */
   textOnly?: boolean;
 };
 
@@ -45,9 +46,7 @@ function MobileLayoutNav({ pathname, navItems }: { pathname: string; navItems: N
             }`}
           >
             {item.textOnly ? (
-              <span className="flex flex-col items-center text-center text-base font-extrabold leading-tight tracking-wide text-amber-500 dark:text-amber-400">
-                {item.label.split(' ').map((word) => <span key={word}>{word}</span>)}
-              </span>
+              <OpenGuideLabel />
             ) : 'iconImage' in item && item.iconImage ? (
               <img src={item.iconImage} alt="" className="h-6 w-6 object-contain" />
             ) : (
