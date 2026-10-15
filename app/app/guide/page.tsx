@@ -10,7 +10,7 @@ import { fetchUserGuide } from '@/lib/services/userGuideClient';
 import { formatGuideDate, type UserGuideView } from '@/lib/services/userGuideService';
 
 /**
- * "GUIDE ME" — opens the current CAS User Guide PDF (uploaded by an admin on
+ * "OPEN GUIDE" — opens the current CAS User Guide PDF (uploaded by an admin on
  * /admin; see lib/services/userGuideService.ts). The PDF opens in the
  * phone's own PDF viewer rather than inside the app, since an embedded PDF
  * on a phone often shows only the first page.
