@@ -9,13 +9,20 @@ vi.mock('next/navigation', () => ({
 
 import AdminQuickActions from '../AdminQuickActions';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  mockPush.mockClear();
+});
 
 describe('AdminQuickActions', () => {
-  it('offers only the registry lookup — no download buttons or state filter', () => {
+  it('offers the registry lookup and two public links — no download buttons or state filter', () => {
     render(<AdminQuickActions />);
 
-    expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual(['Check if a Person is Registered']);
+    expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual([
+      'Check if a Person is Registered',
+      'Week 1 Campaigns',
+      'Campaign Results',
+    ]);
     expect(screen.queryByRole('combobox')).toBeNull();
   });
 
@@ -23,5 +30,14 @@ describe('AdminQuickActions', () => {
     render(<AdminQuickActions />);
     screen.getByRole('button', { name: 'Check if a Person is Registered' }).click();
     expect(mockPush).toHaveBeenCalledWith('/admin/check-registration');
+  });
+
+  it.each([
+    ['Week 1 Campaigns', '/public/week1-campaigns'],
+    ['Campaign Results', '/public/campaign-results'],
+  ])('opens the %s public link', (name, path) => {
+    render(<AdminQuickActions />);
+    screen.getByRole('button', { name }).click();
+    expect(mockPush).toHaveBeenCalledWith(path);
   });
 });
