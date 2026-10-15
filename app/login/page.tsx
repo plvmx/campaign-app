@@ -18,6 +18,7 @@ import { AUSTRALIAN_STATE_NAMES } from '@/lib/constants';
 import { InlineCodeFallback } from '@/components/auth/InlineCodeFallback';
 import { cardClass as setupCardClass, bodyTextClass, headingClass, errorBannerClass, primaryButtonClass, secondaryButtonClass, inputClass } from '@/components/auth/CodeEntryScreen';
 import { GetHelp } from '@/components/auth/GetHelp';
+import GuideScreen, { OpenGuideButton } from '@/components/GuideScreen';
 import { SetupStep } from '@/components/auth/SetupStep';
 import { getAdminLoginGate, type AdminLoginGate } from '@/lib/adminLoginGate';
 import { clearPendingLoginStep, readPendingLoginStep, savePendingLoginStep } from '@/lib/pendingLoginStep';
@@ -76,6 +77,11 @@ export default function LoginPage() {
   // the same no-skip email/2FA steps an admin does, instead of a plain sign-in.
   // Everyone else is no longer prompted to set up email or 2FA at sign-in.
   const [requireTwoFactor, setRequireTwoFactor] = useState(false);
+  // OPEN GUIDE on the sign-in form and the "What do you want to do today?"
+  // screen shows the guide in place rather than navigating away, so Close
+  // returns to exactly where the leader was (anything typed, the chooser) —
+  // coming back to /login with a session would otherwise jump to /app.
+  const [showGuide, setShowGuide] = useState(false);
 
   // Set once the on-load restore check below has finished, so the persist
   // effect doesn't clear a remembered step before it has been read.
@@ -430,6 +436,8 @@ export default function LoginPage() {
   };
 
   // ── Loading / session-check spinner ──────────────────────────────────────
+  if (showGuide) return <GuideScreen onClose={() => setShowGuide(false)} />;
+
   if (checkingSession) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-gray-900">
@@ -661,6 +669,7 @@ export default function LoginPage() {
                 </button>
               )}
             </div>
+            <OpenGuideButton onClick={() => setShowGuide(true)} />
           </div>
         </div>
       </div>
@@ -856,15 +865,8 @@ export default function LoginPage() {
               </button>
             </div>
 
-            {/* For leaders who've confirmed their email and set up an
-                authenticator app (see app/login/mfa/page.tsx) — mobile+name
-                stays the only option for everyone else. */}
-            <a
-              href="/login/mfa"
-              className={`${secondaryButtonClass} block text-center`}
-            >
-              Already set up two-factor authentication? Sign in with email instead
-            </a>
+            {/* New leaders: the guide covers installing the app and signing in. */}
+            <OpenGuideButton onClick={() => setShowGuide(true)} />
           </form>
         )}
       </div>

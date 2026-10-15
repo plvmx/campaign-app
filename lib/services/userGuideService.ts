@@ -3,13 +3,13 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 /**
  * The CAS User Guide PDF that leaders open from the "OPEN GUIDE" button.
  *
- * Kept in a **private** Supabase Storage bucket (the guide carries
- * screenshots and support phone numbers, so it isn't put on a public URL).
- * Nothing in the browser reads the bucket directly: leaders get a
- * short-lived signed URL from GET /api/leader/user-guide, and an admin
- * uploads through a one-time signed upload URL from
- * POST /api/admin/user-guide/upload-url — direct to Storage, so a large PDF
- * never hits Vercel's request-body limit.
+ * Kept in a **private** Supabase Storage bucket, so the PDF never sits at a
+ * fixed public address; it's reached only through short-lived signed URLs
+ * from GET /api/public/user-guide. That route needs no sign-in — the guide is
+ * offered on the sign-in screen for new leaders, and Peter decided
+ * (2026-10-15) that anyone may read it. An admin uploads through a one-time
+ * signed upload URL from POST /api/admin/user-guide/upload-url — direct to
+ * Storage, so a large PDF never hits Vercel's request-body limit.
  *
  * Each upload gets a new timestamped name and the newest file is the current
  * guide, so a replaced guide is never served from a stale CDN cache. Before

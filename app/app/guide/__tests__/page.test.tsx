@@ -11,7 +11,6 @@ const mockFetchGuide = vi.fn();
 let viewerProps: { url: string; onError: (e: unknown) => void } | null = null;
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ back: mockBack, push: mockPush }) }));
-vi.mock('@/contexts/UserContext', () => ({ useUser: () => ({ user: { id: 'u1' }, isLoading: false }) }));
 vi.mock('@/lib/services/userGuideClient', () => ({ fetchUserGuide: () => mockFetchGuide() }));
 vi.mock('@/components/PdfGuideViewer', () => ({
   default: (props: { url: string; onError: (e: unknown) => void }) => {
