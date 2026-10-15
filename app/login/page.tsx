@@ -1,5 +1,6 @@
 'use client';
 
+import { BusyChoiceButtons } from '@/components/auth/BusyChoiceButtons';
 import { useState, FormEvent, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
@@ -758,40 +759,28 @@ export default function LoginPage() {
               </p>
             </div>
 
-            <div className="flex flex-col gap-3">
-              {pendingMatches.map(match => {
-                const isSelected = selectedStateId === match.id;
-                const isOther    = isLoading && !isSelected;
-                return (
-                  <button
-                    key={match.id}
-                    onClick={() => handleStateSelect(match)}
-                    disabled={isLoading}
-                    className={[
-                      'w-full rounded-md px-4 py-3 text-base font-bold text-white',
-                      'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2',
-                      'border-2 border-gray-800 dark:border-gray-600',
-                      'disabled:cursor-not-allowed',
-                      isSelected
-                        ? 'bg-blue-600 opacity-75'   // selected: stays blue, slightly dimmed
-                        : isOther
-                          ? 'bg-gray-400'             // others: greyed out while one is loading
-                          : 'bg-blue-600 hover:bg-blue-700', // normal state
-                    ].join(' ')}
-                  >
+            <BusyChoiceButtons
+              choices={pendingMatches.map(match => ({
+                id: match.id,
+                label: (
+                  <>
                     {match.state}
                     {AUSTRALIAN_STATE_NAMES[match.state] && (
                       <span className="ml-2 text-sm font-normal opacity-90">
                         — {AUSTRALIAN_STATE_NAMES[match.state]}
                       </span>
                     )}
-                    {isSelected && (
-                      <span className="ml-2 text-sm font-normal opacity-90">Signing in…</span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
+                  </>
+                ),
+              }))}
+              selectedId={selectedStateId}
+              busy={isLoading}
+              onSelect={id => { const match = pendingMatches.find(m => m.id === id); if (match) handleStateSelect(match); }}
+              baseClass="w-full rounded-md px-4 py-3 text-base font-bold text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600 disabled:cursor-not-allowed"
+              idleClass="bg-blue-600 hover:bg-blue-700"
+              selectedClass="bg-blue-600 opacity-75"
+              otherClass="bg-gray-400"
+            />
 
             <button
               onClick={() => { setPendingMatches(null); setError(null); }}
