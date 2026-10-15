@@ -33,9 +33,9 @@ describe('AdminQuickActions', () => {
   });
 
   it.each([
-    ['Week 1 Campaigns', '/public/week1-campaigns'],
-    ['Campaign Results', '/public/campaign-results'],
-  ])('opens the %s public link', (name, path) => {
+    ['Week 1 Campaigns', '/public/week1-campaigns?from=app'],
+    ['Campaign Results', '/public/campaign-results?from=app'],
+  ])('opens the %s public link with a way back to the app', (name, path) => {
     render(<AdminQuickActions />);
     screen.getByRole('button', { name }).click();
     expect(mockPush).toHaveBeenCalledWith(path);
