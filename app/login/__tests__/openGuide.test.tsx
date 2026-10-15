@@ -35,7 +35,12 @@ describe('LoginPage — OPEN GUIDE', () => {
     render(<LoginPage />);
     fireEvent.change(await screen.findByLabelText(/mobile number/i), { target: { value: '0400 000 000' } });
 
-    fireEvent.click(screen.getByRole('button', { name: 'OPEN GUIDE' }));
+    // Low-key, same as the bottom-bar button: stacked gold label, no box.
+    const button = screen.getByRole('button', { name: 'OPEN GUIDE' });
+    expect(button.className).not.toMatch(/border|bg-white/);
+    expect(button.querySelector('.text-amber-500')).toHaveTextContent('OPENGUIDE');
+
+    fireEvent.click(button);
     expect(await screen.findByTestId('viewer')).toHaveTextContent('https://signed/guide.pdf');
     expect(mockPush).not.toHaveBeenCalled();
 
