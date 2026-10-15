@@ -8,6 +8,7 @@ import { completeLeaderAuthSignIn, signOutClearingAccess, type AuthedLeaderRow }
 import { useUser } from '@/contexts/UserContext';
 import { getLeaderRoleLabel } from '@/lib/leaderRoleLabel';
 import { CodeEntryScreen, cardClass, bodyTextClass, primaryButtonClass, secondaryButtonClass, errorBannerClass, headingClass } from '@/components/auth/CodeEntryScreen';
+import { BusyChoiceButtons } from '@/components/auth/BusyChoiceButtons';
 import { getErrorMessage } from '@/lib/errorUtils';
 import { describeMfaVerifyError } from '@/lib/mfaErrors';
 import { EmailAndCodeFallback } from '@/components/auth/EmailAndCodeFallback';
@@ -54,6 +55,7 @@ export default function LoginMfaCallbackPage() {
   const [screen, setScreen] = useState<Screen>('waiting');
   const [error, setError] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
+  const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
   // Scanner-proof link: the token is only used when the person taps the button (lib/magicLinkToken.ts).
   const [tokenHash, setTokenHash] = useState<string | null>(null);
 
@@ -77,6 +79,7 @@ export default function LoginMfaCallbackPage() {
   }
 
   async function finishSignIn(row: AuthedLeaderRow) {
+    setSelectedRowId(row.id);
     setIsBusy(true);
     setError(null);
     try {
@@ -322,18 +325,16 @@ export default function LoginMfaCallbackPage() {
             <h2 className={headingClass}>Which role are you signing in as?</h2>
             <p className={bodyTextClass}>You have more than one role on file.</p>
             {error && <p role="alert" className={errorBannerClass}>{error}</p>}
-            <div className="flex flex-col gap-3">
-              {rows.map((row) => (
-                <button
-                  key={row.id}
-                  onClick={() => finishSignIn(row)}
-                  disabled={isBusy}
-                  className={primaryButtonClass}
-                >
-                  {getLeaderRoleLabel(row.admin, row.state)}
-                </button>
-              ))}
-            </div>
+            <BusyChoiceButtons
+              choices={rows.map(row => ({ id: row.id, label: getLeaderRoleLabel(row.admin, row.state) }))}
+              selectedId={selectedRowId}
+              busy={isBusy}
+              onSelect={id => { const row = rows.find(r => r.id === id); if (row) void finishSignIn(row); }}
+              baseClass={primaryButtonClass}
+              idleClass=""
+              selectedClass="opacity-75"
+              otherClass="!bg-gray-400 !opacity-100"
+            />
             <button onClick={handleCancel} disabled={isBusy} className={secondaryButtonClass}>Cancel</button>
           </div>
         )}
