@@ -2,18 +2,19 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import MobileLayout from '@/components/MobileLayout';
-import LoadingSpinner from '@/components/LoadingSpinner';
+import PdfGuideViewer from '@/components/PdfGuideViewer';
 import { useUser } from '@/contexts/UserContext';
 import { getErrorMessage } from '@/lib/errorUtils';
 import { fetchUserGuide } from '@/lib/services/userGuideClient';
-import { formatGuideDate, type UserGuideView } from '@/lib/services/userGuideService';
+import type { UserGuideView } from '@/lib/services/userGuideService';
 
 /**
- * "OPEN GUIDE" — opens the current CAS User Guide PDF (uploaded by an admin on
- * /admin; see lib/services/userGuideService.ts). The PDF opens in the
- * phone's own PDF viewer rather than inside the app, since an embedded PDF
- * on a phone often shows only the first page.
+ * "OPEN GUIDE" — shows the current CAS User Guide PDF (uploaded by an admin on
+ * /admin; see lib/services/userGuideService.ts) straight away, full screen,
+ * with a Close button that returns to wherever the leader came from. The PDF
+ * is drawn inside the app (components/PdfGuideViewer.tsx) because the
+ * browser's own PDF viewer has no way back into the app; if that fails (e.g.
+ * a very old phone) the leader is offered the plain link instead.
  */
 export default function GuidePage() {
   const router = useRouter();
@@ -21,6 +22,7 @@ export default function GuidePage() {
   // undefined = still loading; null = no guide uploaded yet
   const [guide, setGuide] = useState<UserGuideView | null | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
+  const [viewerFailed, setViewerFailed] = useState(false);
 
   useEffect(() => {
     if (isUserLoading) return;
@@ -34,49 +36,56 @@ export default function GuidePage() {
     return () => { cancelled = true; };
   }, [isUserLoading, user, router]);
 
-  if (isUserLoading || (guide === undefined && !error)) {
-    return (
-      <MobileLayout>
-        <div className="flex min-h-screen items-center justify-center"><LoadingSpinner /></div>
-      </MobileLayout>
-    );
-  }
+  const handleClose = () => {
+    // Back to the screen the leader tapped OPEN GUIDE on; home if the guide
+    // was opened directly (e.g. a bookmarked or reloaded page).
+    if (window.history.length > 1) router.back();
+    else router.push('/app');
+  };
 
   return (
-    <MobileLayout>
-      <div className="mx-auto max-w-xl p-4">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">CAS User Guide</h1>
+    <div className="flex min-h-screen flex-col bg-gray-200 dark:bg-gray-900">
+      <header className="sticky top-0 z-10 flex h-16 items-center justify-between gap-3 border-b-2 border-gray-800 bg-white px-4 dark:border-gray-600 dark:bg-gray-950">
+        <h1 className="truncate text-xl font-bold text-gray-900 dark:text-gray-100">CAS User Guide</h1>
+        <button
+          onClick={handleClose}
+          className="whitespace-nowrap rounded-md border-2 border-gray-800 bg-blue-600 px-5 py-2 text-xl font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:border-gray-600"
+        >
+          ✕ Close
+        </button>
+      </header>
 
+      <main className="flex-1 px-2 py-3">
         {error ? (
-          <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20">
-            <p className="text-base text-red-700 dark:text-red-300">{error}</p>
-          </div>
-        ) : guide ? (
-          <>
-            <p className="mt-2 text-base text-gray-700 dark:text-gray-300">
-              Step-by-step instructions, with pictures, for using the Campaign Activity System app.
-            </p>
+          <p className="mx-auto max-w-xl p-6 text-center text-xl text-red-700 dark:text-red-300">{error}</p>
+        ) : guide === null ? (
+          <p className="mx-auto max-w-xl p-6 text-center text-xl text-gray-700 dark:text-gray-300">
+            The guide isn&apos;t available yet. Please check back soon.
+          </p>
+        ) : guide === undefined ? (
+          <p className="p-8 text-center text-xl text-gray-700 dark:text-gray-300">Opening the guide…</p>
+        ) : viewerFailed ? (
+          <div className="mx-auto max-w-xl p-6 text-center">
+            <p className="text-xl text-gray-700 dark:text-gray-300">The guide couldn&apos;t be shown here.</p>
             <a
               href={guide.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="mt-6 block w-full rounded-md bg-blue-600 px-4 py-4 text-center text-xl font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
+              className="mt-6 block w-full rounded-md border-2 border-gray-800 bg-blue-600 px-4 py-4 text-xl font-bold text-white hover:bg-blue-700 dark:border-gray-600"
             >
-              Open the Guide
+              Open the guide in a new page
             </a>
-            <p className="mt-3 text-sm text-gray-600 dark:text-gray-400">
-              The guide opens in a new page. When you are finished, close it or go back to return to the app.
-            </p>
-            <p className="mt-6 text-sm text-gray-500 dark:text-gray-400">
-              Last updated {formatGuideDate(guide.uploadedAt)}
-            </p>
-          </>
+          </div>
         ) : (
-          <p className="mt-4 text-base text-gray-700 dark:text-gray-300">
-            The guide isn&apos;t available yet. Please check back soon.
-          </p>
+          <PdfGuideViewer
+            url={guide.url}
+            onError={(err) => {
+              console.error('[guide] in-app viewer failed:', err);
+              setViewerFailed(true);
+            }}
+          />
         )}
-      </div>
-    </MobileLayout>
+      </main>
+    </div>
   );
 }
