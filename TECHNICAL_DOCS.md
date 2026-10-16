@@ -24,6 +24,7 @@
 15. [Running the App Locally](#15-running-the-app-locally)
 16. [Change Management — Git Workflow](#16-change-management--git-workflow)
 17. [Registry Pipeline — Separate Subsystem](#17-registry-pipeline--separate-subsystem)
+18. [Keeping This Document Current](#18-keeping-this-document-current)
 
 ---
 
@@ -172,12 +173,20 @@ campaign-app/
 │   ├── page.tsx                # Route: / (auth redirect guard)
 │   │
 │   ├── login/
-│   │   └── page.tsx            # Route: /login
+│   │   ├── page.tsx            # Route: /login (mobile+name; email-capture / 2FA-setup steps — see §6)
+│   │   └── mfa/                # Route: /login/mfa (email sign-in) + /login/mfa/callback (magic link → TOTP → role picker)
+│   ├── confirm-email/          # Route: /confirm-email — leader email-confirmation magic-link landing page
+│   ├── setup-mfa/              # Route: /setup-mfa — authenticator-app (TOTP) enrolment landing page
+│   ├── help/2fa/               # Route: /help/2fa — public, printable step-by-step setup guide
+│   ├── campaign-interest/      # Route: /campaign-interest — leader view of people who registered interest (2FA-gated)
+│   ├── training-interest/      # Route: /training-interest (+ /[campaignId]) — leader view of training-session interest
 │   │
 │   ├── app/                    # Route group: main app pages
 │   │   ├── page.tsx            # Route: /app (main campaign feed)
 │   │   ├── sr-admin/page.tsx   # Route: /app/sr-admin (State Reporter dashboard)
-│   │   ├── tl-admin/page.tsx   # Route: /app/tl-admin (Team Leader dashboard)
+│   │   ├── tl-admin/page.tsx   # Route: /app/tl-admin ("My Admin" for plain team leaders)
+│   │   ├── guide/page.tsx      # Route: /app/guide — in-app CAS User Guide PDF viewer (OPEN GUIDE)
+│   │   ├── check-registration/ # Route: /app/check-registration — leader "is this person registered?" check
 │   │   └── components/         # Components used ONLY by /app pages
 │   │       ├── AdminQuickActions.tsx
 │   │       ├── CampaignCard.tsx
@@ -201,6 +210,11 @@ campaign-app/
 │   │   ├── campaign-messages/      # Route: /admin/campaign-messages — per-date banner text
 │   │   ├── campaign-rules/         # Route: /admin/campaign-rules — recurring scheduling rules
 │   │   ├── campaigns-near-me/      # Route: /admin/campaigns-near-me — geolocation-filtered map
+│   │   ├── campaign-reports-cleanup/ # Route: /admin/campaign-reports-cleanup — fill State/Place/Leader on campaign_reports
+│   │   ├── check-registration/     # Route: /admin/check-registration — registry lookup by mobile/email (AD + 2FA)
+│   │   ├── generate-week-campaigns/ # Route: /admin/generate-week-campaigns — "Single Week Campaigns" JPEG
+│   │   ├── registered-interest/    # Route: /admin/registered-interest — everyone who registered interest
+│   │   ├── stuck-leaders/          # Route: /admin/stuck-leaders — leaders stuck on email/2FA setup
 │   │   ├── generate-report/        # Route: /admin/generate-report — canvas-based PDF report
 │   │   ├── generate-slides/        # Route: /admin/generate-slides — JPEG slide ZIP download
 │   │   ├── leader-shares/          # Route: /admin/leader-shares — leader-to-leader sharing links
@@ -222,26 +236,40 @@ campaign-app/
 │   ├── view-slides/page.tsx    # Route: /view-slides (public, no-login JPEG slide viewer)
 │   │
 │   ├── public/                 # No-login pages, server-rendered for link-preview metadata
+│   │   ├── layout.tsx          # Applies large-text; shows "← Back to app" bar when ?from=app
 │   │   ├── week1-campaigns/page.tsx
-│   │   └── temporary-upcoming-campaigns/page.tsx
+│   │   ├── temporary-upcoming-campaigns/page.tsx
+│   │   ├── final-campaign-lists/page.tsx
+│   │   ├── campaign-results/page.tsx
+│   │   ├── register-interest/page.tsx
+│   │   ├── upcoming-campaigns/page.tsx
+│   │   ├── campaigns-near-me/page.tsx   # personalised per registry registrant (?r=<id>)
+│   │   └── training/[campaignId]/page.tsx
 │   │
 │   ├── auth/callback/route.ts  # Route: /auth/callback — Supabase OAuth code exchange, then redirects
 │   │
 │   └── api/                    # Server-side API routes
-│       ├── auth/validate-leader/route.ts          # Service-role leader lookup on sign-in
+│       ├── auth/                                  # validate-leader, grant-session-access, revoke-session-access,
+│       │                                          #   propose-email, confirm-email, request-mfa-setup, complete-mfa-setup
+│       ├── leader/                                # check-registration, interest-counts (signed-in leaders)
+│       ├── registry/                              # manage-summary, manage-record, manage-edit-log, manage-whatsapp-invite-log (§17)
+│       ├── admin/{check-registration,stuck-leaders,reset-mfa,user-guide/upload-url,campaign-reports/derived-fields}
 │       ├── admin/geocode-address/route.ts
 │       ├── admin/geocode-place/route.ts
 │       ├── admin/invalidate-user-session/route.ts
 │       ├── admin/settings/route.ts
-│       ├── public/week1-campaigns/route.ts        # Data route backing /public/week1-campaigns
-│       ├── public/temporary-upcoming-campaigns/route.ts
+│       ├── public/*/route.ts                      # One data route per /public page (+ geocode-postcode, user-guide)
 │       ├── tiles/[z]/[x]/[y]/route.ts             # Server-side map tile proxy
 │       └── cron/weekly-refresh/route.ts           # Called by Vercel Cron
 │
 ├── components/                 # Shared components (used across multiple pages)
 │   ├── CampaignForm.tsx        # Generic campaign add/edit form
 │   ├── CampaignMap.tsx         # Leaflet map used by /public/upcoming-campaigns, /admin/state-places-map
+│   ├── auth/                   # Sign-in / 2FA setup building blocks (CodeEntryScreen, MfaEnrollmentFlow,
+│   │                           #   TapToContinue, EmailAndCodeFallback, SigningInStuck, GetHelp, SetupStep,
+│   │                           #   RequireTwoFactorForMemberDetails, …) — see §6
 │   ├── ErrorBoundary.tsx       # React error boundary
+│   ├── GuideScreen.tsx         # Full-screen CAS User Guide viewer (uses PdfGuideViewer.tsx / pdf.js)
 │   ├── LoadingSpinner.tsx      # Loading indicator
 │   ├── MapPopupActions.tsx     # RSVP buttons shown inside map popups
 │   ├── MobileLayout.tsx        # Page shell: header + bottom nav + content
@@ -262,7 +290,7 @@ campaign-app/
 │   ├── supabaseClient.ts       # Browser Supabase client
 │   ├── supabaseAdmin.ts        # Server-only Supabase admin client
 │   ├── auth.ts                 # Login, sign-out, session helpers
-│   ├── userProfile.ts          # user_profiles table CRUD
+│   ├── userProfile.ts          # user_profiles reads (profile writes are server-only since 2026-10 — see §6.5)
 │   ├── campaignFilter.ts       # getUserAdminStatusAndMobile(), isRecognizedAdminStatus()
 │   ├── campaignRules.ts        # Rules evaluation engine
 │   ├── campaignDates.ts        # Date window calculations
@@ -396,9 +424,26 @@ app_events  (analytics)
 app_settings  (feature toggles)
   key, value  (e.g. 'campaign_logging_enabled' = 'true')
 
-user_roles  (redundant, kept for legacy)
+user_roles  (written server-side only; not read by any RLS policy)
   user_id (FK → auth.users), role 'admin' | 'user' | 'viewer'
 ```
+
+### 5.1a Later additions (summary)
+
+Each is described in more depth in `CLAUDE.md` and has a SQL script in `scripts/`.
+
+| Table / columns | Purpose |
+|---|---|
+| `state_leaders.email`, `pending_email`, `user_id`, `email_confirmed_at`, `mfa_enrolled_at` | Leader email capture + 2FA rollout (§6). `email` is deliberately **not** unique — one person can have several rows |
+| `state_leader_email_changes` | Append-only audit of email changes (`source: 'self-serve' \| 'admin'`) |
+| `state_leader_mfa_resets` | Audit of admin "Reset 2FA" actions |
+| `campaign_interest` | People registering interest in campaigns via the public link. RLS requires an **aal2** (2FA) session to read |
+| `training_interest` | Same, for BOTJ/TLT training sessions (per-campaign public link). aal2-gated |
+| `campaign_interest_sms_log` | Audit of "text the leader" SMS attempts (ClickSend) |
+| `campaign_reports` | Campaign Report project tallies (admin-only RLS) |
+| `user_profiles` | Now **server-written only**: `INSERT`/`UPDATE` revoked from `authenticated`/`anon` (`scripts/lock_down_user_profiles_and_roles.sql`) |
+
+Log tables (`state_leader_*`, `campaign_interest_sms_log`, `campaign_changes_log`) are excluded from `BACKUP_TABLE_CONFIG`; admin-curated tables must be added to it (see §18).
 
 ### 5.2 Key Naming Conventions
 
@@ -411,7 +456,10 @@ user_roles  (redundant, kept for legacy)
 
 ## 6. Authentication & Session Flow
 
-The app uses **Supabase Anonymous Auth** — users never set a password. Instead, they prove identity by matching their mobile number + first name against the `state_leaders` table.
+The app has **two sign-in paths**, both ending in a Supabase session plus an `app_session` cookie:
+
+1. **Mobile + first name (anonymous auth)** — the original path. Users never set a password; they prove identity by matching mobile number + first name against `state_leaders`. Now available to **plain team leaders only**.
+2. **Email + magic link + authenticator-app code (real Supabase Auth, MFA)** — required for **admins (AD and SR)** since 2026-10-12, optional for plain leaders (needed only to view members' personal details). See §6.4–§6.8.
 
 ### 6.1 Sign-In Flow
 
@@ -441,9 +489,10 @@ The app uses **Supabase Anonymous Auth** — users never set a password. Instead
                     ┌──────────▼─────────────────────▼───┐
                     │  completeSignIn(stateLeaderMatch)   │
                     │  1. supabase.auth.signInAnonymously()│
-                    │  2. Write user_profiles row         │
-                    │  3. Write user_roles (if admin)     │
-                    │  4. Update last_sign_in_at          │
+                    │  2. POST /api/auth/grant-session-    │
+                    │     access (server re-verifies and  │
+                    │     writes user_profiles/user_roles)│
+                    │  3. Update last_sign_in_at          │
                     └──────────────┬──────────────────────┘
                                    │
                     ┌──────────────▼───────────────┐
@@ -452,6 +501,8 @@ The app uses **Supabase Anonymous Auth** — users never set a password. Instead
                     │  getAuthenticatedUser()       │
                     └──────────────────────────────┘
 ```
+
+> The diagram above is the **plain-leader** path. For an AD/SR match, `getAdminLoginGate()` (`lib/adminLoginGate.ts`) stops the flow: an enrolled admin is pointed at `/login/mfa`; an unenrolled one is walked through email confirmation and 2FA setup with no "Skip".
 
 ### 6.2 Session Persistence
 
@@ -467,6 +518,49 @@ The app uses **Supabase Anonymous Auth** — users never set a password. Instead
 | `lib/services/authService.ts` | `getAuthenticatedUser()` — single DB round-trip resolving user + role |
 | `contexts/UserContext.tsx` | Global auth state provider, used by every page via `useUser()` |
 | `app/api/auth/validate-leader/route.ts` | Server-side leader lookup (uses service role) |
+| `lib/auth.ts` (also) | `completeLeaderAuthSignIn()` (email+2FA path), `signOutClearingAccess()`, `getVerifiedSession()` |
+| `lib/services/leaderVerificationService.ts` | `findVerifiedStateLeaders(mobile, firstName)` — the one mobile+name matcher shared by every auth route |
+| `lib/adminLoginGate.ts` | `getAdminLoginGate()` — what the mobile+name form must do for an admin / 2FA-required leader |
+| `lib/supabaseLock.ts` | `createNonBlockingAuthLock()` — stops a stuck browser tab freezing every other tab |
+
+### 6.4 Server-Side Session Grant (why browsers can't write profiles)
+
+`user_profiles` (name + state) is what `public.is_admin()` reads to decide admin access, so it must never be self-assertable. Since 2026-10-11:
+
+- `completeSignIn()` / `completeLeaderAuthSignIn()` call `POST /api/auth/grant-session-access` → `sessionAccessService.grantSessionAccess()`. It re-verifies on the server (`mobile-name`: typed mobile+name matches the chosen leader row; `real-auth`: the session user is the row's bound `user_id` **and** the JWT is `aal2`) and writes `user_profiles`/`user_roles` with the service role.
+- A `mobile-name` grant for an AD/SR row is refused (`403 mfa_required`).
+- Sign-out calls `POST /api/auth/revoke-session-access` first (deletes that session's profile rows).
+- Never re-add a browser-side write to `user_profiles`/`user_roles`.
+
+### 6.5 Leader Email Capture & 2FA Enrolment
+
+Both are skippable for plain leaders at normal sign-in only in the sense that they are **no longer prompted**; admins (and anyone arriving via `/login?require2fa=1`) get the no-skip version.
+
+| Step | Pages / routes | Notes |
+|---|---|---|
+| Propose email | `/login` → `POST /api/auth/propose-email` | Re-verifies mobile+name, writes `pending_email`, sends a Supabase magic link |
+| Confirm email | `/confirm-email` → `POST /api/auth/confirm-email` | Trusts only `supabaseAdmin.auth.getUser(token)` for the email; commit is scoped to that one `leaderId` |
+| Request 2FA setup | `POST /api/auth/request-mfa-setup` | Sends a magic link to `/setup-mfa` |
+| Enrol TOTP | `/setup-mfa` or the choice on `/confirm-email` → `components/auth/MfaEnrollmentFlow.tsx` | AAL2 step-up if the account already has a verified factor; QR + typed key; setup key survives a page reload (`lib/pendingTotpEnrollment.ts`) |
+| Finish | `POST /api/auth/complete-mfa-setup` → `mfaEnrollmentService.completeMfaEnrollment()` | Only if the account really has a verified factor; binds `user_id` on unbound rows with the proven email, stamps `mfa_enrolled_at` |
+
+The confirm/setup pages use an **isolated** Supabase client (`lib/emailConfirmSupabaseClient.ts`, its own localStorage key) so they cannot collide with the leader's real app session. Authenticator apps only — SMS MFA was built and removed before launch.
+
+### 6.6 Email + 2FA Sign-In (`/login/mfa`)
+
+`/login/mfa` (email) → magic link → `/login/mfa/callback` (TOTP challenge → role picker if the person has several `state_leaders` rows → `completeLeaderAuthSignIn()`). It uses the **main** browser client, so the session becomes the leader's persistent identity (30-day `app_session` cookie). A **Switch Role** button in `MobileLayout` re-opens the picker without a new link. `lib/emailLoginPreference.ts` remembers on the device that an admin prefers email sign-in (`/login?mode=mobile` bypasses it once).
+
+### 6.7 Magic-Link Robustness
+
+Email scanners (Apple Mail Privacy Protection, Outlook) fetch links and consume Supabase's one-time tokens. Countermeasures:
+
+- **Scanner-proof links** — the Magic Link email template links to our own page with `token_hash` in the query string; the page calls `verifyOtp()` only when the person **taps a button** (`components/auth/TapToContinue.tsx`, `lib/magicLinkToken.ts`). Template copy: `docs/email-templates/magic-link.html` (the Supabase dashboard is what is live). Every `emailRedirectTo` must already contain a `?`, and every host must be in Supabase's Redirect URLs allow-list.
+- **Typed-code fallback** — `InlineCodeFallback` (on "check your inbox") and `EmailAndCodeFallback` (on "link already used" screens); codes are 6–10 digits (`lib/otpInput.ts`).
+- **No freezing** — `SigningInStuck.tsx` (20 s watchdog), `awaitingTapRef` guards, `lib/pendingLoginStep.ts` (remembers the "check your inbox" screen across a reload), `getVerifiedSession()` (clears a server-rejected session instead of looping).
+
+### 6.8 Setup Help for Non-Technical Leaders
+
+`SetupStep`, `GetHelp`, the public `/help/2fa` guide, `lib/authenticatorApps.ts`, and the admin-only `/admin/stuck-leaders` list (`stuckLeadersService.ts`) exist so leaders who stall can be found and helped. Setup screens use the large-text constants in `components/auth/CodeEntryScreen.tsx` (a test fails if they shrink).
 
 ---
 
@@ -499,6 +593,8 @@ getAuthenticatedUser()    (lib/services/authService.ts)
                 └── match.admin === null  →  isAdmin = false, adminStatus = null
 ```
 
+> **Admin identity is server-written.** `user_profiles`/`user_roles` are only ever written by `grantSessionAccess()` (§6.4); an AD/SR identity can only come from an email + 2FA (`aal2`) sign-in.
+
 ### 7.3 Access Control in Pages
 
 Every protected page checks the role early:
@@ -520,6 +616,13 @@ There is no separate permissions module. Role logic is kept inline wherever it i
 - `adminStatus === 'SR'` — state reporter check (own state only)
 - `!isAdmin && adminStatus !== 'SR'` — deny both admin-only pages to team leaders
 - Role resolution lives in `UserContext` and `lib/campaignFilter.ts` (`getUserAdminStatusAndMobile()`)
+- **Never** write `=== 'AD' || === 'SR'` inline — use `isRecognizedAdminStatus()` from `lib/campaignFilter.ts`
+
+### 7.5 Admin API Routes and 2FA-Gated Data
+
+- Every admin-only route under `app/api/admin/*` must call `verifyAdminCaller(client, token)` (`lib/services/adminCallerService.ts`): Bearer token → an AD whose JWT is `aal2`, exact normalised name match (never `ILIKE`, where `_` is a wildcard). `app/api/admin/__tests__/adminRoutesRequireAdmin.test.ts` pins this.
+- **Reset 2FA** (`/admin/state-leaders` → `POST /api/admin/reset-mfa` → `mfaResetService.resetLeaderMfa()`): AD at aal2 only, cannot reset yourself.
+- **Members' personal details** (`campaign_interest`, `training_interest`): RLS requires `aal2`. Pages that show them are wrapped in `RequireTwoFactorForMemberDetails`; leaders still see counts through `POST /api/leader/interest-counts` (numbers only).
 
 ---
 
@@ -529,10 +632,20 @@ There is no separate permissions module. Role logic is kept inline wherever it i
 
 ```
 /                                     Auth guard — redirects to /app or /login
-/login                                Sign in with mobile + name
+/login                                Sign in with mobile + name (plain leaders); email/2FA steps for admins
+/login/mfa                            Email sign-in (real auth + 2FA)
+/login/mfa/callback                   Magic-link landing: TOTP challenge, role picker
+/confirm-email                        Leader email-confirmation landing page
+/setup-mfa                            Authenticator-app enrolment landing page
+/help/2fa                             Public printable 2FA setup guide
 /app                                  Main campaign feed (home screen)
 /app/sr-admin                         State Reporter dashboard
-/app/tl-admin                         Team Leader dashboard
+/app/tl-admin                         "My Admin" for plain team leaders (campaign rules, check registration, extra security)
+/app/guide                            OPEN GUIDE — CAS User Guide PDF, full screen
+/app/check-registration               Leader check: is this person registered? (no registry data shown)
+/campaign-interest                    People who registered interest in my campaigns (2FA required)
+/training-interest                    My BOTJ/TLT sessions and their interest counts
+/training-interest/[campaignId]       Who registered interest in one training session (2FA required)
 /record-results                       Select a campaign to record results for
 /record-results/detail                Enter result names + counts
 /results                              View result summaries (signed-in JPEG slide viewer)
@@ -542,6 +655,12 @@ There is no separate permissions module. Role logic is kept inline wherever it i
 /public/week1-campaigns               Public, no-login "Week 1 Campaigns" link (shareable)
 /public/temporary-upcoming-campaigns  Public, no-login temporary-upcoming-campaigns link
 /public/upcoming-campaigns            Public, no-login map of upcoming campaigns, all states (replaces the former /admin/campaign-map)
+/public/final-campaign-lists          Public read-only fortnight list (download only)
+/public/campaign-results              Public campaign results for the last-refreshed week
+/public/register-interest             Public: tick campaigns, "Yes I'm In" / "Tell Me More"
+/public/campaigns-near-me             Public: personalised map for a registry registrant (?r=<id>)
+/public/training/[campaignId]         Public: one training session + interest form
+/registry/*                           Registry portal (own auth + MFA) — see §17
 /auth/callback                        Supabase OAuth code-exchange handler, not user-facing
 
 /admin                                Admin hub (full admin only)
@@ -561,6 +680,11 @@ There is no separate permissions module. Role logic is kept inline wherever it i
 /admin/generate-report                Generate downloadable campaign reports
 /admin/metrics                        Admin analytics dashboard (usage, active users, row counts)
 /admin/results-metrics                Names recorded per category (TM/P/F/SP), by state/place/campaign
+/admin/check-registration            Registry lookup by mobile/email (AD + 2FA)
+/admin/stuck-leaders                  Leaders stuck on email sign-in / 2FA setup
+/admin/registered-interest            Everyone who registered interest, with Contacted checkbox
+/admin/generate-week-campaigns        "Single Week Campaigns" JPEG for a chosen date range/state
+/admin/campaign-reports-cleanup       Fill missing State/Place/Leader on campaign_reports rows
 /admin/backup                         Export/restore JSON backup of every admin-curated table
 ```
 
@@ -793,6 +917,33 @@ Supabase Postgres
 | Function | Description |
 |----------|-------------|
 | `getAuthenticatedUser()` | One call: auth check + profile + admin status (3 DB round-trips total) |
+
+#### Auth and security services (added Sept–Oct 2026)
+
+All take an **injected Supabase client** (always `supabaseAdmin` in practice) so they test with `supabaseMock.ts`.
+
+| Module | Key functions |
+|--------|---------------|
+| `sessionAccessService.ts` | `grantSessionAccess()`, `revokeSessionAccess()`, `getAalFromJwt()` |
+| `adminCallerService.ts` | `verifyAdminCaller()` — shared admin-route gate |
+| `leaderVerificationService.ts` | `findVerifiedStateLeaders()` |
+| `mfaEnrollmentService.ts` | `completeMfaEnrollment()` |
+| `mfaResetService.ts` / `mfaResetClient.ts` | `resetLeaderMfa()` / browser fetch wrapper |
+| `stuckLeadersService.ts` / `stuckLeadersClient.ts` | `classifyStuckLeaders()`, `getStuckLeaders()` |
+| `registrationCheckService.ts` / `registrationCheckClient.ts` | `checkRegistration()` (leader — returns no registry data), `lookupRegistrationByContact()` (admin — returns records; only behind `verifyAdminCaller`) |
+| `registrantEmailSuggestionService.ts` | `getSuggestedEmailByMobile()` |
+| `interestCountsService.ts` / `interestCountsClient.ts` | `getVisibleInterestCounts()` — counts without exposing rows |
+| `userGuideService.ts` / `userGuideClient.ts` | Private `user-guide` storage bucket: `getUserGuideView()`, `createUserGuideUploadTarget()` |
+
+#### Interest, public pages and reports
+
+| Module | Purpose |
+|--------|---------|
+| `campaignInterestService.ts`, `trainingInterestService.ts` | Leader/admin views of registered interest; `TRAINING_CATEGORIES` / `isTrainingCategory()` |
+| `campaignInterestSmsService.ts` | One combined ClickSend text per owning leader; logs to `campaign_interest_sms_log`; never throws |
+| `publicCampaignListService.ts`, `publicCampaignResultsService.ts`, `publicCampaignsNearMeService.ts`, `publicUpcomingCampaignsService.ts` | Data/grouping logic behind the `/public/*` pages (cached coordinates only, no on-demand geocoding) |
+| `campaignReportsService.ts` | Campaign Report cleanup |
+| `backupService.ts` | `exportBackup`/`restoreBackup`; `BACKUP_TABLE_CONFIG` is the single source of truth, FK-safe order |
 
 #### `lib/services/weeklyRefreshService.ts`
 
@@ -1167,6 +1318,12 @@ If the fix and the test live in the same file (rare), use `git show HEAD~1:path/
 | `SUPABASE_SERVICE_ROLE_KEY` | `lib/supabaseAdmin.ts` (server-only API routes) | Yes |
 | `CRON_SECRET` | `app/api/cron/weekly-refresh/route.ts` | Yes (production) |
 | `NEXT_PUBLIC_ADMIN_EMAILS` | Referenced but not actively enforced | No |
+| `NEXT_PUBLIC_SITE_URL` | `lib/siteUrl.ts` — absolute links in emails/SMS/OG tags (falls back to Vercel's production URL, then localhost) | Production |
+| `NEXT_PUBLIC_SUPPORT_MOBILE` | `lib/supportContact.ts` — support number on `/help/2fa` and the stuck-leaders Call/Text links | No |
+| `CLICKSEND_USERNAME`, `CLICKSEND_API_KEY` | `lib/clickSendClient.ts` — "text the leader" SMS; missing config makes sends fail (logged, never blocks the registrant) | For SMS |
+| `VERCEL_PROJECT_PRODUCTION_URL` | Auto-injected by Vercel; `siteUrl.ts` fallback | Auto |
+
+Supabase dashboard settings that the code depends on (not env vars): the **Magic Link email template** (`docs/email-templates/`), the **Redirect URLs allow-list** (every sign-in host as `https://<host>/**`, Site URL `https`), and **Email OTP length/expiry**.
 
 ### 14.2 Where to Set Them
 
@@ -1542,4 +1699,21 @@ Full design: `docs/registry-pipeline/AFJ_PII_Technical_Implementation_Plan.md`. 
 
 ---
 
-*Last updated: June 2026*
+---
+
+## 18. Keeping This Document Current
+
+**Standing rule:** every PR that changes code must also update this file when it touches anything described here, and the PR description must say what was updated — or "TECHNICAL_DOCS: N/A" with a reason. Update `CLAUDE.md` in the same PR (its Architecture section carries the long-form history and rationale; this file is the junior-developer overview).
+
+Check against this list:
+
+- New/renamed/removed route or page → §4, §8.1
+- New service module or exported function → §10
+- New table/column or RLS change → §5 (and `BACKUP_TABLE_CONFIG` in `backupService.ts` if admin-curated)
+- Auth, role or session change → §6, §7
+- New env var or Supabase dashboard dependency → §14
+- New test convention → §13
+
+---
+
+*Last updated: 16 October 2026*
