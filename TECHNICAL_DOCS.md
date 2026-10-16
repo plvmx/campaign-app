@@ -226,6 +226,7 @@ campaign-app/
 │   │   ├── generate-week-campaigns/ # Route: /admin/generate-week-campaigns — "Single Week Campaigns" JPEG
 │   │   ├── registered-interest/    # Route: /admin/registered-interest — everyone who registered interest
 │   │   ├── stuck-leaders/          # Route: /admin/stuck-leaders — leaders stuck on email/2FA setup
+│   │   ├── components/             # Admin hub cards: UserGuideUploadCard, TechInsightsSettingsCard
 │   │   ├── generate-report/        # Route: /admin/generate-report — canvas-based PDF report
 │   │   ├── generate-slides/        # Route: /admin/generate-slides — JPEG slide ZIP download
 │   │   ├── leader-shares/          # Route: /admin/leader-shares — leader-to-leader sharing links
@@ -264,7 +265,7 @@ campaign-app/
 │       │                                          #   propose-email, confirm-email, request-mfa-setup, complete-mfa-setup
 │       ├── leader/                                # check-registration, interest-counts (signed-in leaders)
 │       ├── registry/                              # manage-summary, manage-record, manage-edit-log, manage-whatsapp-invite-log (§17)
-│       ├── admin/{check-registration,stuck-leaders,reset-mfa,user-guide/upload-url,campaign-reports/derived-fields}
+│       ├── admin/{check-registration,stuck-leaders,tech-insights,reset-mfa,user-guide/upload-url,campaign-reports/derived-fields}
 │       ├── admin/geocode-address/route.ts
 │       ├── admin/geocode-place/route.ts
 │       ├── admin/invalidate-user-session/route.ts
@@ -1520,6 +1521,8 @@ npm run dev
 # Opens at http://localhost:3000
 ```
 
+`npm run dev` and `npm run build` first run `npm run tech-insights` (regenerates the gitignored Tech Insights manifest, a couple of seconds — see §20). Re-run it by hand to refresh the panel's data while `next dev` is already running.
+
 ### 15.4 Before Committing
 
 Always run all four checks locally before pushing:
@@ -1995,6 +1998,12 @@ Aggregate per-campaign tallies (Partial/Full Presentations, Sinner's Prayer, Inf
 ## 20. UI Conventions
 
 - **App-wide large text.** A `large-text` CSS class in `app/globals.css` — deliberately **unlayered**, so it beats Tailwind's layered utilities and `sm:` variants without editing class lists — raises every `text-xs…text-3xl` inside it by ≈4 px (xs 16, sm 18, base 20, lg 22, xl 24, 2xl 28, 3xl 34). Applied to `MobileLayout`'s `<main>` (campaign feed, results, capture, training/campaign-interest, My Admin, … — **but not under `/admin`**, dense tables), `app/public/layout.tsx`, `components/Modal.tsx` (modals portal outside the page scope), and `/login`'s credentials form / action chooser. **Left alone on purpose:** `MobileLayout`'s fixed-height header and bottom nav, the setup screens (explicit sizes, §6.11), canvas/slide output, `/registry`. `components/__tests__/largeText.test.tsx` pins where it applies. `app/layout.tsx`'s viewport no longer sets `maximumScale: 1`, so people can pinch-zoom. If a screen looks cramped, drop `large-text` from it or fix its layout.
+- **Tech Insights (admin-only technical panel).** Press a configurable shortcut (default `Ctrl+Alt+I`) on any screen, on a desktop device, as a full admin (AD) signed in with 2FA, to open a side panel describing that screen: URL pattern → page file and layouts, a drop-down of every file reachable from the page (components, services, libraries, API routes — grouped by kind), the shortest import chain from the page to the selected file, its exports with line numbers, imports / imported-by / tests, the database tables, RPCs, API routes and assets it touches, and its source code (exports jump to and highlight their lines). **Phase 1 is page-level** — the drop-down lists what the page *imports*, not what is currently visible; tagging visible components is a later phase. Moving parts:
+  - **Manifest generator** — `scripts/build-tech-insights.ts` (run by `predev`/`prebuild`, or `npm run tech-insights`) feeds every `.ts/.tsx/.css` under `app/ components/ contexts/ lib/` (+ `middleware.ts`) to the pure `lib/techInsights/buildManifest.ts` (TypeScript parser only, ≈2 s), writing `generated/tech-insights/{manifest,sources}.json` (**gitignored**). Static analysis only: literal `.from('table')`/`.rpc()`/`'/api/…'` strings are found; values built from variables are not (and are never guessed).
+  - **Serving** — `GET /api/admin/tech-insights` (`verifyAdminCaller`: AD + aal2) returns the manifest, or one file's source with `?file=<path>` — only for paths the manifest lists (`lib/techInsights/manifestStore.ts`), never an arbitrary filesystem path. The data is deliberately **not** in `public/` or the client bundle (it is the app's source code). `next.config.ts`'s `outputFileTracingIncludes` ships the generated files with that one function.
+  - **Settings** — `app_settings` keys `tech_insights_enabled` (off by default) and `tech_insights_hotkey` (validated server-side in `/api/admin/settings`), edited from the Tech Insights card on `/admin` (`TechInsightsSettingsCard`; click the box and press the keys).
+  - **Zero cost for everyone else** — `components/techInsights/TechInsightsLoader.tsx` is mounted in `app/providers.tsx`; for a non-admin or a phone/touch device it makes no request and registers no listener. For an eligible admin it reads the two settings once per page load; the panel (`TechInsightsPanel`, loaded with `next/dynamic`) and the manifest are only fetched the first time the shortcut is pressed.
+  - Pure helpers in `lib/techInsights/` (`routeMatch.ts` URL↔file, `hotkey.ts`, `graph.ts` reachability/path/summary, `types.ts`) are unit tested; `app/api/admin/__tests__/adminRoutesRequireAdmin.test.ts` pins that the route refuses non-admins.
 - **Role picker busy state.** `components/auth/BusyChoiceButtons.tsx` — only the tapped role button shows as loading.
 - **Sign Out / Switch Role** live in `MobileLayout`; Switch Role shows only for real (non-anonymous) sessions.
 - Shared forms/hooks: `app/app/components/useCampaignForm.ts` (all form state, place creation, leader mobile auto-fill, submit; `handleSubmit` accepts `FormEvent` and `MouseEvent`) and `useStateDropdowns.ts` (state-scoped place/leader lists, with all `setState` routed through Promise chains to satisfy the `react-hooks/set-state-in-effect` lint rule).
@@ -2025,7 +2034,7 @@ Check against this list:
 - New table/column or RLS change → §5 (and `BACKUP_TABLE_CONFIG` in `backupService.ts` if admin-curated)
 - Auth, role or session change → §6, §7
 - New env var or Supabase dashboard dependency → §14
-- Public page / interest feature → §18; slide/report change → §19; shared UI convention → §20
+- Public page / interest feature → §18; slide/report change → §19; shared UI convention (incl. Tech Insights) → §20
 - New script or deploy-order constraint → §21
 - Registry pipeline change → §17 (and `docs/registry-pipeline/OPERATIONS.md`)
 - New test convention → §13

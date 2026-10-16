@@ -44,6 +44,9 @@ vi.mock('@/lib/appSettings', () => ({
   setCampaignLoggingEnabled: vi.fn(),
   getSlideViewEnabled: vi.fn().mockResolvedValue(false),
   setSlideViewEnabled: vi.fn(),
+  getTechInsightsConfig: vi.fn().mockResolvedValue({ enabled: false, hotkey: 'Ctrl+Alt+I' }),
+  setTechInsightsEnabled: vi.fn(),
+  setTechInsightsHotkey: vi.fn(),
 }));
 
 vi.mock('@/lib/services/weeklyRefreshService', () => ({
