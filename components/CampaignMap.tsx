@@ -5,7 +5,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import L from 'leaflet';
 import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
 import { getStateMarkerIcon, type StateMarkerIconOptions } from '@/lib/leafletMarkerIcon';
-import { formatCampaignDateTimeDisplay, isCampaignPast, sortCampaignsChronologically } from '@/lib/campaignUtils';
+import { formatCampaignDateTimeDisplay, sortCampaignsChronologically } from '@/lib/campaignUtils';
 import MapPopupActions from '@/components/MapPopupActions';
 import TechInsightsMapTag from '@/components/techInsights/TechInsightsMapTag';
 
@@ -133,10 +133,18 @@ interface CampaignMapProps {
   resizeKey?: unknown;
   /** Called when a marker is clicked/tapped (e.g. to hide a first-visit hint). */
   onMarkerOpen?: () => void;
-  renderActions?: (props: { campaignId: string; place: string; state: string; isPast: boolean }) => ReactNode;
+  renderActions?: (props: { campaignId: string; place: string; state: string }) => ReactNode;
+  /**
+   * Place-level alternative to `renderActions`: when given, it is rendered
+   * once under a marker's campaign list (instead of per-campaign actions),
+   * receiving every campaign id at that place. The public Upcoming Campaigns
+   * screen uses this for its single "Contact Me about This or Other
+   * Campaigns at this Location" button.
+   */
+  renderPlaceActions?: (props: { campaignIds: string[]; place: string; state: string }) => ReactNode;
 }
 
-export default function CampaignMap({ center, zoom, markers, markerStyle, fitToMarkers = false, resizeKey, onMarkerOpen, renderActions = (props) => <MapPopupActions {...props} /> }: CampaignMapProps) {
+export default function CampaignMap({ center, zoom, markers, markerStyle, fitToMarkers = false, resizeKey, onMarkerOpen, renderPlaceActions, renderActions = (props) => <MapPopupActions {...props} /> }: CampaignMapProps) {
   return (
     <MapContainer
       center={center}
@@ -168,9 +176,10 @@ export default function CampaignMap({ center, zoom, markers, markerStyle, fitToM
                     <div key={campaign.id} className="mt-2 border-t border-gray-200 pt-2" data-testid="map-popup-campaign">
                       <p>{formatCampaignDateTimeDisplay(campaign.date, campaign.time)}</p>
                       <p>Leader: {campaign.leader}</p>
-                      {renderActions({ campaignId: campaign.id, place: marker.place, state: marker.state, isPast: isCampaignPast(campaign.date, campaign.time) })}
+                      {!renderPlaceActions && renderActions({ campaignId: campaign.id, place: marker.place, state: marker.state })}
                     </div>
                   ))}
+                  {renderPlaceActions?.({ campaignIds: campaigns.map(c => c.id), place: marker.place, state: marker.state })}
                 </div>
               ) : (
                 <p className="text-sm font-semibold">{marker.place} {marker.state}</p>
