@@ -287,7 +287,7 @@ campaign-app/
 │   ├── MobileLayout.tsx        # Page shell: header + bottom nav + content
 │   ├── Modal.tsx               # Modal overlay wrapper
 │   ├── NearbyCampaignsMap.tsx  # Map for /admin/campaigns-near-me
-│   ├── PWAInstallPrompt.tsx    # Install-banner prompt (hidden on /public/* pages)
+│   ├── PWAInstallPrompt.tsx    # Install-banner prompt (hidden on /public/* pages; renders nothing until after mount so SSR/hydration match, then detects platform)
 │   ├── PublicCampaignList.tsx  # Shared list rendering for /public/* pages
 │   ├── ServiceWorkerRegistration.tsx
 │   └── __tests__/

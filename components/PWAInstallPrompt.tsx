@@ -33,14 +33,23 @@ export default function PWAInstallPrompt() {
   const pathname = usePathname();
   const isPublicPage = pathname?.startsWith('/public/') ?? false;
 
-  // Lazy initializer runs once on the client — avoids any setState call inside an effect.
-  // null = hidden; non-null = visible with the detected platform.
-  const [platform, setPlatform] = useState<Platform>(() => {
-    if (typeof window === 'undefined') return null;
-    if (isStandalone()) return null;
-    if (localStorage.getItem(DISMISSED_KEY)) return null;
-    return detectPlatform();
-  });
+  // null = hidden; non-null = visible with the detected platform. Starts null so the
+  // first client render matches the server's (which can't see window/localStorage);
+  // the real value is filled in after mount.
+  const [platform, setPlatform] = useState<Platform>(null);
+
+  // setState goes through a Promise callback (react-hooks/set-state-in-effect).
+  useEffect(() => {
+    let cancelled = false;
+    Promise.resolve().then(() => {
+      if (cancelled) return;
+      if (isStandalone() || localStorage.getItem(DISMISSED_KEY)) return;
+      setPlatform(detectPlatform());
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // showInstructions: true once the user asks how to install (iOS always; Android fallback)
   const [showInstructions, setShowInstructions] = useState(false);

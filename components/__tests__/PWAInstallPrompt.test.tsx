@@ -8,7 +8,9 @@
  * fixed bottom nav whenever the (dismissible, mobile-only-taller) banner showed.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, cleanup, waitFor, act } from '@testing-library/react';
+import { renderToString } from 'react-dom/server';
+import { hydrateRoot } from 'react-dom/client';
 import PWAInstallPrompt from '../PWAInstallPrompt';
 
 const BANNER_HEIGHT_PX = 120;
@@ -61,32 +63,70 @@ describe('PWAInstallPrompt — publishes --pwa-banner-height', () => {
     vi.restoreAllMocks();
   });
 
-  it('sets --pwa-banner-height to its own rendered height on mount', () => {
+  it('sets --pwa-banner-height to its own rendered height on mount', async () => {
     render(<PWAInstallPrompt />);
-    expect(bannerHeightVar()).toBe(`${BANNER_HEIGHT_PX}px`);
+    await waitFor(() => expect(bannerHeightVar()).toBe(`${BANNER_HEIGHT_PX}px`));
   });
 
-  it('resets --pwa-banner-height to 0px when the user dismisses the banner', () => {
+  it('resets --pwa-banner-height to 0px when the user dismisses the banner', async () => {
     render(<PWAInstallPrompt />);
-    expect(bannerHeightVar()).toBe(`${BANNER_HEIGHT_PX}px`);
+    await waitFor(() => expect(bannerHeightVar()).toBe(`${BANNER_HEIGHT_PX}px`));
 
     fireEvent.click(screen.getByRole('button', { name: /dismiss install prompt/i }));
 
     expect(bannerHeightVar()).toBe('0px');
   });
 
-  it('resets --pwa-banner-height to 0px on unmount', () => {
+  it('resets --pwa-banner-height to 0px on unmount', async () => {
     const { unmount } = render(<PWAInstallPrompt />);
-    expect(bannerHeightVar()).toBe(`${BANNER_HEIGHT_PX}px`);
+    await waitFor(() => expect(bannerHeightVar()).toBe(`${BANNER_HEIGHT_PX}px`));
 
     unmount();
 
     expect(bannerHeightVar()).toBe('0px');
   });
 
-  it('never publishes a non-zero height when already installed (standalone)', () => {
+  it('never publishes a non-zero height when already installed (standalone)', async () => {
     mockMatchMedia(true); // display-mode: standalone
     render(<PWAInstallPrompt />);
+    await act(async () => {});
+    expect(screen.queryByRole('button', { name: /dismiss install prompt/i })).toBeNull();
     expect(bannerHeightVar()).toBe('0px');
+  });
+
+  it('stays hidden when the banner was previously dismissed', async () => {
+    localStorage.setItem('pwa-install-dismissed-v2', '1');
+    render(<PWAInstallPrompt />);
+    await act(async () => {});
+    expect(screen.queryByRole('button', { name: /dismiss install prompt/i })).toBeNull();
+  });
+
+  // Regression: the platform used to be read from window/localStorage in a lazy
+  // useState initializer, so the first client render drew the banner while the
+  // server (no window) rendered nothing -> "Hydration failed" in Next.js.
+  describe('hydration', () => {
+    it('renders nothing on the first render, even when the banner would show', () => {
+      // jsdom has a window, so this exercises the "banner-eligible" first render.
+      expect(renderToString(<PWAInstallPrompt />)).toBe('');
+    });
+
+    it('hydrates server HTML (empty) without a mismatch, then shows the banner', async () => {
+      const container = document.createElement('div');
+      document.body.appendChild(container);
+      const onRecoverableError = vi.fn();
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      let root!: ReturnType<typeof hydrateRoot>;
+      await act(async () => {
+        root = hydrateRoot(container, <PWAInstallPrompt />, { onRecoverableError });
+      });
+
+      await waitFor(() => expect(container.textContent).toMatch(/Install this app/));
+      expect(onRecoverableError).not.toHaveBeenCalled();
+      expect(consoleError).not.toHaveBeenCalled();
+
+      act(() => root.unmount());
+      container.remove();
+    });
   });
 });
