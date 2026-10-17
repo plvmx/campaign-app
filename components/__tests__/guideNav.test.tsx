@@ -10,7 +10,7 @@ const mockAdmin = vi.fn();
 vi.mock('next/navigation', () => ({ usePathname: () => '/app', useSearchParams: () => new URLSearchParams() }));
 vi.mock('next/link', () => ({ default: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a> }));
 vi.mock('@/lib/auth', () => ({ signOut: vi.fn() }));
-vi.mock('@/lib/campaignFilter', () => ({ getUserAdminStatusAndMobile: () => mockAdmin() }));
+vi.mock('@/contexts/UserContext', () => ({ useUser: () => ({ adminStatus: mockAdmin(), isLoading: false }) }));
 vi.mock('@/lib/supabaseClient', () => ({
   supabase: { auth: { getSession: vi.fn().mockResolvedValue({ data: { session: null } }) }, from: vi.fn() },
 }));
@@ -27,7 +27,7 @@ async function navLinks(): Promise<string[]> {
 
 describe('OPEN GUIDE nav button', () => {
   it('sits between Home and My Admin for a plain leader, linking to /app/guide', async () => {
-    mockAdmin.mockResolvedValue({ admin: null, mobile: null });
+    mockAdmin.mockReturnValue(null);
     expect(await navLinks()).toEqual(['🏠Home', 'OPENGUIDE', '⚙️My Admin']);
     const open = screen.getByText('OPEN');
     expect(open.closest('a')).toHaveAttribute('href', '/app/guide');
@@ -37,7 +37,7 @@ describe('OPEN GUIDE nav button', () => {
   });
 
   it.each(['AD', 'SR'])('is not shown to an admin (%s)', async (admin) => {
-    mockAdmin.mockResolvedValue({ admin, mobile: null });
+    mockAdmin.mockReturnValue(admin);
     expect(await navLinks()).not.toContain('OPENGUIDE');
   });
 });
