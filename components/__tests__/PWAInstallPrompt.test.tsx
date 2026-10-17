@@ -1,19 +1,14 @@
 /**
- * Regression test for the map-under-bottom-nav bug: the admin map pages size
- * their map container using `calc(100dvh - ... - var(--pwa-banner-height,0px))`,
- * relying on PWAInstallPrompt to publish its own rendered height as that CSS
- * custom property (see app/admin/campaigns-near-me/page.tsx and friends). Before
- * the fix, nothing published that height, so the map's height calc had no way to
- * know the banner was pushing it down, and the map rendered underneath the
- * fixed bottom nav whenever the (dismissible, mobile-only-taller) banner showed.
+ * The banner only appears after hydration (it needs localStorage / the user
+ * agent). Rendered in normal flow it pushed the whole page down when it mounted
+ * — a layout shift on every first visit — so it is a fixed overlay instead:
+ * nothing moves, and pages no longer need to know its height.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, cleanup, waitFor, act } from '@testing-library/react';
+import { render, screen, cleanup, waitFor, act } from '@testing-library/react';
 import { renderToString } from 'react-dom/server';
 import { hydrateRoot } from 'react-dom/client';
 import PWAInstallPrompt from '../PWAInstallPrompt';
-
-const BANNER_HEIGHT_PX = 120;
 
 function mockMatchMedia(matches: boolean) {
   Object.defineProperty(window, 'matchMedia', {
@@ -28,34 +23,15 @@ function mockMatchMedia(matches: boolean) {
   });
 }
 
-function bannerHeightVar(): string {
-  return document.documentElement.style.getPropertyValue('--pwa-banner-height');
-}
-
-describe('PWAInstallPrompt — publishes --pwa-banner-height', () => {
+describe('PWAInstallPrompt', () => {
   beforeEach(() => {
     localStorage.clear();
-    document.documentElement.style.removeProperty('--pwa-banner-height');
 
     mockMatchMedia(false); // not already installed/standalone
     Object.defineProperty(navigator, 'userAgent', {
       value: 'Mozilla/5.0 (Linux; Android 14)',
       configurable: true,
     });
-
-    // jsdom has no layout engine (offsetHeight is always 0) — force a realistic
-    // rendered height so the effect under test has something real to publish.
-    Object.defineProperty(HTMLElement.prototype, 'offsetHeight', {
-      configurable: true,
-      value: BANNER_HEIGHT_PX,
-    });
-
-    // jsdom doesn't implement ResizeObserver.
-    window.ResizeObserver = class {
-      observe() {}
-      disconnect() {}
-      unobserve() {}
-    } as unknown as typeof ResizeObserver;
   });
 
   afterEach(() => {
@@ -63,35 +39,18 @@ describe('PWAInstallPrompt — publishes --pwa-banner-height', () => {
     vi.restoreAllMocks();
   });
 
-  it('sets --pwa-banner-height to its own rendered height on mount', async () => {
-    render(<PWAInstallPrompt />);
-    await waitFor(() => expect(bannerHeightVar()).toBe(`${BANNER_HEIGHT_PX}px`));
+  it('is a fixed overlay, not in normal flow, so showing it shifts no content', async () => {
+    const { container } = render(<PWAInstallPrompt />);
+    await waitFor(() => expect(screen.getByRole('button', { name: /dismiss install prompt/i })).toBeTruthy());
+    const banner = container.firstElementChild as HTMLElement;
+    expect(banner.className).toMatch(/\bfixed\b/);
   });
 
-  it('resets --pwa-banner-height to 0px when the user dismisses the banner', async () => {
-    render(<PWAInstallPrompt />);
-    await waitFor(() => expect(bannerHeightVar()).toBe(`${BANNER_HEIGHT_PX}px`));
-
-    fireEvent.click(screen.getByRole('button', { name: /dismiss install prompt/i }));
-
-    expect(bannerHeightVar()).toBe('0px');
-  });
-
-  it('resets --pwa-banner-height to 0px on unmount', async () => {
-    const { unmount } = render(<PWAInstallPrompt />);
-    await waitFor(() => expect(bannerHeightVar()).toBe(`${BANNER_HEIGHT_PX}px`));
-
-    unmount();
-
-    expect(bannerHeightVar()).toBe('0px');
-  });
-
-  it('never publishes a non-zero height when already installed (standalone)', async () => {
+  it('is not shown when already installed (standalone)', async () => {
     mockMatchMedia(true); // display-mode: standalone
     render(<PWAInstallPrompt />);
     await act(async () => {});
     expect(screen.queryByRole('button', { name: /dismiss install prompt/i })).toBeNull();
-    expect(bannerHeightVar()).toBe('0px');
   });
 
   it('stays hidden when the banner was previously dismissed', async () => {

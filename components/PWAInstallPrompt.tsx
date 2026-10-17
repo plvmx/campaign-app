@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 
 type Platform = 'ios' | 'android' | 'desktop' | null;
@@ -72,31 +72,10 @@ export default function PWAInstallPrompt() {
     setShowInstructions(false);
   };
 
-  // This banner renders in the root layout, above (outside) MobileLayout, so it
-  // pushes every page's content down by its own height in normal flow — a height
-  // that varies (dismissible; wraps to more lines on narrow screens; grows when
-  // "How to install" instructions expand). Pages that size a full-height element
-  // via a fixed `calc(100dvh - ...)` (e.g. the admin map pages) have no way to
-  // know that height unless it's published somewhere, so it's exposed here as a
-  // CSS custom property on the root element for them to subtract.
-  const bannerRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const el = bannerRef.current;
-    if (isPublicPage || !platform || !el) {
-      document.documentElement.style.setProperty('--pwa-banner-height', '0px');
-      return;
-    }
-    const updateHeight = () => {
-      document.documentElement.style.setProperty('--pwa-banner-height', `${el.offsetHeight}px`);
-    };
-    updateHeight();
-    const observer = new ResizeObserver(updateHeight);
-    observer.observe(el);
-    return () => {
-      observer.disconnect();
-      document.documentElement.style.setProperty('--pwa-banner-height', '0px');
-    };
-  }, [platform, isPublicPage]);
+  // Rendered as a fixed overlay above the bottom nav, not in normal flow: it only
+  // appears after hydration (it needs localStorage / the user agent), so an in-flow
+  // banner pushed the whole page down once it mounted — a layout shift on every
+  // first visit. An overlay moves nothing, so pages need no knowledge of its height.
 
   const handleInstallClick = async () => {
     if (deferredPrompt) {
@@ -117,7 +96,7 @@ export default function PWAInstallPrompt() {
   const isAndroid = platform === 'android';
 
   return (
-    <div data-ti="components/PWAInstallPrompt.tsx" ref={bannerRef} className="bg-[#1e3a5f] text-white px-4 py-3 text-sm">
+    <div data-ti="components/PWAInstallPrompt.tsx" className="fixed inset-x-0 bottom-20 z-20 max-h-[60dvh] overflow-y-auto bg-[#1e3a5f] text-white px-4 py-3 text-sm shadow-lg">
       <div className="flex items-start justify-between gap-3 max-w-lg mx-auto">
         <div className="flex-1 min-w-0">
           {!showInstructions ? (
