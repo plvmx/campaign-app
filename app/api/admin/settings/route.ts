@@ -12,6 +12,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { enforceOrigin } from '@/lib/corsUtils';
 import { verifyAdminCaller } from '@/lib/services/adminCallerService';
+import { normalizeHotkey } from '@/lib/techInsights/hotkey';
+import { TECH_INSIGHTS_ENABLED_KEY, TECH_INSIGHTS_HOTKEY_KEY } from '@/lib/techInsights/settings';
 import { PUBLIC_LINKS, publicLinkTitleSettingKey, publicLinkDescriptionSettingKey } from '@/lib/publicLinks';
 
 // Public link keys are derived from PUBLIC_LINKS so a new entry there is
@@ -21,6 +23,8 @@ const ALLOWED_SETTING_KEYS = new Set([
   'slide_view_leaders',
   'slide_view_sr',
   'slide_view_admin',
+  TECH_INSIGHTS_ENABLED_KEY,
+  TECH_INSIGHTS_HOTKEY_KEY,
   ...PUBLIC_LINKS.flatMap((link) => [publicLinkTitleSettingKey(link.slug), publicLinkDescriptionSettingKey(link.slug)]),
 ]);
 
@@ -71,6 +75,14 @@ export async function POST(request: NextRequest) {
   // Allowlist of valid setting keys — prevents writing arbitrary rows
   if (!ALLOWED_SETTING_KEYS.has(key)) {
     return NextResponse.json({ error: 'Unknown setting key' }, { status: 400 });
+  }
+
+  // A malformed shortcut or flag would silently disable (or mis-bind) Tech Insights for every admin.
+  if (key === TECH_INSIGHTS_HOTKEY_KEY && normalizeHotkey(value) !== value) {
+    return NextResponse.json({ error: 'Invalid keyboard shortcut' }, { status: 400 });
+  }
+  if (key === TECH_INSIGHTS_ENABLED_KEY && value !== 'true' && value !== 'false') {
+    return NextResponse.json({ error: 'Value must be true or false' }, { status: 400 });
   }
 
   const { error: upsertError } = await supabaseAdmin

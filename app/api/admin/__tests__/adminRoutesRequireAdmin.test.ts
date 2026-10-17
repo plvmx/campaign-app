@@ -33,6 +33,7 @@ const ROUTES: Array<[string, () => Promise<{ POST?: Handler; GET?: Handler }>, '
   ['reset-mfa', () => import('../reset-mfa/route'), 'POST'],
   ['check-registration', () => import('../check-registration/route'), 'POST'],
   ['user-guide/upload-url', () => import('../user-guide/upload-url/route'), 'POST'],
+  ['tech-insights', () => import('../tech-insights/route'), 'GET'],
 ];
 
 function makeRequest(name: string, token?: string, method: 'POST' | 'GET' = 'POST') {
