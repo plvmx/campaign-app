@@ -12,7 +12,7 @@ interface Props {
 export default function DeleteConfirmModal({ campaign, onConfirm, onCancel }: Props) {
   return (
     <Modal onClose={onCancel}>
-      <div className="w-full max-w-sm rounded-xl border-2 border-gray-800 bg-white p-6 shadow-2xl dark:border-gray-600 dark:bg-gray-900">
+      <div data-ti="app/app/components/DeleteConfirmModal.tsx" className="w-full max-w-sm rounded-xl border-2 border-gray-800 bg-white p-6 shadow-2xl dark:border-gray-600 dark:bg-gray-900">
         <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Delete Campaign?</h2>
         <div className="mt-3 rounded-md bg-gray-50 px-4 py-3 text-sm text-gray-700 dark:bg-gray-800 dark:text-gray-300">
           <p><span className="font-semibold">Place:</span> {combinePlaceAndSite(campaign.place, campaign.site)}, {campaign.state}</p>

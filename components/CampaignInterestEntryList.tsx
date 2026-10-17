@@ -40,7 +40,7 @@ export default function CampaignInterestEntryList({ entries, updatingIds, onTogg
         const campaign = entry.campaign;
         const isUpdating = updatingIds.has(entry.id);
         return (
-          <div key={entry.id} className="p-4">
+          <div key={entry.id} data-ti="components/CampaignInterestEntryList.tsx" className="p-4">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 {campaign ? (

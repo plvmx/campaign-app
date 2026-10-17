@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { fetchTechInsightsManifest, fetchTechInsightsSource } from '@/lib/techInsights/client';
 import { computeReach, groupByKind, pathTo, summariseReach, KIND_SINGULAR } from '@/lib/techInsights/graph';
 import { matchRoute } from '@/lib/techInsights/routeMatch';
+import { closestTagged, scanVisibleTags, tagChain, type VisibleTag } from '@/lib/techInsights/domScan';
 import type { ExportInfo, FileEntry, TechInsightsManifest } from '@/lib/techInsights/types';
 import { getErrorMessage } from '@/lib/errorUtils';
 
@@ -28,6 +29,11 @@ export default function TechInsightsPanel({ onClose, hotkey }: Props) {
   const [showCode, setShowCode] = useState(false);
   const [range, setRange] = useState<{ start: number; end: number } | null>(null);
   const [codeError, setCodeError] = useState<string | null>(null);
+  // Bumped to re-read which tagged components are on screen (navigation, a modal opening, the drop-down being opened).
+  const [scanTick, setScanTick] = useState(0);
+  const [visible, setVisible] = useState<VisibleTag[]>([]);
+  const [picking, setPicking] = useState(false);
+  const [hovered, setHovered] = useState<Element | null>(null);
 
   useEffect(() => {
     if (cachedManifest) return;
@@ -39,15 +45,64 @@ export default function TechInsightsPanel({ onClose, hotkey }: Props) {
   }, []);
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (picking) setPicking(false); else onClose();
+    };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, [onClose, picking]);
+
+  // "Pick on screen": hover outlines the nearest tagged component, a click selects it (and is swallowed, so the page does nothing).
+  useEffect(() => {
+    if (!picking || !manifest) return;
+    const outsidePanel = (target: EventTarget | null) => !(target instanceof Element && target.closest('[aria-label="Tech Insights"]'));
+    const known = (el: Element | null): el is Element => el !== null && Boolean(manifest.files[el.getAttribute('data-ti') ?? '']);
+    const onMove = (e: MouseEvent) => {
+      const el = outsidePanel(e.target) ? closestTagged(e.target) : null;
+      setHovered(known(el) ? el : null);
+    };
+    const onClick = (e: MouseEvent) => {
+      if (!outsidePanel(e.target)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const el = closestTagged(e.target);
+      if (known(el)) {
+        setSelected(el.getAttribute('data-ti'));
+        setShowCode(false);
+        setRange(null);
+        setCodeError(null);
+        setScanTick((t) => t + 1);
+      }
+      setPicking(false);
+    };
+    document.addEventListener('mousemove', onMove, true);
+    document.addEventListener('click', onClick, true);
+    return () => {
+      document.removeEventListener('mousemove', onMove, true);
+      document.removeEventListener('click', onClick, true);
+      setHovered(null);
+    };
+  }, [picking, manifest]);
+
+  // Re-scan a frame after the page (or manifest) changes, so the new DOM has committed.
+  useEffect(() => {
+    if (!manifest) return;
+    const frame = requestAnimationFrame(() => setVisible(scanVisibleTags(document, (p) => Boolean(manifest.files[p]))));
+    return () => cancelAnimationFrame(frame);
+  }, [manifest, pathname, scanTick]);
 
   const route = useMemo(() => (manifest ? matchRoute(pathname, manifest.routes) : null), [manifest, pathname]);
   const reach = useMemo(() => (manifest && route ? computeReach([route.file, ...route.layouts], manifest) : null), [manifest, route]);
   const summary = useMemo(() => (manifest && reach ? summariseReach(reach, manifest) : null), [manifest, reach]);
   const groups = useMemo(() => (manifest && reach ? groupByKind(reach.order, manifest.files) : []), [manifest, reach]);
+
+  const visiblePaths = useMemo(() => new Set(visible.map((v) => v.path)), [visible]);
+
+  const selectedElements = useMemo(
+    () => (selected ? visible.find((v) => v.path === selected)?.elements ?? [] : []),
+    [visible, selected],
+  );
 
   const currentPath = selected ?? route?.file ?? null;
   const file: FileEntry | null = manifest && currentPath ? manifest.files[currentPath] ?? null : null;
@@ -114,17 +169,35 @@ export default function TechInsightsPanel({ onClose, hotkey }: Props) {
               <span className={heading}>Inspect</span>
               <select
                 value={selected ?? ''}
+                onMouseDown={() => setScanTick((t) => t + 1)}
                 onChange={(e) => select(e.target.value || null)}
                 className="mt-1 block w-full rounded border-2 border-gray-800 bg-white px-2 py-1.5 font-mono text-xs dark:border-gray-500 dark:bg-gray-800"
               >
                 <option value="">This screen — {route.pattern}</option>
-                {groups.map((g) => (
-                  <optgroup key={g.kind} label={`${g.label} (${g.paths.length})`}>
-                    {g.paths.map((p) => <option key={p} value={p}>{p}</option>)}
+                {visible.length > 0 && (
+                  <optgroup label={`Visible on this screen (${visible.length})`}>
+                    {visible.map((v) => (
+                      <option key={v.path} value={v.path}>{v.path}{v.elements.length > 1 ? ` ×${v.elements.length}` : ''}</option>
+                    ))}
                   </optgroup>
-                ))}
+                )}
+                {groups.map((g) => {
+                  const rest = g.paths.filter((p) => !visiblePaths.has(p));
+                  return rest.length === 0 ? null : (
+                    <optgroup key={g.kind} label={`${g.label} (${rest.length})`}>
+                      {rest.map((p) => <option key={p} value={p}>{p}</option>)}
+                    </optgroup>
+                  );
+                })}
               </select>
             </label>
+
+            <button
+              onClick={() => setPicking((p) => !p)}
+              className={`mt-2 rounded border-2 px-2 py-1 text-xs font-bold ${picking ? 'border-blue-700 bg-blue-600 text-white' : 'border-gray-800 hover:bg-gray-100 dark:border-gray-500 dark:hover:bg-gray-800'}`}
+            >
+              {picking ? 'Click a component on the page… (Esc to cancel)' : 'Pick on screen'}
+            </button>
 
             {selected === null && (
               <div className={section}>
@@ -135,6 +208,8 @@ export default function TechInsightsPanel({ onClose, hotkey }: Props) {
                   <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">Wrapped by {route.layouts.map(fileLink)}</p>
                 )}
                 <p className="mt-1">{reach.order.length - 1} files are reachable from this screen through imports and API calls.</p>
+
+                <SummaryList label="Components visible on this screen" items={visible.map((v) => v.path)} onSelect={select} known={manifest.files} />
 
                 <p className={`${heading} ${section}`}>Data this screen touches</p>
                 <SummaryList label="Database tables" items={summary.tables} />
@@ -159,6 +234,18 @@ export default function TechInsightsPanel({ onClose, hotkey }: Props) {
 
                 {file.description && (
                   <p className="mt-2 whitespace-pre-wrap rounded bg-gray-50 p-2 text-xs text-gray-700 dark:bg-gray-800 dark:text-gray-300">{file.description}</p>
+                )}
+
+                {selected !== null && selectedElements.length > 0 && (
+                  <div className={section}>
+                    <p className={heading}>Where it appears on this screen</p>
+                    <p className="mt-1 text-xs">{selectedElements.length === 1 ? 'Shown once' : `Shown ${selectedElements.length} times`} — outlined on the page.</p>
+                    <p className="mt-1 flex flex-wrap items-center gap-1 text-xs">
+                      {tagChain(selectedElements[0]).map((p, i) => (
+                        <span key={p} className="flex items-center gap-1">{i > 0 && <span className="text-gray-400">›</span>}{fileLink(p)}</span>
+                      ))}
+                    </p>
+                  </div>
                 )}
 
                 {chain.length > 1 && (
@@ -211,7 +298,36 @@ export default function TechInsightsPanel({ onClose, hotkey }: Props) {
           </>
         )}
       </div>
+      <HighlightBoxes elements={hovered ? [hovered] : selectedElements} />
     </aside>
+  );
+}
+
+/** Outlines elements on the page; positions follow scrolling and resizing. */
+function HighlightBoxes({ elements }: { elements: Element[] }) {
+  const [rects, setRects] = useState<DOMRect[]>([]);
+  useEffect(() => {
+    const measure = () => setRects(elements.filter((el) => el.isConnected).map((el) => el.getBoundingClientRect()));
+    const frame = requestAnimationFrame(measure);
+    window.addEventListener('scroll', measure, true);
+    window.addEventListener('resize', measure);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener('scroll', measure, true);
+      window.removeEventListener('resize', measure);
+    };
+  }, [elements]);
+  return (
+    <>
+      {rects.map((r, i) => (
+        <div
+          key={i}
+          aria-hidden
+          className="pointer-events-none fixed z-[2999] rounded-sm outline outline-2 outline-offset-2 outline-blue-600 bg-blue-500/10"
+          style={{ left: r.left, top: r.top, width: r.width, height: r.height }}
+        />
+      ))}
+    </>
   );
 }
 

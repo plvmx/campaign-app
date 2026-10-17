@@ -28,7 +28,7 @@ export default function PublicMapRegisterInterestActions({ campaignId }: PublicM
   }
 
   return (
-    <div className="mt-2">
+    <div data-ti="components/PublicMapRegisterInterestActions.tsx" className="mt-2">
       <div className="flex gap-2">
         <button
           type="button"

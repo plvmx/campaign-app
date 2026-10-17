@@ -4,7 +4,7 @@ interface Props {
 
 export default function LoadingSpinner({ text = 'Loading…' }: Props) {
   return (
-    <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+    <div data-ti="components/LoadingSpinner.tsx" className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
       <svg
         className="h-4 w-4 animate-spin"
         xmlns="http://www.w3.org/2000/svg"

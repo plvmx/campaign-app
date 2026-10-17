@@ -24,7 +24,7 @@ export default function CampaignFilters({
   const hasFilters = filterState || filterPlace || filterLeader || filterMobile;
 
   return (
-    <div className="w-full space-y-2">
+    <div data-ti="app/app/components/CampaignFilters.tsx" className="w-full space-y-2">
       <div className="grid grid-cols-2 gap-2">
         <div>
           <label htmlFor="filter-state" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">State</label>

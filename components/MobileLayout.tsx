@@ -127,7 +127,7 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-gray-50 dark:bg-gray-900 overflow-x-hidden">
+    <div data-ti="components/MobileLayout.tsx" className="flex min-h-screen flex-col bg-gray-50 dark:bg-gray-900 overflow-x-hidden">
       {/* Header */}
       <header className="sticky top-0 z-10 border-b-2 border-gray-800 dark:border-gray-600 bg-white dark:bg-gray-950">
         <div className="flex h-14 items-center justify-between px-4">

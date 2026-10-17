@@ -112,7 +112,7 @@ export default function TrainingInterestClient({ campaignId }: { campaignId: str
   const { campaign, categoryName } = data;
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-md flex-col p-4">
+    <div data-ti="app/public/training/[campaignId]/TrainingInterestClient.tsx" className="mx-auto flex min-h-screen max-w-md flex-col p-4">
       <div className="mb-4">
         <span className="inline-block rounded-md bg-blue-600 px-2 py-0.5 text-xs font-bold text-white">
           {categoryName}

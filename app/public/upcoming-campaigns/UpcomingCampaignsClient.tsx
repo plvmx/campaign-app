@@ -169,7 +169,7 @@ export default function UpcomingCampaignsClient() {
   };
 
   return (
-    <div className="mx-auto flex h-[100dvh] max-w-4xl flex-col p-4">
+    <div data-ti="app/public/upcoming-campaigns/UpcomingCampaignsClient.tsx" className="mx-auto flex h-[100dvh] max-w-4xl flex-col p-4">
       <div className="mb-3">
         <h1 className="text-2xl font-bold text-gray-900">Upcoming AFJ Campaigns</h1>
         <p className="mt-1 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm font-medium text-blue-800">

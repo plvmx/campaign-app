@@ -7,6 +7,7 @@ import L from 'leaflet';
 import { getStateMarkerIcon } from '@/lib/leafletMarkerIcon';
 import { formatCampaignDateTimeDisplay, getEarliestCampaign } from '@/lib/campaignUtils';
 import MapPopupActions from '@/components/MapPopupActions';
+import TechInsightsMapTag from '@/components/techInsights/TechInsightsMapTag';
 
 /**
  * Just enough of a campaign for this map's popup (id/date/time/leader) —
@@ -137,6 +138,7 @@ export default function NearbyCampaignsMap({
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         url="/api/tiles/{z}/{x}/{y}"
       />
+      <TechInsightsMapTag data-ti="components/NearbyCampaignsMap.tsx" />
       <FitBounds center={center} radiusKm={radiusKm} />
       <ResetViewControl center={center} radiusKm={radiusKm} />
       <Circle

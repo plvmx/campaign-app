@@ -119,5 +119,5 @@ export default function CampaignList({
     }
   }
 
-  return <div className="divide-y divide-gray-200 dark:divide-gray-700">{result}</div>;
+  return <div data-ti="app/app/components/CampaignList.tsx" className="divide-y divide-gray-200 dark:divide-gray-700">{result}</div>;
 }

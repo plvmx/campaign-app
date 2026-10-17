@@ -39,7 +39,7 @@ export default function GuideScreen({ onClose }: { onClose: () => void }) {
   }, []);
 
   return (
-    <div className="flex min-h-screen flex-col bg-gray-200 dark:bg-gray-900">
+    <div data-ti="components/GuideScreen.tsx" className="flex min-h-screen flex-col bg-gray-200 dark:bg-gray-900">
       <header className="sticky top-0 z-10 flex h-16 items-center justify-between gap-3 border-b-2 border-gray-800 bg-white px-4 dark:border-gray-600 dark:bg-gray-950">
         <h1 className="truncate text-xl font-bold text-gray-900 dark:text-gray-100">CAS User Guide</h1>
         <button

@@ -92,7 +92,7 @@ export default function CampaignResultsClient() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gray-100 p-4 dark:bg-gray-950">
+    <div data-ti="app/public/campaign-results/CampaignResultsClient.tsx" className="min-h-screen bg-gray-100 p-4 dark:bg-gray-950">
       <div className="mx-auto max-w-4xl">
         <div
           role="note"

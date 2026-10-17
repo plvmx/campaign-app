@@ -48,7 +48,7 @@ export function EmailAndCodeFallback({ onVerify }: { onVerify: (email: string, c
   }
 
   return (
-    <div className="space-y-3">
+    <div data-ti="components/auth/EmailAndCodeFallback.tsx" className="space-y-3">
       <p className={bodyTextClass}>
         <strong>You can still carry on.</strong> Type your email address below, and the code from the same email — the
         number shown underneath the CONFIRM NOW link.
