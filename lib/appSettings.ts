@@ -1,6 +1,8 @@
 import { supabase } from './supabaseClient';
 import { supabaseAdmin } from './supabaseAdmin';
 import { publicLinkTitleSettingKey, publicLinkDescriptionSettingKey } from './publicLinks';
+import { TECH_INSIGHTS_ENABLED_KEY, TECH_INSIGHTS_HOTKEY_KEY } from './techInsights/settings';
+import { DEFAULT_TECH_INSIGHTS_HOTKEY, normalizeHotkey } from './techInsights/hotkey';
 
 // ---------------------------------------------------------------------------
 // Server-only read (no user session available, e.g. generateMetadata on a
@@ -224,4 +226,38 @@ export async function setPublicLinkTitle(slug: string, value: string): Promise<v
  */
 export async function setPublicLinkDescription(slug: string, value: string): Promise<void> {
   await setSettingSecure(publicLinkDescriptionSettingKey(slug), value, `Display description override for public link "${slug}"`);
+}
+
+// ---------------------------------------------------------------------------
+// Tech Insights (admin-only on-screen technical details — see lib/techInsights/)
+// ---------------------------------------------------------------------------
+
+export interface TechInsightsConfig { enabled: boolean; hotkey: string }
+
+/** One query for both settings; an unset or invalid hotkey falls back to the default. Off unless explicitly enabled. */
+export async function getTechInsightsConfig(): Promise<TechInsightsConfig> {
+  const { data, error } = await supabase
+    .from('app_settings')
+    .select('setting_key, setting_value')
+    .in('setting_key', [TECH_INSIGHTS_ENABLED_KEY, TECH_INSIGHTS_HOTKEY_KEY]);
+  if (error) {
+    console.error('Error fetching Tech Insights settings:', error);
+    return { enabled: false, hotkey: DEFAULT_TECH_INSIGHTS_HOTKEY };
+  }
+  const byKey = new Map((data ?? []).map((r: { setting_key: string; setting_value: string | null }) => [r.setting_key, r.setting_value]));
+  return {
+    enabled: (byKey.get(TECH_INSIGHTS_ENABLED_KEY) ?? '').toLowerCase() === 'true',
+    hotkey: normalizeHotkey(byKey.get(TECH_INSIGHTS_HOTKEY_KEY) ?? '') ?? DEFAULT_TECH_INSIGHTS_HOTKEY,
+  };
+}
+
+/** Writes through the server-verified API route — admin status is confirmed server-side. */
+export async function setTechInsightsEnabled(enabled: boolean): Promise<void> {
+  await setSettingSecure(TECH_INSIGHTS_ENABLED_KEY, enabled ? 'true' : 'false', 'Enable the Tech Insights panel (desktop, full admins with 2FA only)');
+}
+
+export async function setTechInsightsHotkey(hotkey: string): Promise<void> {
+  const normalized = normalizeHotkey(hotkey);
+  if (!normalized) throw new Error('That is not a valid shortcut — use Ctrl, Alt or Meta plus a letter, digit or F-key');
+  await setSettingSecure(TECH_INSIGHTS_HOTKEY_KEY, normalized, 'Keyboard shortcut that opens the Tech Insights panel');
 }
