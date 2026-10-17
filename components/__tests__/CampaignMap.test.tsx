@@ -5,13 +5,14 @@ import type { ReactNode } from 'react';
 // Leaflet needs a real layout engine; render Popup content inline instead
 // so the test can see what a marker's popup would show once opened.
 const fitBounds = vi.hoisted(() => vi.fn());
+const invalidateSize = vi.hoisted(() => vi.fn());
 
 vi.mock('react-leaflet', () => ({
   MapContainer: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   TileLayer: () => null,
   Marker: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   Popup: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  useMap: () => ({ getSize: () => ({ x: 1, y: 1 }), setView: vi.fn(), flyTo: vi.fn(), fitBounds }),
+  useMap: () => ({ getSize: () => ({ x: 1, y: 1 }), setView: vi.fn(), flyTo: vi.fn(), fitBounds, invalidateSize }),
   useMapEvents: () => null,
 }));
 vi.mock('leaflet', () => ({ default: { latLngBounds: (pts: unknown) => ({ pts }) } }));
@@ -55,5 +56,13 @@ describe('CampaignMap popup', () => {
 
     render(<CampaignMap center={[0, 0]} zoom={5} markers={markers} fitToMarkers />);
     expect(fitBounds).toHaveBeenCalledTimes(1);
+  });
+
+  it('re-measures the map when resizeKey changes', async () => {
+    invalidateSize.mockClear();
+    const { rerender } = render(<CampaignMap center={[0, 0]} zoom={5} markers={[]} resizeKey={false} />);
+    await vi.waitFor(() => expect(invalidateSize).toHaveBeenCalledTimes(1));
+    rerender(<CampaignMap center={[0, 0]} zoom={5} markers={[]} resizeKey />);
+    await vi.waitFor(() => expect(invalidateSize).toHaveBeenCalledTimes(2));
   });
 });
