@@ -65,7 +65,7 @@ export default function TechInsightsSettingsCard() {
   const hotkeyChanged = config !== null && normalizedDraft !== null && normalizedDraft !== config.hotkey;
 
   return (
-    <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
+    <div data-ti="app/admin/components/TechInsightsSettingsCard.tsx" className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
       <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Tech Insights</h2>
       <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
         Press the shortcut on any screen to see its technical details: the files behind it, what they import, which

@@ -10,7 +10,7 @@ import { HELP_GUIDE_PATH } from '@/lib/supportContact';
  */
 export function GetHelp() {
   return (
-    <p className="text-center text-lg leading-relaxed text-gray-800 dark:text-gray-200">
+    <p data-ti="components/auth/GetHelp.tsx" className="text-center text-lg leading-relaxed text-gray-800 dark:text-gray-200">
       Stuck?{' '}
       <a
         href={HELP_GUIDE_PATH}

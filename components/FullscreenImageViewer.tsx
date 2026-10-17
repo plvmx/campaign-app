@@ -64,7 +64,7 @@ export default function FullscreenImageViewer({ src, alt, onClose }: Props) {
   }, [onClose]);
 
   return (
-    <div
+    <div data-ti="components/FullscreenImageViewer.tsx"
       ref={containerRef}
       className="fixed inset-0 z-[2000] flex items-center justify-center overflow-hidden bg-black"
       onClick={onClose}

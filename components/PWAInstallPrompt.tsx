@@ -108,7 +108,7 @@ export default function PWAInstallPrompt() {
   const isAndroid = platform === 'android';
 
   return (
-    <div ref={bannerRef} className="bg-[#1e3a5f] text-white px-4 py-3 text-sm">
+    <div data-ti="components/PWAInstallPrompt.tsx" ref={bannerRef} className="bg-[#1e3a5f] text-white px-4 py-3 text-sm">
       <div className="flex items-start justify-between gap-3 max-w-lg mx-auto">
         <div className="flex-1 min-w-0">
           {!showInstructions ? (

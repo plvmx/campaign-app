@@ -46,7 +46,7 @@ export function CodeEntryScreen({
   help?: ReactNode;
 }) {
   return (
-    <div className="space-y-6">
+    <div data-ti="components/auth/CodeEntryScreen.tsx" className="space-y-6">
       {stepBadge}
       <h2 className={headingClass}>{title}</h2>
       <p className={bodyTextClass}>{description}</p>

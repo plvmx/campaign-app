@@ -84,7 +84,7 @@ export default function Week1CampaignsClient() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gray-100 p-4 dark:bg-gray-950">
+    <div data-ti="app/public/week1-campaigns/Week1CampaignsClient.tsx" className="min-h-screen bg-gray-100 p-4 dark:bg-gray-950">
       <div className="mx-auto max-w-4xl">
         <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">Week 1 Campaigns</h1>
         <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">

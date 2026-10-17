@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { DEFAULT_TECH_INSIGHTS_HOTKEY, hotkeyFromEvent, matchesHotkey, normalizeHotkey, parseHotkey, type HotkeyEventLike } from '../hotkey';
+import { DEFAULT_TECH_INSIGHTS_HOTKEY, hotkeyFromEvent, matchesHotkey, normalizeHotkey, parseHotkey, type HotkeyEventLike, type ParsedHotkey } from '../hotkey';
 
 const ev = (over: Partial<HotkeyEventLike>): HotkeyEventLike =>
   ({ code: 'KeyI', key: 'i', ctrlKey: false, altKey: false, shiftKey: false, metaKey: false, ...over });
@@ -22,7 +22,7 @@ describe('parseHotkey / normalizeHotkey', () => {
 });
 
 describe('matchesHotkey', () => {
-  const hotkey = parseHotkey('Ctrl+Alt+I')!;
+  const hotkey = (parseHotkey('Ctrl+Alt+I') as ParsedHotkey);
 
   it('matches the exact modifiers and key', () => {
     expect(matchesHotkey(ev({ ctrlKey: true, altKey: true }), hotkey)).toBe(true);
@@ -39,7 +39,7 @@ describe('matchesHotkey', () => {
   });
 
   it('matches F-keys by key name', () => {
-    expect(matchesHotkey(ev({ altKey: true, code: 'F9', key: 'F9' }), parseHotkey('Alt+F9')!)).toBe(true);
+    expect(matchesHotkey(ev({ altKey: true, code: 'F9', key: 'F9' }), (parseHotkey('Alt+F9') as ParsedHotkey))).toBe(true);
   });
 });
 

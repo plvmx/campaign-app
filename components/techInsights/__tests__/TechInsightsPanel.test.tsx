@@ -15,7 +15,8 @@ const manifest: TechInsightsManifest = {
     { pattern: '/admin/things/[id]', kind: 'page', file: 'app/admin/things/[id]/page.tsx', layouts: ['app/layout.tsx'], methods: [] },
   ],
   files: Object.fromEntries([
-    f('app/admin/things/[id]/page.tsx', 'page', { client: true, description: 'Shows one thing.', imports: ['lib/services/thingService.ts'] }),
+    f('app/admin/things/[id]/page.tsx', 'page', { client: true, description: 'Shows one thing.', imports: ['lib/services/thingService.ts', 'components/Card.tsx'] }),
+    f('components/Card.tsx', 'component', { importedBy: ['app/admin/things/[id]/page.tsx'] }),
     f('app/layout.tsx', 'layout'),
     f('lib/services/thingService.ts', 'service', {
       tables: ['things'], importedBy: ['app/admin/things/[id]/page.tsx'], tests: ['lib/services/__tests__/thingService.test.ts'],
@@ -32,6 +33,70 @@ vi.mock('@/lib/techInsights/client', () => ({
 }));
 
 import TechInsightsPanel from '../TechInsightsPanel';
+
+describe('TechInsightsPanel — components on screen', () => {
+  const mountPage = (html: string) => {
+    const host = document.createElement('div');
+    host.innerHTML = html;
+    document.body.appendChild(host);
+    return host;
+  };
+  afterEach(() => { document.body.innerHTML = ''; cleanup(); });
+
+  it('lists tagged components that are on screen first, with counts, ignoring unknown tags', async () => {
+    mockFetchManifest.mockResolvedValue(manifest);
+    mountPage('<div data-ti="components/Card.tsx"></div><div data-ti="components/Card.tsx"></div><div data-ti="components/Gone.tsx"></div>');
+    render(<TechInsightsPanel onClose={() => {}} hotkey="Ctrl+Alt+I" />);
+    const group = await waitFor(() => {
+      const g = document.querySelector('optgroup[label^="Visible on this screen"]');
+      if (!g) throw new Error('not yet');
+      return g as HTMLElement;
+    });
+    expect(group.getAttribute('label')).toBe('Visible on this screen (1)');
+    expect(group.textContent).toBe('components/Card.tsx ×2');
+    // not repeated under the generic "Components" group
+    expect(document.querySelector('optgroup[label^="Components"]')).toBeNull();
+  });
+
+  it('outlines a selected visible component and shows where it sits in the screen', async () => {
+    mockFetchManifest.mockResolvedValue(manifest);
+    mountPage('<div data-ti="components/Card.tsx"></div><div data-ti="components/Card.tsx"></div>');
+    render(<TechInsightsPanel onClose={() => {}} hotkey="Ctrl+Alt+I" />);
+    await waitFor(() => expect(document.querySelector('optgroup[label^="Visible"]')).not.toBeNull());
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'components/Card.tsx' } });
+    expect(await screen.findByText('Where it appears on this screen')).toBeTruthy();
+    expect(screen.getByText(/Shown 2 times/)).toBeTruthy();
+    await waitFor(() => expect(document.querySelectorAll('[aria-hidden].outline-blue-600').length).toBe(2));
+  });
+
+  it('"Pick on screen" selects the clicked component and swallows the click', async () => {
+    mockFetchManifest.mockResolvedValue(manifest);
+    const host = mountPage('<div data-ti="components/Card.tsx"><button id="inner">Do it</button></div>');
+    const pageClick = vi.fn();
+    (host.querySelector('#inner') as Element).addEventListener('click', pageClick);
+    render(<TechInsightsPanel onClose={() => {}} hotkey="Ctrl+Alt+I" />);
+    await screen.findByText('/admin/things/[id]');
+    fireEvent.click(screen.getByText('Pick on screen'));
+    fireEvent.click(host.querySelector('#inner') as Element);
+    expect(await screen.findByText('Where it appears on this screen')).toBeTruthy();
+    expect(pageClick).not.toHaveBeenCalled();
+    // picking mode ended: the next click reaches the page again
+    fireEvent.click(host.querySelector('#inner') as Element);
+    expect(pageClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('Escape cancels picking instead of closing the panel', async () => {
+    mockFetchManifest.mockResolvedValue(manifest);
+    const onClose = vi.fn();
+    render(<TechInsightsPanel onClose={onClose} hotkey="Ctrl+Alt+I" />);
+    await screen.findByText('/admin/things/[id]');
+    fireEvent.click(screen.getByText('Pick on screen'));
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});
 
 describe('TechInsightsPanel', () => {
   beforeAll(() => {
