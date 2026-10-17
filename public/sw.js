@@ -1,7 +1,7 @@
 // AFJ CAS Service Worker
 // Bump this version string whenever this file changes, so the cache-cleanup in
 // 'activate' actually purges entries cached under the old worker.
-const CACHE_NAME = 'afj-cas-v2';
+const CACHE_NAME = 'afj-cas-v3';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
@@ -30,6 +30,14 @@ self.addEventListener('activate', (event) => {
 // Network-first strategy: always try network, fall back to cache
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
+
+  // Only same-origin pages and static assets get the offline fallback. Supabase
+  // calls (cross-origin) and our own /api/ responses are live data: cloning each
+  // one into Cache Storage added work to every request on slow phones and kept
+  // copies of signed-in users' data on the device. Not calling respondWith lets
+  // the browser handle them normally.
+  const url = new URL(event.request.url);
+  if (url.origin !== self.location.origin || url.pathname.startsWith('/api/')) return;
 
   event.respondWith(
     fetch(event.request)

@@ -192,8 +192,9 @@ function AppPageContent() {
           contextAdminStatus === 'AD' ? 'admin'
           : contextAdminStatus === 'SR' ? 'sr'
           : 'leaders';
-        const svEnabled = await getSlideViewEnabled(slideRole);
-        setSlideViewEnabled(svEnabled);
+        // Started now but awaited later, so it runs alongside the campaign fetch
+        // instead of delaying it by a round trip.
+        const svEnabledPromise = getSlideViewEnabled(slideRole);
 
         // Handle URL params
         const filterParam = searchParams.get('filter');
@@ -212,13 +213,17 @@ function AppPageContent() {
         }
 
         // Fetch campaigns
-        const { campaigns, sharedOwners } = await getCampaignsForUser({
-          adminStatus: contextAdminStatus,
-          userState: contextUserState,
-          userLeader: contextUserLeader,
-          userMobile: contextUserMobile,
-          userId: contextUser!.id,
-        });
+        const [{ campaigns, sharedOwners }, svEnabled] = await Promise.all([
+          getCampaignsForUser({
+            adminStatus: contextAdminStatus,
+            userState: contextUserState,
+            userLeader: contextUserLeader,
+            userMobile: contextUserMobile,
+            userId: contextUser!.id,
+          }),
+          svEnabledPromise,
+        ]);
+        setSlideViewEnabled(svEnabled);
         setSharedWithMeOwners(sharedOwners);
         setAllCampaigns(campaigns);
       } catch (err) {
