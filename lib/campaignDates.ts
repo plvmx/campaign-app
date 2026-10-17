@@ -193,6 +193,21 @@ export function formatWeekDateRangeString(monday: Date): string {
 }
 
 /**
+ * Compact Monday–Sunday range for buttons, e.g. "19–25 Oct", or
+ * "28 Oct – 3 Nov" when the week spans two months.
+ */
+export function formatShortWeekRange(monday: Date): string {
+  const sunday = new Date(monday);
+  sunday.setDate(sunday.getDate() + 6);
+  const startMonth = SHORT_MONTH_NAMES[monday.getMonth()];
+  const endMonth = SHORT_MONTH_NAMES[sunday.getMonth()];
+  if (monday.getMonth() === sunday.getMonth()) {
+    return `${monday.getDate()}–${sunday.getDate()} ${endMonth}`;
+  }
+  return `${monday.getDate()} ${startMonth} – ${sunday.getDate()} ${endMonth}`;
+}
+
+/**
  * Format a Monday-start fortnight (14 days — the combined upcoming + second
  * week period) as a full date range string, e.g. "Mon 10th Aug 26 - Sun 23rd
  * Aug 26". Same format as formatWeekDateRangeString but spans two weeks.
