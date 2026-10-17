@@ -20,11 +20,10 @@ import dynamic from 'next/dynamic';
 import { useCampaignDates } from '@/contexts/CampaignDatesContext';
 import { AUSTRALIA_MAP_CENTER } from '@/lib/constants';
 import { formatDateForDb, formatShortWeekRange } from '@/lib/campaignDates';
-import { isCampaignPast } from '@/lib/campaignUtils';
 import { getErrorMessage } from '@/lib/errorUtils';
 import type { UpcomingCampaignsResponse } from '@/app/api/public/upcoming-campaigns/route';
-import PublicMapRegisterInterestActions from '@/components/PublicMapRegisterInterestActions';
-import PublicRegisterInterestModal, { type PublicInterestType } from '@/components/PublicRegisterInterestModal';
+import PublicMapRegisterInterestActions, { CONTACT_ME_LABEL } from '@/components/PublicMapRegisterInterestActions';
+import PublicRegisterInterestModal from '@/components/PublicRegisterInterestModal';
 import CampaignCheckboxList from '@/components/registerInterest/CampaignCheckboxList';
 
 /** Same larger, darker markers as the Near Me map, so circles read as tappable. */
@@ -203,20 +202,20 @@ export default function UpcomingCampaignsClient() {
     });
   };
   const [listValidationError, setListValidationError] = useState<string | null>(null);
-  const [listPopupAction, setListPopupAction] = useState<PublicInterestType | null>(null);
+  const [isListPopupOpen, setIsListPopupOpen] = useState(false);
 
-  const openListPopup = (action: PublicInterestType) => {
+  const openListPopup = () => {
     setListValidationError(null);
     if (checkedIds.size === 0) {
       setListValidationError('Tick at least one campaign below first.');
       return;
     }
-    setListPopupAction(action);
+    setIsListPopupOpen(true);
   };
 
   const handleListSuccess = () => {
     setCheckedIds(new Set());
-    setListPopupAction(null);
+    setIsListPopupOpen(false);
   };
 
   return (
@@ -226,7 +225,7 @@ export default function UpcomingCampaignsClient() {
         <ol className="mt-2 space-y-1 rounded-lg border border-blue-200 bg-blue-50 p-3 text-base font-medium text-blue-900">
           <li><span className="font-bold">1.</span> Choose a week below.</li>
           <li><span className="font-bold">2.</span> {viewMode === 'map' ? 'Tap a coloured circle on the map (or type your postcode) to see the campaign.' : 'Tick the campaigns you are interested in.'}</li>
-          <li><span className="font-bold">3.</span> Tap <span className="font-bold">Yes I&apos;m In</span> or <span className="font-bold">Tell Me More</span>.</li>
+          <li><span className="font-bold">3.</span> Tap the orange <span className="font-bold">Contact Me</span> button and a leader will be in touch.</li>
         </ol>
       </div>
 
@@ -273,7 +272,7 @@ export default function UpcomingCampaignsClient() {
         <p className="mb-2 text-sm font-medium text-gray-700" data-testid="campaign-summary">
           {campaigns.length === 0
             ? 'No campaigns are listed for this week yet — try the other week.'
-            : `${campaigns.length} campaign${campaigns.length === 1 ? '' : 's'} this ${selectedWeek === 1 ? 'week' : 'coming week'}${viewMode === 'map' ? ` in ${markers.length} place${markers.length === 1 ? '' : 's'}` : ''}.${viewMode === 'list' && campaigns.some(c => isCampaignPast(c.date, c.time)) ? ' Greyed-out campaigns have already taken place.' : ''}`}
+            : `${campaigns.length} campaign${campaigns.length === 1 ? '' : 's'} this ${selectedWeek === 1 ? 'week' : 'coming week'}${viewMode === 'map' ? ` in ${markers.length} place${markers.length === 1 ? '' : 's'}` : ''}.`}
         </p>
       )}
 
@@ -367,7 +366,7 @@ export default function UpcomingCampaignsClient() {
             fitToMarkers={!nearMeTarget}
             resizeKey={isFullscreen}
             onMarkerOpen={() => setShowHint(false)}
-            renderActions={({ campaignId, isPast }) => <PublicMapRegisterInterestActions campaignId={campaignId} isPast={isPast} />}
+            renderPlaceActions={({ campaignIds }) => <PublicMapRegisterInterestActions campaignIds={campaignIds} />}
           />
         </div>
       ) : (
@@ -379,32 +378,25 @@ export default function UpcomingCampaignsClient() {
               </div>
             )}
             <div className="h-full overflow-y-auto">
-              <CampaignCheckboxList campaigns={campaigns} checkedIds={checkedIds} onToggle={toggleChecked} isDisabled={(c) => isCampaignPast(c.date, c.time)} />
+              <CampaignCheckboxList campaigns={campaigns} checkedIds={checkedIds} onToggle={toggleChecked} />
             </div>
           </div>
 
-          <div className="mt-3 flex shrink-0 gap-2">
+          <div className="mt-3 flex shrink-0">
             <button
               type="button"
-              onClick={() => openListPopup('in')}
-              className="flex-1 rounded-md bg-green-600 px-4 py-3 text-base font-bold text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 border-2 border-gray-800"
-            >
-              Yes I&apos;m In
-            </button>
-            <button
-              type="button"
-              onClick={() => openListPopup('more')}
+              onClick={openListPopup}
               className="flex-1 rounded-md bg-orange-500 px-4 py-3 text-base font-bold text-white hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 border-2 border-gray-800"
             >
-              Tell Me More
+              {CONTACT_ME_LABEL}
             </button>
           </div>
 
-          {listPopupAction && (
+          {isListPopupOpen && (
             <PublicRegisterInterestModal
               campaignIds={[...checkedIds]}
-              interestType={listPopupAction}
-              onCancel={() => setListPopupAction(null)}
+              interestType="more"
+              onCancel={() => setIsListPopupOpen(false)}
               onSuccess={handleListSuccess}
             />
           )}

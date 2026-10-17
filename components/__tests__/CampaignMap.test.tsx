@@ -66,7 +66,8 @@ describe('CampaignMap popup', () => {
     await vi.waitFor(() => expect(invalidateSize).toHaveBeenCalledTimes(2));
   });
 
-  it('tells renderActions which campaigns have already happened', () => {
+  it('renders place-level actions once, with every campaign id, instead of per-campaign actions', () => {
+    const renderActions = vi.fn(() => null);
     render(
       <CampaignMap
         center={[0, 0]}
@@ -77,13 +78,16 @@ describe('CampaignMap popup', () => {
           latitude: 0,
           longitude: 0,
           campaigns: [
-            { id: 'old', date: '2020-01-06', time: '09:00', leader: 'Alex' },
-            { id: 'new', date: '2099-01-06', time: '09:00', leader: 'Sam' },
+            { id: 'past', date: '2020-10-20', time: '10:00', leader: 'Sam' },
+            { id: 'future', date: '2099-10-24', time: '09:00', leader: 'Alex' },
           ],
         }]}
-        renderActions={({ campaignId, isPast }) => <span data-testid="actions">{campaignId}:{String(isPast)}</span>}
+        renderActions={renderActions}
+        renderPlaceActions={({ campaignIds }) => <span data-testid="place-actions">{campaignIds.join(',')}</span>}
       />,
     );
-    expect(screen.getAllByTestId('actions').map(el => el.textContent)).toEqual(['old:true', 'new:false']);
+    expect(screen.getAllByTestId('place-actions')).toHaveLength(1);
+    expect(screen.getByTestId('place-actions').textContent).toBe('past,future');
+    expect(renderActions).not.toHaveBeenCalled();
   });
 });
