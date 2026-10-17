@@ -12,6 +12,8 @@ interface Props {
   campaigns: AriseCampaign[];
   checkedIds: Set<string>;
   onToggle: (id: string) => void;
+  /** Campaigns that can't be ticked (e.g. already happened) — shown greyed out. */
+  isDisabled?: (campaign: AriseCampaign) => boolean;
 }
 
 /**
@@ -21,7 +23,7 @@ interface Props {
  * registering interest. Takes AriseCampaign (the public-safe shape, no
  * mobile) rather than the full Campaign type, since this page is public.
  */
-export default function CampaignCheckboxList({ campaigns, checkedIds, onToggle }: Props) {
+export default function CampaignCheckboxList({ campaigns, checkedIds, onToggle, isDisabled }: Props) {
   if (campaigns.length === 0) {
     return (
       <div className="p-4 text-center text-sm text-gray-500">
@@ -84,7 +86,8 @@ export default function CampaignCheckboxList({ campaigns, checkedIds, onToggle }
                   ? c.leader.substring(0, LEADER_COLS)
                   : c.leader;
                 const color  = getSlideStateColor(c.state);
-                const checked = checkedIds.has(c.id);
+                const disabled = isDisabled?.(c) ?? false;
+                const checked = !disabled && checkedIds.has(c.id);
 
                 return (
                   <label
@@ -93,17 +96,18 @@ export default function CampaignCheckboxList({ campaigns, checkedIds, onToggle }
                     // `large-text` scope) a one-line row no longer fits a phone and names were
                     // being cut off. On a phone the leader drops to a second line under the
                     // place; from `sm` up it is one line again.
-                    className="grid grid-cols-[auto_1fr_auto] items-baseline gap-x-3 px-3 py-1 font-mono font-bold text-sm leading-snug cursor-pointer sm:grid-cols-[auto_1fr_auto_13ch]"
-                    style={{ color, ...(cat !== 'TWOL' ? { backgroundColor: '#fcd34d' } : {}) }}
+                    className="grid grid-cols-[auto_1fr_auto] items-baseline gap-x-3 px-3 py-1 font-mono font-bold text-sm leading-snug sm:grid-cols-[auto_1fr_auto_13ch]"
+                    style={{ color, ...(cat !== 'TWOL' ? { backgroundColor: '#fcd34d' } : {}), ...(disabled ? { opacity: 0.45, cursor: 'not-allowed' } : { cursor: 'pointer' }) }}
                   >
                     {/* Checkbox — centered on the row (both lines on a phone) */}
                     <span className="row-span-2 flex items-center self-center sm:row-span-1">
                       <input
                         type="checkbox"
                         checked={checked}
-                        onChange={() => onToggle(c.id)}
+                        disabled={disabled}
+                        onChange={() => { if (!disabled) onToggle(c.id); }}
                         className="h-6 w-6 accent-blue-600"
-                        aria-label={`Register interest in ${place}`}
+                        aria-label={disabled ? `${place} — already taken place` : `Register interest in ${place}`}
                       />
                     </span>
                     {/* Place — left-aligned, takes the spare space */}

@@ -20,6 +20,7 @@ import dynamic from 'next/dynamic';
 import { useCampaignDates } from '@/contexts/CampaignDatesContext';
 import { AUSTRALIA_MAP_CENTER } from '@/lib/constants';
 import { formatDateForDb, formatShortWeekRange } from '@/lib/campaignDates';
+import { isCampaignPast } from '@/lib/campaignUtils';
 import { getErrorMessage } from '@/lib/errorUtils';
 import type { UpcomingCampaignsResponse } from '@/app/api/public/upcoming-campaigns/route';
 import PublicMapRegisterInterestActions from '@/components/PublicMapRegisterInterestActions';
@@ -272,7 +273,7 @@ export default function UpcomingCampaignsClient() {
         <p className="mb-2 text-sm font-medium text-gray-700" data-testid="campaign-summary">
           {campaigns.length === 0
             ? 'No campaigns are listed for this week yet — try the other week.'
-            : `${campaigns.length} campaign${campaigns.length === 1 ? '' : 's'} this ${selectedWeek === 1 ? 'week' : 'coming week'}${viewMode === 'map' ? ` in ${markers.length} place${markers.length === 1 ? '' : 's'}` : ''}.`}
+            : `${campaigns.length} campaign${campaigns.length === 1 ? '' : 's'} this ${selectedWeek === 1 ? 'week' : 'coming week'}${viewMode === 'map' ? ` in ${markers.length} place${markers.length === 1 ? '' : 's'}` : ''}.${viewMode === 'list' && campaigns.some(c => isCampaignPast(c.date, c.time)) ? ' Greyed-out campaigns have already taken place.' : ''}`}
         </p>
       )}
 
@@ -366,7 +367,7 @@ export default function UpcomingCampaignsClient() {
             fitToMarkers={!nearMeTarget}
             resizeKey={isFullscreen}
             onMarkerOpen={() => setShowHint(false)}
-            renderActions={({ campaignId }) => <PublicMapRegisterInterestActions campaignId={campaignId} />}
+            renderActions={({ campaignId, isPast }) => <PublicMapRegisterInterestActions campaignId={campaignId} isPast={isPast} />}
           />
         </div>
       ) : (
@@ -378,7 +379,7 @@ export default function UpcomingCampaignsClient() {
               </div>
             )}
             <div className="h-full overflow-y-auto">
-              <CampaignCheckboxList campaigns={campaigns} checkedIds={checkedIds} onToggle={toggleChecked} />
+              <CampaignCheckboxList campaigns={campaigns} checkedIds={checkedIds} onToggle={toggleChecked} isDisabled={(c) => isCampaignPast(c.date, c.time)} />
             </div>
           </div>
 

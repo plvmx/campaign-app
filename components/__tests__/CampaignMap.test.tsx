@@ -65,4 +65,25 @@ describe('CampaignMap popup', () => {
     rerender(<CampaignMap center={[0, 0]} zoom={5} markers={[]} resizeKey />);
     await vi.waitFor(() => expect(invalidateSize).toHaveBeenCalledTimes(2));
   });
+
+  it('tells renderActions which campaigns have already happened', () => {
+    render(
+      <CampaignMap
+        center={[0, 0]}
+        zoom={5}
+        markers={[{
+          state: 'VIC',
+          place: 'Geelong',
+          latitude: 0,
+          longitude: 0,
+          campaigns: [
+            { id: 'old', date: '2020-01-06', time: '09:00', leader: 'Alex' },
+            { id: 'new', date: '2099-01-06', time: '09:00', leader: 'Sam' },
+          ],
+        }]}
+        renderActions={({ campaignId, isPast }) => <span data-testid="actions">{campaignId}:{String(isPast)}</span>}
+      />,
+    );
+    expect(screen.getAllByTestId('actions').map(el => el.textContent)).toEqual(['old:true', 'new:false']);
+  });
 });
