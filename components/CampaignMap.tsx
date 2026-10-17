@@ -83,6 +83,20 @@ function FitToMarkers({ markers }: { markers: CampaignMapPopupMarker[] }) {
   return null;
 }
 
+/**
+ * Leaflet only notices window resizes, not its container changing size
+ * (e.g. toggling full screen) — tell it to re-measure when `resizeKey` changes.
+ */
+function InvalidateSizeOnChange({ resizeKey }: { resizeKey: unknown }) {
+  const map = useMap();
+  useEffect(() => {
+    // Wait a frame so the container has its new layout size.
+    const id = requestAnimationFrame(() => map.invalidateSize());
+    return () => cancelAnimationFrame(id);
+  }, [map, resizeKey]);
+  return null;
+}
+
 /** Surfaces tile load failures directly instead of leaving the admin staring at a blank grey map. */
 function TileErrorBanner() {
   const [hasError, setHasError] = useState(false);
@@ -115,12 +129,14 @@ interface CampaignMapProps {
   markerStyle?: StateMarkerIconOptions;
   /** Frame the map around the markers whenever they change (instead of staying on `center`/`zoom`). */
   fitToMarkers?: boolean;
+  /** Changing this value makes the map re-measure its container (e.g. when the caller toggles full screen). */
+  resizeKey?: unknown;
   /** Called when a marker is clicked/tapped (e.g. to hide a first-visit hint). */
   onMarkerOpen?: () => void;
   renderActions?: (props: { campaignId: string; place: string; state: string }) => ReactNode;
 }
 
-export default function CampaignMap({ center, zoom, markers, markerStyle, fitToMarkers = false, onMarkerOpen, renderActions = (props) => <MapPopupActions {...props} /> }: CampaignMapProps) {
+export default function CampaignMap({ center, zoom, markers, markerStyle, fitToMarkers = false, resizeKey, onMarkerOpen, renderActions = (props) => <MapPopupActions {...props} /> }: CampaignMapProps) {
   return (
     <MapContainer
       center={center}
@@ -134,6 +150,7 @@ export default function CampaignMap({ center, zoom, markers, markerStyle, fitToM
       />
       <TechInsightsMapTag data-ti="components/CampaignMap.tsx" />
       <TileErrorBanner />
+      <InvalidateSizeOnChange resizeKey={resizeKey} />
       <FlyTo center={center} zoom={zoom} />
       {fitToMarkers && <FitToMarkers markers={markers} />}
       {markers.map(marker => {

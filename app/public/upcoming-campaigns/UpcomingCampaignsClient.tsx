@@ -167,6 +167,21 @@ export default function UpcomingCampaignsClient() {
     );
   };
 
+  // Full-screen map (phones show the page's own header/controls above a
+  // small map): Escape exits, and the page behind doesn't scroll meanwhile.
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  useEffect(() => {
+    if (!isFullscreen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setIsFullscreen(false); };
+    window.addEventListener('keydown', onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [isFullscreen]);
+
   // First-visit hint over the map, until a circle is opened, dismissed, or 12 s pass.
   const [showHint, setShowHint] = useState(true);
   useEffect(() => {
@@ -204,7 +219,7 @@ export default function UpcomingCampaignsClient() {
   };
 
   return (
-    <div data-ti="app/public/upcoming-campaigns/UpcomingCampaignsClient.tsx" className="mx-auto flex h-[100dvh] max-w-4xl flex-col p-4">
+    <div data-ti="app/public/upcoming-campaigns/UpcomingCampaignsClient.tsx" className="mx-auto flex min-h-[100dvh] max-w-4xl flex-col p-4">
       <div className="mb-3">
         <h1 className="text-2xl font-bold text-gray-900">Upcoming AFJ Campaigns</h1>
         <ol className="mt-2 space-y-1 rounded-lg border border-blue-200 bg-blue-50 p-3 text-base font-medium text-blue-900">
@@ -240,7 +255,7 @@ export default function UpcomingCampaignsClient() {
           <button
             key={mode}
             type="button"
-            onClick={() => setViewMode(mode)}
+            onClick={() => { setViewMode(mode); setIsFullscreen(false); }}
             aria-pressed={viewMode === mode}
             className={`flex-1 rounded-md px-3 py-2 text-sm font-semibold border-2 ${
               viewMode === mode
@@ -318,7 +333,20 @@ export default function UpcomingCampaignsClient() {
       )}
 
       {viewMode === 'map' ? (
-        <div className="relative flex-1 overflow-hidden rounded-lg border-2 border-gray-800">
+        <div
+          className={
+            isFullscreen
+              ? 'fixed inset-0 z-[1500] bg-white'
+              : 'relative h-[65dvh] min-h-[360px] overflow-hidden rounded-lg border-2 border-gray-800'
+          }
+        >
+          <button
+            type="button"
+            onClick={() => setIsFullscreen(f => !f)}
+            className="absolute top-2 right-2 z-[1000] rounded-md border-2 border-gray-800 bg-white px-3 py-2 text-sm font-bold text-gray-800 shadow hover:bg-gray-100"
+          >
+            {isFullscreen ? '✕ Exit full screen' : '⤢ Full screen'}
+          </button>
           {isLoadingMap && (
             <div className="absolute inset-0 z-[1100] flex flex-col items-center justify-center gap-3 bg-white/80 px-6 text-center">
               <p className="text-sm text-gray-700">Please wait — locating campaigns on the map</p>
@@ -336,13 +364,14 @@ export default function UpcomingCampaignsClient() {
             markers={markers}
             markerStyle={MARKER_STYLE}
             fitToMarkers={!nearMeTarget}
+            resizeKey={isFullscreen}
             onMarkerOpen={() => setShowHint(false)}
             renderActions={({ campaignId }) => <PublicMapRegisterInterestActions campaignId={campaignId} />}
           />
         </div>
       ) : (
         <>
-          <div className="relative flex-1 overflow-hidden rounded-lg border-2 border-gray-800">
+          <div className="relative h-[65dvh] min-h-[360px] overflow-hidden rounded-lg border-2 border-gray-800">
             {isLoadingMap && (
               <div className="absolute inset-0 z-[1100] flex flex-col items-center justify-center gap-3 bg-white/80 px-6 text-center">
                 <p className="text-sm text-gray-700">Please wait — loading campaigns</p>
