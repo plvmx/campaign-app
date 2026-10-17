@@ -19,12 +19,15 @@ import { useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useCampaignDates } from '@/contexts/CampaignDatesContext';
 import { AUSTRALIA_MAP_CENTER } from '@/lib/constants';
-import { formatDateForDb, formatWeekDateRangeString } from '@/lib/campaignDates';
+import { formatDateForDb, formatShortWeekRange } from '@/lib/campaignDates';
 import { getErrorMessage } from '@/lib/errorUtils';
 import type { UpcomingCampaignsResponse } from '@/app/api/public/upcoming-campaigns/route';
 import PublicMapRegisterInterestActions from '@/components/PublicMapRegisterInterestActions';
 import PublicRegisterInterestModal, { type PublicInterestType } from '@/components/PublicRegisterInterestModal';
 import CampaignCheckboxList from '@/components/registerInterest/CampaignCheckboxList';
+
+/** Same larger, darker markers as the Near Me map, so circles read as tappable. */
+const MARKER_STYLE = { size: 30, fillOpacity: 0.5 };
 
 /** Approximate zoom level for a ~60km-radius view around a postcode. */
 const POSTCODE_ZOOM = 10;
@@ -53,8 +56,8 @@ export default function UpcomingCampaignsClient() {
     const week1Start = campaignDates.upcomingCampaignStart;
     const week2Start = campaignDates.secondWeekStart;
     return {
-      1: { startDate: formatDateForDb(week1Start), rangeText: formatWeekDateRangeString(week1Start) },
-      2: { startDate: formatDateForDb(week2Start), rangeText: formatWeekDateRangeString(week2Start) },
+      1: { startDate: formatDateForDb(week1Start), rangeText: formatShortWeekRange(week1Start) },
+      2: { startDate: formatDateForDb(week2Start), rangeText: formatShortWeekRange(week2Start) },
     };
   }, [campaignDates]);
 
@@ -70,6 +73,8 @@ export default function UpcomingCampaignsClient() {
   const [campaigns, setCampaigns] = useState<UpcomingCampaignsResponse['campaigns']>([]);
   const [unresolvedCount, setUnresolvedCount] = useState(0);
   const [isLoadingMap, setIsLoadingMap] = useState(false);
+  // Stays false until the first response lands, so the summary line doesn't claim "no campaigns" before anything has loaded.
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -93,6 +98,7 @@ export default function UpcomingCampaignsClient() {
         setMarkers(result.markers);
         setCampaigns(result.campaigns);
         setUnresolvedCount(result.unresolvedCount);
+        setHasLoaded(true);
       })
       .catch((err: unknown) => {
         if (cancelled) return;
@@ -172,9 +178,11 @@ export default function UpcomingCampaignsClient() {
     <div data-ti="app/public/upcoming-campaigns/UpcomingCampaignsClient.tsx" className="mx-auto flex h-[100dvh] max-w-4xl flex-col p-4">
       <div className="mb-3">
         <h1 className="text-2xl font-bold text-gray-900">Upcoming AFJ Campaigns</h1>
-        <p className="mt-1 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm font-medium text-blue-800">
-          Click on a colored circle for Details or to Register your Interest.
-        </p>
+        <ol className="mt-2 space-y-1 rounded-lg border border-blue-200 bg-blue-50 p-3 text-base font-medium text-blue-900">
+          <li><span className="font-bold">1.</span> Choose a week below.</li>
+          <li><span className="font-bold">2.</span> {viewMode === 'map' ? 'Tap a coloured circle on the map (or type your postcode) to see the campaign.' : 'Tick the campaigns you are interested in.'}</li>
+          <li><span className="font-bold">3.</span> Tap <span className="font-bold">Yes I&apos;m In</span> or <span className="font-bold">Tell Me More</span>.</li>
+        </ol>
       </div>
 
       {weeks && (
@@ -184,6 +192,7 @@ export default function UpcomingCampaignsClient() {
               key={week}
               type="button"
               onClick={() => setSelectedWeek(week)}
+              aria-pressed={selectedWeek === week}
               className={`flex-1 rounded-md px-3 py-2 text-sm font-semibold border-2 transition-colors ${
                 selectedWeek === week
                   ? 'bg-blue-600 text-white border-blue-700'
@@ -191,9 +200,36 @@ export default function UpcomingCampaignsClient() {
               }`}
             >
               {week === 1 ? 'This Week' : 'Next Week'}
+              <span className="block text-xs font-normal">{weeks[week].rangeText}</span>
             </button>
           ))}
         </div>
+      )}
+
+      <div className="mb-2 flex gap-2" role="group" aria-label="View">
+        {([['map', 'Map'], ['list', 'List']] as const).map(([mode, label]) => (
+          <button
+            key={mode}
+            type="button"
+            onClick={() => setViewMode(mode)}
+            aria-pressed={viewMode === mode}
+            className={`flex-1 rounded-md px-3 py-2 text-sm font-semibold border-2 ${
+              viewMode === mode
+                ? 'bg-gray-800 text-white border-gray-800'
+                : 'bg-white text-gray-700 border-gray-400 hover:bg-gray-50'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {hasLoaded && !isLoadingMap && !mapError && (
+        <p className="mb-2 text-sm font-medium text-gray-700" data-testid="campaign-summary">
+          {campaigns.length === 0
+            ? 'No campaigns are listed for this week yet — try the other week.'
+            : `${campaigns.length} campaign${campaigns.length === 1 ? '' : 's'} this ${selectedWeek === 1 ? 'week' : 'coming week'}${viewMode === 'map' ? ` in ${markers.length} place${markers.length === 1 ? '' : 's'}` : ''}.`}
+        </p>
       )}
 
       {mapError && (
@@ -250,17 +286,11 @@ export default function UpcomingCampaignsClient() {
               <p className="text-sm text-gray-700">Please wait — locating campaigns on the map</p>
             </div>
           )}
-          <button
-            type="button"
-            onClick={() => setViewMode('list')}
-            className="absolute bottom-2 left-2 z-[1000] rounded-md border-2 border-gray-800 bg-white px-2 py-1 text-xs font-bold text-gray-700 shadow hover:bg-gray-100"
-          >
-            List View
-          </button>
           <CampaignMap
             center={center}
             zoom={zoom}
             markers={markers}
+            markerStyle={MARKER_STYLE}
             renderActions={({ campaignId }) => <PublicMapRegisterInterestActions campaignId={campaignId} />}
           />
         </div>
@@ -272,13 +302,6 @@ export default function UpcomingCampaignsClient() {
                 <p className="text-sm text-gray-700">Please wait — loading campaigns</p>
               </div>
             )}
-            <button
-              type="button"
-              onClick={() => setViewMode('map')}
-              className="absolute bottom-2 left-2 z-[1000] rounded-md border-2 border-gray-800 bg-white px-2 py-1 text-xs font-bold text-gray-700 shadow hover:bg-gray-100"
-            >
-              Map View
-            </button>
             <div className="h-full overflow-y-auto">
               <CampaignCheckboxList campaigns={campaigns} checkedIds={checkedIds} onToggle={toggleChecked} />
             </div>

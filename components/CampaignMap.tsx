@@ -3,8 +3,8 @@
 import 'leaflet/dist/leaflet.css';
 import { useEffect, useState, type ReactNode } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
-import { getStateMarkerIcon } from '@/lib/leafletMarkerIcon';
-import { formatCampaignDateTimeDisplay, getEarliestCampaign } from '@/lib/campaignUtils';
+import { getStateMarkerIcon, type StateMarkerIconOptions } from '@/lib/leafletMarkerIcon';
+import { formatCampaignDateTimeDisplay, sortCampaignsChronologically } from '@/lib/campaignUtils';
 import MapPopupActions from '@/components/MapPopupActions';
 import TechInsightsMapTag from '@/components/techInsights/TechInsightsMapTag';
 
@@ -92,10 +92,12 @@ interface CampaignMapProps {
    * console.log placeholders — same `renderActions` pattern
    * NearbyCampaignsMap.tsx already established.
    */
+  /** Marker size/opacity — defaults to the small, faint style; the public map passes a larger one so markers read as tappable. */
+  markerStyle?: StateMarkerIconOptions;
   renderActions?: (props: { campaignId: string; place: string; state: string }) => ReactNode;
 }
 
-export default function CampaignMap({ center, zoom, markers, renderActions = (props) => <MapPopupActions {...props} /> }: CampaignMapProps) {
+export default function CampaignMap({ center, zoom, markers, markerStyle, renderActions = (props) => <MapPopupActions {...props} /> }: CampaignMapProps) {
   return (
     <MapContainer
       center={center}
@@ -111,16 +113,23 @@ export default function CampaignMap({ center, zoom, markers, renderActions = (pr
       <TileErrorBanner />
       <FlyTo center={center} zoom={zoom} />
       {markers.map(marker => {
-        const firstCampaign = marker.campaigns ? getEarliestCampaign(marker.campaigns) : undefined;
+        // Every campaign at this place is listed (earliest first) — showing
+        // only the first hid any later day's campaign from a visitor, and
+        // "Yes I'm In" could only ever register interest in that one.
+        const campaigns = marker.campaigns ? sortCampaignsChronologically(marker.campaigns) : [];
         return (
-          <Marker key={`${marker.state}::${marker.place}`} position={[marker.latitude, marker.longitude]} icon={getStateMarkerIcon(marker.state, marker.place)}>
+          <Marker key={`${marker.state}::${marker.place}`} position={[marker.latitude, marker.longitude]} icon={getStateMarkerIcon(marker.state, marker.place, markerStyle)}>
             <Popup>
-              {firstCampaign ? (
+              {campaigns.length > 0 ? (
                 <div className="text-sm">
                   <p className="font-semibold">{marker.place}, {marker.state}</p>
-                  <p className="mt-1">{formatCampaignDateTimeDisplay(firstCampaign.date, firstCampaign.time)}</p>
-                  <p>Leader: {firstCampaign.leader}</p>
-                  {renderActions({ campaignId: firstCampaign.id, place: marker.place, state: marker.state })}
+                  {campaigns.map(campaign => (
+                    <div key={campaign.id} className="mt-2 border-t border-gray-200 pt-2" data-testid="map-popup-campaign">
+                      <p>{formatCampaignDateTimeDisplay(campaign.date, campaign.time)}</p>
+                      <p>Leader: {campaign.leader}</p>
+                      {renderActions({ campaignId: campaign.id, place: marker.place, state: marker.state })}
+                    </div>
+                  ))}
                 </div>
               ) : (
                 <p className="text-sm font-semibold">{marker.place} {marker.state}</p>

@@ -45,6 +45,9 @@ export default function PublicMapRegisterInterestActions({ campaignId }: PublicM
           Tell Me More
         </button>
       </div>
+      <p className="mt-1 text-xs text-gray-600">
+        <strong>Yes I&apos;m In</strong> — a leader will contact you. <strong>Tell Me More</strong> — we&apos;ll send you details.
+      </p>
 
       {pendingType && (
         <PublicRegisterInterestModal
