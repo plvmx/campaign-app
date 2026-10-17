@@ -13,11 +13,21 @@ import PublicRegisterInterestModal, { type PublicInterestType } from '@/componen
 
 interface PublicMapRegisterInterestActionsProps {
   campaignId: string;
+  /** The campaign has already happened — interest can't be registered. */
+  isPast?: boolean;
 }
 
-export default function PublicMapRegisterInterestActions({ campaignId }: PublicMapRegisterInterestActionsProps) {
+export default function PublicMapRegisterInterestActions({ campaignId, isPast = false }: PublicMapRegisterInterestActionsProps) {
   const [pendingType, setPendingType] = useState<PublicInterestType | null>(null);
   const [doneType, setDoneType] = useState<PublicInterestType | null>(null);
+
+  if (isPast) {
+    return (
+      <p className="mt-2 text-xs font-semibold text-gray-600" data-testid="campaign-past-note">
+        This campaign has already taken place.
+      </p>
+    );
+  }
 
   if (doneType) {
     return (

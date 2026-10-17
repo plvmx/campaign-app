@@ -5,7 +5,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import L from 'leaflet';
 import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
 import { getStateMarkerIcon, type StateMarkerIconOptions } from '@/lib/leafletMarkerIcon';
-import { formatCampaignDateTimeDisplay, sortCampaignsChronologically } from '@/lib/campaignUtils';
+import { formatCampaignDateTimeDisplay, isCampaignPast, sortCampaignsChronologically } from '@/lib/campaignUtils';
 import MapPopupActions from '@/components/MapPopupActions';
 import TechInsightsMapTag from '@/components/techInsights/TechInsightsMapTag';
 
@@ -133,7 +133,7 @@ interface CampaignMapProps {
   resizeKey?: unknown;
   /** Called when a marker is clicked/tapped (e.g. to hide a first-visit hint). */
   onMarkerOpen?: () => void;
-  renderActions?: (props: { campaignId: string; place: string; state: string }) => ReactNode;
+  renderActions?: (props: { campaignId: string; place: string; state: string; isPast: boolean }) => ReactNode;
 }
 
 export default function CampaignMap({ center, zoom, markers, markerStyle, fitToMarkers = false, resizeKey, onMarkerOpen, renderActions = (props) => <MapPopupActions {...props} /> }: CampaignMapProps) {
@@ -168,7 +168,7 @@ export default function CampaignMap({ center, zoom, markers, markerStyle, fitToM
                     <div key={campaign.id} className="mt-2 border-t border-gray-200 pt-2" data-testid="map-popup-campaign">
                       <p>{formatCampaignDateTimeDisplay(campaign.date, campaign.time)}</p>
                       <p>Leader: {campaign.leader}</p>
-                      {renderActions({ campaignId: campaign.id, place: marker.place, state: marker.state })}
+                      {renderActions({ campaignId: campaign.id, place: marker.place, state: marker.state, isPast: isCampaignPast(campaign.date, campaign.time) })}
                     </div>
                   ))}
                 </div>
