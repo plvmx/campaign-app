@@ -65,14 +65,12 @@ describe('PWAInstallPrompt — publishes --pwa-banner-height', () => {
 
   it('sets --pwa-banner-height to its own rendered height on mount', async () => {
     render(<PWAInstallPrompt />);
-    await screen.findByRole('button', { name: /dismiss install prompt/i });
-    expect(bannerHeightVar()).toBe(`${BANNER_HEIGHT_PX}px`);
+    await waitFor(() => expect(bannerHeightVar()).toBe(`${BANNER_HEIGHT_PX}px`));
   });
 
   it('resets --pwa-banner-height to 0px when the user dismisses the banner', async () => {
     render(<PWAInstallPrompt />);
-    await screen.findByRole('button', { name: /dismiss install prompt/i });
-    expect(bannerHeightVar()).toBe(`${BANNER_HEIGHT_PX}px`);
+    await waitFor(() => expect(bannerHeightVar()).toBe(`${BANNER_HEIGHT_PX}px`));
 
     fireEvent.click(screen.getByRole('button', { name: /dismiss install prompt/i }));
 
@@ -81,8 +79,7 @@ describe('PWAInstallPrompt — publishes --pwa-banner-height', () => {
 
   it('resets --pwa-banner-height to 0px on unmount', async () => {
     const { unmount } = render(<PWAInstallPrompt />);
-    await screen.findByRole('button', { name: /dismiss install prompt/i });
-    expect(bannerHeightVar()).toBe(`${BANNER_HEIGHT_PX}px`);
+    await waitFor(() => expect(bannerHeightVar()).toBe(`${BANNER_HEIGHT_PX}px`));
 
     unmount();
 
