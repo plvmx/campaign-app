@@ -7,7 +7,7 @@ import { signOut } from '@/lib/auth';
 import { supabase } from '@/lib/supabaseClient';
 import Modal from '@/components/Modal';
 import OpenGuideLabel from '@/components/OpenGuideLabel';
-import { getUserAdminStatusAndMobile } from '@/lib/campaignFilter';
+import { useUser } from '@/contexts/UserContext';
 
 interface MobileLayoutProps {
   children: ReactNode;
@@ -70,8 +70,12 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
   const pathname = usePathname();
   // Larger text everywhere except the admin screens (dense tables) — see `.large-text` in app/globals.css.
   const largeText = !(pathname ?? '').startsWith('/admin');
-  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
-  const [adminStatus, setAdminStatus] = useState<string | null>(null);
+  // Role comes from UserContext, which resolves it once per app load. MobileLayout
+  // remounts on every page, so querying here again cost a getUser() round trip plus
+  // two table lookups on every navigation.
+  const { adminStatus: userAdminStatus, isLoading: isUserLoading } = useUser();
+  const isAdmin = isUserLoading ? null : userAdminStatus === 'AD';
+  const adminStatus = userAdminStatus;
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
   // Only a leader signed in via the real-auth + MFA path (app/login/mfa)
   // has more than one selectable role tied to their session — the
@@ -80,19 +84,6 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
   const [canSwitchRole, setCanSwitchRole] = useState(false);
 
   useEffect(() => {
-    async function checkAdminAndSr() {
-      try {
-        const { admin: srOrAd } = await getUserAdminStatusAndMobile();
-        setIsAdmin(srOrAd === 'AD');
-        setAdminStatus(srOrAd ?? null);
-      } catch (error) {
-        console.error('Error checking admin status:', error);
-        setIsAdmin(false);
-        setAdminStatus(null);
-      }
-    }
-    checkAdminAndSr();
-
     supabase.auth.getSession().then(({ data: { session } }) => {
       setCanSwitchRole(!!session && session.user.is_anonymous === false);
     });

@@ -2006,6 +2006,7 @@ Aggregate per-campaign tallies (Partial/Full Presentations, Sinner's Prayer, Inf
   - Pure helpers in `lib/techInsights/` (`routeMatch.ts` URL↔file, `hotkey.ts`, `graph.ts` reachability/path/summary, `types.ts`) are unit tested; `app/api/admin/__tests__/adminRoutesRequireAdmin.test.ts` pins that the route refuses non-admins.
 - **Role picker busy state.** `components/auth/BusyChoiceButtons.tsx` — only the tapped role button shows as loading.
 - **Sign Out / Switch Role** live in `MobileLayout`; Switch Role shows only for real (non-anonymous) sessions.
+- **Mobile performance pass (2026-10-17).** `MobileLayout` now reads the role from `useUser()` instead of re-querying (`getUser` + `user_profiles` + `state_leaders`) on every page mount; `/app` fetches the slide-view flag in parallel with the campaigns; `public/sw.js` (cache `afj-cas-v3`) no longer intercepts cross-origin (Supabase) or `/api/` requests — only same-origin pages/assets get the network-first cache + offline fallback (`lib/__tests__/serviceWorker.test.ts`).
 - Shared forms/hooks: `app/app/components/useCampaignForm.ts` (all form state, place creation, leader mobile auto-fill, submit; `handleSubmit` accepts `FormEvent` and `MouseEvent`) and `useStateDropdowns.ts` (state-scoped place/leader lists, with all `setState` routed through Promise chains to satisfy the `react-hooks/set-state-in-effect` lint rule).
 - `/admin/state-leaders` filters by state, role (`lib/stateLeaderRoleFilter.ts` — e.g. "Admins only (AD & SR)"), name and mobile, shows each admin's 2FA status and a "Reset 2FA" button.
 
