@@ -4,14 +4,17 @@ import type { ReactNode } from 'react';
 
 // Leaflet needs a real layout engine; render Popup content inline instead
 // so the test can see what a marker's popup would show once opened.
+const fitBounds = vi.hoisted(() => vi.fn());
+
 vi.mock('react-leaflet', () => ({
   MapContainer: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   TileLayer: () => null,
   Marker: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   Popup: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  useMap: () => ({ getSize: () => ({ x: 1, y: 1 }), setView: vi.fn(), flyTo: vi.fn() }),
+  useMap: () => ({ getSize: () => ({ x: 1, y: 1 }), setView: vi.fn(), flyTo: vi.fn(), fitBounds }),
   useMapEvents: () => null,
 }));
+vi.mock('leaflet', () => ({ default: { latLngBounds: (pts: unknown) => ({ pts }) } }));
 vi.mock('leaflet/dist/leaflet.css', () => ({}));
 vi.mock('@/lib/leafletMarkerIcon', () => ({ getStateMarkerIcon: () => ({}) }));
 vi.mock('@/components/techInsights/TechInsightsMapTag', () => ({ default: () => null }));
@@ -42,5 +45,15 @@ describe('CampaignMap popup', () => {
     expect(screen.getAllByTestId('actions').map(el => el.textContent)).toEqual(['early', 'late']);
     expect(screen.getByText('Leader: Sam')).toBeTruthy();
     expect(screen.getByText('Leader: Alex')).toBeTruthy();
+  });
+
+  it('frames the map around the markers only when fitToMarkers is set', () => {
+    const markers = [{ state: 'VIC', place: 'Geelong', latitude: -38.1, longitude: 144.3 }];
+    fitBounds.mockClear();
+    render(<CampaignMap center={[0, 0]} zoom={5} markers={markers} />);
+    expect(fitBounds).not.toHaveBeenCalled();
+
+    render(<CampaignMap center={[0, 0]} zoom={5} markers={markers} fitToMarkers />);
+    expect(fitBounds).toHaveBeenCalledTimes(1);
   });
 });

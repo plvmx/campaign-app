@@ -145,6 +145,35 @@ export default function UpcomingCampaignsClient() {
     }
   };
 
+  // Browser geolocation is an optional shortcut to the postcode box; the
+  // position stays in the browser and is only used to recentre the map.
+  const handleUseMyLocation = () => {
+    if (!navigator.geolocation) {
+      setPostcodeError('Your browser cannot share its location — please type your postcode instead.');
+      return;
+    }
+    setIsLocating(true);
+    setPostcodeError(null);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setNearMeTarget({ center: [pos.coords.latitude, pos.coords.longitude], zoom: POSTCODE_ZOOM });
+        setIsLocating(false);
+      },
+      () => {
+        setPostcodeError('Could not get your location — please type your postcode instead.');
+        setIsLocating(false);
+      },
+      { timeout: 10000 },
+    );
+  };
+
+  // First-visit hint over the map, until a circle is opened, dismissed, or 12 s pass.
+  const [showHint, setShowHint] = useState(true);
+  useEffect(() => {
+    const t = setTimeout(() => setShowHint(false), 12000);
+    return () => clearTimeout(t);
+  }, []);
+
   const { center, zoom } = nearMeTarget ?? { center: [AUSTRALIA_MAP_CENTER.lat, AUSTRALIA_MAP_CENTER.lng] as [number, number], zoom: AUSTRALIA_MAP_CENTER.zoom };
 
   // List View — same checklist + confirmation popup as /public/register-interest,
@@ -250,40 +279,55 @@ export default function UpcomingCampaignsClient() {
         </div>
       )}
 
+      {viewMode === 'map' && (
+        <div className="mb-2 rounded-lg border-2 border-gray-800 bg-white p-2">
+          <form onSubmit={handlePostcodeSubmit}>
+            <p className="text-sm font-bold text-gray-900">Find campaigns near me</p>
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              <label htmlFor="near-me-postcode" className="text-sm text-gray-700">My postcode is</label>
+              <input
+                id="near-me-postcode"
+                type="text"
+                inputMode="numeric"
+                maxLength={4}
+                value={postcode}
+                onChange={(e) => setPostcode(e.target.value.replace(/\D/g, ''))}
+                placeholder="3000"
+                className="w-20 rounded-md border border-gray-400 px-2 py-1 text-sm text-gray-900"
+              />
+              <button
+                type="submit"
+                disabled={isLocating || postcode.trim().length !== 4}
+                className="rounded-md bg-blue-600 px-3 py-1 text-sm font-bold text-white hover:bg-blue-700 disabled:bg-gray-400"
+              >
+                {isLocating ? '…' : 'Go'}
+              </button>
+              <span className="text-sm text-gray-500">or</span>
+              <button
+                type="button"
+                onClick={handleUseMyLocation}
+                disabled={isLocating}
+                className="rounded-md border-2 border-gray-800 bg-white px-3 py-1 text-sm font-bold text-gray-800 hover:bg-gray-100 disabled:opacity-60"
+              >
+                Use my location
+              </button>
+            </div>
+          </form>
+          {postcodeError && <p className="mt-1 text-sm text-red-700">{postcodeError}</p>}
+        </div>
+      )}
+
       {viewMode === 'map' ? (
         <div className="relative flex-1 overflow-hidden rounded-lg border-2 border-gray-800">
-          <div className="absolute top-2 right-2 z-[1000] w-fit max-w-[calc(100%-1rem)] rounded-md border-2 border-gray-800 bg-white px-3 py-2 shadow">
-            <form onSubmit={handlePostcodeSubmit}>
-              <p className="whitespace-nowrap text-center text-xs text-gray-700">
-                Show me Campaigns <strong className="font-bold">Near Me</strong>
-              </p>
-              <div className="mt-1 flex flex-nowrap items-center justify-center gap-2">
-                <label className="whitespace-nowrap text-xs text-gray-700">My Postcode is</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={4}
-                  value={postcode}
-                  onChange={(e) => setPostcode(e.target.value.replace(/\D/g, ''))}
-                  placeholder="3000"
-                  className="w-16 shrink-0 rounded-md border border-gray-300 px-1.5 py-1 text-xs font-normal text-gray-900"
-                />
-                <button
-                  type="submit"
-                  disabled={isLocating || postcode.trim().length !== 4}
-                  className="shrink-0 rounded-md bg-blue-600 px-2 py-1 text-xs font-bold text-white hover:bg-blue-700 disabled:bg-gray-400"
-                >
-                  {isLocating ? '…' : 'Go'}
-                </button>
-              </div>
-            </form>
-            {postcodeError && (
-              <p className="mt-1 text-center text-xs font-normal text-red-700">{postcodeError}</p>
-            )}
-          </div>
           {isLoadingMap && (
             <div className="absolute inset-0 z-[1100] flex flex-col items-center justify-center gap-3 bg-white/80 px-6 text-center">
               <p className="text-sm text-gray-700">Please wait — locating campaigns on the map</p>
+            </div>
+          )}
+          {showHint && !isLoadingMap && markers.length > 0 && (
+            <div className="absolute bottom-3 left-1/2 z-[1000] flex -translate-x-1/2 animate-pulse items-center gap-2 rounded-full border-2 border-gray-800 bg-yellow-100 px-4 py-2 text-sm font-bold text-gray-900 shadow">
+              <span>👆 Tap a circle to see the campaign</span>
+              <button type="button" onClick={() => setShowHint(false)} aria-label="Dismiss hint" className="text-gray-700">✕</button>
             </div>
           )}
           <CampaignMap
@@ -291,6 +335,8 @@ export default function UpcomingCampaignsClient() {
             zoom={zoom}
             markers={markers}
             markerStyle={MARKER_STYLE}
+            fitToMarkers={!nearMeTarget}
+            onMarkerOpen={() => setShowHint(false)}
             renderActions={({ campaignId }) => <PublicMapRegisterInterestActions campaignId={campaignId} />}
           />
         </div>
