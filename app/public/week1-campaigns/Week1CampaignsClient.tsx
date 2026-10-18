@@ -90,6 +90,12 @@ export default function Week1CampaignsClient() {
         <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
           All upcoming campaigns for this week, all states.
         </p>
+        {imgUrl && (
+          <p className="mt-2 rounded-lg border border-blue-200 bg-blue-50 p-3 text-base font-medium text-blue-900 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-100">
+            <span className="font-bold">Tap the list below</span> to view it full screen. Tap anywhere (or the{' '}
+            <span className="font-bold">Close</span> button) to come back.
+          </p>
+        )}
 
         {error && (
           <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-800 dark:bg-red-900/20 dark:text-red-200">
@@ -122,13 +128,22 @@ export default function Week1CampaignsClient() {
               </a>
             </div>
             {/* Rendered at 4200×3000; scaled down for on-screen viewing. */}
-            {/* eslint-disable-next-line @next/next/no-img-element -- object URL, not an optimizable static/remote asset */}
-            <img
-              src={imgUrl}
-              alt="Week 1 Campaigns list"
-              onClick={() => setIsFullscreen(true)}
-              className="mt-4 w-full cursor-zoom-in rounded-lg border-2 border-gray-800 shadow-sm dark:border-gray-600"
-            />
+            <div className="relative mt-4">
+              {/* eslint-disable-next-line @next/next/no-img-element -- object URL, not an optimizable static/remote asset */}
+              <img
+                src={imgUrl}
+                alt="Week 1 Campaigns list"
+                onClick={() => setIsFullscreen(true)}
+                className="w-full cursor-zoom-in rounded-lg border-2 border-gray-800 shadow-sm dark:border-gray-600"
+              />
+              <button
+                type="button"
+                onClick={() => setIsFullscreen(true)}
+                className="absolute bottom-3 right-3 rounded-full border-2 border-gray-800 bg-yellow-100 px-4 py-2 text-base font-bold text-gray-900 shadow"
+              >
+                Tap to enlarge
+              </button>
+            </div>
           </div>
         )}
       </div>
