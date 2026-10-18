@@ -82,16 +82,16 @@ export default function TemporaryUpcomingCampaignsClient() {
       <div className="mb-3">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{TITLE}</h1>
         <p className="mt-1 text-base text-gray-600 dark:text-gray-400">{INTRO_TEXT}</p>
-        <p className="mt-2 text-base text-gray-600 dark:text-gray-400">ALL LEADERS please:</p>
-        <ul className="mt-1 list-disc space-y-1 pl-5 text-base text-gray-600 dark:text-gray-400">
-          {LEADER_BULLETS.map(([before, bold, after]) => (
+        <p className="mt-2 text-base font-bold text-gray-900 dark:text-gray-100">ALL LEADERS please:</p>
+        <ol className="mt-1 space-y-1 rounded-lg border border-blue-200 bg-blue-50 p-3 text-base font-medium text-blue-900 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-100">
+          {LEADER_BULLETS.map(([before, bold, after], index) => (
             <li key={bold}>
-              {before}
+              <span className="font-bold">{index + 1}.</span> {before}
               <span className="font-bold">{bold}</span>
               {after}
             </li>
           ))}
-        </ul>
+        </ol>
       </div>
 
       {loadError && (
