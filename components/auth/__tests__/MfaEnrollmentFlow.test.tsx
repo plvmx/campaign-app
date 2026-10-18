@@ -10,6 +10,9 @@ import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/re
 
 vi.mock('react-qr-code', () => ({ default: ({ value }: { value: string }) => <div data-testid="qrcode" data-value={value} /> }));
 
+const mockIsIos = vi.fn(() => false);
+vi.mock('@/lib/isIosDevice', () => ({ isIosDevice: () => mockIsIos() }));
+
 const mockListFactors = vi.fn();
 const mockUnenroll = vi.fn();
 const mockEnroll = vi.fn();
@@ -38,6 +41,7 @@ const FIRST = { id: 'factor-1', totp: { uri: 'otpauth://totp/AFJ:a@x.com?secret=
 const SECOND = { id: 'factor-2', totp: { uri: 'otpauth://totp/AFJ:a@x.com?secret=SECONDKEY', secret: 'SECONDKEY' } };
 
 beforeEach(() => {
+  mockIsIos.mockReset().mockReturnValue(false);
   localStorage.clear();
   mockListFactors.mockReset().mockResolvedValue({ data: { all: [] }, error: null });
   mockUnenroll.mockReset().mockResolvedValue({ data: {}, error: null });
@@ -178,5 +182,28 @@ describe('MfaEnrollmentFlow — guidance for people who are not computer-literat
     const hrefs = screen.getAllByRole('link').map((a) => a.getAttribute('href') ?? '');
     expect(hrefs.some((h) => h.startsWith('https://apps.apple.com/'))).toBe(true);
     expect(hrefs.some((h) => h.startsWith('https://play.google.com/'))).toBe(true);
+  });
+});
+
+describe('MfaEnrollmentFlow — iPhone leads with the typed setup key', () => {
+  // Mark (admin, iPhone, 2026-10-19): the otpauth:// button did nothing useful and the QR code can't be scanned from the phone's own screen.
+  it('hides the phone-only button and the QR code, and shows the key steps with Copy key', async () => {
+    mockIsIos.mockReturnValue(true);
+    render(<MfaEnrollmentFlow accessToken="tok" onDone={vi.fn()} />);
+    await screen.findByText('FIRSTKEY');
+    expect(screen.queryByRole('link', { name: /add to my authenticator app/i })).toBeNull();
+    expect(screen.queryByTestId('qrcode')).toBeNull();
+    expect(screen.getByText(/enter a setup key/i)).toBeInTheDocument();
+    expect(screen.getByText(/time based/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /copy key/i })).toBeInTheDocument();
+  });
+
+  it('still verifies the typed code against the enrolled factor', async () => {
+    mockIsIos.mockReturnValue(true);
+    render(<MfaEnrollmentFlow accessToken="tok" onDone={vi.fn()} />);
+    await screen.findByText('FIRSTKEY');
+    fireEvent.change(screen.getByLabelText(/6-digit code/i), { target: { value: '123456' } });
+    fireEvent.click(screen.getByRole('button', { name: /verify and continue/i }));
+    await waitFor(() => expect(mockChallengeAndVerify).toHaveBeenCalledWith({ factorId: 'factor-1', code: '123456' }));
   });
 });
