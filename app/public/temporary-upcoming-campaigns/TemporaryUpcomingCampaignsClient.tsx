@@ -24,11 +24,11 @@ import type { TemporaryUpcomingCampaignsResponse } from '@/app/api/public/tempor
 const TITLE = 'Temporary AFJ Campaign Lists';
 const INTRO_TEXT = 'Here is the temporary upcoming campaign list for this fortnight.';
 
-/** Each bullet as [before, bold word, after] so the bold word can be styled inline. */
-const LEADER_BULLETS: [string, string, string][] = [
-  ['', 'Check', ' that your campaign details are correct'],
-  ['Click on the ', 'Edit', ' button to make changes'],
-  ['Click on the ', 'Download', ' button to save a copy'],
+/** Each step as [text, bold?] segments so the key words can be styled inline. */
+const LEADER_BULLETS: [string, boolean][][] = [
+  [['Check', true], [' that your campaign details are correct', false]],
+  [['If', true], [' anything is wrong, click on the ', false], ['Edit', true], [' button to fix it', false]],
+  [['If', true], [' you want to keep a copy, click on the ', false], ['Download', true], [' button to save it', false]],
 ];
 
 export default function TemporaryUpcomingCampaignsClient() {
@@ -84,11 +84,12 @@ export default function TemporaryUpcomingCampaignsClient() {
         <p className="mt-1 text-base text-gray-600 dark:text-gray-400">{INTRO_TEXT}</p>
         <p className="mt-2 text-base font-bold text-gray-900 dark:text-gray-100">ALL LEADERS please:</p>
         <ol className="mt-1 space-y-1 rounded-lg border border-blue-200 bg-blue-50 p-3 text-base font-medium text-blue-900 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-100">
-          {LEADER_BULLETS.map(([before, bold, after], index) => (
-            <li key={bold}>
-              <span className="font-bold">{index + 1}.</span> {before}
-              <span className="font-bold">{bold}</span>
-              {after}
+          {LEADER_BULLETS.map((segments, index) => (
+            <li key={index}>
+              <span className="font-bold">{index + 1}.</span>{' '}
+              {segments.map(([text, bold], i) =>
+                bold ? <span key={i} className="font-bold">{text}</span> : text,
+              )}
             </li>
           ))}
         </ol>
