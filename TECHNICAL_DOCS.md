@@ -196,7 +196,7 @@ campaign-app/
 │   │   ├── page.tsx            # Route: /app (main campaign feed)
 │   │   ├── sr-admin/page.tsx   # Route: /app/sr-admin (State Reporter dashboard)
 │   │   ├── tl-admin/page.tsx   # Route: /app/tl-admin ("My Admin" for plain team leaders)
-│   │   ├── guide/page.tsx      # Route: /app/guide — in-app CAS User Guide PDF viewer (OPEN GUIDE)
+│   │   ├── guide/page.tsx      # Route: /app/guide — in-app CAS User Guide PDF viewer (USER GUIDE)
 │   │   ├── check-registration/ # Route: /app/check-registration — leader "is this person registered?" check
 │   │   └── components/         # Components used ONLY by /app pages
 │   │       ├── AdminQuickActions.tsx
@@ -778,7 +778,7 @@ There is no separate permissions module. Role logic is kept inline wherever it i
 /app                                  Main campaign feed (home screen)
 /app/sr-admin                         State Reporter dashboard
 /app/tl-admin                         "My Admin" for plain team leaders (campaign rules, check registration, extra security)
-/app/guide                            OPEN GUIDE — CAS User Guide PDF, full screen
+/app/guide                            USER GUIDE — CAS User Guide PDF, full screen
 /app/check-registration               Leader check: is this person registered? (no registry data shown)
 /campaign-interest                    People who registered interest in my campaigns (2FA required)
 /training-interest                    My BOTJ/TLT sessions and their interest counts
@@ -1971,12 +1971,12 @@ No-login pages, each registered in `lib/publicLinks.ts` (single source of truth 
 - **Admin lookup** — `/admin/check-registration` → `POST /api/admin/check-registration`, gated by `verifyAdminCaller`. `parseContactLookupInput()` + `lookupRegistrationByContact()`: mobile and/or email only; returns `{ registered, matchedOn, registrants }` **including the matching records** (name, email, phone, state, postcode, registered date, webinar/Code-of-Conduct fields, unsubscribed/NFC — what `/registry/manage` shows), deduplicated by id with a per-record `matchedOn`. Never call it from a route with a weaker gate. Browser wrappers in `registrationCheckClient.ts`.
 - `AdminQuickActions` (top of `/app`, AD only) holds a "Check if a Person is Registered" button plus **Week 1 Campaigns** and **Campaign Results** buttons that open those public links with `?from=app`. Its older download buttons were retired; the same outputs live on `/admin/generate-slides`, `/admin/generate-report`, `/admin/generate-week-campaigns`.
 
-### 18.4 CAS User Guide (OPEN GUIDE)
+### 18.4 CAS User Guide (USER GUIDE)
 
 A PDF guide for leaders, stored in a **private** Supabase Storage bucket `user-guide` (created automatically on first admin upload; PDF-only, 20 MB; never a public URL because it carries screenshots and support numbers).
 - Each upload is a new `guide-<timestamp>.pdf`; the newest is current (so a replaced guide is never served from a stale CDN cache); before each upload all but the current file are deleted.
 - `userGuideService.getUserGuideView(client)` → a 4-hour signed URL, backing `GET /api/public/user-guide` (**no sign-in** — the guide is also offered on the sign-in screen for new leaders; not cached, so a new guide shows straight away). `createUserGuideUploadTarget(client)` → a one-time signed upload target behind `POST /api/admin/user-guide/upload-url` (`verifyAdminCaller`); the browser then uploads straight to Storage (`userGuideClient.uploadUserGuide`), so a large PDF never hits Vercel's ~4.5 MB request limit. Admin upload card: `app/admin/components/UserGuideUploadCard.tsx` on `/admin`.
-- Shown by `components/GuideScreen.tsx` (full screen + ✕ Close): as the `/app/guide` page (plain leaders' bottom-bar OPEN GUIDE button) and **in place** (`showGuide` state) from the buttons on `/login`'s sign-in form and action chooser — in place so Close returns to exactly where they were (going back to `/login` with a session would jump to `/app`). `components/OpenGuideLabel.tsx` keeps the discreet button styling identical across places.
+- Shown by `components/GuideScreen.tsx` (full screen + ✕ Close): as the `/app/guide` page (plain leaders' bottom-bar USER GUIDE button) and **in place** (`showGuide` state) from the buttons on `/login`'s sign-in form and action chooser — in place so Close returns to exactly where they were (going back to `/login` with a session would jump to `/app`). `components/OpenGuideLabel.tsx` keeps the discreet button styling identical across places.
 - `components/PdfGuideViewer.tsx` draws each page with pdf.js (`pdfjs-dist` pinned to 5.4.x — 6.x needs Node 22 and CI runs 20; the *legacy* build for older phones; loaded only when the guide opens), because browser PDF viewers can't be embedded reliably on phones. Canvas sharpness is capped at 2× (`lib/pdfRenderScale.ts`). pdf.js pauses drawing in a hidden tab, so when testing in a background preview only page 1 appears until visible. Falls back to a plain link if the viewer fails. Not part of `/admin/backup` (a file, not a table) — keep the source PDF.
 
 ---

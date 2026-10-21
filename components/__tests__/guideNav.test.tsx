@@ -1,5 +1,5 @@
 /**
- * The "OPEN GUIDE" button (Peter, 2026-10-15): plain leaders get it in the
+ * The "USER GUIDE" button (Peter, 2026-10-15): plain leaders get it in the
  * bottom bar between Home and My Admin — "OPEN" above "GUIDE", in bold gold —
  * and admins (AD/SR) don't.
  */
@@ -25,11 +25,11 @@ async function navLinks(): Promise<string[]> {
   return Array.from(document.querySelectorAll('nav a')).map((a) => a.textContent ?? '');
 }
 
-describe('OPEN GUIDE nav button', () => {
+describe('USER GUIDE nav button', () => {
   it('sits between Home and My Admin for a plain leader, linking to /app/guide', async () => {
     mockAdmin.mockReturnValue(null);
-    expect(await navLinks()).toEqual(['🏠Home', 'OPENGUIDE', '⚙️My Admin']);
-    const open = screen.getByText('OPEN');
+    expect(await navLinks()).toEqual(['🏠Home', 'USERGUIDE', '⚙️My Admin']);
+    const open = screen.getByText('USER');
     expect(open.closest('a')).toHaveAttribute('href', '/app/guide');
     // Two stacked words, centred, in bold gold.
     expect(open.nextElementSibling).toHaveTextContent('GUIDE');
@@ -38,6 +38,6 @@ describe('OPEN GUIDE nav button', () => {
 
   it.each(['AD', 'SR'])('is not shown to an admin (%s)', async (admin) => {
     mockAdmin.mockReturnValue(admin);
-    expect(await navLinks()).not.toContain('OPENGUIDE');
+    expect(await navLinks()).not.toContain('USERGUIDE');
   });
 });
