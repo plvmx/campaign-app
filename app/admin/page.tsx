@@ -328,7 +328,7 @@ export default function AdminPage() {
             </button>
           </div>
 
-          {/* CAS User Guide ("OPEN GUIDE" button) */}
+          {/* CAS User Guide ("USER GUIDE" button) */}
           <UserGuideUploadCard />
 
           {/* Tech Insights (on-screen technical details, desktop admins only) */}

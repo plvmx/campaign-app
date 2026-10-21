@@ -86,8 +86,8 @@ export default function GuideScreen({ onClose }: { onClose: () => void }) {
 }
 
 /**
- * The OPEN GUIDE button for the sign-in and "What do you want to do today?"
- * screens — deliberately low-key, styled exactly like the bottom-bar button
+ * The USER GUIDE button for the "What do you want to do today?"
+ * screen — deliberately low-key, styled exactly like the bottom-bar button
  * (Peter, 2026-10-15): just the gold stacked label, no box.
  */
 export function OpenGuideButton({ onClick }: { onClick: () => void }) {
@@ -96,11 +96,31 @@ export function OpenGuideButton({ onClick }: { onClick: () => void }) {
       <button
         type="button"
         onClick={onClick}
-        aria-label="OPEN GUIDE"
+        aria-label="USER GUIDE"
         className="rounded-md px-4 py-2 hover:bg-amber-50 focus:outline-none focus:ring-2 focus:ring-amber-500 dark:hover:bg-gray-800"
       >
         <OpenGuideLabel />
       </button>
     </div>
+  );
+}
+
+/**
+ * The sign-in form's guide prompt (Peter, 2026-10-22): the bare gold button
+ * confused new leaders, so this is a plain sentence with a "Click Here" link.
+ */
+export function SignInGuideLink({ onClick }: { onClick: () => void }) {
+  return (
+    <p className="text-center text-sm text-gray-700 dark:text-gray-300">
+      If you need help using this app please{' '}
+      <button
+        type="button"
+        onClick={onClick}
+        className="font-bold text-blue-600 underline hover:text-blue-800 dark:text-blue-400"
+      >
+        Click Here
+      </button>{' '}
+      to read the User Guide
+    </p>
   );
 }

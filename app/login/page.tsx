@@ -19,7 +19,7 @@ import { AUSTRALIAN_STATE_NAMES } from '@/lib/constants';
 import { InlineCodeFallback } from '@/components/auth/InlineCodeFallback';
 import { cardClass as setupCardClass, bodyTextClass, headingClass, errorBannerClass, primaryButtonClass, secondaryButtonClass, inputClass } from '@/components/auth/CodeEntryScreen';
 import { GetHelp } from '@/components/auth/GetHelp';
-import GuideScreen, { OpenGuideButton } from '@/components/GuideScreen';
+import GuideScreen, { OpenGuideButton, SignInGuideLink } from '@/components/GuideScreen';
 import { SetupStep } from '@/components/auth/SetupStep';
 import { getAdminLoginGate, type AdminLoginGate } from '@/lib/adminLoginGate';
 import { clearPendingLoginStep, readPendingLoginStep, savePendingLoginStep } from '@/lib/pendingLoginStep';
@@ -855,7 +855,7 @@ export default function LoginPage() {
             </div>
 
             {/* New leaders: the guide covers installing the app and signing in. */}
-            <OpenGuideButton onClick={() => setShowGuide(true)} />
+            <SignInGuideLink onClick={() => setShowGuide(true)} />
           </form>
         )}
       </div>

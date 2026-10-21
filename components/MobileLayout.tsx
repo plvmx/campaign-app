@@ -20,7 +20,7 @@ type NavItem = {
   iconImage?: string;
   isSrAdmin?: boolean;
   isTlAdmin?: boolean;
-  /** The OPEN GUIDE item: bold gold stacked label (OpenGuideLabel) instead of icon + label. */
+  /** The USER GUIDE item: bold gold stacked label (OpenGuideLabel) instead of icon + label. */
   textOnly?: boolean;
 };
 
@@ -94,7 +94,7 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
   const adminNavItem: NavItem   = { href: '/admin',         label: 'Admin',   icon: '⚙️' };
   const srAdminNavItem: NavItem = { href: '/app/sr-admin',  label: 'Admin',    icon: '⚙️', isSrAdmin: true };
   const tlAdminNavItem: NavItem = { href: '/app/tl-admin',  label: 'My Admin', icon: '⚙️', isTlAdmin: true };
-  const guideNavItem: NavItem   = { href: '/app/guide',     label: 'OPEN GUIDE', textOnly: true };
+  const guideNavItem: NavItem   = { href: '/app/guide',     label: 'USER GUIDE', textOnly: true };
 
   // Full admins (AD): Home | Metrics | Admin
   // State reporters (SR): Home | SR Admin
