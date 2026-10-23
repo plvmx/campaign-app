@@ -282,7 +282,7 @@ campaign-app/
 │   │                           #   RequireTwoFactorForMemberDetails, …) — see §6
 │   ├── ErrorBoundary.tsx       # React error boundary
 │   ├── GuideScreen.tsx         # Full-screen CAS User Guide viewer (uses PdfGuideViewer.tsx / pdf.js)
-│   ├── AllLeadersCampaignListScreen.tsx  # Full-screen fortnight campaign list + "Download a Copy" (plain leaders' Extras link on /app)
+│   ├── AllLeadersCampaignListScreen.tsx  # Full-screen fortnight campaign list + "Download a Copy" (plain leaders' Extras link on /app); the Extras box also reuses app/public/campaign-results/CampaignResultsClient.tsx (onClose prop) for last week's results
 │   ├── LoadingSpinner.tsx      # Loading indicator
 │   ├── MapPopupActions.tsx     # RSVP buttons shown inside map popups
 │   ├── MobileLayout.tsx        # Page shell: header + bottom nav + content
