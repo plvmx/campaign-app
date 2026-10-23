@@ -125,7 +125,7 @@ export default function CampaignResultsClient({ onClose }: { onClose?: () => voi
         <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
           Results recorded for the past week&apos;s campaigns, all states.
         </p>
-        {pages && pages.length > 0 && (
+        {!inApp && pages && pages.length > 0 && (
           <p className="mt-2 rounded-lg border border-blue-200 bg-blue-50 p-3 text-base font-medium text-blue-900 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-100">
             <span className="font-bold">Tap a page below</span> to view it full screen. Tap anywhere (or the{' '}
             <span className="font-bold">Close</span> button) to come back.

@@ -30,6 +30,7 @@ describe('CampaignResultsClient', () => {
     await waitFor(() => expect(screen.getByText('Download a Copy of Page 2')).toBeTruthy());
     expect(screen.getByText('Download a Copy of Page 1')).toBeTruthy();
     expect(screen.queryByText(/Save .*to Photos/)).toBeNull();
+    expect(screen.queryByText('Tap a page below')).toBeNull();
     fireEvent.click(screen.getAllByText(/Return to the previous page/)[0]);
     expect(onClose).toHaveBeenCalled();
   });
