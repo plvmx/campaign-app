@@ -12,7 +12,7 @@ import { deleteCampaign, updateCampaign, getCampaignsForUser } from '@/lib/servi
 import { getCampaignInterestCounts } from '@/lib/services/campaignInterestService';
 import { trackEvent } from '@/lib/analytics';
 import { getCampaignCategories } from '@/lib/services/dropdownService';
-import { getUserAdminStatusAndMobile, isRecognizedAdminStatus } from '@/lib/campaignFilter';
+import { getUserAdminStatusAndMobile, shouldShowExtras } from '@/lib/campaignFilter';
 import AllLeadersCampaignListScreen from '@/components/AllLeadersCampaignListScreen';
 import { getSlideViewEnabled, type SlideViewRole } from '@/lib/appSettings';
 import { combinePlaceAndSite } from '@/lib/placeSite';
@@ -404,7 +404,7 @@ function AppPageContent() {
             >
               More Info
             </button>
-            {adminStatus !== null && !isRecognizedAdminStatus(adminStatus) && (
+            {shouldShowExtras(adminStatus) && (
               <button
                 onClick={() => setShowExtras(!showExtras)}
                 className="ml-4 text-base font-bold text-green-600 dark:text-green-400 underline hover:text-green-800 dark:hover:text-green-300 focus:outline-none"
@@ -412,7 +412,7 @@ function AppPageContent() {
                 Extras
               </button>
             )}
-            {showExtras && !isRecognizedAdminStatus(adminStatus) && (
+            {showExtras && shouldShowExtras(adminStatus) && (
               <div className="mt-2 p-3 bg-green-50 dark:bg-green-900/20 rounded-md">
                 <button
                   onClick={() => setShowAllLeadersList(true)}
