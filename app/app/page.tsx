@@ -12,7 +12,8 @@ import { deleteCampaign, updateCampaign, getCampaignsForUser } from '@/lib/servi
 import { getCampaignInterestCounts } from '@/lib/services/campaignInterestService';
 import { trackEvent } from '@/lib/analytics';
 import { getCampaignCategories } from '@/lib/services/dropdownService';
-import { getUserAdminStatusAndMobile } from '@/lib/campaignFilter';
+import { getUserAdminStatusAndMobile, isRecognizedAdminStatus } from '@/lib/campaignFilter';
+import AllLeadersCampaignListScreen from '@/components/AllLeadersCampaignListScreen';
 import { getSlideViewEnabled, type SlideViewRole } from '@/lib/appSettings';
 import { combinePlaceAndSite } from '@/lib/placeSite';
 
@@ -49,6 +50,8 @@ function AppPageContent() {
   const [sharedWithMeOwners, setSharedWithMeOwners] = useState<LeaderShareOwner[]>([]);
 
   const [showMoreInfo, setShowMoreInfo] = useState(false);
+  const [showExtras, setShowExtras] = useState(false);
+  const [showAllLeadersList, setShowAllLeadersList] = useState(false);
   const [viewMode, setViewMode] = useState<'view' | 'edit'>('view');
   const [slideViewEnabled, setSlideViewEnabled] = useState(false);
   const [allCampaigns, setAllCampaigns] = useState<Campaign[]>([]);
@@ -376,6 +379,9 @@ function AppPageContent() {
 
   return (
     <MobileLayout>
+      {showAllLeadersList && (
+        <AllLeadersCampaignListScreen onClose={() => setShowAllLeadersList(false)} />
+      )}
       <div className="p-4 max-w-full overflow-x-hidden">
 
         {/* Welcome header */}
@@ -398,6 +404,24 @@ function AppPageContent() {
             >
               More Info
             </button>
+            {adminStatus !== null && !isRecognizedAdminStatus(adminStatus) && (
+              <button
+                onClick={() => setShowExtras(!showExtras)}
+                className="ml-4 text-base font-bold text-green-600 dark:text-green-400 underline hover:text-green-800 dark:hover:text-green-300 focus:outline-none"
+              >
+                Extras
+              </button>
+            )}
+            {showExtras && !isRecognizedAdminStatus(adminStatus) && (
+              <div className="mt-2 p-3 bg-green-50 dark:bg-green-900/20 rounded-md">
+                <button
+                  onClick={() => setShowAllLeadersList(true)}
+                  className="rounded-md border-2 border-gray-800 dark:border-gray-600 bg-green-600 px-4 py-2 text-base font-bold text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                >
+                  Upcoming Campaigns for All Leaders
+                </button>
+              </div>
+            )}
             {showMoreInfo && (
               <div className="mt-2 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md text-sm text-gray-700 dark:text-gray-300">
                 {adminStatus === 'SR'
