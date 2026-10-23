@@ -14,6 +14,7 @@ import { trackEvent } from '@/lib/analytics';
 import { getCampaignCategories } from '@/lib/services/dropdownService';
 import { getUserAdminStatusAndMobile, shouldShowExtras } from '@/lib/campaignFilter';
 import AllLeadersCampaignListScreen from '@/components/AllLeadersCampaignListScreen';
+import CampaignResultsClient from '@/app/public/campaign-results/CampaignResultsClient';
 import { getSlideViewEnabled, type SlideViewRole } from '@/lib/appSettings';
 import { combinePlaceAndSite } from '@/lib/placeSite';
 
@@ -52,6 +53,7 @@ function AppPageContent() {
   const [showMoreInfo, setShowMoreInfo] = useState(false);
   const [showExtras, setShowExtras] = useState(false);
   const [showAllLeadersList, setShowAllLeadersList] = useState(false);
+  const [showLastWeekResults, setShowLastWeekResults] = useState(false);
   const [viewMode, setViewMode] = useState<'view' | 'edit'>('view');
   const [slideViewEnabled, setSlideViewEnabled] = useState(false);
   const [allCampaigns, setAllCampaigns] = useState<Campaign[]>([]);
@@ -379,6 +381,9 @@ function AppPageContent() {
 
   return (
     <MobileLayout>
+      {showLastWeekResults && (
+        <CampaignResultsClient onClose={() => setShowLastWeekResults(false)} />
+      )}
       {showAllLeadersList && (
         <AllLeadersCampaignListScreen onClose={() => setShowAllLeadersList(false)} />
       )}
@@ -413,12 +418,18 @@ function AppPageContent() {
               </button>
             )}
             {showExtras && shouldShowExtras(adminStatus) && (
-              <div className="mt-2 p-3 bg-green-50 dark:bg-green-900/20 rounded-md">
+              <div className="mt-2 flex flex-col items-start gap-2 p-3 bg-green-50 dark:bg-green-900/20 rounded-md">
                 <button
                   onClick={() => setShowAllLeadersList(true)}
                   className="rounded-md border-2 border-gray-800 dark:border-gray-600 bg-green-600 px-4 py-2 text-base font-bold text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
                 >
                   Upcoming Campaigns for All Leaders
+                </button>
+                <button
+                  onClick={() => setShowLastWeekResults(true)}
+                  className="rounded-md border-2 border-gray-800 dark:border-gray-600 bg-yellow-300 px-4 py-2 text-base font-bold text-gray-900 hover:bg-yellow-400 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2"
+                >
+                  All Campaign Results for Last Week
                 </button>
               </div>
             )}
