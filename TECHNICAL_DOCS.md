@@ -169,6 +169,7 @@ Most of the app runs entirely **in the browser** (client components). The two ex
 |------|------|-----------------|
 | `app/api/auth/validate-leader/route.ts` | API Route | Needs service-role key (bypasses RLS) to look up leaders without exposing the key to browsers |
 | `app/api/cron/weekly-refresh/route.ts` | API Route | Called by Vercel Cron; validates a secret token |
+| `app/api/cron/campaign-report-sync/route.ts` | API Route | Daily Vercel Cron; pulls new rows from the live Google Sheet into `campaign_reports` (temporary — §19.2) |
 
 Everything else — including all database queries — runs **in the browser** using the anonymous Supabase client, protected by Supabase Row Level Security (RLS) policies.
 
@@ -272,7 +273,8 @@ campaign-app/
 │       ├── admin/settings/route.ts
 │       ├── public/*/route.ts                      # One data route per /public page (+ geocode-postcode, user-guide)
 │       ├── tiles/[z]/[x]/[y]/route.ts             # Server-side map tile proxy
-│       └── cron/weekly-refresh/route.ts           # Called by Vercel Cron
+│       ├── cron/weekly-refresh/route.ts           # Called by Vercel Cron
+│       └── cron/campaign-report-sync/route.ts     # Daily Vercel Cron: Google Sheet → campaign_reports (temporary)
 │
 ├── components/                 # Shared components (used across multiple pages)
 │   ├── CampaignForm.tsx        # Generic campaign add/edit form
@@ -1091,6 +1093,7 @@ All take an **injected Supabase client** (always `supabaseAdmin` in practice) so
 | `campaignInterestSmsService.ts` | One combined ClickSend text per owning leader; logs to `campaign_interest_sms_log`; never throws |
 | `publicCampaignListService.ts`, `publicCampaignResultsService.ts`, `publicCampaignsNearMeService.ts`, `publicUpcomingCampaignsService.ts` | Data/grouping logic behind the `/public/*` pages (cached coordinates only, no on-demand geocoding) |
 | `campaignReportsService.ts` | Campaign Report cleanup |
+| `campaignReportSyncService.ts` | Temporary live-sheet sync into `campaign_reports` (`syncCampaignReportsFromSheet`) and the shared `deriveCampaignReportFieldsSince`; reader in `lib/campaignReportSheetReader.ts` |
 | `backupService.ts` | `exportBackup`/`restoreBackup`; see §5.1a |
 | `placeService.ts` (also) | `addNewPlaceForState()` best-effort geocodes the new place immediately (`lib/geocoding.ts`) |
 
@@ -1470,7 +1473,8 @@ If the fix and the test live in the same file (rare), use `git show HEAD~1:path/
 | `NEXT_PUBLIC_SUPABASE_URL` | `lib/supabaseClient.ts`, `lib/supabaseAdmin.ts` | Yes |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | `lib/supabaseClient.ts` | Yes |
 | `SUPABASE_SERVICE_ROLE_KEY` | `lib/supabaseAdmin.ts` (server-only API routes) | Yes |
-| `CRON_SECRET` | `app/api/cron/weekly-refresh/route.ts` | Yes (production) |
+| `CRON_SECRET` | `app/api/cron/weekly-refresh/route.ts`, `app/api/cron/campaign-report-sync/route.ts` | Yes (production) |
+| `CAMPAIGN_REPORT_SHEET_ID` | `app/api/cron/campaign-report-sync/route.ts`, `scripts/sync_campaign_reports_from_sheet.ts` — id of the link-shared Google Sheet (between `/d/` and `/edit`) | Yes, for the sheet sync |
 | `NEXT_PUBLIC_ADMIN_EMAILS` | Referenced but not actively enforced | No |
 | `NEXT_PUBLIC_SITE_URL` | `lib/siteUrl.ts` — absolute links in emails/SMS/OG tags (falls back to Vercel's production URL, then localhost) | Production |
 | `NEXT_PUBLIC_SUPPORT_MOBILE` | `lib/supportContact.ts` — support number on `/help/2fa` and the stuck-leaders Call/Text links | No |
@@ -1992,7 +1996,7 @@ Three modules: `lib/ariseLayout.ts` (constants, `AriseCampaign`, `apx()`, `simul
 
 ### 19.2 Campaign Report project (on hold)
 
-Aggregate per-campaign tallies (Partial/Full Presentations, Sinner's Prayer, Information Requests) from an external Google Sheet, in `campaign_reports`. `lib/campaignReportParser.ts` (`parseTallyValue`, `parseCampaignDate`, `normalizeCampaignReportRow`) owns the messy-data parsing rules, shared by the initial load (`scripts/campaign_reports_xlsx_to_json.py` + `scripts/import_campaign_reports.ts`) and the incremental catch-up import. `location_raw`/`leader_raw` are free text with no FK; every tally/date column has a paired `*_raw` and `needs_review` flags rows the parser couldn't resolve; `submitted_at` is unique (the de-dup key for re-imports); `campaign_id` is a nullable unenforced best-effort link. `derived_state`/`derived_place`/`derived_leader` are populated only for rows submitted on/after 2026-05-06 by `lib/campaignReportMatcher.ts` (`scripts/derive_campaign_reports_fields.ts`), null when not confidently resolvable — never guessed. `/admin/campaign-reports-cleanup` (`campaignReportsService.getCampaignReportsNeedingReview` / `updateCampaignReportDerivedFields` via `POST /api/admin/campaign-reports/derived-fields`, service role) lets an admin fill the rest. Admin-only RLS. See `docs/campaign-report/BRIEF.md`.
+Aggregate per-campaign tallies (Partial/Full Presentations, Sinner's Prayer, Information Requests) from an external Google Sheet, in `campaign_reports`. `lib/campaignReportParser.ts` (`parseTallyValue`, `parseCampaignDate`, `normalizeCampaignReportRow`) owns the messy-data parsing rules, shared by the initial load (`scripts/campaign_reports_xlsx_to_json.py` + `scripts/import_campaign_reports.ts`) and the incremental catch-up import. `location_raw`/`leader_raw` are free text with no FK; every tally/date column has a paired `*_raw` and `needs_review` flags rows the parser couldn't resolve; `submitted_at` is unique (the de-dup key for re-imports); `campaign_id` is a nullable unenforced best-effort link. `derived_state`/`derived_place`/`derived_leader` are populated only for rows submitted on/after 2026-05-06 by `lib/campaignReportMatcher.ts` (`scripts/derive_campaign_reports_fields.ts`), null when not confidently resolvable — never guessed. `/admin/campaign-reports-cleanup` (`campaignReportsService.getCampaignReportsNeedingReview` / `updateCampaignReportDerivedFields` via `POST /api/admin/campaign-reports/derived-fields`, service role) lets an admin fill the rest. Admin-only RLS. **Live sheet sync (temporary, 2026-10-24):** `/api/cron/campaign-report-sync` (daily, 16:30 UTC, `vercel.json`) runs `campaignReportSyncService.syncCampaignReportsFromSheet` — reads the link-shared sheet (`campaignReportSheetReader.ts` merges its public CSV export for text with its `gviz` JSON feed for true dates; no API key or xlsx library), inserts only rows whose `submitted_at` isn't stored yet (`source = 'google_sheet_sync'`; existing rows are never modified), then re-derives state/place/leader for rows since 2026-05-06. Sheet timestamps are read as Australia/Melbourne wall-clock. Remove it, its cron entry and env var when the app's own numbers replace the sheet. See `docs/campaign-report/BRIEF.md`.
 
 ---
 
