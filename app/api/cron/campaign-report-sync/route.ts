@@ -10,7 +10,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
-import { syncCampaignReportsFromSheet } from '@/lib/services/campaignReportSyncService';
+import { syncCampaignReportsFromSheet, summarizeUnresolvedLocations } from '@/lib/services/campaignReportSyncService';
 import { getErrorMessage } from '@/lib/errorUtils';
 
 export const maxDuration = 60;
@@ -30,6 +30,7 @@ export async function GET(request: NextRequest) {
   try {
     const result = await syncCampaignReportsFromSheet(supabaseAdmin, sheetId);
     console.log(`[cron/campaign-report-sync] OK — ${JSON.stringify(result)}`);
+    console.log(`[cron/campaign-report-sync] ${summarizeUnresolvedLocations(result.derived)}`);
     return NextResponse.json({ success: true, ...result });
   } catch (err) {
     const message = getErrorMessage(err, 'Campaign report sync failed');

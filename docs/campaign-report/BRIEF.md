@@ -23,6 +23,21 @@ needs a Google Cloud API key. Known limitation: a leader-name cell that
 Google has formatted as a date comes through as a date string, not the
 original number (5 such historical cells; cosmetic).
 
+## Location matching for analysis (2026-10-24)
+
+Peter wants an admin analysis page, which needs a state and a `state_places`
+place on every report. The 2026-05-06 derive cutoff was lifted (whole history).
+Measured on the full history: ~93% resolve a state; ~1,365 rows (573 distinct
+locations) still have no place because `state_places` has ~213 places against
+~1,350 distinct sheet spellings (many real places were never in the table).
+Fixes: (1) a state typed in the location is now authoritative — the old
+matcher got ~5% of those wrong (e.g. "Brighton SA" -> NSW's "Brighton Le S",
+"Ayr Qld" -> VIC via the leader); (2) `campaign_report_location_aliases` +
+`/admin/campaign-report-locations` let an admin map each spelling once, adding
+historical-only places to `state_places` (Peter's decision; they will show in
+campaign dropdowns); (3) derive fills only empty fields so manual edits stick;
+(4) the daily sync logs one line with the number of locations still unmapped.
+
 ## Resumed with narrowed scope (2026-09-02)
 
 The "may not be required" hold from 2026-09-01 (below) was resolved: Peter

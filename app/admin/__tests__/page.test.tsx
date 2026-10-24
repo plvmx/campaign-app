@@ -82,6 +82,15 @@ describe('Admin hub — Campaign Report Cleanup link', () => {
   });
 });
 
+describe('Admin hub — Campaign Report Locations link', () => {
+  it('links to /admin/campaign-report-locations', async () => {
+    render(<AdminPage />);
+    await waitFor(() => expect(screen.getByText('Campaign Report Locations')).toBeInTheDocument());
+    screen.getByRole('button', { name: 'Match Locations' }).click();
+    expect(mockPush).toHaveBeenCalledWith('/admin/campaign-report-locations');
+  });
+});
+
 describe('Admin hub — Registry Lookup link', () => {
   it('is the first card and links to /admin/check-registration', async () => {
     render(<AdminPage />);

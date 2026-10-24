@@ -8,11 +8,13 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { normalizeCampaignReportRow, type CampaignReportInsert, type RawCampaignReportSheetRow } from '@/lib/campaignReportParser';
-import { deriveCampaignReportFields, type PlaceRef, type LeaderRef } from '@/lib/campaignReportMatcher';
+import {
+  deriveCampaignReportFields, locationKey, type PlaceRef, type LeaderRef, type LocationAliasRef,
+} from '@/lib/campaignReportMatcher';
 import { fetchCampaignReportSheetRows } from '@/lib/campaignReportSheetReader';
 
-/** Rows from this date on get derived_state/place/leader (the project's narrowed scope). */
-export const DERIVE_SINCE = '2026-05-06';
+/** Derive state/place/leader for the whole history (the original 2026-05-06 cutoff was lifted 2026-10-24). */
+export const DERIVE_SINCE = '2000-01-01';
 
 /** Marks rows written by the live sync so they're easy to find (and remove) when the sheet is retired. */
 export const SHEET_SYNC_SOURCE = 'google_sheet_sync';
@@ -32,7 +34,18 @@ export interface SheetSyncResult {
 export interface DeriveResult {
   inScope: number;
   updated: number;
+  /** Rows still without a state. */
   unresolved: number;
+  /** Rows still without a state_places place, and how many distinct locations that is. */
+  noPlaceRows: number;
+  noPlaceLocations: number;
+}
+
+/** The one-line daily summary the cron job logs. */
+export function summarizeUnresolvedLocations(d: DeriveResult): string {
+  return d.noPlaceRows === 0
+    ? 'All campaign report locations map to a place.'
+    : `${d.noPlaceLocations} location(s) (${d.noPlaceRows} report row(s)) don't map to a place yet — review at /admin/campaign-report-locations.`;
 }
 
 /** Normalizes raw sheet rows, dropping rows with no usable timestamp and repeated timestamps (first wins, like the original load). */
@@ -53,45 +66,98 @@ export function prepareInserts(rows: RawCampaignReportSheetRow[]): {
   return { inserts, skippedNoTimestamp, duplicateTimestamps };
 }
 
+const PAGE = 1000;
+const UPDATE_CHUNK = 100; // ids per UPDATE ... IN (...) — keeps the request URL short
+
+async function fetchAll<T>(build: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>): Promise<T[]> {
+  const out: T[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await build(from, from + PAGE - 1);
+    if (error) throw error;
+    out.push(...(data ?? []));
+    if ((data?.length ?? 0) < PAGE) return out;
+  }
+}
+
+/** Confirmed location aliases keyed by location_key. A missing table (SQL not yet run) counts as none. */
+export async function loadLocationAliases(client: SupabaseClient): Promise<Map<string, LocationAliasRef>> {
+  const { data, error } = await client.from('campaign_report_location_aliases').select('location_key, state, place');
+  if (error) {
+    const code = (error as { code?: string }).code;
+    if (code === '42P01' || code === 'PGRST205') return new Map();
+    throw error;
+  }
+  return new Map((data ?? []).map((a) => [a.location_key as string, a as LocationAliasRef]));
+}
+
+interface ReportForDerive {
+  id: string;
+  location_raw: string | null;
+  leader_raw: string | null;
+  derived_state: string | null;
+  derived_place: string | null;
+  derived_leader: string | null;
+}
+
 /**
- * Recomputes derived_state/place/leader for rows submitted since `since` and
- * writes only those whose values changed. Idempotent.
+ * Fills derived_state/derived_place/derived_leader for every row from
+ * `since` on. By default only EMPTY fields are filled, so a value an admin
+ * set by hand (cleanup screen) or a location alias already applied is never
+ * overwritten by a later run; `overwrite: true` recomputes everything (used
+ * once after the matcher itself changes). Rows needing the same values are
+ * written together. Also reports how many rows still have no place.
  */
 export async function deriveCampaignReportFieldsSince(
   client: SupabaseClient,
   since: string = DERIVE_SINCE,
   apply = true,
+  overwrite = false,
 ): Promise<DeriveResult> {
-  const { data: reports, error: rErr } = await client
-    .from('campaign_reports')
-    .select('id, location_raw, leader_raw, derived_state, derived_place, derived_leader')
-    .gte('submitted_at', since);
-  if (rErr) throw rErr;
+  const reports = await fetchAll<ReportForDerive>((from, to) =>
+    client.from('campaign_reports')
+      .select('id, location_raw, leader_raw, derived_state, derived_place, derived_leader')
+      .gte('submitted_at', since).order('submitted_at').range(from, to));
   const { data: places, error: pErr } = await client.from('state_places').select('state, place');
   if (pErr) throw pErr;
   const { data: leaders, error: lErr } = await client.from('state_leaders').select('state, leader');
   if (lErr) throw lErr;
+  const aliases = await loadLocationAliases(client);
 
+  const groups = new Map<string, { values: Record<string, string | null>; ids: string[] }>();
   let updated = 0;
   let unresolved = 0;
-  for (const row of reports ?? []) {
-    const derived = deriveCampaignReportFields(row, (places ?? []) as PlaceRef[], (leaders ?? []) as LeaderRef[]);
-    if (!derived.state) unresolved++;
-    const changed =
-      (row.derived_state ?? null) !== derived.state ||
-      (row.derived_place ?? null) !== derived.place ||
-      (row.derived_leader ?? null) !== derived.leader;
-    if (!changed) continue;
+  let noPlaceRows = 0;
+  const noPlaceKeys = new Set<string>();
+
+  for (const row of reports) {
+    const d = deriveCampaignReportFields(row, (places ?? []) as PlaceRef[], (leaders ?? []) as LeaderRef[], aliases);
+    const next = {
+      derived_state: overwrite ? d.state : row.derived_state ?? d.state,
+      derived_place: overwrite ? d.place : row.derived_place ?? d.place,
+      derived_leader: overwrite ? d.leader : row.derived_leader ?? d.leader,
+    };
+    if (!next.derived_state) unresolved++;
+    if (!next.derived_place) {
+      noPlaceRows++;
+      noPlaceKeys.add(locationKey(row.location_raw));
+    }
+    if (next.derived_state === row.derived_state && next.derived_place === row.derived_place && next.derived_leader === row.derived_leader) continue;
     updated++;
-    if (apply) {
-      const { error } = await client
-        .from('campaign_reports')
-        .update({ derived_state: derived.state, derived_place: derived.place, derived_leader: derived.leader })
-        .eq('id', row.id);
-      if (error) throw error;
+    const groupKey = JSON.stringify(next);
+    const g: { values: Record<string, string | null>; ids: string[] } = groups.get(groupKey) ?? { values: next, ids: [] };
+    g.ids.push(row.id);
+    groups.set(groupKey, g);
+  }
+
+  if (apply) {
+    for (const { values, ids } of groups.values()) {
+      for (let i = 0; i < ids.length; i += UPDATE_CHUNK) {
+        const { error } = await client.from('campaign_reports').update(values).in('id', ids.slice(i, i + UPDATE_CHUNK));
+        if (error) throw error;
+      }
     }
   }
-  return { inScope: reports?.length ?? 0, updated, unresolved };
+  return { inScope: reports.length, updated, unresolved, noPlaceRows, noPlaceLocations: noPlaceKeys.size };
 }
 
 /** Every `submitted_at` already stored, as epoch ms (dry runs use this to count what would be new). */

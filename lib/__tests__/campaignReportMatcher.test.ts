@@ -5,6 +5,9 @@ import {
   matchPlace,
   matchLeader,
   deriveCampaignReportFields,
+  extractStateHint,
+  locationKey,
+  type LocationAliasRef,
   type PlaceRef,
   type LeaderRef,
 } from '../campaignReportMatcher';
@@ -200,5 +203,62 @@ describe('deriveCampaignReportFields', () => {
       LEADERS,
     );
     expect(result).toEqual({ state: null, place: null, leader: null });
+  });
+});
+
+describe('extractStateHint', () => {
+  it.each([
+    ['Brighton SA', 'SA'],
+    ['Ayr  Nth Qld', 'QLD'],
+    ['Hoppers Crossing Vic', 'VIC'],
+    ['Queanbeyan, NSW', 'NSW'],
+    ['Midwest WA', 'WA'],
+    ['Foo (Tasmania)', 'TAS'],
+  ])('reads the typed state from %s', (raw, state) => {
+    expect(extractStateHint(raw)).toBe(state);
+  });
+
+  it('returns null when no state is typed, or the letters are only part of a word', () => {
+    expect(extractStateHint('Dandenong')).toBeNull();
+    expect(extractStateHint('Pisa')).toBeNull();
+    expect(extractStateHint(null)).toBeNull();
+  });
+});
+
+describe('deriveCampaignReportFields — a typed state is authoritative', () => {
+  const places: PlaceRef[] = [...PLACES, { state: 'NSW', place: 'Brighton Le S' }, { state: 'ACT', place: 'Queanbeyan' }, { state: 'NSW', place: 'Queanbeyan' }];
+  const leaders: LeaderRef[] = [...LEADERS, { state: 'NSW', leader: 'Anne Mills' }];
+
+  it('does not match a same-named place in another state', () => {
+    const r = deriveCampaignReportFields({ location_raw: 'Brighton SA', leader_raw: 'Anne Mills' }, places, leaders);
+    expect(r.state).toBe('SA');
+    expect(r.place).toBeNull();
+  });
+
+  it('is not overridden by the leader\'s usual state', () => {
+    const r = deriveCampaignReportFields({ location_raw: 'Aberfoyle Park SA', leader_raw: 'Anne Mills' }, places, leaders);
+    expect(r).toEqual({ state: 'SA', place: null, leader: null });
+  });
+
+  it('still finds the place within the typed state', () => {
+    const r = deriveCampaignReportFields({ location_raw: 'Queanbeyan, NSW', leader_raw: null }, places, leaders);
+    expect(r).toEqual({ state: 'NSW', place: 'Queanbeyan', leader: null });
+  });
+});
+
+describe('deriveCampaignReportFields — confirmed aliases', () => {
+  const aliases = new Map<string, LocationAliasRef>([
+    [locationKey('Rundle Mall - Adelaide'), { location_key: locationKey('Rundle Mall - Adelaide'), state: 'SA', place: 'Adelaide CBD' }],
+  ]);
+
+  it('uses the alias over any heuristic, and still matches the leader within that state', () => {
+    const r = deriveCampaignReportFields({ location_raw: 'Rundle Mall - Adelaide', leader_raw: 'Maria' }, PLACES, LEADERS, aliases);
+    expect(r).toEqual({ state: 'SA', place: 'Adelaide CBD', leader: 'Maria' });
+  });
+
+  it('keeps a state-only alias as state-only', () => {
+    const only = new Map([['herberton', { location_key: 'herberton', state: 'QLD', place: null }]]);
+    expect(deriveCampaignReportFields({ location_raw: 'Herberton', leader_raw: null }, PLACES, LEADERS, only))
+      .toEqual({ state: 'QLD', place: null, leader: null });
   });
 });
