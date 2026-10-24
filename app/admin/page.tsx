@@ -446,6 +446,22 @@ export default function AdminPage() {
             </button>
           </div>
 
+          {/* Campaign Report Locations */}
+          <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+              Campaign Report Locations
+            </h2>
+            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+              Match locations typed in the Campaign Report sheet to a state and place, so reports can be analysed by state
+            </p>
+            <button
+              onClick={() => router.push('/admin/campaign-report-locations')}
+              className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
+            >
+              Match Locations
+            </button>
+          </div>
+
           {/* Single Week Campaigns */}
           <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">

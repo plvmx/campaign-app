@@ -538,3 +538,16 @@ CREATE POLICY "campaign_reports: admin can read"
   USING (public.is_admin());
 
 -- No authenticated write policy — managed by service role only, for now.
+
+
+-- =============================================================================
+-- campaign_report_location_aliases  (Campaign Report project)
+-- Admin-confirmed sheet-location -> state/place mappings. Admin read only;
+-- written by the service role (see scripts/create_campaign_report_location_aliases_table.sql).
+-- =============================================================================
+ALTER TABLE campaign_report_location_aliases ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "campaign_report_location_aliases: admin can read" ON campaign_report_location_aliases;
+CREATE POLICY "campaign_report_location_aliases: admin can read"
+  ON campaign_report_location_aliases FOR SELECT TO authenticated
+  USING (public.is_admin());

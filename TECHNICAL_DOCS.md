@@ -222,6 +222,7 @@ campaign-app/
 │   │   ├── campaign-messages/      # Route: /admin/campaign-messages — per-date banner text
 │   │   ├── campaign-rules/         # Route: /admin/campaign-rules — recurring scheduling rules
 │   │   ├── campaigns-near-me/      # Route: /admin/campaigns-near-me — geolocation-filtered map
+│   │   ├── campaign-report-locations/ # Route: /admin/campaign-report-locations — map sheet locations to a state and state_places place
 │   │   ├── campaign-reports-cleanup/ # Route: /admin/campaign-reports-cleanup — fill State/Place/Leader on campaign_reports
 │   │   ├── check-registration/     # Route: /admin/check-registration — registry lookup by mobile/email (AD + 2FA)
 │   │   ├── generate-week-campaigns/ # Route: /admin/generate-week-campaigns — "Single Week Campaigns" JPEG
@@ -472,6 +473,10 @@ training_interest
 campaign_interest_sms_log
   campaign_ids[], leader, status 'sent' | 'failed' | 'skipped_no_mobile', error
   admin SELECT only; writes via service role
+
+campaign_report_location_aliases  (Campaign Report project, §19.2)
+  location_key UNIQUE, state, place nullable — admin-confirmed sheet location -> state_places place.
+  Admin read RLS; service-role writes; in BACKUP_TABLE_CONFIG
 
 campaign_reports  (Campaign Report project, §19.2)
   tallies + paired *_raw columns, needs_review, submitted_at UNIQUE,
@@ -824,6 +829,7 @@ There is no separate permissions module. Role logic is kept inline wherever it i
 /admin/stuck-leaders                  Leaders stuck on email sign-in / 2FA setup
 /admin/registered-interest            Everyone who registered interest, with Contacted checkbox
 /admin/generate-week-campaigns        "Single Week Campaigns" JPEG for a chosen date range/state
+/admin/campaign-report-locations      Match sheet locations to a state + State Places place (aliases)
 /admin/campaign-reports-cleanup       Fill missing State/Place/Leader on campaign_reports rows
 /admin/backup                         Export/restore JSON backup of every admin-curated table
 ```
@@ -1093,6 +1099,7 @@ All take an **injected Supabase client** (always `supabaseAdmin` in practice) so
 | `campaignInterestSmsService.ts` | One combined ClickSend text per owning leader; logs to `campaign_interest_sms_log`; never throws |
 | `publicCampaignListService.ts`, `publicCampaignResultsService.ts`, `publicCampaignsNearMeService.ts`, `publicUpcomingCampaignsService.ts` | Data/grouping logic behind the `/public/*` pages (cached coordinates only, no on-demand geocoding) |
 | `campaignReportsService.ts` | Campaign Report cleanup |
+| `campaignReportLocationsService.ts` | `/admin/campaign-report-locations`: unresolved sheet locations, `saveLocationAlias` (optionally adds a `state_places` row) |
 | `campaignReportSyncService.ts` | Temporary live-sheet sync into `campaign_reports` (`syncCampaignReportsFromSheet`) and the shared `deriveCampaignReportFieldsSince`; reader in `lib/campaignReportSheetReader.ts` |
 | `backupService.ts` | `exportBackup`/`restoreBackup`; see §5.1a |
 | `placeService.ts` (also) | `addNewPlaceForState()` best-effort geocodes the new place immediately (`lib/geocoding.ts`) |
@@ -1996,7 +2003,7 @@ Three modules: `lib/ariseLayout.ts` (constants, `AriseCampaign`, `apx()`, `simul
 
 ### 19.2 Campaign Report project (on hold)
 
-Aggregate per-campaign tallies (Partial/Full Presentations, Sinner's Prayer, Information Requests) from an external Google Sheet, in `campaign_reports`. `lib/campaignReportParser.ts` (`parseTallyValue`, `parseCampaignDate`, `normalizeCampaignReportRow`) owns the messy-data parsing rules, shared by the initial load (`scripts/campaign_reports_xlsx_to_json.py` + `scripts/import_campaign_reports.ts`) and the incremental catch-up import. `location_raw`/`leader_raw` are free text with no FK; every tally/date column has a paired `*_raw` and `needs_review` flags rows the parser couldn't resolve; `submitted_at` is unique (the de-dup key for re-imports); `campaign_id` is a nullable unenforced best-effort link. `derived_state`/`derived_place`/`derived_leader` are populated only for rows submitted on/after 2026-05-06 by `lib/campaignReportMatcher.ts` (`scripts/derive_campaign_reports_fields.ts`), null when not confidently resolvable — never guessed. `/admin/campaign-reports-cleanup` (`campaignReportsService.getCampaignReportsNeedingReview` / `updateCampaignReportDerivedFields` via `POST /api/admin/campaign-reports/derived-fields`, service role) lets an admin fill the rest. Admin-only RLS. **Live sheet sync (temporary, 2026-10-24):** `/api/cron/campaign-report-sync` (daily, 16:30 UTC, `vercel.json`) runs `campaignReportSyncService.syncCampaignReportsFromSheet` — reads the link-shared sheet (`campaignReportSheetReader.ts` merges its public CSV export for text with its `gviz` JSON feed for true dates; no API key or xlsx library), inserts only rows whose `submitted_at` isn't stored yet (`source = 'google_sheet_sync'`; existing rows are never modified), then re-derives state/place/leader for rows since 2026-05-06. Sheet timestamps are read as Australia/Melbourne wall-clock. Remove it, its cron entry and env var when the app's own numbers replace the sheet. See `docs/campaign-report/BRIEF.md`.
+Aggregate per-campaign tallies (Partial/Full Presentations, Sinner's Prayer, Information Requests) from an external Google Sheet, in `campaign_reports`. `lib/campaignReportParser.ts` (`parseTallyValue`, `parseCampaignDate`, `normalizeCampaignReportRow`) owns the messy-data parsing rules, shared by the initial load (`scripts/campaign_reports_xlsx_to_json.py` + `scripts/import_campaign_reports.ts`) and the incremental catch-up import. `location_raw`/`leader_raw` are free text with no FK; every tally/date column has a paired `*_raw` and `needs_review` flags rows the parser couldn't resolve; `submitted_at` is unique (the de-dup key for re-imports); `campaign_id` is a nullable unenforced best-effort link. `derived_state`/`derived_place`/`derived_leader` are populated for every row (2026-10-24; was only on/after 2026-05-06) by `lib/campaignReportMatcher.ts` — a state typed in the location ("Brighton SA") is authoritative and a confirmed `campaign_report_location_aliases` row beats every heuristic; the cleanup step fills only empty fields so hand-entered values survive. `/admin/campaign-report-locations` (`campaignReportLocationsService`, `GET/POST /api/admin/campaign-reports/locations`) is where an admin maps each remaining location to a state and `state_places` place, or adds it as a new place; the daily sync logs one line with how many locations still have no place (`scripts/derive_campaign_reports_fields.ts`), null when not confidently resolvable — never guessed. `/admin/campaign-reports-cleanup` (`campaignReportsService.getCampaignReportsNeedingReview` / `updateCampaignReportDerivedFields` via `POST /api/admin/campaign-reports/derived-fields`, service role) lets an admin fill the rest. Admin-only RLS. **Live sheet sync (temporary, 2026-10-24):** `/api/cron/campaign-report-sync` (daily, 16:30 UTC, `vercel.json`) runs `campaignReportSyncService.syncCampaignReportsFromSheet` — reads the link-shared sheet (`campaignReportSheetReader.ts` merges its public CSV export for text with its `gviz` JSON feed for true dates; no API key or xlsx library), inserts only rows whose `submitted_at` isn't stored yet (`source = 'google_sheet_sync'`; existing rows are never modified), then fills any empty derived state/place/leader. Sheet timestamps are read as Australia/Melbourne wall-clock. Remove it, its cron entry and env var when the app's own numbers replace the sheet. See `docs/campaign-report/BRIEF.md`.
 
 ---
 
