@@ -38,6 +38,15 @@ historical-only places to `state_places` (Peter's decision; they will show in
 campaign dropdowns); (3) derive fills only empty fields so manual edits stick;
 (4) the daily sync logs one line with the number of locations still unmapped.
 
+## Management screen (2026-10-26)
+
+After mapping the frequent locations (395 left, almost all one-offs), Peter
+chose to stop mapping for analysis and asked for a management console like
+`/registry/manage`: `/admin/campaign-reports` — search, filter, sort and a
+View/Edit toggle to fill in missing State / Place / Leader, with an audit log
+(`campaign_report_edits`, `/admin/campaign-reports/edit-log`). Manual edits
+survive the daily sync because it only fills empty fields.
+
 ## Resumed with narrowed scope (2026-09-02)
 
 The "may not be required" hold from 2026-09-01 (below) was resolved: Peter

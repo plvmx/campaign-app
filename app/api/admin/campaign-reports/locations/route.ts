@@ -8,29 +8,15 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
-import { enforceOrigin } from '@/lib/corsUtils';
-import { verifyAdminCaller } from '@/lib/services/adminCallerService';
+import { authorizeAdminRequest } from '@/lib/adminRouteGuard';
 import { getUnresolvedLocations, saveLocationAlias } from '@/lib/services/campaignReportLocationsService';
 import { getErrorMessage } from '@/lib/errorUtils';
 
-async function authorize(request: NextRequest): Promise<NextResponse | null> {
-  const corsBlock = enforceOrigin(request);
-  if (corsBlock) return corsBlock;
-  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    console.error('[admin/campaign-reports/locations] SUPABASE_SERVICE_ROLE_KEY is not set');
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
-  }
-  const authHeader = request.headers.get('authorization');
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
-  if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  const caller = await verifyAdminCaller(supabaseAdmin, token);
-  if (!caller.ok) return NextResponse.json({ error: caller.error }, { status: caller.status });
-  return null;
-}
+const LOG_TAG = 'admin/campaign-reports/locations';
 
 export async function GET(request: NextRequest) {
-  const denied = await authorize(request);
-  if (denied) return denied;
+  const auth = await authorizeAdminRequest(request, LOG_TAG);
+  if (!auth.ok) return auth.response;
   try {
     return NextResponse.json(await getUnresolvedLocations(supabaseAdmin));
   } catch (err) {
@@ -40,8 +26,8 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const denied = await authorize(request);
-  if (denied) return denied;
+  const auth = await authorizeAdminRequest(request, LOG_TAG);
+  if (!auth.ok) return auth.response;
 
   let body: { locationKey?: unknown; state?: unknown; place?: unknown; newPlace?: unknown };
   try {
