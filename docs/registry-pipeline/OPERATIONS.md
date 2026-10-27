@@ -2089,3 +2089,38 @@ have already resolved one in the intervening 5 days — none had), excluded
 `carolinemusuka@gmail.com` by hardcoded email (the confirmed-invalid
 case), and overwrote the remaining 66. Backed up (pre-write state +
 intended patch) to `backups/` before writing, dry-run by default.
+
+## Registrants lost to the List [2] migration, and sheet-only people never loaded (2026-10-27)
+
+Triggered by two people Lorraine re-registered by hand ("not showing on the
+database") and a count that looked 60 short (9,327 → 9,308).
+
+**Cause 1 — migration premise was false.** The 2026-09-14
+`migrate_wayoflife_responders_to_twol_respondents.ts` moved registrants
+whose only `registration_events` were List `[2]`, on the premise that
+CSV-reloaded rows have no events. But `ac-sync` ran between the reload
+(09-08/09) and the migration and attached List `[2]` events to existing
+CSV rows by email, so ~31 CSV registrants qualified, were copied to
+`twol_respondents` and deleted. **Cause 2 — sheet-only people.** 45
+Australians were added to Lorraine's sheet after the September CSV export;
+they are not in AC, so no job could ever load them. **Cause 3 —
+placeholder email.** AC contact 6609 has `noemail@noemail.com`; the name
+pinned by its first sync stayed (registrantNameGuard).
+
+**Fix.** `scripts/restore_missing_registrants_from_sheet.ts` (planner:
+`lib/registryPipeline/sheetRestorePlan.ts`): 31 restored, 45 imported,
+1 name corrected (logged to `registrant_edits`); dry-run by default,
+backed up to `backups/`, idempotent, deletes nothing; `twol_respondents`
+left as an append-only record. Registrants 9,308 → 9,384. Overseas
+(OS/NZ/UK) sheet rows stay excluded as decided for the reload.
+
+**Why not 9,368.** Lorraine's expectation was 9,326 sheet rows + 42 new.
+The 42 is exact; the sheet's row count is not a head-count (151 overseas
+rows excluded by design, ~150 rows that are the same person as another,
+~320 registry people not on the sheet). Write-up for her:
+`reconciliation-for-lorraine-2026-10-27.md`.
+
+**Open.** ~192 registrants have emails with stray whitespace/footnote
+digits from the CSV (e.g. `x@gmail.com    1`) — a duplicate risk for
+`ac-sync`'s exact-email match; clean up separately. Fix the placeholder
+email on the AC contact. Chris/Yency NFC to be set by Lorraine in Manage.
