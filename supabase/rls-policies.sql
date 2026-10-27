@@ -551,3 +551,16 @@ DROP POLICY IF EXISTS "campaign_report_location_aliases: admin can read" ON camp
 CREATE POLICY "campaign_report_location_aliases: admin can read"
   ON campaign_report_location_aliases FOR SELECT TO authenticated
   USING (public.is_admin());
+
+
+-- =============================================================================
+-- campaign_report_edits  (Campaign Report project)
+-- Audit trail of hand edits from /admin/campaign-reports. Admin read only;
+-- written by the service role (see scripts/create_campaign_report_edits_table.sql).
+-- =============================================================================
+ALTER TABLE campaign_report_edits ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "campaign_report_edits: admin can read" ON campaign_report_edits;
+CREATE POLICY "campaign_report_edits: admin can read"
+  ON campaign_report_edits FOR SELECT TO authenticated
+  USING (public.is_admin());

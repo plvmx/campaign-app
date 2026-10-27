@@ -82,6 +82,15 @@ describe('Admin hub — Campaign Report Cleanup link', () => {
   });
 });
 
+describe('Admin hub — Campaign Reports link', () => {
+  it('links to /admin/campaign-reports', async () => {
+    render(<AdminPage />);
+    await waitFor(() => expect(screen.getByText('Campaign Reports')).toBeInTheDocument());
+    screen.getByRole('button', { name: 'Manage Reports' }).click();
+    expect(mockPush).toHaveBeenCalledWith('/admin/campaign-reports');
+  });
+});
+
 describe('Admin hub — Campaign Report Locations link', () => {
   it('links to /admin/campaign-report-locations', async () => {
     render(<AdminPage />);
