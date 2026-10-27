@@ -12,7 +12,9 @@ import { deleteCampaign, updateCampaign, getCampaignsForUser } from '@/lib/servi
 import { getCampaignInterestCounts } from '@/lib/services/campaignInterestService';
 import { trackEvent } from '@/lib/analytics';
 import { getCampaignCategories } from '@/lib/services/dropdownService';
-import { getUserAdminStatusAndMobile } from '@/lib/campaignFilter';
+import { getUserAdminStatusAndMobile, shouldShowExtras } from '@/lib/campaignFilter';
+import AllLeadersCampaignListScreen from '@/components/AllLeadersCampaignListScreen';
+import CampaignResultsClient from '@/app/public/campaign-results/CampaignResultsClient';
 import { getSlideViewEnabled, type SlideViewRole } from '@/lib/appSettings';
 import { combinePlaceAndSite } from '@/lib/placeSite';
 
@@ -49,6 +51,9 @@ function AppPageContent() {
   const [sharedWithMeOwners, setSharedWithMeOwners] = useState<LeaderShareOwner[]>([]);
 
   const [showMoreInfo, setShowMoreInfo] = useState(false);
+  const [showExtras, setShowExtras] = useState(false);
+  const [showAllLeadersList, setShowAllLeadersList] = useState(false);
+  const [showLastWeekResults, setShowLastWeekResults] = useState(false);
   const [viewMode, setViewMode] = useState<'view' | 'edit'>('view');
   const [slideViewEnabled, setSlideViewEnabled] = useState(false);
   const [allCampaigns, setAllCampaigns] = useState<Campaign[]>([]);
@@ -192,8 +197,9 @@ function AppPageContent() {
           contextAdminStatus === 'AD' ? 'admin'
           : contextAdminStatus === 'SR' ? 'sr'
           : 'leaders';
-        const svEnabled = await getSlideViewEnabled(slideRole);
-        setSlideViewEnabled(svEnabled);
+        // Started now but awaited later, so it runs alongside the campaign fetch
+        // instead of delaying it by a round trip.
+        const svEnabledPromise = getSlideViewEnabled(slideRole);
 
         // Handle URL params
         const filterParam = searchParams.get('filter');
@@ -212,13 +218,17 @@ function AppPageContent() {
         }
 
         // Fetch campaigns
-        const { campaigns, sharedOwners } = await getCampaignsForUser({
-          adminStatus: contextAdminStatus,
-          userState: contextUserState,
-          userLeader: contextUserLeader,
-          userMobile: contextUserMobile,
-          userId: contextUser!.id,
-        });
+        const [{ campaigns, sharedOwners }, svEnabled] = await Promise.all([
+          getCampaignsForUser({
+            adminStatus: contextAdminStatus,
+            userState: contextUserState,
+            userLeader: contextUserLeader,
+            userMobile: contextUserMobile,
+            userId: contextUser!.id,
+          }),
+          svEnabledPromise,
+        ]);
+        setSlideViewEnabled(svEnabled);
         setSharedWithMeOwners(sharedOwners);
         setAllCampaigns(campaigns);
       } catch (err) {
@@ -371,6 +381,12 @@ function AppPageContent() {
 
   return (
     <MobileLayout>
+      {showLastWeekResults && (
+        <CampaignResultsClient onClose={() => setShowLastWeekResults(false)} />
+      )}
+      {showAllLeadersList && (
+        <AllLeadersCampaignListScreen onClose={() => setShowAllLeadersList(false)} />
+      )}
       <div className="p-4 max-w-full overflow-x-hidden">
 
         {/* Welcome header */}
@@ -393,6 +409,30 @@ function AppPageContent() {
             >
               More Info
             </button>
+            {shouldShowExtras(adminStatus) && (
+              <button
+                onClick={() => setShowExtras(!showExtras)}
+                className="ml-4 text-base font-bold text-green-600 dark:text-green-400 underline hover:text-green-800 dark:hover:text-green-300 focus:outline-none"
+              >
+                Extras
+              </button>
+            )}
+            {showExtras && shouldShowExtras(adminStatus) && (
+              <div className="mt-2 flex flex-col items-start gap-2 p-3 bg-green-50 dark:bg-green-900/20 rounded-md">
+                <button
+                  onClick={() => setShowAllLeadersList(true)}
+                  className="rounded-md border-2 border-gray-800 dark:border-gray-600 bg-green-600 px-4 py-2 text-base font-bold text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                >
+                  Upcoming Campaigns for All Leaders
+                </button>
+                <button
+                  onClick={() => setShowLastWeekResults(true)}
+                  className="rounded-md border-2 border-gray-800 dark:border-gray-600 bg-yellow-300 px-4 py-2 text-base font-bold text-gray-900 hover:bg-yellow-400 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2"
+                >
+                  All Campaign Results for Last Week
+                </button>
+              </div>
+            )}
             {showMoreInfo && (
               <div className="mt-2 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md text-sm text-gray-700 dark:text-gray-300">
                 {adminStatus === 'SR'

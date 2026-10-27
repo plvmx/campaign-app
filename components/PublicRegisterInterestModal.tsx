@@ -71,7 +71,7 @@ export default function PublicRegisterInterestModal({ campaignIds, interestType,
 
   return (
     <Modal onClose={isSubmitting ? undefined : onCancel}>
-      <div className="w-full max-w-sm rounded-xl border-2 border-gray-800 bg-white p-6 text-left shadow-2xl dark:border-gray-600 dark:bg-gray-900">
+      <div data-ti="components/PublicRegisterInterestModal.tsx" className="w-full max-w-sm rounded-xl border-2 border-gray-800 bg-white p-6 text-left shadow-2xl dark:border-gray-600 dark:bg-gray-900">
         <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
           Enter your details below. By proceeding you agree that they will be made available to the team leader(s) of the
           selected campaign(s), and you give your permission for them to contact you regarding their campaign.

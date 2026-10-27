@@ -12,7 +12,7 @@ let mockPathname = '/app';
 vi.mock('next/navigation', () => ({ usePathname: () => mockPathname, useSearchParams: () => new URLSearchParams() }));
 vi.mock('next/link', () => ({ default: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a> }));
 vi.mock('@/lib/auth', () => ({ signOut: vi.fn() }));
-vi.mock('@/lib/campaignFilter', () => ({ getUserAdminStatusAndMobile: vi.fn().mockResolvedValue({ adminStatus: null, mobile: null, isAdmin: false }) }));
+vi.mock('@/contexts/UserContext', () => ({ useUser: () => ({ adminStatus: null, isLoading: false }) }));
 vi.mock('@/lib/supabaseClient', () => ({
   supabase: {
     auth: {

@@ -14,8 +14,12 @@
  *   (hides the address bar / chrome) where the API is available; failures
  *   are swallowed since the CSS-rotated overlay already satisfies the
  *   "fullscreen landscape" requirement on its own.
+ * - Easy to leave on a phone: a large labelled Close button, tapping anywhere
+ *   closes, and the phone's Back gesture/button closes it too (the viewer
+ *   pushes one history entry while open, so Back returns to the page instead
+ *   of leaving it). Leaving real fullscreen (e.g. swipe down) also closes it.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 interface Props {
   src: string;
@@ -25,6 +29,8 @@ interface Props {
 
 export default function FullscreenImageViewer({ src, alt, onClose }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+  const pushedHistoryRef = useRef(false);
   const [isPortrait, setIsPortrait] = useState(
     () => typeof window !== 'undefined' && window.innerHeight > window.innerWidth,
   );
@@ -41,10 +47,41 @@ export default function FullscreenImageViewer({ src, alt, onClose }: Props) {
   }, []);
 
   useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  // Every close goes through here: if we pushed a history entry, popping it
+  // (popstate below) is what actually closes, so Back and the Close button
+  // behave identically and no stray entry is left behind.
+  const close = useCallback(() => {
+    if (pushedHistoryRef.current) {
+      window.history.back();
+    } else {
+      onCloseRef.current();
+    }
+  }, []);
+
+  useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') close();
+    };
+    const handlePopState = () => {
+      pushedHistoryRef.current = false;
+      onCloseRef.current();
+    };
+    let enteredFullscreen = false;
+    const handleFullscreenChange = () => {
+      if (enteredFullscreen && !document.fullscreenElement) close();
     };
     document.addEventListener('keydown', handleKey);
+    window.addEventListener('popstate', handlePopState);
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+
+    // Guarded so React Strict Mode's dev-only mount/unmount/mount can't stack two entries.
+    if (!window.history.state?.fullscreenImageViewer) {
+      window.history.pushState({ fullscreenImageViewer: true }, '');
+    }
+    pushedHistoryRef.current = true;
 
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -52,38 +89,45 @@ export default function FullscreenImageViewer({ src, alt, onClose }: Props) {
     // Best-effort real fullscreen — silently no-ops where unsupported
     // (notably iOS Safari before 16.4) since the CSS rotate below already
     // makes the image read as landscape and fill the viewport regardless.
-    containerRef.current?.requestFullscreen?.().catch(() => {});
+    containerRef.current
+      ?.requestFullscreen?.()
+      .then(() => { enteredFullscreen = true; })
+      .catch(() => {});
 
     return () => {
       document.removeEventListener('keydown', handleKey);
+      window.removeEventListener('popstate', handlePopState);
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
       document.body.style.overflow = prevOverflow;
+      enteredFullscreen = false;
       if (document.fullscreenElement) {
         document.exitFullscreen().catch(() => {});
       }
     };
-  }, [onClose]);
+  }, [close]);
 
   return (
-    <div
+    <div data-ti="components/FullscreenImageViewer.tsx"
       ref={containerRef}
       className="fixed inset-0 z-[2000] flex items-center justify-center overflow-hidden bg-black"
-      onClick={onClose}
+      onClick={close}
     >
       <button
-        onClick={onClose}
+        onClick={close}
         aria-label="Close full screen view"
-        className="absolute right-3 top-3 z-10 rounded-full bg-white/10 p-2 text-white hover:bg-white/20"
+        className="absolute right-3 top-3 z-10 flex items-center gap-2 rounded-full border-2 border-white bg-black/70 px-5 py-3 text-lg font-bold text-white hover:bg-black"
+        style={{ marginTop: 'env(safe-area-inset-top)', marginRight: 'env(safe-area-inset-right)' }}
       >
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-6 w-6">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} className="h-6 w-6" aria-hidden="true">
           <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
         </svg>
+        Close
       </button>
       {/* eslint-disable-next-line @next/next/no-img-element -- object URL, not an optimizable static/remote asset */}
       <img
         src={src}
         alt={alt}
-        onClick={(e) => e.stopPropagation()}
-        style={
+                style={
           isPortrait
             ? {
                 width: '100vh',

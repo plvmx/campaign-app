@@ -3,7 +3,7 @@
  * Run with: npm test or jest
  */
 
-import { calculateCampaignDates, formatDateForDb, formatWeekRangeLabel, formatWeekDateRangeString, formatFortnightDateRangeString, formatShortDateWithOrdinal, formatLongDateWithOrdinal, getCampaignResultsNoticeDate, getFortnightDateRange, getDateRangeInclusive } from '../campaignDates';
+import { calculateCampaignDates, formatDateForDb, formatWeekRangeLabel, formatWeekDateRangeString, formatFortnightDateRangeString, formatShortWeekRange, formatShortDateWithOrdinal, formatLongDateWithOrdinal, getCampaignResultsNoticeDate, getFortnightDateRange, getDateRangeInclusive } from '../campaignDates';
 
 describe('Campaign Dates Calculations', () => {
   // Helper to create a date
@@ -286,5 +286,15 @@ describe('Campaign Dates Calculations', () => {
       expect(start.getTime()).toBe(startCopy.getTime());
       expect(end.getTime()).toBe(endCopy.getTime());
     });
+  });
+});
+
+describe('formatShortWeekRange', () => {
+  it('collapses a week inside one month', () => {
+    expect(formatShortWeekRange(new Date(2026, 9, 19))).toBe('19–25 Oct');
+  });
+
+  it('shows both months when the week spans two', () => {
+    expect(formatShortWeekRange(new Date(2026, 9, 26))).toBe('26 Oct – 1 Nov');
   });
 });

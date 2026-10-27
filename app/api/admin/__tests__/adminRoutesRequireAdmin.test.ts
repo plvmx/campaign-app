@@ -23,19 +23,26 @@ vi.mock('@/lib/geocoding', () => ({ geocodeAddress: vi.fn(), geocodePlace: vi.fn
 vi.mock('@/lib/supabaseClient', () => ({ supabase: { auth: {}, from: vi.fn() } }));
 
 type Handler = (r: NextRequest) => Promise<Response>;
-const ROUTES: Array<[string, () => Promise<{ POST?: Handler; GET?: Handler }>, 'POST' | 'GET']> = [
+type Method = 'POST' | 'GET' | 'PATCH';
+const ROUTES: Array<[string, () => Promise<{ POST?: Handler; GET?: Handler; PATCH?: Handler }>, Method]> = [
   ['settings', () => import('../settings/route'), 'POST'],
   ['geocode-address', () => import('../geocode-address/route'), 'POST'],
   ['geocode-place', () => import('../geocode-place/route'), 'POST'],
   ['invalidate-user-session', () => import('../invalidate-user-session/route'), 'POST'],
   ['campaign-reports/derived-fields', () => import('../campaign-reports/derived-fields/route'), 'POST'],
+  ['campaign-reports/locations', () => import('../campaign-reports/locations/route'), 'GET'],
+  ['campaign-reports/locations', () => import('../campaign-reports/locations/route'), 'POST'],
+  ['campaign-reports/manage', () => import('../campaign-reports/manage/route'), 'GET'],
+  ['campaign-reports/manage', () => import('../campaign-reports/manage/route'), 'PATCH'],
+  ['campaign-reports/edit-log', () => import('../campaign-reports/edit-log/route'), 'GET'],
   ['stuck-leaders', () => import('../stuck-leaders/route'), 'GET'],
   ['reset-mfa', () => import('../reset-mfa/route'), 'POST'],
   ['check-registration', () => import('../check-registration/route'), 'POST'],
   ['user-guide/upload-url', () => import('../user-guide/upload-url/route'), 'POST'],
+  ['tech-insights', () => import('../tech-insights/route'), 'GET'],
 ];
 
-function makeRequest(name: string, token?: string, method: 'POST' | 'GET' = 'POST') {
+function makeRequest(name: string, token?: string, method: Method = 'POST') {
   const headers = { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) };
   if (method === 'GET') return new NextRequest(`http://localhost/api/admin/${name}`, { method, headers });
   return new NextRequest(`http://localhost/api/admin/${name}`, {

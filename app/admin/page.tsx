@@ -16,6 +16,7 @@ import { runWeeklyRefresh } from '@/lib/services/weeklyRefreshService';
 import { getErrorMessage } from '@/lib/errorUtils';
 import { trackEvent } from '@/lib/analytics';
 import UserGuideUploadCard from './components/UserGuideUploadCard';
+import TechInsightsSettingsCard from './components/TechInsightsSettingsCard';
 
 /** Most-recent row from weekly_refresh_log (new columns may be null on older rows). */
 interface LastRefreshInfo {
@@ -327,8 +328,11 @@ export default function AdminPage() {
             </button>
           </div>
 
-          {/* CAS User Guide ("OPEN GUIDE" button) */}
+          {/* CAS User Guide ("USER GUIDE" button) */}
           <UserGuideUploadCard />
+
+          {/* Tech Insights (on-screen technical details, desktop admins only) */}
+          <TechInsightsSettingsCard />
 
           {/* Leader Sharing */}
           <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
@@ -439,6 +443,38 @@ export default function AdminPage() {
               className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
             >
               Review Records
+            </button>
+          </div>
+
+          {/* Campaign Reports */}
+          <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+              Campaign Reports
+            </h2>
+            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+              Search, filter and sort every Campaign Report, and fill in any missing State, Place or Leader
+            </p>
+            <button
+              onClick={() => router.push('/admin/campaign-reports')}
+              className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
+            >
+              Manage Reports
+            </button>
+          </div>
+
+          {/* Campaign Report Locations */}
+          <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+              Campaign Report Locations
+            </h2>
+            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+              Match locations typed in the Campaign Report sheet to a state and place, so reports can be analysed by state
+            </p>
+            <button
+              onClick={() => router.push('/admin/campaign-report-locations')}
+              className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
+            >
+              Match Locations
             </button>
           </div>
 

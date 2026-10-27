@@ -51,7 +51,7 @@ export default function CampaignCreateForm({
   });
 
   return (
-    <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white shadow-sm dark:bg-gray-800 w-full overflow-hidden">
+    <div data-ti="app/app/components/CampaignCreateForm.tsx" className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white shadow-sm dark:bg-gray-800 w-full overflow-hidden">
       <div className="flex items-center justify-between p-4">
         <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Add Campaign</h2>
         <button type="button" onClick={onClose}

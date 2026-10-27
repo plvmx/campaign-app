@@ -41,7 +41,7 @@ export default function PublicCampaignList({ campaigns }: Props) {
 
   return (
     // Force white background so slide state colours (incl. black for NSW) remain legible
-    <div style={{ backgroundColor: '#ffffff' }}>
+    <div data-ti="components/PublicCampaignList.tsx" style={{ backgroundColor: '#ffffff' }}>
 
       {/* Colour key — sticky so it stays visible while the lines below it scroll */}
       <div

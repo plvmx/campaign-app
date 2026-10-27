@@ -66,7 +66,7 @@ export default function FinalCampaignListsClient() {
   };
 
   return (
-    <div className="flex h-[calc(100dvh-var(--pwa-banner-height,0px))] flex-col p-4">
+    <div data-ti="app/public/final-campaign-lists/FinalCampaignListsClient.tsx" className="flex h-dvh flex-col p-4">
       <div className="mb-3">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{TITLE}</h1>
         <p className="mt-1 text-base text-gray-600 dark:text-gray-400">{DESCRIPTION}</p>

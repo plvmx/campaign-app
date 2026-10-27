@@ -32,7 +32,13 @@ interface ResultPage {
   blob: Blob;
 }
 
-export default function CampaignResultsClient() {
+/**
+ * `onClose` switches to the in-app version (the Extras box on /app): shown as
+ * a full-screen overlay with a return link, and with no "Save to Photos"
+ * buttons — just "Download a Copy of Page N".
+ */
+export default function CampaignResultsClient({ onClose }: { onClose?: () => void } = {}) {
+  const inApp = onClose !== undefined;
   const [progress, setProgress] = useState('Loading campaign results…');
   const [error, setError] = useState<string | null>(null);
   const [pages, setPages] = useState<ResultPage[] | null>(null);
@@ -92,8 +98,12 @@ export default function CampaignResultsClient() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gray-100 p-4 dark:bg-gray-950">
+    <div
+      data-ti="app/public/campaign-results/CampaignResultsClient.tsx"
+      className={`bg-gray-100 p-4 dark:bg-gray-950 ${inApp ? 'fixed inset-0 z-50 overflow-y-auto' : 'min-h-screen'}`}
+    >
       <div className="mx-auto max-w-4xl">
+        {onClose && <ReturnLink onClose={onClose} />}
         <div
           role="note"
           className="mb-4 rounded-lg border-2 border-red-700 bg-red-50 p-4 dark:border-red-500 dark:bg-red-900/20"
@@ -115,6 +125,12 @@ export default function CampaignResultsClient() {
         <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
           Results recorded for the past week&apos;s campaigns, all states.
         </p>
+        {!inApp && pages && pages.length > 0 && (
+          <p className="mt-2 rounded-lg border border-blue-200 bg-blue-50 p-3 text-base font-medium text-blue-900 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-100">
+            <span className="font-bold">Tap a page below</span> to view it full screen. Tap anywhere (or the{' '}
+            <span className="font-bold">Close</span> button) to come back.
+          </p>
+        )}
 
         {error && (
           <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-800 dark:bg-red-900/20 dark:text-red-200">
@@ -139,31 +155,43 @@ export default function CampaignResultsClient() {
             {pages.map((page, i) => (
               <div key={page.imgUrl}>
                 <div className="flex flex-wrap items-start gap-2">
-                  <SaveImageButton
-                    blob={page.blob}
-                    filename={page.filename}
-                    label={pages.length > 1 ? `Save Page ${i + 1} to Photos` : 'Save to Photos'}
-                    className="rounded-md bg-green-600 px-4 py-2 text-base font-bold text-white hover:bg-green-700 disabled:opacity-50 border-2 border-gray-800 dark:border-gray-600"
-                  />
+                  {!inApp && (
+                    <SaveImageButton
+                      blob={page.blob}
+                      filename={page.filename}
+                      label={pages.length > 1 ? `Save Page ${i + 1} to Photos` : 'Save to Photos'}
+                      className="rounded-md bg-green-600 px-4 py-2 text-base font-bold text-white hover:bg-green-700 disabled:opacity-50 border-2 border-gray-800 dark:border-gray-600"
+                    />
+                  )}
                   <a
                     href={page.imgUrl}
                     download={page.filename}
                     className="inline-block rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 border-2 border-gray-800 dark:border-gray-600"
                   >
-                    Download JPEG for Page {i + 1}
+                    {inApp ? `Download a Copy of Page ${i + 1}` : `Download JPEG for Page ${i + 1}`}
                   </a>
                 </div>
-                {/* eslint-disable-next-line @next/next/no-img-element -- object URL, not an optimizable static/remote asset */}
-                <img
-                  src={page.imgUrl}
-                  alt={`Campaign results, page ${i + 1}`}
-                  onClick={() => setFullscreenPage(i)}
-                  className="mt-4 w-full cursor-zoom-in rounded-lg border-2 border-gray-800 shadow-sm dark:border-gray-600"
-                />
+                <div className="relative mt-4">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- object URL, not an optimizable static/remote asset */}
+                  <img
+                    src={page.imgUrl}
+                    alt={`Campaign results, page ${i + 1}`}
+                    onClick={() => setFullscreenPage(i)}
+                    className="w-full cursor-zoom-in rounded-lg border-2 border-gray-800 shadow-sm dark:border-gray-600"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setFullscreenPage(i)}
+                    className="absolute bottom-3 right-3 rounded-full border-2 border-gray-800 bg-yellow-100 px-4 py-2 text-base font-bold text-gray-900 shadow"
+                  >
+                    Tap to enlarge
+                  </button>
+                </div>
               </div>
             ))}
           </div>
         )}
+        {onClose && <ReturnLink onClose={onClose} />}
       </div>
 
       {pages && fullscreenPage !== null && pages[fullscreenPage] && (
@@ -174,5 +202,17 @@ export default function CampaignResultsClient() {
         />
       )}
     </div>
+  );
+}
+
+function ReturnLink({ onClose }: { onClose: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClose}
+      className="my-3 block py-1 text-base font-bold text-blue-600 underline hover:text-blue-800 focus:outline-none dark:text-blue-400 dark:hover:text-blue-300"
+    >
+      ← Return to the previous page
+    </button>
   );
 }

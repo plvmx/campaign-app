@@ -169,6 +169,7 @@ Most of the app runs entirely **in the browser** (client components). The two ex
 |------|------|-----------------|
 | `app/api/auth/validate-leader/route.ts` | API Route | Needs service-role key (bypasses RLS) to look up leaders without exposing the key to browsers |
 | `app/api/cron/weekly-refresh/route.ts` | API Route | Called by Vercel Cron; validates a secret token |
+| `app/api/cron/campaign-report-sync/route.ts` | API Route | Daily Vercel Cron; pulls new rows from the live Google Sheet into `campaign_reports` (temporary — §19.2) |
 
 Everything else — including all database queries — runs **in the browser** using the anonymous Supabase client, protected by Supabase Row Level Security (RLS) policies.
 
@@ -196,7 +197,7 @@ campaign-app/
 │   │   ├── page.tsx            # Route: /app (main campaign feed)
 │   │   ├── sr-admin/page.tsx   # Route: /app/sr-admin (State Reporter dashboard)
 │   │   ├── tl-admin/page.tsx   # Route: /app/tl-admin ("My Admin" for plain team leaders)
-│   │   ├── guide/page.tsx      # Route: /app/guide — in-app CAS User Guide PDF viewer (OPEN GUIDE)
+│   │   ├── guide/page.tsx      # Route: /app/guide — in-app CAS User Guide PDF viewer (USER GUIDE)
 │   │   ├── check-registration/ # Route: /app/check-registration — leader "is this person registered?" check
 │   │   └── components/         # Components used ONLY by /app pages
 │   │       ├── AdminQuickActions.tsx
@@ -221,11 +222,14 @@ campaign-app/
 │   │   ├── campaign-messages/      # Route: /admin/campaign-messages — per-date banner text
 │   │   ├── campaign-rules/         # Route: /admin/campaign-rules — recurring scheduling rules
 │   │   ├── campaigns-near-me/      # Route: /admin/campaigns-near-me — geolocation-filtered map
+│   │   ├── campaign-reports/ # Route: /admin/campaign-reports (+ /edit-log) — search/filter/sort/edit every campaign report
+│   │   ├── campaign-report-locations/ # Route: /admin/campaign-report-locations — map sheet locations to a state and state_places place
 │   │   ├── campaign-reports-cleanup/ # Route: /admin/campaign-reports-cleanup — fill State/Place/Leader on campaign_reports
 │   │   ├── check-registration/     # Route: /admin/check-registration — registry lookup by mobile/email (AD + 2FA)
 │   │   ├── generate-week-campaigns/ # Route: /admin/generate-week-campaigns — "Single Week Campaigns" JPEG
 │   │   ├── registered-interest/    # Route: /admin/registered-interest — everyone who registered interest
 │   │   ├── stuck-leaders/          # Route: /admin/stuck-leaders — leaders stuck on email/2FA setup
+│   │   ├── components/             # Admin hub cards: UserGuideUploadCard, TechInsightsSettingsCard
 │   │   ├── generate-report/        # Route: /admin/generate-report — canvas-based PDF report
 │   │   ├── generate-slides/        # Route: /admin/generate-slides — JPEG slide ZIP download
 │   │   ├── leader-shares/          # Route: /admin/leader-shares — leader-to-leader sharing links
@@ -264,14 +268,15 @@ campaign-app/
 │       │                                          #   propose-email, confirm-email, request-mfa-setup, complete-mfa-setup
 │       ├── leader/                                # check-registration, interest-counts (signed-in leaders)
 │       ├── registry/                              # manage-summary, manage-record, manage-edit-log, manage-whatsapp-invite-log (§17)
-│       ├── admin/{check-registration,stuck-leaders,reset-mfa,user-guide/upload-url,campaign-reports/derived-fields}
+│       ├── admin/{check-registration,stuck-leaders,tech-insights,reset-mfa,user-guide/upload-url,campaign-reports/derived-fields}
 │       ├── admin/geocode-address/route.ts
 │       ├── admin/geocode-place/route.ts
 │       ├── admin/invalidate-user-session/route.ts
 │       ├── admin/settings/route.ts
 │       ├── public/*/route.ts                      # One data route per /public page (+ geocode-postcode, user-guide)
 │       ├── tiles/[z]/[x]/[y]/route.ts             # Server-side map tile proxy
-│       └── cron/weekly-refresh/route.ts           # Called by Vercel Cron
+│       ├── cron/weekly-refresh/route.ts           # Called by Vercel Cron
+│       └── cron/campaign-report-sync/route.ts     # Daily Vercel Cron: Google Sheet → campaign_reports (temporary)
 │
 ├── components/                 # Shared components (used across multiple pages)
 │   ├── CampaignForm.tsx        # Generic campaign add/edit form
@@ -281,12 +286,13 @@ campaign-app/
 │   │                           #   RequireTwoFactorForMemberDetails, …) — see §6
 │   ├── ErrorBoundary.tsx       # React error boundary
 │   ├── GuideScreen.tsx         # Full-screen CAS User Guide viewer (uses PdfGuideViewer.tsx / pdf.js)
+│   ├── AllLeadersCampaignListScreen.tsx  # Full-screen fortnight campaign list + "Download a Copy" (plain leaders' Extras link on /app); the Extras box also reuses app/public/campaign-results/CampaignResultsClient.tsx (onClose prop) for last week's results
 │   ├── LoadingSpinner.tsx      # Loading indicator
 │   ├── MapPopupActions.tsx     # RSVP buttons shown inside map popups
 │   ├── MobileLayout.tsx        # Page shell: header + bottom nav + content
 │   ├── Modal.tsx               # Modal overlay wrapper
 │   ├── NearbyCampaignsMap.tsx  # Map for /admin/campaigns-near-me
-│   ├── PWAInstallPrompt.tsx    # Install-banner prompt (hidden on /public/* pages)
+│   ├── PWAInstallPrompt.tsx    # Install-banner prompt, a fixed overlay above the bottom nav so it causes no layout shift (hidden on /public/* pages; renders nothing until after mount so SSR/hydration match, then detects platform)
 │   ├── PublicCampaignList.tsx  # Shared list rendering for /public/* pages
 │   ├── ServiceWorkerRegistration.tsx
 │   └── __tests__/
@@ -469,6 +475,14 @@ campaign_interest_sms_log
   campaign_ids[], leader, status 'sent' | 'failed' | 'skipped_no_mobile', error
   admin SELECT only; writes via service role
 
+campaign_report_edits  (Campaign Report project, §19.2)
+  report_id -> campaign_reports, field, old_value, new_value, edited_by, edited_by_label, edited_at
+  audit of hand edits from /admin/campaign-reports; admin read RLS; service-role writes; not backed up (log)
+
+campaign_report_location_aliases  (Campaign Report project, §19.2)
+  location_key UNIQUE, state, place nullable — admin-confirmed sheet location -> state_places place.
+  Admin read RLS; service-role writes; in BACKUP_TABLE_CONFIG
+
 campaign_reports  (Campaign Report project, §19.2)
   tallies + paired *_raw columns, needs_review, submitted_at UNIQUE,
   derived_state / derived_place / derived_leader. Admin-only RLS
@@ -607,7 +621,7 @@ Admins can also set a leader's `email` directly on `/admin/state-leaders` with n
 - AAL2 step-up first if the account already has a verified factor (Supabase refuses to enrol another factor below AAL2, regardless of `friendlyName`). The shared Supabase user pool means a leader may already have a `/registry` TOTP factor. Cancelling shows a "2FA **was not set up**" screen.
 - A successful step-up goes straight to completion — the existing verified factor already satisfies MFA, and a second QR code would only confuse.
 - Stale unverified factors are cleaned up (scoped by `factor_type`) before a fresh `enroll()`; `enroll()` passes `friendlyName` "AFJ Campaign App (Authenticator)" to avoid a name collision.
-- The QR is rendered client-side from `data.totp.uri`. Two boxed options: **Way 1 — on your phone** (an "Add to my authenticator app" `otpauth://` link, phone only) and **Way 2 — on a computer: scan the square code**; plus a **Copy key** button and "pick *Time based*" guidance for manual entry. A collapsed "I don't have an authenticator app yet" lists the store links in `lib/authenticatorApps.ts`.
+- The QR is rendered client-side from `data.totp.uri`. Two boxed options: **Way 1 — on your phone** (an "Add to my authenticator app" `otpauth://` link, phone only) and **Way 2 — on a computer: scan the square code**; plus a **Copy key** button and "pick *Time based*" guidance for manual entry. **On iOS** (`lib/isIosDevice.ts` — iPhone/iPod/iPad, including iPadOS reporting as a Mac) the phone-only link and the QR code are hidden and the numbered typed-key steps (Copy key → app's "Enter a setup key" → *Time based* → type the 6-digit code) come first, because an `otpauth://` link may open Apple Passwords instead of an authenticator app and a QR code can't be scanned from the phone's own screen (Mark, admin on iPhone, 2026-10-19). A collapsed "I don't have an authenticator app yet" lists the store links in `lib/authenticatorApps.ts`.
 - The unfinished factor survives a page reload: `lib/pendingTotpEnrollment.ts` stores `{factorId, uri, secret}` for 15 minutes and reuses it **only if** `listFactors()` still shows it as an unverified TOTP on the signed-in account. (Previously a reload — which iPhones do when you switch to copy the key — created a *new* secret and every typed code failed.)
 - A rejected code is explained by `lib/mfaErrors.ts`'s `describeMfaVerifyError()` (stale "AFJ Campaign App" entry in the phone app, phone clock not automatic, code changed while typing; also expired-challenge, rate-limit, missing-factor).
 
@@ -777,7 +791,7 @@ There is no separate permissions module. Role logic is kept inline wherever it i
 /app                                  Main campaign feed (home screen)
 /app/sr-admin                         State Reporter dashboard
 /app/tl-admin                         "My Admin" for plain team leaders (campaign rules, check registration, extra security)
-/app/guide                            OPEN GUIDE — CAS User Guide PDF, full screen
+/app/guide                            USER GUIDE — CAS User Guide PDF, full screen
 /app/check-registration               Leader check: is this person registered? (no registry data shown)
 /campaign-interest                    People who registered interest in my campaigns (2FA required)
 /training-interest                    My BOTJ/TLT sessions and their interest counts
@@ -820,6 +834,9 @@ There is no separate permissions module. Role logic is kept inline wherever it i
 /admin/stuck-leaders                  Leaders stuck on email sign-in / 2FA setup
 /admin/registered-interest            Everyone who registered interest, with Contacted checkbox
 /admin/generate-week-campaigns        "Single Week Campaigns" JPEG for a chosen date range/state
+/admin/campaign-reports               Manage every campaign report: search, filter, sort, edit State/Place/Leader (audited)
+/admin/campaign-reports/edit-log      Audit trail of those edits
+/admin/campaign-report-locations      Match sheet locations to a state + State Places place (aliases)
 /admin/campaign-reports-cleanup       Fill missing State/Place/Leader on campaign_reports rows
 /admin/backup                         Export/restore JSON backup of every admin-curated table
 ```
@@ -1089,6 +1106,9 @@ All take an **injected Supabase client** (always `supabaseAdmin` in practice) so
 | `campaignInterestSmsService.ts` | One combined ClickSend text per owning leader; logs to `campaign_interest_sms_log`; never throws |
 | `publicCampaignListService.ts`, `publicCampaignResultsService.ts`, `publicCampaignsNearMeService.ts`, `publicUpcomingCampaignsService.ts` | Data/grouping logic behind the `/public/*` pages (cached coordinates only, no on-demand geocoding) |
 | `campaignReportsService.ts` | Campaign Report cleanup |
+| `campaignReportManageService.ts` | `/admin/campaign-reports`: `getManageData`, audited `applyReportEdit`, `getEditLog` (browser filters in `lib/campaignReportManageFilters.ts`) |
+| `campaignReportLocationsService.ts` | `/admin/campaign-report-locations`: unresolved sheet locations, `saveLocationAlias` (optionally adds a `state_places` row) |
+| `campaignReportSyncService.ts` | Temporary live-sheet sync into `campaign_reports` (`syncCampaignReportsFromSheet`) and the shared `deriveCampaignReportFieldsSince`; reader in `lib/campaignReportSheetReader.ts` |
 | `backupService.ts` | `exportBackup`/`restoreBackup`; see §5.1a |
 | `placeService.ts` (also) | `addNewPlaceForState()` best-effort geocodes the new place immediately (`lib/geocoding.ts`) |
 
@@ -1468,7 +1488,8 @@ If the fix and the test live in the same file (rare), use `git show HEAD~1:path/
 | `NEXT_PUBLIC_SUPABASE_URL` | `lib/supabaseClient.ts`, `lib/supabaseAdmin.ts` | Yes |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | `lib/supabaseClient.ts` | Yes |
 | `SUPABASE_SERVICE_ROLE_KEY` | `lib/supabaseAdmin.ts` (server-only API routes) | Yes |
-| `CRON_SECRET` | `app/api/cron/weekly-refresh/route.ts` | Yes (production) |
+| `CRON_SECRET` | `app/api/cron/weekly-refresh/route.ts`, `app/api/cron/campaign-report-sync/route.ts` | Yes (production) |
+| `CAMPAIGN_REPORT_SHEET_ID` | `app/api/cron/campaign-report-sync/route.ts`, `scripts/sync_campaign_reports_from_sheet.ts` — id of the link-shared Google Sheet (between `/d/` and `/edit`) | Yes, for the sheet sync |
 | `NEXT_PUBLIC_ADMIN_EMAILS` | Referenced but not actively enforced | No |
 | `NEXT_PUBLIC_SITE_URL` | `lib/siteUrl.ts` — absolute links in emails/SMS/OG tags (falls back to Vercel's production URL, then localhost) | Production |
 | `NEXT_PUBLIC_SUPPORT_MOBILE` | `lib/supportContact.ts` — support number on `/help/2fa` and the stuck-leaders Call/Text links | No |
@@ -1519,6 +1540,8 @@ cp .env.example .env.local   # or create manually
 npm run dev
 # Opens at http://localhost:3000
 ```
+
+`npm run dev` and `npm run build` first run `npm run tech-insights` (regenerates the gitignored Tech Insights manifest, a couple of seconds — see §20). Re-run it by hand to refresh the panel's data while `next dev` is already running.
 
 ### 15.4 Before Committing
 
@@ -1898,7 +1921,7 @@ No client ever queries these tables directly. Only the service role (used by the
 
 Real Supabase Auth (magic link) + MFA for `registry.leader_roles`, independent of the main app's login and deliberately not under `/admin` (a `national_admin` needn't be a `state_leaders` row). `lib/registrySupabaseClient.ts` is a second client with its own localStorage key so both sessions coexist.
 
-Flow: `/registry/login` (invite-only, `shouldCreateUser: false`) → magic link → `/registry/auth/callback` (client-side exchange — must run in-browser so the session can persist) → `lib/registryAuth.ts`'s `getRegistryAccessState()` reads the caller's own `leader_roles` row + AAL/factors and routes via `evaluateMfaGate()` to `/registry/mfa/enroll`, `/registry/mfa/challenge`, `/registry/no-access`, or `/registry` (landing page; links to `/registry/manage` for national/whatsapp admins). `middleware.ts` guards `/registry/*` with two **plain session cookies** — `registry_auth` once a session exists, `registry_session` once the MFA gate clears. They are a UX guard only; the real boundary is RLS + `has_required_mfa()`. Because they have no `max-age` they can vanish before the real session does, so `/registry/login` checks `getRegistryAccessState()` on mount and carries a still-signed-in leader through instead of showing a blank form. Access is seeded by `scripts/seed_registry_leader_roles.ts`. `/registry/recent-registrations` was retired 2026-09-14 (a live per-contact AC walk that kept exceeding the 60 s `maxDuration`; `/registry/manage` is DB-backed and covers it).
+Flow: `/registry/login` (invite-only, `shouldCreateUser: false`) → magic link → `/registry/auth/callback` (client-side exchange — must run in-browser so the session can persist) → `lib/registryAuth.ts`'s `getRegistryAccessState()` reads the caller's own `leader_roles` row + AAL/factors and routes via `evaluateMfaGate()` to `/registry/mfa/enroll`, `/registry/mfa/challenge`, `/registry/no-access`, or `/registry` (landing page; links to `/registry/manage` for national/whatsapp admins). `middleware.ts` guards `/registry/*` with two **plain session cookies** — `registry_auth` once a session exists, `registry_session` once the MFA gate clears. They are a UX guard only; the real boundary is RLS + `has_required_mfa()`. Because they have no `max-age` they can vanish before the real session does, so `/registry/login` checks `getRegistryAccessState()` on mount and carries a still-signed-in leader through instead of showing a blank form. Access is seeded by `scripts/seed_registry_leader_roles.ts`. The authenticator-code boxes on `/registry/mfa/challenge` and `/registry/mfa/enroll` use `lib/otpInput.ts`'s `normalizeOtpInput()` (strips spaces/non-digits, caps at 6) rather than `maxLength={6}` — authenticator apps show codes as "123 456", and the old cap truncated that to "123 45" so every code was rejected (fixed 2026-10-21 after Lorraine could not get past the challenge). `/registry/recent-registrations` was retired 2026-09-14 (a live per-contact AC walk that kept exceeding the 60 s `maxDuration`; `/registry/manage` is DB-backed and covers it).
 
 ### 17.4 `/registry/manage` and its logs
 
@@ -1949,13 +1972,13 @@ No-login pages, each registered in `lib/publicLinks.ts` (single source of truth 
 | `/public/final-campaign-lists` | Read-only version of the same list once leaders are done editing (Download only). Same data source (`publicCampaignListService`: `getUpcomingFortnightDateStrings()` — also a cache key — and `fetchFortnightCampaignDays()`) |
 | `/public/campaign-results` | Results for the week the last Weekly Refresh *kept*, shown until the next refresh (`publicCampaignResultsService`: `getLastSuccessfulWeeklyRefreshAt()` + pure `getDisplayedResultsWeekStart()`). Per-page JPEG downloads. An "IMPORTANT NOTICE" says first names are for prayer only and won't be kept beyond a named Sunday — deliberately one week *after* the actual deletion (`lib/campaignDates.ts`'s `getCampaignResultsNoticeDate()`), giving people time to delete downloaded copies. Names are really removed by the Sunday weekly refresh deleting past campaigns (their `results` rows go too); `lib/resultsLog.ts` logs category codes only, never first names, so the log can't outlive them |
 | `/public/register-interest` | Tick upcoming campaigns and register "Yes I'm In" / "Tell Me More" with first name + validated mobile and/or email (`lib/validation.ts`). The only `/public/*` page with a POST |
-| `/public/upcoming-campaigns` | Public map of upcoming campaigns, all states, This Week / Next Week toggle (replaced the admin-only `/admin/campaign-map`). Groups by place using cached `state_places` coordinates only. A postcode box (`/api/public/geocode-postcode`) recentres the map. Marker actions collect name + mobile/email inline (`PublicMapRegisterInterestActions`) |
+| `/public/upcoming-campaigns` | Public map of campaigns, all states, This Week / Next Week toggle — shows the **whole selected week, including campaigns already past** (`GET /api/public/upcoming-campaigns` no longer filters with `isCampaignPast`; Peter, 2026-10-17). The popup has **one** orange button, "Contact Me about This or Other Campaigns at this Location" (`PublicMapRegisterInterestActions`, via `CampaignMap`'s `renderPlaceActions`), which registers interest — type `more` — in every campaign at that place, past or future; past campaigns are not greyed out or disabled (Peter, 2026-10-17). List View has the same single button for the ticked campaigns (replaced the admin-only `/admin/campaign-map`). Groups by place using cached `state_places` coordinates only. A postcode box (`/api/public/geocode-postcode`) recentres the map. Marker actions collect name + mobile/email inline (`PublicMapRegisterInterestActions`). Usability pass 2026-10-17: a 3-step instruction strip, week buttons showing their dates (`formatShortWeekRange`), a full-width Map / List toggle, a "N campaigns in M places" summary, larger markers (30 px / 0.5 opacity), a "Find campaigns near me" box above the map (postcode **or** a "Use my location" button — browser geolocation, never sent anywhere), the map auto-framing the markers (`CampaignMap`'s `fitToMarkers`, off once a postcode/location target is set), a **Full screen** button on the map (fixed overlay, Escape or ✕ exits; `CampaignMap`'s `resizeKey` makes Leaflet re-measure) — the page is now scrollable (`min-h-[100dvh]`, map `65dvh`/min 360 px) rather than a fixed-height column that squeezed the map on phones — a dismissible first-visit "Tap a circle" hint (hidden on first marker click via `onMarkerOpen`, or after 12 s), and a popup that lists **every** campaign at a place (earliest first, each with its own buttons — it used to show only the earliest) |
 | `/public/campaigns-near-me?r=<registrantId>` | Personalised map for one registry registrant, reached from their WhatsApp-invite email. Centres on their postcode (state fallback) for 7 days from today within 60 km. The URL carries only the opaque id — never name/email/mobile. Tapping a marker action (`PublicCampaignInterestActions`) shows the consent modal then POSTs `{registrantId, campaignId, interestType}`; the route re-derives name/mobile/email from `registry.registrants` server-side. Not in `publicLinks.ts` and not cached (personalised) |
 | `/public/training/[campaignId]` | One BOTJ/TLT training session's details with an interest form → `training_interest`. Dynamic, so *not* in `publicLinks.ts` (metadata from the campaign record in `generateMetadata()`); GET not cached (single indexed lookup). GET+POST in `app/api/public/training-interest/[campaignId]/route.ts` |
 
 **No on-demand geocoding on public pages.** The admin equivalents geocode via the admin-only `geocode-place` route, which anonymous visitors can't call, so public services (`publicCampaignsNearMeService.buildNearbyMarkers()`, `publicUpcomingCampaignsService.buildUpcomingCampaignMarkers()`) are pure functions over already-fetched campaign rows + cached coordinates, unit tested with no mocks. They share `campaignMapService.placeKey()` so place matching is normalised identically. A place missing coordinates is invisible on those maps with no warning — `addNewPlaceForState()` therefore best-effort geocodes new places (`lib/geocoding.ts`'s `geocodePlace()`) and `/admin/state-places` flags any place without coordinates.
 
-**Maps.** `components/CampaignMap.tsx` (every upcoming campaign, no radius — public `/public/upcoming-campaigns` and admin `/admin/state-places-map`) and `components/NearbyCampaignsMap.tsx` (within a radius — admin and public near-me) take a `renderActions` prop so each screen supplies its own popup actions (default: the admin `MapPopupActions` stub). Marker/campaign types are minimal local interfaces rather than the admin `Campaign` type so a public caller's leaner rows fit. Near-me markers are larger/darker (30 px, 0.5 fill-opacity) than the default (22 px, 0.35) via `lib/leafletMarkerIcon.ts`'s `getStateMarkerIcon({ size, fillOpacity })` — the icon cache key includes those options. `components/Modal.tsx` portals to `document.body` because a modal opened from a Leaflet popup would otherwise position itself inside the map's CSS-transformed pane.
+**Maps.** `components/CampaignMap.tsx` (every upcoming campaign, no radius — public `/public/upcoming-campaigns` and admin `/admin/state-places-map`) and `components/NearbyCampaignsMap.tsx` (within a radius — admin and public near-me) take a `renderActions` prop so each screen supplies its own popup actions (default: the admin `MapPopupActions` stub). Marker/campaign types are minimal local interfaces rather than the admin `Campaign` type so a public caller's leaner rows fit. `CampaignMap`'s popup lists every campaign at a place via `sortCampaignsChronologically()` (`lib/campaignUtils.ts`), and takes a `markerStyle` prop. `NearbyCampaignsMap`'s popup does the same. Near-me markers are larger/darker (30 px, 0.5 fill-opacity) than the default (22 px, 0.35) via `lib/leafletMarkerIcon.ts`'s `getStateMarkerIcon({ size, fillOpacity })` — the icon cache key includes those options. `components/Modal.tsx` portals to `document.body` because a modal opened from a Leaflet popup would otherwise position itself inside the map's CSS-transformed pane.
 
 ### 18.2 Registering interest and following up
 
@@ -1970,12 +1993,12 @@ No-login pages, each registered in `lib/publicLinks.ts` (single source of truth 
 - **Admin lookup** — `/admin/check-registration` → `POST /api/admin/check-registration`, gated by `verifyAdminCaller`. `parseContactLookupInput()` + `lookupRegistrationByContact()`: mobile and/or email only; returns `{ registered, matchedOn, registrants }` **including the matching records** (name, email, phone, state, postcode, registered date, webinar/Code-of-Conduct fields, unsubscribed/NFC — what `/registry/manage` shows), deduplicated by id with a per-record `matchedOn`. Never call it from a route with a weaker gate. Browser wrappers in `registrationCheckClient.ts`.
 - `AdminQuickActions` (top of `/app`, AD only) holds a "Check if a Person is Registered" button plus **Week 1 Campaigns** and **Campaign Results** buttons that open those public links with `?from=app`. Its older download buttons were retired; the same outputs live on `/admin/generate-slides`, `/admin/generate-report`, `/admin/generate-week-campaigns`.
 
-### 18.4 CAS User Guide (OPEN GUIDE)
+### 18.4 CAS User Guide (USER GUIDE)
 
 A PDF guide for leaders, stored in a **private** Supabase Storage bucket `user-guide` (created automatically on first admin upload; PDF-only, 20 MB; never a public URL because it carries screenshots and support numbers).
 - Each upload is a new `guide-<timestamp>.pdf`; the newest is current (so a replaced guide is never served from a stale CDN cache); before each upload all but the current file are deleted.
 - `userGuideService.getUserGuideView(client)` → a 4-hour signed URL, backing `GET /api/public/user-guide` (**no sign-in** — the guide is also offered on the sign-in screen for new leaders; not cached, so a new guide shows straight away). `createUserGuideUploadTarget(client)` → a one-time signed upload target behind `POST /api/admin/user-guide/upload-url` (`verifyAdminCaller`); the browser then uploads straight to Storage (`userGuideClient.uploadUserGuide`), so a large PDF never hits Vercel's ~4.5 MB request limit. Admin upload card: `app/admin/components/UserGuideUploadCard.tsx` on `/admin`.
-- Shown by `components/GuideScreen.tsx` (full screen + ✕ Close): as the `/app/guide` page (plain leaders' bottom-bar OPEN GUIDE button) and **in place** (`showGuide` state) from the buttons on `/login`'s sign-in form and action chooser — in place so Close returns to exactly where they were (going back to `/login` with a session would jump to `/app`). `components/OpenGuideLabel.tsx` keeps the discreet button styling identical across places.
+- Shown by `components/GuideScreen.tsx` (full screen + ✕ Close): as the `/app/guide` page (plain leaders' bottom-bar USER GUIDE button) and **in place** (`showGuide` state) from the buttons on `/login`'s sign-in form and action chooser — in place so Close returns to exactly where they were (going back to `/login` with a session would jump to `/app`). `components/OpenGuideLabel.tsx` keeps the discreet button styling identical across places.
 - `components/PdfGuideViewer.tsx` draws each page with pdf.js (`pdfjs-dist` pinned to 5.4.x — 6.x needs Node 22 and CI runs 20; the *legacy* build for older phones; loaded only when the guide opens), because browser PDF viewers can't be embedded reliably on phones. Canvas sharpness is capped at 2× (`lib/pdfRenderScale.ts`). pdf.js pauses drawing in a hidden tab, so when testing in a background preview only page 1 appears until visible. Falls back to a plain link if the viewer fails. Not part of `/admin/backup` (a file, not a table) — keep the source PDF.
 
 ---
@@ -1990,15 +2013,22 @@ Three modules: `lib/ariseLayout.ts` (constants, `AriseCampaign`, `apx()`, `simul
 
 ### 19.2 Campaign Report project (on hold)
 
-Aggregate per-campaign tallies (Partial/Full Presentations, Sinner's Prayer, Information Requests) from an external Google Sheet, in `campaign_reports`. `lib/campaignReportParser.ts` (`parseTallyValue`, `parseCampaignDate`, `normalizeCampaignReportRow`) owns the messy-data parsing rules, shared by the initial load (`scripts/campaign_reports_xlsx_to_json.py` + `scripts/import_campaign_reports.ts`) and the incremental catch-up import. `location_raw`/`leader_raw` are free text with no FK; every tally/date column has a paired `*_raw` and `needs_review` flags rows the parser couldn't resolve; `submitted_at` is unique (the de-dup key for re-imports); `campaign_id` is a nullable unenforced best-effort link. `derived_state`/`derived_place`/`derived_leader` are populated only for rows submitted on/after 2026-05-06 by `lib/campaignReportMatcher.ts` (`scripts/derive_campaign_reports_fields.ts`), null when not confidently resolvable — never guessed. `/admin/campaign-reports-cleanup` (`campaignReportsService.getCampaignReportsNeedingReview` / `updateCampaignReportDerivedFields` via `POST /api/admin/campaign-reports/derived-fields`, service role) lets an admin fill the rest. Admin-only RLS. See `docs/campaign-report/BRIEF.md`.
+Aggregate per-campaign tallies (Partial/Full Presentations, Sinner's Prayer, Information Requests) from an external Google Sheet, in `campaign_reports`. `lib/campaignReportParser.ts` (`parseTallyValue`, `parseCampaignDate`, `normalizeCampaignReportRow`) owns the messy-data parsing rules, shared by the initial load (`scripts/campaign_reports_xlsx_to_json.py` + `scripts/import_campaign_reports.ts`) and the incremental catch-up import. `location_raw`/`leader_raw` are free text with no FK; every tally/date column has a paired `*_raw` and `needs_review` flags rows the parser couldn't resolve; `submitted_at` is unique (the de-dup key for re-imports); `campaign_id` is a nullable unenforced best-effort link. `derived_state`/`derived_place`/`derived_leader` are populated for every row (2026-10-24; was only on/after 2026-05-06) by `lib/campaignReportMatcher.ts` — a state typed in the location ("Brighton SA") is authoritative and a confirmed `campaign_report_location_aliases` row beats every heuristic; the cleanup step fills only empty fields so hand-entered values survive. `/admin/campaign-reports` (`campaignReportManageService`; `GET/PATCH /api/admin/campaign-reports/manage`) is the management console — search, filter by state / place / year / needs-review, sortable columns, and a View/Edit toggle to fill in State, Place and Leader (place must be in State Places or be added after a confirmation; changing the state clears a place/leader that isn't in it); every change is logged to `campaign_report_edits` and shown at `/admin/campaign-reports/edit-log`. `/admin/campaign-report-locations` (`campaignReportLocationsService`, `GET/POST /api/admin/campaign-reports/locations`) is where an admin maps each remaining location to a state and `state_places` place, or adds it as a new place; the daily sync logs one line with how many locations still have no place (`scripts/derive_campaign_reports_fields.ts`), null when not confidently resolvable — never guessed. `/admin/campaign-reports-cleanup` (`campaignReportsService.getCampaignReportsNeedingReview` / `updateCampaignReportDerivedFields` via `POST /api/admin/campaign-reports/derived-fields`, service role) lets an admin fill the rest. Admin-only RLS. **Live sheet sync (temporary, 2026-10-24):** `/api/cron/campaign-report-sync` (daily, 16:30 UTC, `vercel.json`) runs `campaignReportSyncService.syncCampaignReportsFromSheet` — reads the link-shared sheet (`campaignReportSheetReader.ts` merges its public CSV export for text with its `gviz` JSON feed for true dates; no API key or xlsx library), inserts only rows whose `submitted_at` isn't stored yet (`source = 'google_sheet_sync'`; existing rows are never modified), then fills any empty derived state/place/leader. Sheet timestamps are read as Australia/Melbourne wall-clock. Remove it, its cron entry and env var when the app's own numbers replace the sheet. See `docs/campaign-report/BRIEF.md`.
 
 ---
 
 ## 20. UI Conventions
 
 - **App-wide large text.** A `large-text` CSS class in `app/globals.css` — deliberately **unlayered**, so it beats Tailwind's layered utilities and `sm:` variants without editing class lists — raises every `text-xs…text-3xl` inside it by ≈4 px (xs 16, sm 18, base 20, lg 22, xl 24, 2xl 28, 3xl 34). Applied to `MobileLayout`'s `<main>` (campaign feed, results, capture, training/campaign-interest, My Admin, … — **but not under `/admin`**, dense tables), `app/public/layout.tsx`, `components/Modal.tsx` (modals portal outside the page scope), and `/login`'s credentials form / action chooser. **Left alone on purpose:** `MobileLayout`'s fixed-height header and bottom nav, the setup screens (explicit sizes, §6.11), canvas/slide output, `/registry`. `components/__tests__/largeText.test.tsx` pins where it applies. `app/layout.tsx`'s viewport no longer sets `maximumScale: 1`, so people can pinch-zoom. If a screen looks cramped, drop `large-text` from it or fix its layout.
+- **Tech Insights (admin-only technical panel).** Press a configurable shortcut (default `Ctrl+Alt+I`) on any screen, on a desktop device, as a full admin (AD) signed in with 2FA, to open a side panel describing that screen: URL pattern → page file and layouts, a drop-down of every file reachable from the page (components, services, libraries, API routes — grouped by kind), the shortest import chain from the page to the selected file, its exports with line numbers, imports / imported-by / tests, the database tables, RPCs, API routes and assets it touches, and its source code (exports jump to and highlight their lines). **Visible components (Phase 2).** Components opt in by carrying `data-ti="<their own repo-relative file path>"` on their root element — attribute only, no wrapper or extra render, so it survives minification and costs nothing at runtime (≈45 components are tagged; add the attribute to a new component's root to include it; `LoadingSpinner`, `MobileLayout`, `Modal`, the campaign cards/forms/lists, the public-page clients, the auth setup pieces, the maps — a `MapContainer` can't take `data-*`, so `components/techInsights/TechInsightsMapTag.tsx` sets it on the map's container — and so on). While the panel is open it scans the DOM (`lib/techInsights/domScan.ts`): the drop-down gets a **"Visible on this screen"** group first (with ×N counts), the screen overview lists them, **Pick on screen** lets you click any component on the page (hover outlines the nearest tagged one; the click is swallowed so the page does nothing; Esc cancels), the chosen component is outlined on the page, and a "Where it appears" line shows its tagged ancestors (`MobileLayout › CampaignCard › …`). `lib/techInsights/__tests__/tagsMatchSourceFiles.test.ts` fails if any tag names a file other than the one it is written in. Not tagged on purpose: hooks/types, the Tech Insights panel itself, `ErrorBoundary`/`Providers`/`ServiceWorkerRegistration` (render nothing), and `MfaEnrollmentFlow` (its root is `CodeEntryScreen`, which is tagged). **Note:** the tag values are file paths in the page HTML for every user (not secret, but visible via view-source). Moving parts:
+  - **Manifest generator** — `scripts/build-tech-insights.ts` (run by `predev`/`prebuild`, or `npm run tech-insights`) feeds every `.ts/.tsx/.css` under `app/ components/ contexts/ lib/` (+ `middleware.ts`) to the pure `lib/techInsights/buildManifest.ts` (TypeScript parser only, ≈2 s), writing `generated/tech-insights/{manifest,sources}.json` (**gitignored**). Static analysis only: literal `.from('table')`/`.rpc()`/`'/api/…'` strings are found; values built from variables are not (and are never guessed).
+  - **Serving** — `GET /api/admin/tech-insights` (`verifyAdminCaller`: AD + aal2) returns the manifest, or one file's source with `?file=<path>` — only for paths the manifest lists (`lib/techInsights/manifestStore.ts`), never an arbitrary filesystem path. The data is deliberately **not** in `public/` or the client bundle (it is the app's source code). `next.config.ts`'s `outputFileTracingIncludes` ships the generated files with that one function.
+  - **Settings** — `app_settings` keys `tech_insights_enabled` (off by default) and `tech_insights_hotkey` (validated server-side in `/api/admin/settings`), edited from the Tech Insights card on `/admin` (`TechInsightsSettingsCard`; click the box and press the keys).
+  - **Zero cost for everyone else** — `components/techInsights/TechInsightsLoader.tsx` is mounted in `app/providers.tsx`; for a non-admin or a phone/touch device it makes no request and registers no listener. For an eligible admin it reads the two settings once per page load; the panel (`TechInsightsPanel`, loaded with `next/dynamic`) and the manifest are only fetched the first time the shortcut is pressed.
+  - Pure helpers in `lib/techInsights/` (`routeMatch.ts` URL↔file, `hotkey.ts`, `graph.ts` reachability/path/summary, `types.ts`) are unit tested; `app/api/admin/__tests__/adminRoutesRequireAdmin.test.ts` pins that the route refuses non-admins.
 - **Role picker busy state.** `components/auth/BusyChoiceButtons.tsx` — only the tapped role button shows as loading.
 - **Sign Out / Switch Role** live in `MobileLayout`; Switch Role shows only for real (non-anonymous) sessions.
+- **Mobile performance pass (2026-10-17).** `MobileLayout` now reads the role from `useUser()` instead of re-querying (`getUser` + `user_profiles` + `state_leaders`) on every page mount; `/app` fetches the slide-view flag in parallel with the campaigns; `public/sw.js` (cache `afj-cas-v3`) no longer intercepts cross-origin (Supabase) or `/api/` requests — only same-origin pages/assets get the network-first cache + offline fallback (`lib/__tests__/serviceWorker.test.ts`).
 - Shared forms/hooks: `app/app/components/useCampaignForm.ts` (all form state, place creation, leader mobile auto-fill, submit; `handleSubmit` accepts `FormEvent` and `MouseEvent`) and `useStateDropdowns.ts` (state-scoped place/leader lists, with all `setState` routed through Promise chains to satisfy the `react-hooks/set-state-in-effect` lint rule).
 - `/admin/state-leaders` filters by state, role (`lib/stateLeaderRoleFilter.ts` — e.g. "Admins only (AD & SR)"), name and mobile, shows each admin's 2FA status and a "Reset 2FA" button.
 
@@ -2027,7 +2057,7 @@ Check against this list:
 - New table/column or RLS change → §5 (and `BACKUP_TABLE_CONFIG` in `backupService.ts` if admin-curated)
 - Auth, role or session change → §6, §7
 - New env var or Supabase dashboard dependency → §14
-- Public page / interest feature → §18; slide/report change → §19; shared UI convention → §20
+- Public page / interest feature → §18; slide/report change → §19; shared UI convention (incl. Tech Insights) → §20
 - New script or deploy-order constraint → §21
 - Registry pipeline change → §17 (and `docs/registry-pipeline/OPERATIONS.md`)
 - New test convention → §13

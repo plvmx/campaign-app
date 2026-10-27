@@ -44,6 +44,9 @@ vi.mock('@/lib/appSettings', () => ({
   setCampaignLoggingEnabled: vi.fn(),
   getSlideViewEnabled: vi.fn().mockResolvedValue(false),
   setSlideViewEnabled: vi.fn(),
+  getTechInsightsConfig: vi.fn().mockResolvedValue({ enabled: false, hotkey: 'Ctrl+Alt+I' }),
+  setTechInsightsEnabled: vi.fn(),
+  setTechInsightsHotkey: vi.fn(),
 }));
 
 vi.mock('@/lib/services/weeklyRefreshService', () => ({
@@ -76,6 +79,24 @@ describe('Admin hub — Campaign Report Cleanup link', () => {
     const button = screen.getByRole('button', { name: /Review Records/i });
     button.click();
     expect(mockPush).toHaveBeenCalledWith('/admin/campaign-reports-cleanup');
+  });
+});
+
+describe('Admin hub — Campaign Reports link', () => {
+  it('links to /admin/campaign-reports', async () => {
+    render(<AdminPage />);
+    await waitFor(() => expect(screen.getByText('Campaign Reports')).toBeInTheDocument());
+    screen.getByRole('button', { name: 'Manage Reports' }).click();
+    expect(mockPush).toHaveBeenCalledWith('/admin/campaign-reports');
+  });
+});
+
+describe('Admin hub — Campaign Report Locations link', () => {
+  it('links to /admin/campaign-report-locations', async () => {
+    render(<AdminPage />);
+    await waitFor(() => expect(screen.getByText('Campaign Report Locations')).toBeInTheDocument());
+    screen.getByRole('button', { name: 'Match Locations' }).click();
+    expect(mockPush).toHaveBeenCalledWith('/admin/campaign-report-locations');
   });
 });
 
