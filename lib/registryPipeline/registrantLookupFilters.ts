@@ -5,22 +5,27 @@
 // the grid itself. Kept pure/framework-free, same precedent as the rest of
 // lib/registryPipeline/.
 //
-// Deliberately covers every pane column except State and Date registered —
-// State already has its own axis (the grid's columns, plus a constrained
-// edit dropdown) and Date registered is continuous/high-cardinality in a
-// way a value picker doesn't suit; both were explicitly excluded by
-// request. Mobile is included (maps to the `phone` field/column).
+// Deliberately covers the pane's text-valued columns except State and the
+// date columns — State already has its own axis (the grid's columns, plus a
+// constrained edit dropdown) and the dates are continuous/high-cardinality
+// in a way a value picker doesn't suit; Date registered was explicitly
+// excluded by request. Church, Webinar attended and Code agreed were added
+// 2026-10-28 at Lorraine's request (the latter two are Yes/blank, so
+// "(blank)" there means "no"). Mobile maps to the `phone` field/column.
 
-/** The subset of a registrant record these lookups actually read — anything with these five fields (ManageRegistrant included) works, nothing more is required. */
+/** The subset of a registrant record these lookups actually read — anything with these fields (ManageRegistrant included) works, nothing more is required. */
 export interface LookupableRegistrant {
   firstName: string | null;
   lastName: string | null;
   email: string | null;
   phone: string | null;
   postcode: string | null;
+  churchName: string | null;
+  webinarAttended: string | null;
+  codeOfConductAgreed: string | null;
 }
 
-export const LOOKUP_FIELDS = ['firstName', 'lastName', 'email', 'phone', 'postcode'] as const;
+export const LOOKUP_FIELDS = ['firstName', 'lastName', 'email', 'phone', 'postcode', 'churchName', 'webinarAttended', 'codeOfConductAgreed'] as const;
 export type LookupField = (typeof LOOKUP_FIELDS)[number];
 
 /** Display label per field — 'phone' reads as 'Mobile' here, matching the pane's own column header. */
@@ -30,6 +35,9 @@ export const LOOKUP_FIELD_LABELS: Record<LookupField, string> = {
   email: 'Email',
   phone: 'Mobile',
   postcode: 'Postcode',
+  churchName: 'Church',
+  webinarAttended: 'Webinar attended',
+  codeOfConductAgreed: 'Code agreed',
 };
 
 /** Sentinel select value representing "this field is null or blank" — never a value a real record could hold, so it can't collide with an actual stored value. */
@@ -44,7 +52,7 @@ export interface LookupOption {
 }
 
 function isBlank(value: string | null): boolean {
-  return value === null || value.trim() === '';
+  return value == null || value.trim() === '';
 }
 
 /**
