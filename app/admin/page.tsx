@@ -258,6 +258,22 @@ export default function AdminPage() {
             </button>
           </div>
 
+          {/* Campaign Reports */}
+          <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+              Campaign Reports
+            </h2>
+            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+              Search, filter and sort every Campaign Report, and fill in any missing State, Place or Leader
+            </p>
+            <button
+              onClick={() => router.push('/admin/campaign-reports')}
+              className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
+            >
+              Manage Reports
+            </button>
+          </div>
+
           {/* Results Metrics */}
           <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
@@ -430,51 +446,19 @@ export default function AdminPage() {
             </button>
           </div>
 
-          {/* Campaign Report Cleanup */}
-          <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-              Campaign Report Cleanup
-            </h2>
-            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-              Manually fill in State/Place/Leader for Campaign Report records that couldn&apos;t be worked out automatically
-            </p>
-            <button
-              onClick={() => router.push('/admin/campaign-reports-cleanup')}
-              className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
-            >
-              Review Records
-            </button>
-          </div>
-
-          {/* Campaign Reports */}
-          <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-              Campaign Reports
-            </h2>
-            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-              Search, filter and sort every Campaign Report, and fill in any missing State, Place or Leader
-            </p>
-            <button
-              onClick={() => router.push('/admin/campaign-reports')}
-              className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
-            >
-              Manage Reports
-            </button>
-          </div>
-
           {/* Campaign Report Locations */}
           <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-              Campaign Report Locations
+              Campaign Report Locations (bulk)
             </h2>
             <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-              Match locations typed in the Campaign Report sheet to a state and place, so reports can be analysed by state
+              Match a location spelling to a state and place once — it applies to every report with that spelling, now and when new ones arrive
             </p>
             <button
               onClick={() => router.push('/admin/campaign-report-locations')}
               className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-base font-bold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
             >
-              Match Locations
+              Match Locations (bulk)
             </button>
           </div>
 
