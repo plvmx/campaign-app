@@ -1,6 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { makeQueryBuilder } from './supabaseMock';
+
+vi.mock('@/lib/geocoding', () => ({
+  geocodePlace: vi.fn().mockResolvedValue({ latitude: -17.39, longitude: 145.39 }),
+}));
 import { suggestPlaces, getUnresolvedLocations, saveLocationAlias } from '../campaignReportLocationsService';
 
 const PLACES = [
@@ -60,7 +64,10 @@ describe('saveLocationAlias', () => {
     const { client, statePlaces, aliases, reports } = setup();
     const r = await saveLocationAlias(client, { locationKey: 'herberton', state: 'QLD', place: null, newPlace: 'Herberton' });
     expect(r).toEqual({ ok: true, rowsUpdated: 2 });
-    expect(statePlaces.insert).toHaveBeenCalledWith([{ state: 'QLD', place: 'Herberton' }]);
+    // A new place gets its location text and coordinates, so it isn't left ungeocoded and invisible on the maps.
+    expect(statePlaces.insert).toHaveBeenCalledWith([
+      { state: 'QLD', place: 'Herberton', location: 'Herberton', latitude: -17.39, longitude: 145.39 },
+    ]);
     expect(aliases.upsert).toHaveBeenCalledWith({ location_key: 'herberton', state: 'QLD', place: 'Herberton' }, { onConflict: 'location_key' });
     expect(reports.update).toHaveBeenCalledWith({ derived_state: 'QLD', derived_place: 'Herberton' });
     expect(reports.in).toHaveBeenCalledWith('id', ['r1', 'r3']);

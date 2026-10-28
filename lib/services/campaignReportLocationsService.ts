@@ -10,6 +10,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { locationKey } from '@/lib/campaignReportMatcher';
 import { AUSTRALIAN_STATES } from '@/lib/constants';
+import { buildNewStatePlaceRow } from '@/lib/services/newStatePlace';
 
 const PAGE = 1000;
 const UPDATE_CHUNK = 100;
@@ -100,7 +101,7 @@ export async function saveLocationAlias(
   const newPlace = input.newPlace?.trim() || null;
 
   if (newPlace) {
-    const { error } = await client.from('state_places').insert([{ state: input.state, place: newPlace }]);
+    const { error } = await client.from('state_places').insert([await buildNewStatePlaceRow(input.state, newPlace)]);
     if (error && error.code !== '23505') throw error;
     place = newPlace;
   } else if (place) {

@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import MobileLayout from '@/components/MobileLayout';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import { useUser } from '@/contexts/UserContext';
 import { fetchUnresolvedLocations, saveLocationMapping } from '@/lib/services/campaignReportLocationsClient';
 import type { UnresolvedLocation } from '@/lib/services/campaignReportLocationsService';
+import { sortLocations, type LocationSortColumn, type SortDirection } from '@/lib/campaignReportLocationSort';
 import { getErrorMessage } from '@/lib/errorUtils';
 import { AUSTRALIAN_STATES } from '@/lib/constants';
 
@@ -33,6 +34,8 @@ export default function CampaignReportLocationsPage() {
   const [saveStates, setSaveStates] = useState<Record<string, SaveState>>({});
   const [saveErrors, setSaveErrors] = useState<Record<string, string>>({});
   const [notice, setNotice] = useState<string | null>(null);
+  const [sortColumn, setSortColumn] = useState<LocationSortColumn>('records');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
 
   useEffect(() => {
     if (isUserLoading) return;
@@ -68,6 +71,8 @@ export default function CampaignReportLocationsPage() {
   useEffect(() => {
     if (hasAccess) load();
   }, [hasAccess, load]);
+
+  const sortedLocations = useMemo(() => sortLocations(locations, sortColumn, sortDirection), [locations, sortColumn, sortDirection]);
 
   const update = (key: string, patch: Partial<Draft>) => {
     setDrafts((prev) => ({ ...prev, [key]: { ...prev[key], ...patch } }));
@@ -159,6 +164,30 @@ export default function CampaignReportLocationsPage() {
           <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
             {locations.length} location{locations.length === 1 ? '' : 's'} ({totalRows} records) remaining
           </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="text-xs font-medium text-gray-700 dark:text-gray-300" htmlFor="location-sort">Sort by</label>
+            <select
+              id="location-sort"
+              value={sortColumn}
+              onChange={(e) => {
+                const column = e.target.value as LocationSortColumn;
+                setSortColumn(column);
+                setSortDirection(column === 'records' ? 'desc' : 'asc');
+              }}
+              className="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+            >
+              <option value="records">Number of records</option>
+              <option value="location">Location</option>
+              <option value="state">State</option>
+            </select>
+            <button
+              type="button"
+              onClick={() => setSortDirection((d) => (d === 'asc' ? 'desc' : 'asc'))}
+              aria-label={`Sort direction: ${sortDirection === 'asc' ? 'ascending' : 'descending'}`}
+              className="rounded-md border-2 border-gray-400 bg-white px-3 py-1.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-500 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+            >
+              {sortDirection === 'asc' ? '▲ A–Z' : '▼ Z–A'}
+            </button>
           <button
             type="button"
             onClick={load}
@@ -166,6 +195,7 @@ export default function CampaignReportLocationsPage() {
           >
             Refresh
           </button>
+          </div>
         </div>
 
         {locations.length === 0 && !isLoading && (
@@ -175,7 +205,7 @@ export default function CampaignReportLocationsPage() {
         )}
 
         <div className="space-y-4">
-          {locations.map((loc) => {
+          {sortedLocations.map((loc) => {
             const d = drafts[loc.key] ?? { state: '', place: '', newPlace: '' };
             const saveState = saveStates[loc.key] ?? 'idle';
             const stateOptions = places.filter((p) => p.state === d.state);

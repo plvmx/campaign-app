@@ -1,6 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { makeQueryBuilder } from './supabaseMock';
+
+vi.mock('@/lib/geocoding', () => ({
+  geocodePlace: vi.fn().mockResolvedValue({ latitude: -38.11, longitude: 147.07 }),
+}));
 import { applyReportEdit, getEditLog, getManageData, toManageReport } from '../campaignReportManageService';
 
 const ACTOR = { userId: 'u1', label: 'Peter_AD' };
@@ -71,7 +75,9 @@ describe('applyReportEdit', () => {
     const second = setup();
     const r = await applyReportEdit(second.client, { id: 'r1', field: 'place', value: 'Sale', addPlace: true, actor: ACTOR });
     expect(r.ok).toBe(true);
-    expect(second.places.insert).toHaveBeenCalledWith([{ state: 'VIC', place: 'Sale' }]);
+    expect(second.places.insert).toHaveBeenCalledWith([
+      { state: 'VIC', place: 'Sale', location: 'Sale', latitude: -38.11, longitude: 147.07 },
+    ]);
   });
 
   it('only accepts a leader who is in that state', async () => {
