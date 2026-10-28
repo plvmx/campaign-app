@@ -102,7 +102,7 @@ interface ReportForDerive {
 /**
  * Fills derived_state/derived_place/derived_leader for every row from
  * `since` on. By default only EMPTY fields are filled, so a value an admin
- * set by hand (cleanup screen) or a location alias already applied is never
+ * set by hand (Campaign Reports screen) or a location alias already applied is never
  * overwritten by a later run; `overwrite: true` recomputes everything (used
  * once after the matcher itself changes). Rows needing the same values are
  * written together. Also reports how many rows still have no place.

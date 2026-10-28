@@ -47,6 +47,14 @@ View/Edit toggle to fill in missing State / Place / Leader, with an audit log
 (`campaign_report_edits`, `/admin/campaign-reports/edit-log`). Manual edits
 survive the daily sync because it only fills empty fields.
 
+## Cleanup screen retired (2026-10-28)
+
+`/admin/campaign-reports-cleanup` (per-row, only reports since 2026-05-06, no
+validation or audit log) was removed once `/admin/campaign-reports` did the
+same job for every report. `/admin/campaign-report-locations` stays as the
+bulk tool (one decision per location spelling, applied to existing and future
+reports) and is labelled "(bulk)" on the Admin hub.
+
 ## Resumed with narrowed scope (2026-09-02)
 
 The "may not be required" hold from 2026-09-01 (below) was resolved: Peter

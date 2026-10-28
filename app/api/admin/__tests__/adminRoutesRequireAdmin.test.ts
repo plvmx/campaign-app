@@ -29,7 +29,6 @@ const ROUTES: Array<[string, () => Promise<{ POST?: Handler; GET?: Handler; PATC
   ['geocode-address', () => import('../geocode-address/route'), 'POST'],
   ['geocode-place', () => import('../geocode-place/route'), 'POST'],
   ['invalidate-user-session', () => import('../invalidate-user-session/route'), 'POST'],
-  ['campaign-reports/derived-fields', () => import('../campaign-reports/derived-fields/route'), 'POST'],
   ['campaign-reports/locations', () => import('../campaign-reports/locations/route'), 'GET'],
   ['campaign-reports/locations', () => import('../campaign-reports/locations/route'), 'POST'],
   ['campaign-reports/manage', () => import('../campaign-reports/manage/route'), 'GET'],
