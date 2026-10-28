@@ -146,6 +146,42 @@ describe('RegistryManagePage', () => {
     await waitFor(() => expect(primaryRow).toHaveTextContent('2'));
   });
 
+  it('opens with the whole database listed, without clicking anything', async () => {
+    mockUseRegistryGate.mockReturnValue({ status: 'ready', leaderRole: { role: 'national_admin', mfa_required: true } });
+    render(<RegistryManagePage />);
+    expect(await screen.findByText(/All AFJ Registrations — Total \(3\)/)).toBeInTheDocument();
+    const table = recordsTable();
+    for (const email of ['vicky@example.com', 'nat@example.com', 'uma@example.com']) {
+      expect(within(table).getByText(email)).toBeInTheDocument();
+    }
+  });
+
+  it('pages through every record rather than stopping at 500', async () => {
+    const many = Array.from({ length: 620 }, (_, i) => ({
+      ...SAMPLE_REGISTRANTS[0],
+      id: `m${i}`,
+      email: `person${String(i).padStart(4, '0')}@example.com`,
+      isLeader: false,
+      leaderName: null,
+      registeredAt: new Date(Date.now() - i * HOUR).toISOString(),
+    }));
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ lastSync: null, registrants: many }),
+    }) as unknown as typeof fetch;
+    mockUseRegistryGate.mockReturnValue({ status: 'ready', leaderRole: { role: 'national_admin', mfa_required: true } });
+    render(<RegistryManagePage />);
+    await screen.findByRole('table', { name: 'Matching records' });
+
+    expect(screen.getAllByText(/Page 1 of 7/).length).toBeGreaterThan(0);
+    fireEvent.change(screen.getAllByLabelText('Rows per page')[0], { target: { value: '250' } });
+    expect(screen.getAllByText(/Page 1 of 3/).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getAllByText('Next →')[0]);
+    fireEvent.click(screen.getAllByText('Next →')[0]);
+    // The oldest record is beyond the old 500-row cap.
+    expect(within(recordsTable()).getByText('person0619@example.com')).toBeInTheDocument();
+  }, 20000);
+
   it('shows no record pane, and plain "0" text (not a button), for every zero-count cell', async () => {
     mockUseRegistryGate.mockReturnValue({ status: 'ready', leaderRole: { role: 'national_admin', mfa_required: true } });
     render(<RegistryManagePage />);
@@ -154,6 +190,7 @@ describe('RegistryManagePage', () => {
     for (const zeroCell of within(allRow).getAllByText('0')) {
       expect(zeroCell.tagName).not.toBe('BUTTON');
     }
+    fireEvent.click(screen.getByText('Clear selection'));
     expect(screen.getByText(/click a number above/i)).toBeInTheDocument();
   });
 
@@ -537,14 +574,19 @@ describe('RegistryManagePage', () => {
       expect(asc.indexOf('Unknown')).toBeLessThan(asc.indexOf('Vale'));
     });
 
-    it('sorts by Postcode, with a blank postcode sorting first ascending', async () => {
+    it('sorts by Postcode, with a blank postcode always sorting last', async () => {
       await selectAllTotalCell();
       const table = recordsTable();
 
       fireEvent.click(within(table).getByText(/Postcode/));
       const asc = table.textContent ?? '';
-      expect(asc.indexOf('uma@example.com')).toBeLessThan(asc.indexOf('nat@example.com')); // null postcode
       expect(asc.indexOf('nat@example.com')).toBeLessThan(asc.indexOf('vicky@example.com')); // 2000 < 3000
+      expect(asc.indexOf('vicky@example.com')).toBeLessThan(asc.indexOf('uma@example.com')); // null postcode last
+
+      fireEvent.click(within(table).getByText(/Postcode/));
+      const desc = table.textContent ?? '';
+      expect(desc.indexOf('vicky@example.com')).toBeLessThan(desc.indexOf('nat@example.com'));
+      expect(desc.indexOf('nat@example.com')).toBeLessThan(desc.indexOf('uma@example.com')); // still last
     });
 
     it('sorts by Registered date, defaulting to newest-first with a visible indicator', async () => {
@@ -565,12 +607,17 @@ describe('RegistryManagePage', () => {
       expect(asc.indexOf('nat@example.com')).toBeLessThan(asc.indexOf('vicky@example.com'));
     });
 
-    it('does not make Email, Mobile, or State clickable/sortable', async () => {
+    it('makes every column sortable, including Email, Mobile, State and the webinar/Code columns', async () => {
       await selectAllTotalCell();
       const table = recordsTable();
-      for (const header of ['Email', 'Mobile', 'State']) {
-        expect(within(table).getByText(header)).not.toHaveStyle({ cursor: 'pointer' });
+      for (const header of ['Email', 'Mobile', 'State', 'NFC', 'Webinar session', 'Webinar attended', 'Code agreed', 'Date agreed']) {
+        expect(within(table).getByText(header)).toHaveStyle({ cursor: 'pointer' });
       }
+      fireEvent.click(within(table).getByText('Email'));
+      expect(within(table).getByText('Email ▲')).toBeInTheDocument();
+      const asc = table.textContent ?? '';
+      expect(asc.indexOf('nat@example.com')).toBeLessThan(asc.indexOf('uma@example.com'));
+      expect(asc.indexOf('uma@example.com')).toBeLessThan(asc.indexOf('vicky@example.com'));
     });
   });
 
