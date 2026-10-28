@@ -55,6 +55,16 @@ same job for every report. `/admin/campaign-report-locations` stays as the
 bulk tool (one decision per location spelling, applied to existing and future
 reports) and is labelled "(bulk)" on the Admin hub.
 
+## New places get a location and coordinates (2026-10-29)
+
+Places added from the Campaign Report screens (the "Add as new place" paths)
+were inserted as bare `{state, place}` — no `location` text, no coordinates —
+so they were invisible on the public maps and showed as ungeocoded in State
+Places. All three creation paths now share `lib/services/newStatePlace.ts`
+(location always set; coordinates when found inside the right state), and 32
+existing rows were repaired. `/admin/campaign-report-locations` can now be
+sorted by number of records, location or state.
+
 ## Resumed with narrowed scope (2026-09-02)
 
 The "may not be required" hold from 2026-09-01 (below) was resolved: Peter

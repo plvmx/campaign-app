@@ -9,6 +9,7 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { AUSTRALIAN_STATES } from '@/lib/constants';
+import { buildNewStatePlaceRow } from '@/lib/services/newStatePlace';
 import {
   REPORT_FIELD_COLUMNS,
   type EditableReportField,
@@ -126,7 +127,7 @@ export async function applyReportEdit(client: SupabaseClient, input: ApplyEditIn
     if (!input.addPlace) {
       return { ok: false, status: 409, code: 'unknown_place', error: `"${value}" is not in State Places for ${next.state}` };
     }
-    const { error } = await client.from('state_places').insert([{ state: next.state, place: value }]);
+    const { error } = await client.from('state_places').insert([await buildNewStatePlaceRow(next.state, value)]);
     if (error && error.code !== '23505') throw error;
   }
   if (input.field === 'leader' && value && next.state && !(await inState('state_leaders', 'leader', next.state, value))) {

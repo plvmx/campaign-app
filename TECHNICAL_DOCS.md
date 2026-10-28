@@ -1107,7 +1107,7 @@ All take an **injected Supabase client** (always `supabaseAdmin` in practice) so
 | `campaignReportLocationsService.ts` | `/admin/campaign-report-locations`: unresolved sheet locations, `saveLocationAlias` (optionally adds a `state_places` row) |
 | `campaignReportSyncService.ts` | Temporary live-sheet sync into `campaign_reports` (`syncCampaignReportsFromSheet`) and the shared `deriveCampaignReportFieldsSince`; reader in `lib/campaignReportSheetReader.ts` |
 | `backupService.ts` | `exportBackup`/`restoreBackup`; see §5.1a |
-| `placeService.ts` (also) | `addNewPlaceForState()` best-effort geocodes the new place immediately (`lib/geocoding.ts`) |
+| `placeService.ts` (also) | `addNewPlaceForState()` inserts the row built by `newStatePlace.ts`'s `buildNewStatePlaceRow()` — `location` always set, coordinates when geocoding (`lib/geocoding.ts`) finds the place inside its state (`lib/stateBounds.ts`). Also used by the Campaign Report screens when they add a historical place; `scripts/geocode_missing_state_places.ts` repairs rows created without |
 
 #### `lib/services/weeklyRefreshService.ts`
 
