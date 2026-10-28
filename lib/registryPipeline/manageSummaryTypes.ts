@@ -61,6 +61,8 @@ export interface ManageRegistrant {
   unsubscribed: string | null;
   /** 'Yes' if the CSV reload's source postcode field carried a literal "NFC" (No Further Contact) marker (scripts/prepare_registrants_for_csv_reload.sql); null otherwise. Set only at reload time — never written by ac-sync's live upsert, same as unsubscribed. Powers the "Exclude NFC" toggle. */
   nfc: string | null;
+  /** The church the registrant said they attend (AC field [26], fallback [14]; the CSV's Church column, minus any UNSUBSCRIBED marker). Display-only here — synced/loaded, never hand-corrected. Free text. */
+  churchName: string | null;
 }
 
 export interface ManageSummaryResponse {

@@ -658,7 +658,7 @@ function RecordsPane({
       {pager}
 
       <div style={{ overflowX: 'auto', marginTop: '0.5rem' }}>
-        <table aria-label="Matching records" style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1100 }}>
+        <table aria-label="Matching records" style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1300 }}>
           <thead>
             <tr>
               {sortableHeader('firstName', 'First name')}
@@ -668,6 +668,7 @@ function RecordsPane({
               {sortableHeader('state', 'State')}
               {sortableHeader('postcode', 'Postcode')}
               {sortableHeader('nfc', 'NFC')}
+              {sortableHeader('churchName', 'Church')}
               {sortableHeader('registeredAt', 'Registered')}
               {sortableHeader('webinarSessionAt', 'Webinar session')}
               {sortableHeader('webinarAttended', 'Webinar attended')}
@@ -722,6 +723,7 @@ function RecordsPane({
                   ) : (
                     <td style={{ padding: '0.5rem' }}>{r.nfc ?? '—'}</td>
                   )}
+                  <td style={{ padding: '0.5rem' }}>{r.churchName ?? '—'}</td>
                   <td style={{ padding: '0.5rem' }}>{formatDateOnly(r.registeredAt)}</td>
                   <td style={{ padding: '0.5rem' }}>{formatDateTime(r.webinarSessionAt)}</td>
                   <td style={{ padding: '0.5rem' }}>{r.webinarAttended ?? '—'}</td>
@@ -731,7 +733,7 @@ function RecordsPane({
               );
             })}
             {shown.length === 0 && (
-              <tr><td colSpan={12} style={{ padding: '1rem', textAlign: 'center' }}>No matching records.</td></tr>
+              <tr><td colSpan={13} style={{ padding: '1rem', textAlign: 'center' }}>No matching records.</td></tr>
             )}
           </tbody>
         </table>

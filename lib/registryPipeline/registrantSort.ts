@@ -10,6 +10,7 @@ export type RecordSortColumn =
   | 'state'
   | 'postcode'
   | 'nfc'
+  | 'churchName'
   | 'registeredAt'
   | 'webinarSessionAt'
   | 'webinarAttended'

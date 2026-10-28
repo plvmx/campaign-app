@@ -41,7 +41,7 @@ const SAMPLE_REGISTRANTS = [
   {
     id: 'r1', firstName: 'Vicky', lastName: 'Vale', email: 'vicky@example.com', phone: '+61400000001',
     state: 'VIC', postcode: '3000', registeredAt: new Date(Date.now() - HOUR).toISOString(),
-    isLeader: true, leaderName: 'Vicky Vale',
+    isLeader: true, leaderName: 'Vicky Vale', churchName: 'Grace Community Church',
   },
   {
     id: 'r2', firstName: 'Nat', lastName: 'Nelson', email: 'nat@example.com', phone: '+61400000002',
@@ -126,9 +126,9 @@ describe('RegistryManagePage', () => {
     expect(within(table).queryByText(/Date registered/)).not.toBeInTheDocument();
 
     const vickyRow = requireRow(within(table).getByText('vicky@example.com')) as HTMLTableRowElement;
-    // "Registered" is the 8th column (0-indexed 7) — no longer the last
+    // "Registered" is the 9th column (0-indexed 8) — no longer the last
     // column since the NFC and webinar/Code-of-Conduct columns were added after it.
-    const dateCell = vickyRow.cells[7];
+    const dateCell = vickyRow.cells[8];
     expect(dateCell.textContent).toMatch(/^\d{1,2} [A-Za-z]+\.? \d{4}$/); // e.g. "10 Sept 2026" — no time component
   });
 
@@ -154,6 +154,15 @@ describe('RegistryManagePage', () => {
     for (const email of ['vicky@example.com', 'nat@example.com', 'uma@example.com']) {
       expect(within(table).getByText(email)).toBeInTheDocument();
     }
+  });
+
+  it('shows each registrant\'s church name, sortable', async () => {
+    mockUseRegistryGate.mockReturnValue({ status: 'ready', leaderRole: { role: 'national_admin', mfa_required: true } });
+    render(<RegistryManagePage />);
+    await screen.findByRole('table', { name: 'Matching records' });
+    const table = recordsTable();
+    expect(within(table).getByText('Grace Community Church')).toBeInTheDocument();
+    expect(within(table).getByText('Church')).toHaveStyle({ cursor: 'pointer' });
   });
 
   it('pages through every record rather than stopping at 500', async () => {

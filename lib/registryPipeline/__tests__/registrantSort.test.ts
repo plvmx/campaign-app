@@ -6,7 +6,7 @@ function reg(id: string, overrides: Partial<ManageRegistrant> = {}): ManageRegis
   return {
     id, firstName: null, lastName: null, email: null, phone: null, state: null, postcode: null,
     registeredAt: null, isLeader: false, leaderName: null, webinarSessionAt: null, webinarAttended: null,
-    codeOfConductAgreed: null, codeOfConductAgreedAt: null, unsubscribed: null, nfc: null,
+    codeOfConductAgreed: null, codeOfConductAgreedAt: null, unsubscribed: null, nfc: null, churchName: null,
     ...overrides,
   };
 }
@@ -59,6 +59,15 @@ describe('sortRegistrants', () => {
       'asc',
     );
     expect(ids(out)).toEqual(['y1', 'y2', 'n']);
+  });
+
+  it('sorts by church name, blanks last', () => {
+    const out = sortRegistrants(
+      [reg('none'), reg('z', { churchName: 'Zion Baptist' }), reg('a', { churchName: 'abbotsford Church' })],
+      'churchName',
+      'asc',
+    );
+    expect(ids(out)).toEqual(['a', 'z', 'none']);
   });
 
   it('does not mutate its input', () => {
