@@ -479,7 +479,7 @@ function LookupSelect({
   );
 }
 
-/** The five "find a record by a specific value" dropdowns above the pane's table — one per field, each already populated from the values actually present among the selected cell's records. */
+/** The "find a record by a specific value" dropdowns above the pane's table — one per field, each already populated from the values actually present among the selected cell's records. */
 function LookupFiltersRow({
   options,
   filters,

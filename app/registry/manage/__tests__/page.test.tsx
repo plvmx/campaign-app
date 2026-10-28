@@ -453,6 +453,16 @@ describe('RegistryManagePage', () => {
       expect(values).toEqual(['All', 'Nat', 'Uma', 'Vicky']);
     });
 
+    it('can filter by church, webinar attended and code agreed', async () => {
+      await selectAllTotalCell();
+      selectLookupOption('Church', 'Grace', 'Grace Community Church');
+      const table = recordsTable();
+      expect(within(table).getByText('vicky@example.com')).toBeInTheDocument();
+      expect(within(table).queryByText('nat@example.com')).not.toBeInTheDocument();
+      expect(screen.getByLabelText('Look up by Webinar attended')).toBeInTheDocument();
+      expect(screen.getByLabelText('Look up by Code agreed')).toBeInTheDocument();
+    });
+
     it('narrows the shown options as the admin types, by case-insensitive substring', async () => {
       await selectAllTotalCell();
       const input = screen.getByLabelText('Look up by First name');

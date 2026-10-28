@@ -1912,7 +1912,7 @@ No client ever queries these tables directly. Only the service role (used by the
 | `registrantCounts.ts` | Date-window + per-state tallies for `/registry/manage` (`countAllRegistrants`, `countRegistrantsForPeriod`, `filterRegistrantsForCell`, and the category equivalents `countRegistrantsByCategory`/`filterRegistrantsByCategoryForCell`) — all client-side against one fetched list |
 | `registrantValidation.ts` | `EDITABLE_REGISTRANT_FIELDS`/`EDITABLE_FIELD_COLUMNS`/`EDITABLE_FIELD_LABELS`, `isValidAustralianPostcode`, `isValidRegistrantState` — shared by the page and the PATCH route's server-side re-validation. Email/phone/registered_at are deliberately not editable |
 | `registrantSort.ts` | `sortRegistrants` (blanks last, dates as instants) and paging helpers for the record pane |
-| `registrantLookupFilters.ts` | `getLookupOptions`/`filterByLookups` for the pane's five lookup dropdowns |
+| `registrantLookupFilters.ts` | `getLookupOptions`/`filterByLookups` for the pane's eight lookup dropdowns (incl. Church, Webinar attended, Code agreed) |
 | `leaderMatch.ts` | `matchRegistrantsToLeaders` — cross-references registrants with `public.state_leaders` by normalised phone (no email column to match on), computed live on each request |
 | `manageSummaryTypes.ts` | Response shapes shared by Manage routes and pages |
 
