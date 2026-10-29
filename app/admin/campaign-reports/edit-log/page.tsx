@@ -11,7 +11,8 @@ import { getErrorMessage } from '@/lib/errorUtils';
 
 const FIELD_LABELS: Record<string, string> = {
   derived_state: 'State',
-  derived_place: 'Place',
+  derived_location: 'Location',
+  derived_place: 'Place (before 29 Oct)',
   derived_leader: 'Leader (matched)',
 };
 
@@ -59,7 +60,7 @@ export default function CampaignReportEditLogPage() {
       <div className="p-4 pb-28">
         <a href="/admin/campaign-reports" className="mb-4 inline-block text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400">← Back to Campaign Reports</a>
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Campaign Report Edit Log</h1>
-        <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">Every hand edit to a report&apos;s State, Place or Leader, newest first.</p>
+        <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">Every hand edit to a report&apos;s State, Location or Leader, newest first.</p>
 
         {error && <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-600 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300">{error}</div>}
 
@@ -78,7 +79,7 @@ export default function CampaignReportEditLogPage() {
                   {data.entries.map((e) => (
                     <tr key={e.id}>
                       <td className={`${tdClass} whitespace-nowrap`}>{new Date(e.editedAt).toLocaleString('en-AU', { dateStyle: 'medium', timeStyle: 'short' })}</td>
-                      <td className={tdClass}>{e.location || '—'}{e.leader ? <span className="text-gray-500"> · {e.leader}</span> : null}</td>
+                      <td className={tdClass}>{e.locationTyped || '—'}{e.leader ? <span className="text-gray-500"> · {e.leader}</span> : null}</td>
                       <td className={tdClass}>{FIELD_LABELS[e.field] ?? e.field}</td>
                       <td className={tdClass}>{e.oldValue ?? '—'}</td>
                       <td className={tdClass}>{e.newValue ?? '—'}</td>

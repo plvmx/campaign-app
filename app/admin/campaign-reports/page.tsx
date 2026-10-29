@@ -6,7 +6,7 @@ import MobileLayout from '@/components/MobileLayout';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import PickCell from '@/components/campaignReports/PickCell';
 import { useUser } from '@/contexts/UserContext';
-import { fetchManageData, saveReportEdit, UnknownPlaceError } from '@/lib/services/campaignReportManageClient';
+import { fetchManageData, saveReportEdit, UnknownLocationError } from '@/lib/services/campaignReportManageClient';
 import type { EditableReportField, ManageReport } from '@/lib/campaignReportManageTypes';
 import {
   DEFAULT_REPORT_FILTERS, filterReports, sortReports, reportYears, summarizeReports,
@@ -38,7 +38,7 @@ export default function CampaignReportsManagePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reports, setReports] = useState<ManageReport[]>([]);
-  const [places, setPlaces] = useState<{ state: string; place: string }[]>([]);
+  const [stateLocations, setStateLocations] = useState<{ state: string; location: string }[]>([]);
   const [leaders, setLeaders] = useState<{ state: string; leader: string }[]>([]);
 
   const [filters, setFilters] = useState<ReportFilters>(DEFAULT_REPORT_FILTERS);
@@ -59,7 +59,7 @@ export default function CampaignReportsManagePage() {
     try {
       const data = await fetchManageData();
       setReports(data.reports);
-      setPlaces(data.places);
+      setStateLocations(data.locations);
       setLeaders(data.leaders);
     } catch (err: unknown) {
       setLoadError(getErrorMessage(err, 'Error loading reports'));
@@ -88,24 +88,24 @@ export default function CampaignReportsManagePage() {
       : { column, direction: column === 'submittedAt' || column === 'campaignDate' ? 'desc' : 'asc' });
   };
 
-  const placesFor = useCallback((state: string | null) => (state ? places.filter((p) => p.state === state).map((p) => p.place) : []), [places]);
+  const locationsFor = useCallback((state: string | null) => (state ? stateLocations.filter((p) => p.state === state).map((p) => p.location) : []), [stateLocations]);
   const leadersFor = useCallback((state: string | null) => (state ? leaders.filter((l) => l.state === state).map((l) => l.leader) : []), [leaders]);
 
   const applyEdit = async (report: ManageReport, field: EditableReportField, value: string | null) => {
-    let addPlace = false;
+    let addLocation = false;
     for (;;) {
       try {
-        const updated = await saveReportEdit(report.id, field, value, addPlace);
+        const updated = await saveReportEdit(report.id, field, value, addLocation);
         setReports((prev) => prev.map((r) => r.id === report.id
-          ? { ...r, state: updated.state, place: updated.place, matchedLeader: updated.matchedLeader } : r));
-        if (addPlace && updated.place && updated.state) {
-          setPlaces((prev) => [...prev, { state: updated.state!, place: updated.place! }]);
+          ? { ...r, state: updated.state, location: updated.location, matchedLeader: updated.matchedLeader } : r));
+        if (addLocation && updated.location && updated.state) {
+          setStateLocations((prev) => [...prev, { state: updated.state!, location: updated.location! }]);
         }
         return;
       } catch (err: unknown) {
-        if (err instanceof UnknownPlaceError && !addPlace
-            && window.confirm(`"${value}" isn't in State Places for ${report.state}. Add it as a new place?\n\nIt will also appear in State Places and the campaign dropdowns.`)) {
-          addPlace = true;
+        if (err instanceof UnknownLocationError && !addLocation
+            && window.confirm(`"${value}" isn't a location in State Places for ${report.state}. Add it as a new location?\n\nIt will also appear in State Places and the campaign dropdowns.`)) {
+          addLocation = true;
           continue;
         }
         throw err;
@@ -146,7 +146,7 @@ export default function CampaignReportsManagePage() {
         <a href="/admin" className="mb-4 inline-block text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400">← Back to Admin Panel</a>
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Campaign Reports</h1>
         <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-          Every Campaign Report from the sheet, with the State, Place and Leader worked out from it. Search, filter and sort,
+          Every Campaign Report from the sheet, with the State, Location and Leader worked out from it. Search, filter and sort,
           then switch to Edit to fill in anything that is missing. Changes are logged.
         </p>
 
@@ -159,8 +159,8 @@ export default function CampaignReportsManagePage() {
           <button type="button" onClick={() => setFilter('state', 'none')} className="rounded-full border border-amber-400 bg-amber-50 px-3 py-1 text-amber-900 dark:bg-amber-900/20 dark:text-amber-200">
             {summary.noState} with no state
           </button>
-          <button type="button" onClick={() => setFilter('placeStatus', 'missing')} className="rounded-full border border-amber-400 bg-amber-50 px-3 py-1 text-amber-900 dark:bg-amber-900/20 dark:text-amber-200">
-            {summary.noPlace} with no place
+          <button type="button" onClick={() => setFilter('locationStatus', 'missing')} className="rounded-full border border-amber-400 bg-amber-50 px-3 py-1 text-amber-900 dark:bg-amber-900/20 dark:text-amber-200">
+            {summary.noLocation} with no location
           </button>
           <button type="button" onClick={() => setFilter('needsReviewOnly', true)} className="rounded-full border border-gray-300 px-3 py-1 dark:border-gray-600">
             {summary.needsReview} need review
@@ -178,11 +178,11 @@ export default function CampaignReportsManagePage() {
               {AUSTRALIAN_STATES.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
           </label>
-          <label className="text-xs font-medium text-gray-700 dark:text-gray-300">Place
-            <select value={filters.placeStatus} onChange={(e) => setFilter('placeStatus', e.target.value as ReportFilters['placeStatus'])} className={`${inputClass} mt-1 block`}>
+          <label className="text-xs font-medium text-gray-700 dark:text-gray-300">Location
+            <select value={filters.locationStatus} onChange={(e) => setFilter('locationStatus', e.target.value as ReportFilters['locationStatus'])} className={`${inputClass} mt-1 block`}>
               <option value="all">All</option>
-              <option value="missing">No place</option>
-              <option value="set">Has a place</option>
+              <option value="missing">No location</option>
+              <option value="set">Has a location</option>
             </select>
           </label>
           <label className="text-xs font-medium text-gray-700 dark:text-gray-300">Submitted
@@ -224,10 +224,10 @@ export default function CampaignReportsManagePage() {
               <tr>
                 <SortTh column="submittedAt">Submitted</SortTh>
                 <SortTh column="campaignDate">Campaign date</SortTh>
-                <SortTh column="location">Location (as typed)</SortTh>
+                <SortTh column="locationTyped">Location (as typed)</SortTh>
                 <SortTh column="leader">Leader (as typed)</SortTh>
                 <SortTh column="state">State</SortTh>
-                <SortTh column="place">Place</SortTh>
+                <SortTh column="location">Location</SortTh>
                 <th className={thClass}>Leader (matched)</th>
                 <th className={thClass} title="Partial presentations">PP</th>
                 <th className={thClass} title="Full presentations">FP</th>
@@ -240,7 +240,7 @@ export default function CampaignReportsManagePage() {
                 <tr key={r.id} className={r.needsReview ? 'bg-amber-50/50 dark:bg-amber-900/10' : ''}>
                   <td className={`${tdClass} whitespace-nowrap`}>{formatDate(r.submittedAt)}</td>
                   <td className={`${tdClass} whitespace-nowrap`} title={r.campaignDateRaw ?? undefined}>{r.campaignDate ? formatDate(r.campaignDate) : (r.campaignDateRaw ?? '—')}</td>
-                  <td className={tdClass}>{r.location || '—'}</td>
+                  <td className={tdClass}>{r.locationTyped || '—'}</td>
                   <td className={tdClass}>{r.leader || '—'}</td>
                   <td className={tdClass}>
                     {mode === 'edit' ? (
@@ -252,8 +252,8 @@ export default function CampaignReportsManagePage() {
                   </td>
                   <td className={tdClass}>
                     {mode === 'edit'
-                      ? <PickCell key={`${r.id}-${r.state}-${r.place}`} value={r.place} options={placesFor(r.state)} disabled={!r.state} blankLabel="— Pick a place" disabledLabel="Choose a state first" newLabel="Add a new place…" onSave={(v) => applyEdit(r, 'place', v)} />
-                      : (r.place ?? '—')}
+                      ? <PickCell key={`${r.id}-${r.state}-${r.location}`} value={r.location} options={locationsFor(r.state)} disabled={!r.state} blankLabel="— Pick a location" disabledLabel="Choose a state first" newLabel="Add a new location…" onSave={(v) => applyEdit(r, 'location', v)} />
+                      : (r.location ?? '—')}
                   </td>
                   <td className={tdClass}>
                     {mode === 'edit'

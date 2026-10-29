@@ -16,7 +16,7 @@ export async function fetchUnresolvedLocations(): Promise<UnresolvedLocationsRes
 }
 
 export async function saveLocationMapping(input: {
-  locationKey: string; state: string; place?: string | null; newPlace?: string | null;
+  locationKey: string; state: string; location?: string | null; newLocation?: string | null;
 }): Promise<number> {
   const res = await fetch('/api/admin/campaign-reports/locations', {
     method: 'POST', headers: await authHeaders(), body: JSON.stringify(input),

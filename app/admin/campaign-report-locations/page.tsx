@@ -7,6 +7,7 @@ import LoadingSpinner from '@/components/LoadingSpinner';
 import { useUser } from '@/contexts/UserContext';
 import { fetchUnresolvedLocations, saveLocationMapping } from '@/lib/services/campaignReportLocationsClient';
 import type { UnresolvedLocation } from '@/lib/services/campaignReportLocationsService';
+import type { StateLocation } from '@/lib/services/stateLocations';
 import { sortLocations, type LocationSortColumn, type SortDirection } from '@/lib/campaignReportLocationSort';
 import { getErrorMessage } from '@/lib/errorUtils';
 import { AUSTRALIAN_STATES } from '@/lib/constants';
@@ -15,8 +16,8 @@ const ADD_NEW = '__add_new__';
 
 interface Draft {
   state: string;
-  place: string; // a state_places place, '' for state only, or ADD_NEW
-  newPlace: string;
+  location: string; // a State Places location, '' for state only, or ADD_NEW
+  newLocation: string;
 }
 
 type SaveState = 'idle' | 'saving' | 'error';
@@ -28,8 +29,8 @@ export default function CampaignReportLocationsPage() {
   const [hasAccess, setHasAccess] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [locations, setLocations] = useState<UnresolvedLocation[]>([]);
-  const [places, setPlaces] = useState<{ state: string; place: string }[]>([]);
+  const [spellings, setSpellings] = useState<UnresolvedLocation[]>([]);
+  const [stateLocations, setStateLocations] = useState<StateLocation[]>([]);
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const [saveStates, setSaveStates] = useState<Record<string, SaveState>>({});
   const [saveErrors, setSaveErrors] = useState<Record<string, string>>({});
@@ -52,12 +53,12 @@ export default function CampaignReportLocationsPage() {
     setLoadError(null);
     try {
       const data = await fetchUnresolvedLocations();
-      setLocations(data.locations);
-      setPlaces(data.places);
+      setSpellings(data.spellings);
+      setStateLocations(data.locations);
       const next: Record<string, Draft> = {};
-      for (const l of data.locations) {
+      for (const l of data.spellings) {
         const s = l.suggestions.length === 1 ? l.suggestions[0] : null;
-        next[l.key] = { state: s?.state ?? l.knownState ?? '', place: s?.place ?? '', newPlace: '' };
+        next[l.key] = { state: s?.state ?? l.knownState ?? '', location: s?.location ?? '', newLocation: '' };
       }
       setDrafts(next);
       setSaveStates({});
@@ -72,7 +73,7 @@ export default function CampaignReportLocationsPage() {
     if (hasAccess) load();
   }, [hasAccess, load]);
 
-  const sortedLocations = useMemo(() => sortLocations(locations, sortColumn, sortDirection), [locations, sortColumn, sortDirection]);
+  const sortedLocations = useMemo(() => sortLocations(spellings, sortColumn, sortDirection), [spellings, sortColumn, sortDirection]);
 
   const update = (key: string, patch: Partial<Draft>) => {
     setDrafts((prev) => ({ ...prev, [key]: { ...prev[key], ...patch } }));
@@ -87,15 +88,15 @@ export default function CampaignReportLocationsPage() {
       const rowsUpdated = await saveLocationMapping({
         locationKey: loc.key,
         state: d.state,
-        place: d.place && d.place !== ADD_NEW ? d.place : null,
-        newPlace: d.place === ADD_NEW ? d.newPlace : null,
+        location: d.location && d.location !== ADD_NEW ? d.location : null,
+        newLocation: d.location === ADD_NEW ? d.newLocation : null,
       });
       setNotice(`Saved "${loc.example}" — ${rowsUpdated} record${rowsUpdated === 1 ? '' : 's'} updated.`);
-      if (d.place === ADD_NEW && d.newPlace.trim()) {
-        setPlaces((prev) => [...prev, { state: d.state, place: d.newPlace.trim() }]);
+      if (d.location === ADD_NEW && d.newLocation.trim()) {
+        setStateLocations((prev) => [...prev, { state: d.state, location: d.newLocation.trim() }]);
       }
-      // A place-level mapping completes this location; a state-only one stays listed so it isn't forgotten.
-      if (d.place) setLocations((prev) => prev.filter((l) => l.key !== loc.key));
+      // A location-level mapping completes this spelling; a state-only one stays listed so it isn't forgotten.
+      if (d.location) setSpellings((prev) => prev.filter((l) => l.key !== loc.key));
       else setSaveStates((prev) => ({ ...prev, [loc.key]: 'idle' }));
     } catch (err: unknown) {
       setSaveStates((prev) => ({ ...prev, [loc.key]: 'error' }));
@@ -131,7 +132,7 @@ export default function CampaignReportLocationsPage() {
     );
   }
 
-  const totalRows = locations.reduce((n, l) => n + l.rows, 0);
+  const totalRows = spellings.reduce((n, l) => n + l.rows, 0);
 
   return (
     <MobileLayout>
@@ -142,9 +143,9 @@ export default function CampaignReportLocationsPage() {
           </a>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Campaign Report Locations</h1>
           <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-            Locations typed in the Campaign Report sheet that don&apos;t match a place in State Places yet.
-            Pick the state and place for each — it is applied to every record with that spelling, and to new
-            ones as they arrive. Choose &ldquo;Add as new place&rdquo; for a place that is no longer (or never
+            Locations typed in the Campaign Report sheet that aren&apos;t mapped to a State Places location yet.
+            Pick the state and location for each — it is applied to every record with that spelling, and to new
+            ones as they arrive. Choose &ldquo;Add as new location&rdquo; for a location that is no longer (or never
             was) in State Places; it will also appear in State Places and campaign dropdowns.
           </p>
         </div>
@@ -162,7 +163,7 @@ export default function CampaignReportLocationsPage() {
 
         <div className="mb-4 flex items-center justify-between">
           <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-            {locations.length} location{locations.length === 1 ? '' : 's'} ({totalRows} records) remaining
+            {spellings.length} typed location{spellings.length === 1 ? '' : 's'} ({totalRows} records) remaining
           </p>
           <div className="flex flex-wrap items-center gap-2">
             <label className="text-xs font-medium text-gray-700 dark:text-gray-300" htmlFor="location-sort">Sort by</label>
@@ -198,17 +199,17 @@ export default function CampaignReportLocationsPage() {
           </div>
         </div>
 
-        {locations.length === 0 && !isLoading && (
+        {spellings.length === 0 && !isLoading && (
           <div className="rounded-lg border-2 border-green-300 bg-green-50 p-6 text-center dark:border-green-700 dark:bg-green-900/20">
-            <p className="text-base font-semibold text-green-800 dark:text-green-200">Every location maps to a place 🎉</p>
+            <p className="text-base font-semibold text-green-800 dark:text-green-200">Every typed location is mapped 🎉</p>
           </div>
         )}
 
         <div className="space-y-4">
           {sortedLocations.map((loc) => {
-            const d = drafts[loc.key] ?? { state: '', place: '', newPlace: '' };
+            const d = drafts[loc.key] ?? { state: '', location: '', newLocation: '' };
             const saveState = saveStates[loc.key] ?? 'idle';
-            const stateOptions = places.filter((p) => p.state === d.state);
+            const stateOptions = stateLocations.filter((p) => p.state === d.state);
             return (
               <div key={loc.key} className="rounded-lg border-2 border-gray-300 bg-white p-4 shadow-sm dark:border-gray-600 dark:bg-gray-800">
                 <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 border-b border-gray-200 pb-2 dark:border-gray-700">
@@ -224,12 +225,12 @@ export default function CampaignReportLocationsPage() {
                     <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Suggestions:</span>
                     {loc.suggestions.map((s) => (
                       <button
-                        key={`${s.state}-${s.place}`}
+                        key={`${s.state}-${s.location}`}
                         type="button"
-                        onClick={() => update(loc.key, { state: s.state, place: s.place })}
+                        onClick={() => update(loc.key, { state: s.state, location: s.location })}
                         className="rounded-full border border-blue-400 bg-blue-50 px-3 py-0.5 text-xs font-semibold text-blue-800 hover:bg-blue-100 dark:border-blue-500 dark:bg-blue-900/30 dark:text-blue-200"
                       >
-                        {s.place} ({s.state})
+                        {s.location} ({s.state})
                       </button>
                     ))}
                   </div>
@@ -240,7 +241,7 @@ export default function CampaignReportLocationsPage() {
                     <label className="block text-xs font-medium text-gray-700 dark:text-gray-300">State</label>
                     <select
                       value={d.state}
-                      onChange={(e) => update(loc.key, { state: e.target.value, place: '', newPlace: '' })}
+                      onChange={(e) => update(loc.key, { state: e.target.value, location: '', newLocation: '' })}
                       className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
                     >
                       <option value="">— Select —</option>
@@ -248,26 +249,26 @@ export default function CampaignReportLocationsPage() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300">Place</label>
+                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300">Location</label>
                     <select
-                      value={d.place}
-                      onChange={(e) => update(loc.key, { place: e.target.value })}
+                      value={d.location}
+                      onChange={(e) => update(loc.key, { location: e.target.value })}
                       disabled={!d.state}
                       className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm disabled:bg-gray-100 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 dark:disabled:bg-gray-800"
                     >
                       <option value="">{d.state ? '— State only —' : 'Select a state first'}</option>
-                      {stateOptions.map((p) => <option key={p.place} value={p.place}>{p.place}</option>)}
-                      {d.state && <option value={ADD_NEW}>+ Add as new place…</option>}
+                      {stateOptions.map((p) => <option key={p.location} value={p.location}>{p.location}</option>)}
+                      {d.state && <option value={ADD_NEW}>+ Add as new location…</option>}
                     </select>
                   </div>
                 </div>
 
-                {d.place === ADD_NEW && (
+                {d.location === ADD_NEW && (
                   <div className="mt-3">
-                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300">New place name (added to State Places for {d.state})</label>
+                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300">New location name (added to State Places for {d.state})</label>
                     <input
-                      value={d.newPlace}
-                      onChange={(e) => update(loc.key, { newPlace: e.target.value })}
+                      value={d.newLocation}
+                      onChange={(e) => update(loc.key, { newLocation: e.target.value })}
                       placeholder="e.g. Port Macquarie"
                       className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
                     />
@@ -278,7 +279,7 @@ export default function CampaignReportLocationsPage() {
                   <button
                     type="button"
                     onClick={() => save(loc)}
-                    disabled={saveState === 'saving' || !d.state || (d.place === ADD_NEW && !d.newPlace.trim())}
+                    disabled={saveState === 'saving' || !d.state || (d.location === ADD_NEW && !d.newLocation.trim())}
                     className="rounded-md bg-blue-600 px-4 py-1.5 text-sm font-bold text-white hover:bg-blue-700 disabled:bg-gray-400 border-2 border-gray-800 dark:border-gray-600"
                   >
                     {saveState === 'saving' ? 'Saving…' : 'Save'}

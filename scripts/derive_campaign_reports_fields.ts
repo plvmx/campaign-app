@@ -1,13 +1,14 @@
 /**
  * Campaign Report project — see docs/campaign-report/BRIEF.md.
  *
- * Populates campaign_reports.derived_state/derived_place/derived_leader for
+ * Populates campaign_reports.derived_state/derived_location/derived_leader for
  * every row (the original 2026-05-06 cutoff was lifted 2026-10-24),
  * by matching location_raw/leader_raw against state_places/state_leaders —
  * see lib/campaignReportMatcher.ts for the matching rules and rationale.
  *
- * Requires scripts/add_derived_fields_to_campaign_reports.sql to already
- * have been run in the Supabase SQL Editor.
+ * Requires scripts/add_derived_fields_to_campaign_reports.sql and
+ * scripts/add_derived_location_to_campaign_reports.sql to already have been run
+ * in the Supabase SQL Editor.
  *
  * Idempotent — safe to re-run any time (e.g. after tuning the matcher; the
  * /api/cron/campaign-report-sync job already runs the same step after each sheet sync): recomputes from
@@ -40,11 +41,11 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
 
-console.log(`${apply ? 'APPLYING' : 'DRY RUN'} — deriving state/place/leader for campaign_reports rows submitted since ${DERIVE_SINCE}\n`);
+console.log(`${apply ? 'APPLYING' : 'DRY RUN'} — deriving state/location/leader for campaign_reports rows submitted since ${DERIVE_SINCE}\n`);
 deriveCampaignReportFieldsSince(supabase, DERIVE_SINCE, apply, overwrite)
   .then((r) => {
     console.log(`${r.inScope} row(s) in scope; ${r.unresolved} with no state resolved.`);
-    console.log(`${r.noPlaceRows} row(s) (${r.noPlaceLocations} locations) still have no place.`);
+    console.log(`${r.noLocationRows} row(s) (${r.noLocationSpellings} typed locations) still have no mapped location.`);
     console.log(`${r.updated} ${apply ? 'updated' : 'would update'}${overwrite ? ' (overwriting existing values)' : ' (empty fields only)'}.`);
     if (!apply && r.updated > 0) console.log('\nRe-run with --apply to write these changes.');
   })
