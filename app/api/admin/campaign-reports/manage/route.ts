@@ -1,8 +1,8 @@
 /**
  * Campaign Reports management screen (/admin/campaign-reports).
  *
- * GET   -> { reports, places, leaders }  every report plus the State Places / leaders pick-lists
- * PATCH -> { id, field: 'state'|'place'|'leader', value, addPlace? }  one audited hand edit
+ * GET   -> { reports, locations, leaders }  every report plus the State Places locations / leaders pick-lists
+ * PATCH -> { id, field: 'state'|'location'|'leader', value, addLocation? }  one audited hand edit
  * Authorization: Bearer <supabase_access_token>  (caller must be a full admin with 2FA)
  * See lib/services/campaignReportManageService.ts.
  */
@@ -30,7 +30,7 @@ export async function PATCH(request: NextRequest) {
   const auth = await authorizeAdminRequest(request, LOG_TAG);
   if (!auth.ok) return auth.response;
 
-  let body: { id?: unknown; field?: unknown; value?: unknown; addPlace?: unknown };
+  let body: { id?: unknown; field?: unknown; value?: unknown; addLocation?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -38,7 +38,7 @@ export async function PATCH(request: NextRequest) {
   }
   if (typeof body.id !== 'string' || !body.id) return NextResponse.json({ error: 'id is required' }, { status: 400 });
   if (typeof body.field !== 'string' || !EDITABLE_REPORT_FIELDS.includes(body.field as EditableReportField)) {
-    return NextResponse.json({ error: 'field must be state, place or leader' }, { status: 400 });
+    return NextResponse.json({ error: 'field must be state, location or leader' }, { status: 400 });
   }
   if (body.value !== null && typeof body.value !== 'string') {
     return NextResponse.json({ error: 'value must be a string or null' }, { status: 400 });
@@ -49,7 +49,7 @@ export async function PATCH(request: NextRequest) {
       id: body.id,
       field: body.field as EditableReportField,
       value: body.value as string | null,
-      addPlace: body.addPlace === true,
+      addLocation: body.addLocation === true,
       actor: { userId: auth.userId, label: auth.label },
     });
     if (!result.ok) return NextResponse.json({ error: result.error, code: result.code }, { status: result.status });

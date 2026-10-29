@@ -3,13 +3,13 @@
  *
  * Backs the Campaign Reports management screen (/admin/campaign-reports):
  * loads every report in a compact shape, applies one hand edit to a report's
- * derived state / place / leader (audited to campaign_report_edits), and
+ * derived state / location / leader (audited to campaign_report_edits), and
  * pages that audit log. Server-side only — injected client, always
  * `supabaseAdmin` (campaign_reports has no authenticated write policy).
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { AUSTRALIAN_STATES } from '@/lib/constants';
-import { buildNewStatePlaceRow } from '@/lib/services/newStatePlace';
+import { ensureStateLocation, getStateLocations } from '@/lib/services/stateLocations';
 import {
   REPORT_FIELD_COLUMNS,
   type EditableReportField,
@@ -30,7 +30,7 @@ interface ReportRow {
   location_raw: string | null;
   leader_raw: string | null;
   derived_state: string | null;
-  derived_place: string | null;
+  derived_location: string | null;
   derived_leader: string | null;
   partial_presentations: number | null;
   full_presentations: number | null;
@@ -40,7 +40,7 @@ interface ReportRow {
 }
 
 const REPORT_COLUMNS =
-  'id, submitted_at, campaign_date, campaign_date_raw, location_raw, leader_raw, derived_state, derived_place, derived_leader, partial_presentations, full_presentations, sinners_prayer, information_requests, needs_review';
+  'id, submitted_at, campaign_date, campaign_date_raw, location_raw, leader_raw, derived_state, derived_location, derived_leader, partial_presentations, full_presentations, sinners_prayer, information_requests, needs_review';
 
 export function toManageReport(r: ReportRow): ManageReport {
   return {
@@ -48,10 +48,10 @@ export function toManageReport(r: ReportRow): ManageReport {
     submittedAt: r.submitted_at,
     campaignDate: r.campaign_date,
     campaignDateRaw: r.campaign_date_raw,
-    location: r.location_raw,
+    locationTyped: r.location_raw,
     leader: r.leader_raw,
     state: r.derived_state,
-    place: r.derived_place,
+    location: r.derived_location,
     matchedLeader: r.derived_leader,
     partial: r.partial_presentations,
     full: r.full_presentations,
@@ -70,40 +70,39 @@ export async function getManageData(client: SupabaseClient): Promise<ManageDataR
     rows.push(...((data ?? []) as ReportRow[]));
     if ((data?.length ?? 0) < PAGE) break;
   }
-  const { data: places, error: pErr } = await client.from('state_places').select('state, place').order('state').order('place');
-  if (pErr) throw pErr;
+  const locations = await getStateLocations(client);
   const { data: leaders, error: lErr } = await client.from('state_leaders').select('state, leader').order('state').order('leader');
   if (lErr) throw lErr;
-  return { reports: rows.map(toManageReport), places: places ?? [], leaders: leaders ?? [] };
+  return { reports: rows.map(toManageReport), locations, leaders: leaders ?? [] };
 }
 
 export type ApplyEditResult =
   | { ok: true; report: ReportEditResponse }
-  | { ok: false; status: number; error: string; code?: 'unknown_place' };
+  | { ok: false; status: number; error: string; code?: 'unknown_location' };
 
 export interface ApplyEditInput {
   id: string;
   field: EditableReportField;
   value: string | null;
-  /** Confirms a place not yet in State Places should be added to it. */
-  addPlace?: boolean;
+  /** Confirms a location not yet in State Places should be added to it. */
+  addLocation?: boolean;
   actor: { userId: string; label: string };
 }
 
 /**
- * Applies one edit. Changing the state also clears a place or leader that
+ * Applies one edit. Changing the state also clears a location or leader that
  * doesn't exist in the new state (each clear is audited too), so a report
- * can never carry e.g. a VIC place under NSW.
+ * can never carry e.g. a VIC location under NSW.
  */
 export async function applyReportEdit(client: SupabaseClient, input: ApplyEditInput): Promise<ApplyEditResult> {
   const value = input.value?.trim() || null;
 
   const { data: existing, error: fetchError } = await client
-    .from('campaign_reports').select('id, derived_state, derived_place, derived_leader').eq('id', input.id).maybeSingle();
+    .from('campaign_reports').select('id, derived_state, derived_location, derived_leader').eq('id', input.id).maybeSingle();
   if (fetchError) throw fetchError;
   if (!existing) return { ok: false, status: 404, error: 'Report not found' };
 
-  const next = { state: existing.derived_state as string | null, place: existing.derived_place as string | null, leader: existing.derived_leader as string | null };
+  const next = { state: existing.derived_state as string | null, location: existing.derived_location as string | null, leader: existing.derived_leader as string | null };
   const before = { ...next };
 
   if (input.field === 'state') {
@@ -111,40 +110,38 @@ export async function applyReportEdit(client: SupabaseClient, input: ApplyEditIn
     next.state = value;
   } else if (!next.state) {
     return { ok: false, status: 400, error: 'Choose a state first' };
-  } else if (input.field === 'place') {
-    next.place = value;
+  } else if (input.field === 'location') {
+    next.location = value;
   } else {
     next.leader = value;
   }
 
-  const inState = async (table: 'state_places' | 'state_leaders', column: 'place' | 'leader', state: string, name: string) => {
-    const { data, error } = await client.from(table).select(column).eq('state', state).eq(column, name).limit(1);
+  const leaderInState = async (state: string, name: string) => {
+    const { data, error } = await client.from('state_leaders').select('leader').eq('state', state).eq('leader', name).limit(1);
     if (error) throw error;
     return (data?.length ?? 0) > 0;
   };
 
-  if (input.field === 'place' && value && next.state && !(await inState('state_places', 'place', next.state, value))) {
-    if (!input.addPlace) {
-      return { ok: false, status: 409, code: 'unknown_place', error: `"${value}" is not in State Places for ${next.state}` };
-    }
-    const { error } = await client.from('state_places').insert([await buildNewStatePlaceRow(next.state, value)]);
-    if (error && error.code !== '23505') throw error;
+  if (input.field === 'location' && value && next.state) {
+    const found = await ensureStateLocation(client, next.state, value, Boolean(input.addLocation));
+    if (!found.ok) return { ok: false, status: 409, code: found.code, error: found.error };
+    next.location = found.location; // the stored spelling
   }
-  if (input.field === 'leader' && value && next.state && !(await inState('state_leaders', 'leader', next.state, value))) {
+  if (input.field === 'leader' && value && next.state && !(await leaderInState(next.state, value))) {
     return { ok: false, status: 400, error: `"${value}" is not a ${next.state} leader` };
   }
 
   if (input.field === 'state') {
-    if (next.state && next.place && !(await inState('state_places', 'place', next.state, next.place))) next.place = null;
-    if (next.state && next.leader && !(await inState('state_leaders', 'leader', next.state, next.leader))) next.leader = null;
-    if (!next.state) { next.place = null; next.leader = null; }
+    if (next.state && next.location && !(await ensureStateLocation(client, next.state, next.location, false)).ok) next.location = null;
+    if (next.state && next.leader && !(await leaderInState(next.state, next.leader))) next.leader = null;
+    if (!next.state) { next.location = null; next.leader = null; }
   }
 
-  const updates = { derived_state: next.state, derived_place: next.place, derived_leader: next.leader };
+  const updates = { derived_state: next.state, derived_location: next.location, derived_leader: next.leader };
   const { error: updateError } = await client.from('campaign_reports').update(updates).eq('id', input.id);
   if (updateError) throw updateError;
 
-  const audit = (['state', 'place', 'leader'] as const)
+  const audit = (['state', 'location', 'leader'] as const)
     .filter((f) => before[f] !== next[f])
     .map((f) => ({
       report_id: input.id, field: REPORT_FIELD_COLUMNS[f], old_value: before[f], new_value: next[f],
@@ -156,7 +153,7 @@ export async function applyReportEdit(client: SupabaseClient, input: ApplyEditIn
     if (error) console.error('[campaignReportManageService] audit insert failed:', error);
   }
 
-  return { ok: true, report: { id: input.id, state: next.state, place: next.place, matchedLeader: next.leader } };
+  return { ok: true, report: { id: input.id, state: next.state, location: next.location, matchedLeader: next.leader } };
 }
 
 export async function getEditLog(client: SupabaseClient, page: number): Promise<ReportEditLogResponse> {
@@ -170,11 +167,11 @@ export async function getEditLog(client: SupabaseClient, page: number): Promise<
   if (error) throw error;
 
   const ids = [...new Set((data ?? []).map((e) => e.report_id as string))];
-  const context = new Map<string, { location: string | null; leader: string | null }>();
+  const context = new Map<string, { locationTyped: string | null; leader: string | null }>();
   if (ids.length) {
     const { data: reports, error: rErr } = await client.from('campaign_reports').select('id, location_raw, leader_raw').in('id', ids);
     if (rErr) throw rErr;
-    for (const r of reports ?? []) context.set(r.id as string, { location: r.location_raw as string | null, leader: r.leader_raw as string | null });
+    for (const r of reports ?? []) context.set(r.id as string, { locationTyped: r.location_raw as string | null, leader: r.leader_raw as string | null });
   }
 
   return {
@@ -185,7 +182,7 @@ export async function getEditLog(client: SupabaseClient, page: number): Promise<
       field: e.field as string,
       oldValue: e.old_value as string | null,
       newValue: e.new_value as string | null,
-      location: context.get(e.report_id as string)?.location ?? null,
+      locationTyped: context.get(e.report_id as string)?.locationTyped ?? null,
       leader: context.get(e.report_id as string)?.leader ?? null,
     })),
     page: safePage,

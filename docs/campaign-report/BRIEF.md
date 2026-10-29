@@ -73,6 +73,31 @@ which phone browsers barely support (no choices appeared). They are now
 "+ Add a new place…" choice for new places). Overseas records are being left
 with a blank state for now (no 'OS' state).
 
+## "Location" means the physical location, not the place label (2026-10-30)
+
+Peter's observation: a report's typed location should map to
+`state_places.location` (the real physical location), not `state_places.place`.
+Checked against the data: `place` is a campaign-form site label — 33 of 254
+rows differ from their location, and 7 locations are shared by several places
+("Perth CBD 1…4" + "Perth Metro", "Frankston 1/2", "Orange 1/2", three Yagan
+Square variants) — while a typed "Frankston" can't say which site was meant,
+so mapping to `place` forced arbitrary or blank choices. Now:
+
+- `campaign_reports.derived_location` and `campaign_report_location_aliases.location`
+  (new, additive columns, backfilled from the old `derived_place`/`place` via
+  `scripts/add_derived_location_to_campaign_reports.sql`); the old columns are
+  left in place, unused.
+- The matcher, daily sync, bulk Locations screen, Campaign Reports screen, its
+  audit log and the "Add a new location" flow all use `location`. A new
+  location is a `state_places` row whose place and location are both the new
+  name (geocoded).
+- Reports whose old place no longer exists in `state_places` (7 at the time)
+  have no location after the backfill and appear for re-mapping.
+- Data worth checking in State Places: place "Campbelltown" has location
+  "Sydney", place "Ryde" has location "St Anne's, Church St.", and "TestPlace"
+  is located at "Ashburton" — reports typed with those names now resolve to
+  those locations.
+
 ## Resumed with narrowed scope (2026-09-02)
 
 The "may not be required" hold from 2026-09-01 (below) was resolved: Peter

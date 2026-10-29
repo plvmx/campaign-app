@@ -2,8 +2,8 @@
  * Campaign Report locations (see lib/services/campaignReportLocationsService.ts
  * and the /admin/campaign-report-locations screen).
  *
- * GET  -> { locations, places }  sheet locations with no state_places place yet
- * POST -> { locationKey, state, place?, newPlace? }  record a mapping and apply it
+ * GET  -> { spellings, locations }  typed sheet locations with no mapped location yet, and the locations they can map to
+ * POST -> { locationKey, state, location?, newLocation? }  record a mapping and apply it
  * Authorization: Bearer <supabase_access_token>  (caller must be a full admin with 2FA)
  */
 import { NextRequest, NextResponse } from 'next/server';
@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
   const auth = await authorizeAdminRequest(request, LOG_TAG);
   if (!auth.ok) return auth.response;
 
-  let body: { locationKey?: unknown; state?: unknown; place?: unknown; newPlace?: unknown };
+  let body: { locationKey?: unknown; state?: unknown; location?: unknown; newLocation?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const result = await saveLocationAlias(supabaseAdmin, {
-      locationKey: str(body.locationKey)!, state: str(body.state)!, place: str(body.place), newPlace: str(body.newPlace),
+      locationKey: str(body.locationKey)!, state: str(body.state)!, location: str(body.location), newLocation: str(body.newLocation),
     });
     if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
     return NextResponse.json({ ok: true, rowsUpdated: result.rowsUpdated });

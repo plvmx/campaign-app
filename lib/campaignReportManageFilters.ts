@@ -9,17 +9,17 @@ export interface ReportFilters {
   search: string;
   /** 'all', 'none' (no state yet) or a state code. */
   state: string;
-  placeStatus: 'all' | 'missing' | 'set';
+  locationStatus: 'all' | 'missing' | 'set';
   needsReviewOnly: boolean;
   /** 'all' or a submission year, e.g. '2026'. */
   year: string;
 }
 
 export const DEFAULT_REPORT_FILTERS: ReportFilters = {
-  search: '', state: 'all', placeStatus: 'all', needsReviewOnly: false, year: 'all',
+  search: '', state: 'all', locationStatus: 'all', needsReviewOnly: false, year: 'all',
 };
 
-export type ReportSortColumn = 'submittedAt' | 'campaignDate' | 'location' | 'leader' | 'state' | 'place';
+export type ReportSortColumn = 'submittedAt' | 'campaignDate' | 'locationTyped' | 'leader' | 'state' | 'location';
 export type SortDirection = 'asc' | 'desc';
 
 export function filterReports(reports: ManageReport[], f: ReportFilters): ManageReport[] {
@@ -27,12 +27,12 @@ export function filterReports(reports: ManageReport[], f: ReportFilters): Manage
   return reports.filter((r) => {
     if (f.state === 'none' && r.state) return false;
     if (f.state !== 'none' && f.state !== 'all' && r.state !== f.state) return false;
-    if (f.placeStatus === 'missing' && r.place) return false;
-    if (f.placeStatus === 'set' && !r.place) return false;
+    if (f.locationStatus === 'missing' && r.location) return false;
+    if (f.locationStatus === 'set' && !r.location) return false;
     if (f.needsReviewOnly && !r.needsReview) return false;
     if (f.year !== 'all' && !r.submittedAt.startsWith(f.year)) return false;
     if (needle) {
-      const haystack = [r.location, r.leader, r.place, r.matchedLeader, r.state].filter(Boolean).join(' ').toLowerCase();
+      const haystack = [r.locationTyped, r.leader, r.location, r.matchedLeader, r.state].filter(Boolean).join(' ').toLowerCase();
       if (!haystack.includes(needle)) return false;
     }
     return true;
@@ -43,10 +43,10 @@ function sortValue(r: ManageReport, column: ReportSortColumn): string {
   switch (column) {
     case 'submittedAt': return r.submittedAt;
     case 'campaignDate': return r.campaignDate ?? '';
-    case 'location': return (r.location ?? '').toLowerCase();
+    case 'locationTyped': return (r.locationTyped ?? '').toLowerCase();
     case 'leader': return (r.leader ?? '').toLowerCase();
     case 'state': return r.state ?? '';
-    case 'place': return (r.place ?? '').toLowerCase();
+    case 'location': return (r.location ?? '').toLowerCase();
   }
 }
 
@@ -71,7 +71,7 @@ export function reportYears(reports: ManageReport[]): string[] {
 export interface ReportSummary {
   total: number;
   noState: number;
-  noPlace: number;
+  noLocation: number;
   needsReview: number;
 }
 
@@ -79,7 +79,7 @@ export function summarizeReports(reports: ManageReport[]): ReportSummary {
   return {
     total: reports.length,
     noState: reports.filter((r) => !r.state).length,
-    noPlace: reports.filter((r) => !r.place).length,
+    noLocation: reports.filter((r) => !r.location).length,
     needsReview: reports.filter((r) => r.needsReview).length,
   };
 }

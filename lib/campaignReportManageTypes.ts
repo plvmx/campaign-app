@@ -6,10 +6,11 @@ export interface ManageReport {
   campaignDate: string | null;
   campaignDateRaw: string | null;
   /** The location and leader exactly as typed into the sheet. */
-  location: string | null;
+  locationTyped: string | null;
   leader: string | null;
   state: string | null;
-  place: string | null;
+  /** The mapped State Places location (`state_places.location`) — the physical location. */
+  location: string | null;
   matchedLeader: string | null;
   partial: number | null;
   full: number | null;
@@ -20,25 +21,25 @@ export interface ManageReport {
 
 export interface ManageDataResponse {
   reports: ManageReport[];
-  places: { state: string; place: string }[];
+  locations: { state: string; location: string }[];
   leaders: { state: string; leader: string }[];
 }
 
-export type EditableReportField = 'state' | 'place' | 'leader';
+export type EditableReportField = 'state' | 'location' | 'leader';
 
-export const EDITABLE_REPORT_FIELDS: readonly EditableReportField[] = ['state', 'place', 'leader'];
+export const EDITABLE_REPORT_FIELDS: readonly EditableReportField[] = ['state', 'location', 'leader'];
 
 /** Which campaign_reports column each editable field writes. */
-export const REPORT_FIELD_COLUMNS: Record<EditableReportField, 'derived_state' | 'derived_place' | 'derived_leader'> = {
+export const REPORT_FIELD_COLUMNS: Record<EditableReportField, 'derived_state' | 'derived_location' | 'derived_leader'> = {
   state: 'derived_state',
-  place: 'derived_place',
+  location: 'derived_location',
   leader: 'derived_leader',
 };
 
 export interface ReportEditResponse {
   id: string;
   state: string | null;
-  place: string | null;
+  location: string | null;
   matchedLeader: string | null;
 }
 
@@ -49,7 +50,8 @@ export interface ReportEditLogEntry {
   field: string;
   oldValue: string | null;
   newValue: string | null;
-  location: string | null;
+  /** The typed location and leader of the report that was edited, for context. */
+  locationTyped: string | null;
   leader: string | null;
 }
 
