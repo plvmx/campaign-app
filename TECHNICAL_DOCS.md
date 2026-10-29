@@ -1103,7 +1103,7 @@ All take an **injected Supabase client** (always `supabaseAdmin` in practice) so
 | `campaignInterestService.ts`, `trainingInterestService.ts` | Leader/admin views of registered interest; `TRAINING_CATEGORIES` / `isTrainingCategory()` |
 | `campaignInterestSmsService.ts` | One combined ClickSend text per owning leader; logs to `campaign_interest_sms_log`; never throws |
 | `publicCampaignListService.ts`, `publicCampaignResultsService.ts`, `publicCampaignsNearMeService.ts`, `publicUpcomingCampaignsService.ts` | Data/grouping logic behind the `/public/*` pages (cached coordinates only, no on-demand geocoding) |
-| `campaignReportManageService.ts` | `/admin/campaign-reports`: `getManageData`, audited `applyReportEdit`, `getEditLog` (browser filters in `lib/campaignReportManageFilters.ts`) |
+| `campaignReportManageService.ts` (UI: `components/campaignReports/PickCell.tsx`, a native select so the pickers work on mobile) | `/admin/campaign-reports`: `getManageData`, audited `applyReportEdit`, `getEditLog` (browser filters in `lib/campaignReportManageFilters.ts`) |
 | `campaignReportLocationsService.ts` | `/admin/campaign-report-locations`: unresolved sheet locations, `saveLocationAlias` (optionally adds a `state_places` row) |
 | `campaignReportSyncService.ts` | Temporary live-sheet sync into `campaign_reports` (`syncCampaignReportsFromSheet`) and the shared `deriveCampaignReportFieldsSince`; reader in `lib/campaignReportSheetReader.ts` |
 | `backupService.ts` | `exportBackup`/`restoreBackup`; see §5.1a |

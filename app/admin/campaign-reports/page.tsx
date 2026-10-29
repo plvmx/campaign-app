@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import MobileLayout from '@/components/MobileLayout';
 import LoadingSpinner from '@/components/LoadingSpinner';
+import PickCell from '@/components/campaignReports/PickCell';
 import { useUser } from '@/contexts/UserContext';
 import { fetchManageData, saveReportEdit, UnknownPlaceError } from '@/lib/services/campaignReportManageClient';
 import type { EditableReportField, ManageReport } from '@/lib/campaignReportManageTypes';
@@ -27,53 +28,6 @@ function formatDate(iso: string | null): string {
   if (!iso) return '—';
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
-}
-
-/** A single editable text cell that saves when you leave it or press Enter, reverting on failure. Callers key it on the stored value so it resets when that changes. */
-function EditablePickCell({
-  value, options, listId, disabled, placeholder, onSave,
-}: {
-  value: string | null;
-  options: string[];
-  listId: string;
-  disabled?: boolean;
-  placeholder?: string;
-  onSave: (value: string | null) => Promise<void>;
-}) {
-  const [draft, setDraft] = useState(value ?? '');
-  const [status, setStatus] = useState<'idle' | 'saving' | 'error'>('idle');
-  const [error, setError] = useState('');
-
-  const commit = async () => {
-    const next = draft.trim();
-    if (next === (value ?? '')) return;
-    setStatus('saving');
-    try {
-      await onSave(next || null);
-      setStatus('idle');
-    } catch (err: unknown) {
-      setDraft(value ?? '');
-      setError(getErrorMessage(err, 'Failed to save'));
-      setStatus('error');
-    }
-  };
-
-  return (
-    <div>
-      <input
-        list={listId}
-        value={draft}
-        disabled={disabled || status === 'saving'}
-        placeholder={disabled ? 'Choose a state first' : placeholder}
-        onChange={(e) => { setDraft(e.target.value); setStatus('idle'); }}
-        onBlur={commit}
-        onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-        className={`${inputClass} w-44 disabled:bg-gray-100 dark:disabled:bg-gray-800`}
-      />
-      <datalist id={listId}>{options.map((o) => <option key={o} value={o} />)}</datalist>
-      {status === 'error' && <p className="mt-1 max-w-[11rem] text-xs text-red-600 dark:text-red-400">{error}</p>}
-    </div>
-  );
 }
 
 export default function CampaignReportsManagePage() {
@@ -298,12 +252,12 @@ export default function CampaignReportsManagePage() {
                   </td>
                   <td className={tdClass}>
                     {mode === 'edit'
-                      ? <EditablePickCell key={`${r.id}-${r.state}-${r.place}`} value={r.place} options={placesFor(r.state)} listId={`place-${r.id}`} disabled={!r.state} placeholder="Pick or type a place" onSave={(v) => applyEdit(r, 'place', v)} />
+                      ? <PickCell key={`${r.id}-${r.state}-${r.place}`} value={r.place} options={placesFor(r.state)} disabled={!r.state} blankLabel="— Pick a place" disabledLabel="Choose a state first" newLabel="Add a new place…" onSave={(v) => applyEdit(r, 'place', v)} />
                       : (r.place ?? '—')}
                   </td>
                   <td className={tdClass}>
                     {mode === 'edit'
-                      ? <EditablePickCell key={`${r.id}-${r.state}-${r.matchedLeader}`} value={r.matchedLeader} options={leadersFor(r.state)} listId={`leader-${r.id}`} disabled={!r.state} placeholder="Pick a leader" onSave={(v) => applyEdit(r, 'leader', v)} />
+                      ? <PickCell key={`${r.id}-${r.state}-${r.matchedLeader}`} value={r.matchedLeader} options={leadersFor(r.state)} disabled={!r.state} blankLabel="— Pick a leader" disabledLabel="Choose a state first" onSave={(v) => applyEdit(r, 'leader', v)} />
                       : (r.matchedLeader ?? '—')}
                   </td>
                   <td className={`${tdClass} text-right`}>{r.partial ?? '—'}</td>

@@ -65,6 +65,14 @@ Places. All three creation paths now share `lib/services/newStatePlace.ts`
 existing rows were repaired. `/admin/campaign-report-locations` can now be
 sorted by number of records, location or state.
 
+## Mobile pickers (2026-10-30)
+
+The Edit-mode Place/Leader cells used a text box with an HTML `<datalist>`,
+which phone browsers barely support (no choices appeared). They are now
+`components/campaignReports/PickCell.tsx`, a native `<select>` (with a
+"+ Add a new place…" choice for new places). Overseas records are being left
+with a blank state for now (no 'OS' state).
+
 ## Resumed with narrowed scope (2026-09-02)
 
 The "may not be required" hold from 2026-09-01 (below) was resolved: Peter
