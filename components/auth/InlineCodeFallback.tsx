@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { getErrorMessage } from '@/lib/errorUtils';
+import { isStandaloneApp } from '@/lib/isStandaloneApp';
 import { normalizeOtpInput, EMAIL_OTP_MIN_LENGTH, EMAIL_OTP_MAX_LENGTH } from '@/lib/otpInput';
 import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass, errorBannerClass } from '@/components/auth/CodeEntryScreen';
 
@@ -23,12 +24,19 @@ import { inputClass, labelClass, primaryButtonClass, secondaryButtonClass, error
  * prominent "enter a code" box right next to the "check your inbox" message
  * would just be confusing clutter for the common case.
  *
+ * Exception: open by default in an installed home-screen app, where the
+ * emailed link opens in Safari (separate storage) and so can't sign the
+ * installed app in — the code is the only way that works there. See
+ * lib/isStandaloneApp.ts.
+ *
  * Owns only its own UI state (expanded/busy/error) — the caller supplies the
  * actual verifyOtp() + handoff logic via onVerify, since that differs per
  * flow (which Supabase client, what happens after a successful code).
  */
 export function InlineCodeFallback({ onVerify }: { onVerify: (code: string) => Promise<void> }) {
-  const [expanded, setExpanded] = useState(false);
+  // Only rendered after a leader has submitted a form, so reading the window here is client-side only.
+  const [expanded, setExpanded] = useState(() => isStandaloneApp());
+  const [inInstalledApp] = useState(() => isStandaloneApp());
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
@@ -55,6 +63,9 @@ export function InlineCodeFallback({ onVerify }: { onVerify: (code: string) => P
 
   return (
     <div data-ti="components/auth/InlineCodeFallback.tsx" className="space-y-2">
+      {inInstalledApp && (
+        <p className={labelClass}>Type the code from the email here — please don&apos;t tap the link in the email. The link opens in Safari and won&apos;t sign in this app.</p>
+      )}
       <div>
         <label htmlFor="inline-code-fallback" className={labelClass}>Code from the email (the long number under CONFIRM NOW)</label>
         <input
