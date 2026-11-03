@@ -2124,3 +2124,32 @@ rows excluded by design, ~150 rows that are the same person as another,
 digits from the CSV (e.g. `x@gmail.com    1`) — a duplicate risk for
 `ac-sync`'s exact-email match; clean up separately. Fix the placeholder
 email on the AC contact. Chris/Yency NFC to be set by Lorraine in Manage.
+
+## Church never saved for new registrants; Registration Log added (2026-11-03)
+
+**Trigger.** Lorraine reported registrations on 28 and 31 Oct as missing. All
+were traced: seven were Way of Life responder submissions (stored in
+`registry.twol_respondents`, by design), the others were returning
+registrants (the sync matches by email, updates the existing row and leaves
+the registered date alone — so no new row and no change to the count).
+
+**Real bug found.** The current "AFJ Register Commitment" form writes the
+church to AC field `[8]`; `mapAcFields` only read `[26]`/`[14]`. Every
+registrant synced since ~10 Sept had a blank church (77 of 77), and because
+`upsertRegistrant` wrote `church_name: null` on each sync, a sync could also
+blank a church loaded from the CSV (1,676 synced registrants now have none;
+1,301 recoverable from saved staging payloads).
+
+**Fix.** `[8]` added as the last church fallback; `transform.ts` omits
+`churchName` when absent and `ac-sync/db.ts` omits the column (omit-on-
+undefined, like the webinar/tag fields). **Requires `ac-sync` to be
+redeployed** (`supabase functions deploy ac-sync`). Regression tests in
+`fieldMap.test.ts` / `transform.test.ts` (shown failing on the pre-fix
+sources). `scripts/backfill_church_from_staging.ts` — dry-run by default,
+fill-only (`church_name IS NULL` guard), backs up to `backups/`: applied
+`--since=2026-09-10` (73 of 77; 4 have no church in AC). The wider run
+(no `--since`, ~1,228 more) is pending a decision.
+
+**Registration Log.** `/registry/manage/registration-log` shows what the
+sync did with each submission (see TECHNICAL_DOCS §17.4). Not distinguishable:
+a plain AC contact edit looks like a re-submission.

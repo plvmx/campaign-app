@@ -128,3 +128,28 @@ export interface WhatsAppInviteLogResponse {
   entries: WhatsAppInviteLogEntry[];
   totalCount: number;
 }
+
+/**
+ * One row of /registry/manage/registration-log: one form submission ac-sync
+ * received from ActiveCampaign and what became of it (see registrationLog.ts).
+ */
+export interface RegistrationLogEntry {
+  /** staging.ac_events.id */
+  id: number;
+  receivedAt: string;
+  /** AC list id the submission arrived on: '1' registrations, '2' Way of Life responders. */
+  listId: string;
+  outcome: import('./registrationLog').RegistrationLogOutcome;
+  firstName: string | null;
+  lastName: string | null;
+  email: string | null;
+  /** When the person's AC contact was first created — an old date next to a recent receivedAt means a returning person. */
+  contactCreatedAt: string | null;
+  /** The registry row the submission was attached to, when there is one. */
+  registrant: { state: string | null; registeredAt: string | null } | null;
+}
+
+export interface RegistrationLogResponse {
+  entries: RegistrationLogEntry[];
+  totalCount: number;
+}

@@ -929,6 +929,7 @@ export default function RegistryManagePage() {
         <Link href="/registry" style={{ justifySelf: 'start' }}>← Back to Registry</Link>
         <h1 style={{ margin: 0, fontSize: '2rem', fontWeight: 800, textAlign: 'center' }}>Registrations Management</h1>
         <div style={{ justifySelf: 'end', display: 'flex', gap: '1rem' }}>
+          <Link href="/registry/manage/registration-log">View Registration Log →</Link>
           <Link href="/registry/manage/whatsapp-invite-log">View WhatsApp Invite Log →</Link>
           <Link href="/registry/manage/edit-log">View Edit Log →</Link>
         </div>
