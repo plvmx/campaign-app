@@ -114,7 +114,8 @@ export interface DbPort {
     registeredAt: string | null;
     interestedInTraining: string | null;
     churchLeader: string | null;
-    churchName: string | null;
+    /** Omitted (not null) when this sync found no church, so a routine re-sync can never erase one already stored — same rule as the tag-derived fields below. */
+    churchName?: string;
     /**
      * Four fields derived from tags/fields that turned out not to have a
      * simple 1:1 AC custom field (see tagDerivedFields.ts). Deliberately
