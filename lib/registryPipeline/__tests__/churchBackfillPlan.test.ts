@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { planChurchBackfill, type BlankChurchRegistrant } from '../churchBackfillPlan';
+import { isPlaceholderChurch, planChurchBackfill, type BlankChurchRegistrant } from '../churchBackfillPlan';
 import type { RawAcContactPayload } from '../types';
 
 // Synthetic people only — never put real registrants' details in a committed test.
@@ -36,5 +36,24 @@ describe('planChurchBackfill', () => {
     ]);
     const plan = planChurchBackfill([reg('r1', 'c1'), reg('r2', 'c2')], payloads);
     expect(plan.map((p) => [p.registrantId, p.churchName])).toEqual([['r1', 'First Church'], ['r2', 'Second Church']]);
+  });
+});
+
+describe('isPlaceholderChurch', () => {
+  it.each(['None', 'none', 'N/A', 'n/a', 'NA', 'Nil', 'Nil.', 'No', 'No church', 'Not applicable', '-', '.', '  '])(
+    'treats %j as "no church"',
+    (value) => expect(isPlaceholderChurch(value)).toBe(true),
+  );
+
+  it.each(['AOG', 'C3', 'SDA', 'Noosa Church', 'Nilsson Baptist', 'Anglican', 'ACF'])(
+    'keeps %j — a real church or abbreviation',
+    (value) => expect(isPlaceholderChurch(value)).toBe(false),
+  );
+});
+
+describe('planChurchBackfill placeholders', () => {
+  it('does not plan a "None" answer', () => {
+    const plan = planChurchBackfill([reg('r1', 'c1')], new Map([['c1', payload([{ field: '8', value: 'None' }])]]));
+    expect(plan).toEqual([]);
   });
 });

@@ -6,6 +6,18 @@
 import { mapAcFields } from './fieldMap';
 import type { RawAcContactPayload } from './types';
 
+// "No church" answers typed into the Church box. Storing them would put "None"
+// in the Church column, which reads as bad data, so the backfill skips them.
+const PLACEHOLDER_CHURCHES = new Set([
+  'none', 'na', 'nil', 'no', 'nothing', 'notapplicable', 'nochurch', 'nonenil', 'unknown', 'tbc', 'x',
+]);
+
+/** True for an answer that says "no church" rather than naming one ("None", "N/A", "Nil.", "-", "No church"…). */
+export function isPlaceholderChurch(value: string): boolean {
+  const key = value.toLowerCase().replace(/[^a-z]/g, '');
+  return key === '' || PLACEHOLDER_CHURCHES.has(key);
+}
+
 export interface BlankChurchRegistrant {
   id: string;
   acContactId: string;
@@ -23,7 +35,8 @@ export interface ChurchBackfillUpdate {
  * For each registrant with a blank church, the church found in that AC
  * contact's most recent staging payload (the caller passes the latest event
  * per contact). A registrant with no payload, or whose latest payload still
- * has no church, is left out — this only ever fills, never clears.
+ * has no church (or only a placeholder such as "None"), is left out — this
+ * only ever fills, never clears.
  */
 export function planChurchBackfill(
   registrants: BlankChurchRegistrant[],
@@ -34,7 +47,7 @@ export function planChurchBackfill(
     const payload = latestPayloadByContact.get(r.acContactId);
     if (!payload) continue;
     const churchName = mapAcFields(payload).churchName;
-    if (!churchName) continue;
+    if (!churchName || isPlaceholderChurch(churchName)) continue;
     updates.push({ registrantId: r.id, acContactId: r.acContactId, email: r.email, churchName });
   }
   return updates;

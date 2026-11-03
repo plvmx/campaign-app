@@ -2148,7 +2148,8 @@ redeployed** (`supabase functions deploy ac-sync`). Regression tests in
 sources). `scripts/backfill_church_from_staging.ts` — dry-run by default,
 fill-only (`church_name IS NULL` guard), backs up to `backups/`: applied
 `--since=2026-09-10` (73 of 77; 4 have no church in AC). The wider run
-(no `--since`, ~1,228 more) is pending a decision.
+(no `--since`) was then applied too: 1,215 more filled; "None"/"N/A"/"Nil"-style
+placeholders (13) deliberately skipped; 388 registrants have no church in AC.
 
 **Registration Log.** `/registry/manage/registration-log` shows what the
 sync did with each submission (see TECHNICAL_DOCS §17.4). Not distinguishable:
