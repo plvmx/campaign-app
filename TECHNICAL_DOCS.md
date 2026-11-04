@@ -243,7 +243,8 @@ campaign-app/
 │   │
 │   ├── record-results/
 │   │   ├── page.tsx            # Route: /record-results
-│   │   └── detail/page.tsx     # Route: /record-results/detail
+│   │   ├── detail/page.tsx     # Route: /record-results/detail
+│   │   └── report/page.tsx     # Route: /record-results/report (AD only; combined results + campaign report, no save yet)
 │   │
 │   ├── results/page.tsx        # Route: /results (signed-in JPEG slide viewer)
 │   ├── capture/page.tsx        # Route: /capture
@@ -329,6 +330,7 @@ campaign-app/
 │   ├── corsUtils.ts            # Origin enforcement for internal API routes
 │   ├── siteUrl.ts              # Absolute site origin (for OG tags, canonical URLs)
 │   ├── leafletMarkerIcon.ts    # State-tinted map pin icons (shared by every map)
+│   ├── campaignReportEntry.ts  # Input rules for /record-results/report (2-digit counts, 20-char letters-and-spaces names)
 │   ├── recordResultsDraft.ts   # Local-only draft recovery for /record-results/detail
 │   ├── resultsLog.ts           # Audit logging for results changes
 │   ├── resultsMetrics.ts       # Aggregation for /admin/results-metrics
@@ -798,6 +800,7 @@ There is no separate permissions module. Role logic is kept inline wherever it i
 /training-interest/[campaignId]       Who registered interest in one training session (2FA required)
 /record-results                       Select a campaign to record results for
 /record-results/detail                Enter result names + counts
+/record-results/report                Combined results + TWOL Campaign Report entry (AD only, past campaigns; Save does nothing yet)
 /results                              View result summaries (signed-in JPEG slide viewer)
 /capture                              Geolocation-based campaign capture
 /view-slides                          Public, no-login JPEG slide viewer

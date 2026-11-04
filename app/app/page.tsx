@@ -331,6 +331,14 @@ function AppPageContent() {
     [router, dateFilter],
   );
 
+  const handleRecordCampaignReport = useCallback(
+    (campaign: Campaign) => {
+      const params = new URLSearchParams({ id: campaign.id, returnFilter: dateFilter });
+      router.push(`/record-results/report?${params.toString()}`);
+    },
+    [router, dateFilter],
+  );
+
   const handleViewTrainingInterest = useCallback(
     (campaign: Campaign) => {
       router.push(`/training-interest/${campaign.id}`);
@@ -611,6 +619,7 @@ function AppPageContent() {
                 onDelete={(campaign) => setDeleteConfirmCampaign(campaign)}
                 onToggleCheckbox={handleToggleCheckbox}
                 onRecordResults={handleRecordResults}
+                onRecordCampaignReport={handleRecordCampaignReport}
                 onViewTrainingInterest={handleViewTrainingInterest}
                 onViewCampaignInterest={handleViewCampaignInterest}
               />
