@@ -42,3 +42,16 @@ export function formatReportDate(dbDate: string): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(dbDate);
   return m ? `${m[3]}/${m[2]}/${m[1]}` : dbDate;
 }
+
+export const COUNT_REQUIRED_MESSAGE = 'Please enter a number (enter 0 if there were none).';
+
+/** One error per count field left blank; an empty object means the counts are valid. */
+export function validateCounts(
+  counts: Record<ReportCountField, string>,
+): Partial<Record<ReportCountField, string>> {
+  const errors: Partial<Record<ReportCountField, string>> = {};
+  for (const { key } of REPORT_COUNT_FIELDS) {
+    if (!/^\d{1,2}$/.test(counts[key])) errors[key] = COUNT_REQUIRED_MESSAGE;
+  }
+  return errors;
+}

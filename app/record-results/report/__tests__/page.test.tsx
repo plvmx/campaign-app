@@ -23,9 +23,9 @@ afterEach(cleanup);
 describe('Campaign report entry page', () => {
   it('pre-fills location, leader and date and omits the follow-up field', async () => {
     render(<Page />);
-    expect(await screen.findByLabelText('Location *')).toHaveValue('Orange 1 VIC');
-    expect(screen.getByLabelText('Campaign Leader *')).toHaveValue('Jane Smith');
-    expect(screen.getByLabelText('Campaign Date *')).toHaveValue('31/10/2026');
+    expect(await screen.findByLabelText('Location')).toHaveValue('Orange 1 VIC');
+    expect(screen.getByLabelText('Campaign Leader')).toHaveValue('Jane Smith');
+    expect(screen.getByLabelText('Campaign Date')).toHaveValue('31/10/2026');
     expect(screen.queryByText(/Follow-up/)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument();
   });
@@ -46,5 +46,29 @@ describe('Campaign report entry page', () => {
     const name = screen.getByPlaceholderText('Name 1');
     fireEvent.change(name, { target: { value: 'Jo-hn Smith9!' + 'x'.repeat(30) } });
     expect((name as HTMLInputElement).value).toMatch(/^[A-Za-z ]{20}$/);
+  });
+
+  it('marks the pre-filled fields read-only with a shaded background and no star', async () => {
+    render(<Page />);
+    const location = await screen.findByLabelText('Location');
+    expect(location).toHaveAttribute('readonly');
+    expect(location.className).toContain('bg-gray-200');
+    expect(screen.queryByText('Location *')).not.toBeInTheDocument();
+  });
+
+  it('requires a number in every count field when Save is clicked', async () => {
+    render(<Page />);
+    await screen.findByLabelText('Location');
+    fireEvent.change(screen.getByLabelText('Number of Full Presentations *'), { target: { value: '0' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(screen.getAllByRole('alert')).toHaveLength(2);
+    expect(screen.getByLabelText('Number of Partial Presentations *')).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByLabelText('Number of Full Presentations *')).toHaveAttribute('aria-invalid', 'false');
+
+    fireEvent.change(screen.getByLabelText('Number of Partial Presentations *'), { target: { value: '2' } });
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+    fireEvent.change(screen.getByLabelText('Number of Sinners Prayers *'), { target: { value: '1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });
