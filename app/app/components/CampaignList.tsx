@@ -25,6 +25,7 @@ interface Props {
   onDelete: (campaign: Campaign) => void;
   onToggleCheckbox: (id: string, field: 'tl_ok' | 'sr_ok', currentValue: boolean) => void;
   onRecordResults: (campaign: Campaign) => void;
+  onRecordCampaignReport: (campaign: Campaign) => void;
   onViewTrainingInterest: (campaign: Campaign) => void;
   onViewCampaignInterest: (campaign: Campaign) => void;
 }
@@ -32,7 +33,7 @@ interface Props {
 export default function CampaignList({
   campaigns, editingId, dateFilter, isAdmin, adminStatus, userState, userMobileAndLeader,
   sharedWithMeOwners, savedCheckboxId, categories, campaignInterestCounts,
-  onEditStart, onCancelEdit, onSaveEdit, onDelete, onToggleCheckbox, onRecordResults, onViewTrainingInterest,
+  onEditStart, onCancelEdit, onSaveEdit, onDelete, onToggleCheckbox, onRecordResults, onRecordCampaignReport, onViewTrainingInterest,
   onViewCampaignInterest,
 }: Props) {
   if (campaigns.length === 0) {
@@ -109,6 +110,7 @@ export default function CampaignList({
                 onDelete={() => onDelete(campaign)}
                 onToggleCheckbox={(field, val) => onToggleCheckbox(campaign.id, field, val)}
                 onRecordResults={() => onRecordResults(campaign)}
+                onRecordCampaignReport={() => onRecordCampaignReport(campaign)}
                 onViewTrainingInterest={() => onViewTrainingInterest(campaign)}
                 onViewCampaignInterest={() => onViewCampaignInterest(campaign)}
               />,

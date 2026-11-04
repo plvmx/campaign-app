@@ -6,7 +6,7 @@
  * full admins ('AD') and state reporters ('SR') should see it.
  */
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 
 // CampaignCard pulls in lib/campaignFilter.ts -> lib/supabaseClient.ts, which
 // requires real env vars at import time. Stub it out (unused here — this test
@@ -35,11 +35,16 @@ const baseCampaign: Campaign = {
   created_at: '2020-01-01T00:00:00.000Z',
 };
 
-function renderCard(adminStatus: string | null, campaignInterestCount?: number) {
+function renderCard(
+  adminStatus: string | null,
+  campaignInterestCount?: number,
+  dateFilter: 'past' | 'future' = 'future',
+  onRecordCampaignReport?: () => void,
+) {
   return render(
     <CampaignCard
       campaign={baseCampaign}
-      dateFilter="future"
+      dateFilter={dateFilter}
       isAdmin={adminStatus === 'AD'}
       adminStatus={adminStatus}
       userState="VIC"
@@ -51,6 +56,7 @@ function renderCard(adminStatus: string | null, campaignInterestCount?: number) 
       onDelete={() => {}}
       onToggleCheckbox={() => {}}
       onRecordResults={() => {}}
+      onRecordCampaignReport={onRecordCampaignReport}
       onViewTrainingInterest={() => {}}
       onViewCampaignInterest={() => {}}
     />,
@@ -90,5 +96,29 @@ describe('CampaignCard — campaign interest callout', () => {
   it('shows a plural callout for more than one registration', () => {
     renderCard(null, 3);
     expect(screen.getByText(/3 people interested/)).toBeInTheDocument();
+  });
+});
+
+describe('CampaignCard — combined results + campaign report link', () => {
+  const linkText = /Record Results \+ Campaign Report/;
+
+  it('is shown to a full admin on a past campaign and fires its handler', () => {
+    const onClick = vi.fn();
+    renderCard('AD', undefined, 'past', onClick);
+    fireEvent.click(screen.getByText(linkText));
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('is hidden from a state reporter and a plain leader', () => {
+    renderCard('SR', undefined, 'past', () => {});
+    expect(screen.queryByText(linkText)).not.toBeInTheDocument();
+    cleanup();
+    renderCard(null, undefined, 'past', () => {});
+    expect(screen.queryByText(linkText)).not.toBeInTheDocument();
+  });
+
+  it('is hidden on a future campaign', () => {
+    renderCard('AD', undefined, 'future', () => {});
+    expect(screen.queryByText(linkText)).not.toBeInTheDocument();
   });
 });
