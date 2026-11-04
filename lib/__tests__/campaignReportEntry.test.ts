@@ -5,6 +5,8 @@ import {
   nameFieldCount,
   resizeNames,
   formatReportDate,
+  validateCounts,
+  COUNT_REQUIRED_MESSAGE,
 } from '../campaignReportEntry';
 
 describe('sanitizeCountInput', () => {
@@ -44,5 +46,18 @@ describe('resizeNames', () => {
 describe('formatReportDate', () => {
   it('formats as dd/mm/yyyy', () => {
     expect(formatReportDate('2026-11-04')).toBe('04/11/2026');
+  });
+});
+
+describe('validateCounts', () => {
+  it('accepts a number (including 0) in every field', () => {
+    expect(validateCounts({ partial: '0', full: '5', sinnersPrayers: '12' })).toEqual({});
+  });
+
+  it('flags each blank field', () => {
+    expect(validateCounts({ partial: '', full: '3', sinnersPrayers: '' })).toEqual({
+      partial: COUNT_REQUIRED_MESSAGE,
+      sinnersPrayers: COUNT_REQUIRED_MESSAGE,
+    });
   });
 });

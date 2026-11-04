@@ -17,12 +17,16 @@ import {
   resizeNames,
   sanitizeCountInput,
   sanitizeNameInput,
+  validateCounts,
 } from '@/lib/campaignReportEntry';
 
 const labelClass = 'block text-lg font-bold text-gray-900 dark:text-gray-100 mb-1';
 const inputClass =
   'w-full rounded-md border-2 border-gray-400 bg-white px-3 py-2 text-lg text-gray-900 dark:border-gray-500 dark:bg-gray-800 dark:text-gray-100';
-const readOnlyClass = `${inputClass} bg-gray-100 dark:bg-gray-700 cursor-not-allowed`;
+// Shaded, with no white background, so it reads as non-editable.
+const readOnlyClass =
+  'w-full rounded-md border-2 border-gray-300 bg-gray-200 px-3 py-2 text-lg text-gray-700 cursor-not-allowed dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300';
+const errorInputClass = 'border-red-600 dark:border-red-500';
 
 interface PrefilledCampaign {
   location: string;
@@ -44,6 +48,7 @@ function CampaignReportEntryContent() {
     full: '',
     sinnersPrayers: '',
   });
+  const [countErrors, setCountErrors] = useState<Partial<Record<ReportCountField, string>>>({});
   const [names, setNames] = useState<Record<ReportCountField, string[]>>({
     partial: [],
     full: [],
@@ -78,6 +83,7 @@ function CampaignReportEntryContent() {
   const handleCountChange = (field: ReportCountField, raw: string) => {
     const value = sanitizeCountInput(raw);
     setCounts((prev) => ({ ...prev, [field]: value }));
+    setCountErrors((prev) => ({ ...prev, [field]: undefined }));
     setNames((prev) => ({ ...prev, [field]: resizeNames(prev[field], nameFieldCount(value)) }));
   };
 
@@ -87,6 +93,14 @@ function CampaignReportEntryContent() {
       ...prev,
       [field]: prev[field].map((n, i) => (i === index ? value : n)),
     }));
+  };
+
+  const handleSave = (e: React.FormEvent) => {
+    e.preventDefault();
+    const errors = validateCounts(counts);
+    setCountErrors(errors);
+    if (Object.keys(errors).length > 0) return;
+    // No action yet — saving to campaign_reports comes in a later step.
   };
 
   if (!campaign && !error) {
@@ -113,17 +127,17 @@ function CampaignReportEntryContent() {
         )}
 
         {campaign && (
-          <form onSubmit={(e) => e.preventDefault()} className="space-y-5">
+          <form onSubmit={handleSave} noValidate className="space-y-5">
             <div>
-              <label htmlFor="report-location" className={labelClass}>Location *</label>
+              <label htmlFor="report-location" className={labelClass}>Location</label>
               <input id="report-location" type="text" readOnly value={campaign.location} className={readOnlyClass} />
             </div>
             <div>
-              <label htmlFor="report-leader" className={labelClass}>Campaign Leader *</label>
+              <label htmlFor="report-leader" className={labelClass}>Campaign Leader</label>
               <input id="report-leader" type="text" readOnly value={campaign.leader} className={readOnlyClass} />
             </div>
             <div>
-              <label htmlFor="report-date" className={labelClass}>Campaign Date *</label>
+              <label htmlFor="report-date" className={labelClass}>Campaign Date</label>
               <input id="report-date" type="text" readOnly value={campaign.date} className={readOnlyClass} />
             </div>
 
@@ -137,8 +151,15 @@ function CampaignReportEntryContent() {
                   autoComplete="off"
                   value={counts[key]}
                   onChange={(e) => handleCountChange(key, e.target.value)}
-                  className={inputClass}
+                  aria-invalid={!!countErrors[key]}
+                  aria-describedby={countErrors[key] ? `report-${key}-error` : undefined}
+                  className={`${inputClass} ${countErrors[key] ? errorInputClass : ''}`}
                 />
+                {countErrors[key] && (
+                  <p id={`report-${key}-error`} role="alert" className="mt-1 text-base font-semibold text-red-700 dark:text-red-400">
+                    {countErrors[key]}
+                  </p>
+                )}
                 {names[key].length > 0 && (
                   <div className="mt-3 space-y-2 pl-3 border-l-4 border-blue-300 dark:border-blue-700">
                     {names[key].map((name, i) => (
@@ -159,7 +180,6 @@ function CampaignReportEntryContent() {
               </div>
             ))}
 
-            {/* No action yet — saving to campaign_reports comes in a later step. */}
             <button
               type="submit"
               className="w-full rounded-md border-2 border-gray-800 bg-green-600 px-6 py-5 text-2xl font-extrabold text-white hover:bg-green-700 dark:border-gray-600"

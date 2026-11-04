@@ -800,7 +800,7 @@ There is no separate permissions module. Role logic is kept inline wherever it i
 /training-interest/[campaignId]       Who registered interest in one training session (2FA required)
 /record-results                       Select a campaign to record results for
 /record-results/detail                Enter result names + counts
-/record-results/report                Combined results + TWOL Campaign Report entry (AD only, past campaigns; Save does nothing yet)
+/record-results/report                Combined results + TWOL Campaign Report entry (AD only, past campaigns; Save validates the counts but does nothing else yet)
 /results                              View result summaries (signed-in JPEG slide viewer)
 /capture                              Geolocation-based campaign capture
 /view-slides                          Public, no-login JPEG slide viewer
