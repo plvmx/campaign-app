@@ -18,6 +18,8 @@ import {
   sanitizeCountInput,
   sanitizeNameInput,
   validateCounts,
+  validateNames,
+  NAME_REQUIRED_MESSAGE,
 } from '@/lib/campaignReportEntry';
 
 const labelClass = 'block text-lg font-bold text-gray-900 dark:text-gray-100 mb-1';
@@ -49,6 +51,7 @@ function CampaignReportEntryContent() {
     sinnersPrayers: '',
   });
   const [countErrors, setCountErrors] = useState<Partial<Record<ReportCountField, string>>>({});
+  const [nameErrors, setNameErrors] = useState<Partial<Record<ReportCountField, number[]>>>({});
   const [names, setNames] = useState<Record<ReportCountField, string[]>>({
     partial: [],
     full: [],
@@ -84,6 +87,7 @@ function CampaignReportEntryContent() {
     const value = sanitizeCountInput(raw);
     setCounts((prev) => ({ ...prev, [field]: value }));
     setCountErrors((prev) => ({ ...prev, [field]: undefined }));
+    setNameErrors((prev) => ({ ...prev, [field]: undefined }));
     setNames((prev) => ({ ...prev, [field]: resizeNames(prev[field], nameFieldCount(value)) }));
   };
 
@@ -93,13 +97,19 @@ function CampaignReportEntryContent() {
       ...prev,
       [field]: prev[field].map((n, i) => (i === index ? value : n)),
     }));
+    setNameErrors((prev) => {
+      const remaining = prev[field]?.filter((i) => i !== index);
+      return { ...prev, [field]: remaining?.length ? remaining : undefined };
+    });
   };
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     const errors = validateCounts(counts);
+    const missingNames = validateNames(names);
     setCountErrors(errors);
-    if (Object.keys(errors).length > 0) return;
+    setNameErrors(missingNames);
+    if (Object.keys(errors).length > 0 || Object.keys(missingNames).length > 0) return;
     // No action yet — saving to campaign_reports comes in a later step.
   };
 
@@ -172,9 +182,15 @@ function CampaignReportEntryContent() {
                         maxLength={NAME_MAX_LENGTH}
                         value={name}
                         onChange={(e) => handleNameChange(key, i, e.target.value)}
-                        className={inputClass}
+                        aria-invalid={!!nameErrors[key]?.includes(i)}
+                        className={`${inputClass} ${nameErrors[key]?.includes(i) ? errorInputClass : ''}`}
                       />
                     ))}
+                    {nameErrors[key] && (
+                      <p role="alert" className="text-base font-semibold text-red-700 dark:text-red-400">
+                        {NAME_REQUIRED_MESSAGE}
+                      </p>
+                    )}
                   </div>
                 )}
               </div>

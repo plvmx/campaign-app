@@ -6,6 +6,7 @@ import {
   resizeNames,
   formatReportDate,
   validateCounts,
+  validateNames,
   COUNT_REQUIRED_MESSAGE,
 } from '../campaignReportEntry';
 
@@ -59,5 +60,17 @@ describe('validateCounts', () => {
       partial: COUNT_REQUIRED_MESSAGE,
       sinnersPrayers: COUNT_REQUIRED_MESSAGE,
     });
+  });
+});
+
+describe('validateNames', () => {
+  it('accepts fully populated name lists, including empty ones', () => {
+    expect(validateNames({ partial: ['Ann', 'Bob'], full: [], sinnersPrayers: ['Cy'] })).toEqual({});
+  });
+
+  it('reports the blank boxes per field, treating spaces-only as blank', () => {
+    expect(
+      validateNames({ partial: ['Ann', '', '  '], full: ['Bob'], sinnersPrayers: [''] }),
+    ).toEqual({ partial: [1, 2], sinnersPrayers: [0] });
   });
 });

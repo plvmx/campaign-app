@@ -65,10 +65,28 @@ describe('Campaign report entry page', () => {
     expect(screen.getByLabelText('Number of Partial Presentations *')).toHaveAttribute('aria-invalid', 'true');
     expect(screen.getByLabelText('Number of Full Presentations *')).toHaveAttribute('aria-invalid', 'false');
 
-    fireEvent.change(screen.getByLabelText('Number of Partial Presentations *'), { target: { value: '2' } });
+    fireEvent.change(screen.getByLabelText('Number of Partial Presentations *'), { target: { value: '0' } });
     expect(screen.getAllByRole('alert')).toHaveLength(1);
-    fireEvent.change(screen.getByLabelText('Number of Sinners Prayers *'), { target: { value: '1' } });
+    fireEvent.change(screen.getByLabelText('Number of Sinners Prayers *'), { target: { value: '0' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('requires a name in every revealed name box when Save is clicked', async () => {
+    render(<Page />);
+    await screen.findByLabelText('Location');
+    fireEvent.change(screen.getByLabelText('Number of Partial Presentations *'), { target: { value: '2' } });
+    fireEvent.change(screen.getByLabelText('Number of Full Presentations *'), { target: { value: '0' } });
+    fireEvent.change(screen.getByLabelText('Number of Sinners Prayers *'), { target: { value: '0' } });
+    fireEvent.change(screen.getByLabelText('Number of Partial Presentations *'), { target: { value: '2' } });
+    fireEvent.change(screen.getByPlaceholderText('Name 1'), { target: { value: 'Ann' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Please enter a name in every box.');
+    expect(screen.getByPlaceholderText('Name 1')).toHaveAttribute('aria-invalid', 'false');
+    expect(screen.getByPlaceholderText('Name 2')).toHaveAttribute('aria-invalid', 'true');
+
+    fireEvent.change(screen.getByPlaceholderText('Name 2'), { target: { value: 'Bob' } });
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });
