@@ -30,6 +30,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Every change must pass all four CI jobs: **Lint · Type-check · Unit tests · Build**.  
 Never suppress lint errors with disable comments unless there is no correct refactor — always prefer fixing the root cause.
 
+## UI validation (standing rule)
+Whenever a new UI is built (a page, form, modal or any screen that accepts input), add appropriate field-level and form-level validation in the same PR:
+- **Restrict input as it is typed** where the rule is simple (digits only, max length, allowed characters) and **check the whole form on submit** — required fields, fields that depend on each other (e.g. a count that reveals that many name boxes), cross-field rules.
+- Show an inline message next to the offending field (red border, `aria-invalid`, `role="alert"` message), clear it as soon as the user fixes the field, and never submit while any error remains. Server-side routes must re-validate; client checks are for usability only.
+- Keep the rules in a pure, unit-tested helper under `lib/` (not inline in the component), and cover the failing and passing cases in a page/component test.
+- **If the validation rules for a field are not clear from the request, ask Peter before building** — which fields are required, allowed characters, min/max lengths or values, whether 0/blank are acceptable — rather than guessing. State the rules you applied in the PR description.
+
 ## Testing policy
 - Every bug-fix PR includes a regression test that fails on the pre-fix code and passes on the post-fix code, in the same PR. If the bug is purely visual/CSS/copy and genuinely can't be captured in a test, say so explicitly in the PR description rather than silently skipping it.
 - Every new function added to `lib/` or `lib/services/` ships with a test in the same PR.
@@ -206,7 +213,7 @@ All database access goes through service modules in `lib/services/`. Pages and c
 | `/app/tl-admin` | "My Admin" — a plain team leader's admin options (Campaign Rules for their state, Check Registration, optional Extra Security → 2FA setup). AD/SR are pointed at their own admin panels instead |
 | `/app/guide` | "USER GUIDE" (plain leaders' bottom bar, between Home and My Admin) — `components/GuideScreen.tsx`: the current CAS User Guide PDF straight away, full screen, drawn inside the app by `components/PdfGuideViewer.tsx`, with a **✕ Close** button (back to the previous screen, or `/app`). Falls back to a plain link (phone's own viewer) if the in-app viewer fails. The same screen opens in place from USER GUIDE on `/login`'s sign-in form and action chooser. See `lib/services/userGuideService.ts` |
 | `/app/check-registration` | Leader-facing check of whether a member has a registry entry: First Name, Last Name, Email, Mobile (name + at least one contact detail) → **Registered** / **Registered under a different name** / **Not Registered**. Linked from My Admin. Any signed-in `state_leaders` row may use it (enforced by `POST /api/leader/check-registration`, rate-limited per IP and per user); shows no registry data — see `lib/services/registrationCheckService.ts` |
-| `/record-results/report` | Experimental combined "TWOL Campaign Report" + names entry page (2026-11-04), full admins (AD) only, reached from a link under Edit/Delete on **past** campaign cards. Location/Leader/Date pre-filled read-only from the campaign; Partial/Full/Sinners Prayers counts (2 digits max) each reveal that many name boxes (letters and spaces only, 20 chars max; rules in `lib/campaignReportEntry.ts`). Save checks that every count field has a number (0 is fine; rules in `validateCounts`) and otherwise does nothing yet — writing to `campaign_reports` comes next |
+| `/record-results/report` | Experimental combined "TWOL Campaign Report" + names entry page (2026-11-04), full admins (AD) only, reached from a link under Edit/Delete on **past** campaign cards. Location/Leader/Date pre-filled read-only from the campaign; Partial/Full/Sinners Prayers counts (2 digits max) each reveal that many name boxes (letters and spaces only, 20 chars max; rules in `lib/campaignReportEntry.ts`). Save checks that every count field has a number (0 is fine; `validateCounts`) and that every revealed name box is filled (`validateNames`), showing inline errors, and otherwise does nothing yet — writing to `campaign_reports` comes next |
 | `/campaign-list` | Week-by-week slide-style campaign list |
 | `/capture` | Geolocation capture for campaigns |
 | `/record-results` | Record campaign results |

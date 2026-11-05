@@ -55,3 +55,21 @@ export function validateCounts(
   }
   return errors;
 }
+
+export const NAME_REQUIRED_MESSAGE = 'Please enter a name in every box.';
+
+/**
+ * For each count field, the indexes of name boxes left blank (spaces only
+ * counts as blank). Fields with every box filled are omitted, so an empty
+ * object means the names are valid.
+ */
+export function validateNames(
+  names: Record<ReportCountField, string[]>,
+): Partial<Record<ReportCountField, number[]>> {
+  const errors: Partial<Record<ReportCountField, number[]>> = {};
+  for (const { key } of REPORT_COUNT_FIELDS) {
+    const blank = names[key].flatMap((n, i) => (n.trim() === '' ? [i] : []));
+    if (blank.length > 0) errors[key] = blank;
+  }
+  return errors;
+}
