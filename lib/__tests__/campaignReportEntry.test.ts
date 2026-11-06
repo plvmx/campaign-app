@@ -7,6 +7,8 @@ import {
   formatReportDate,
   validateCounts,
   validateNames,
+  formatReportLocation,
+  isValidCount,
   COUNT_REQUIRED_MESSAGE,
 } from '../campaignReportEntry';
 
@@ -72,5 +74,19 @@ describe('validateNames', () => {
     expect(
       validateNames({ partial: ['Ann', '', '  '], full: ['Bob'], sinnersPrayers: [''] }),
     ).toEqual({ partial: [1, 2], sinnersPrayers: [0] });
+  });
+});
+
+describe('formatReportLocation', () => {
+  it('joins place, site and state', () => {
+    expect(formatReportLocation({ place: 'Orange', site: '1', state: 'VIC' })).toBe('Orange 1 VIC');
+    expect(formatReportLocation({ place: 'Sylvania', site: '', state: 'NSW' })).toBe('Sylvania NSW');
+  });
+});
+
+describe('isValidCount', () => {
+  it('accepts whole numbers 0-99 only', () => {
+    expect([0, 5, 99].every(isValidCount)).toBe(true);
+    expect([-1, 100, 1.5, '3', null, undefined, NaN].some(isValidCount)).toBe(false);
   });
 });

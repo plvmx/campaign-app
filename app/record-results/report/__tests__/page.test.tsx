@@ -16,9 +16,14 @@ vi.mock('@/lib/services/campaignService', () => ({
   }),
 }));
 
+const requestEmail = vi.fn();
+vi.mock('@/lib/services/campaignReportEmailClient', () => ({
+  requestCampaignReportEmail: (...a: unknown[]) => requestEmail(...a),
+}));
+
 import Page from '../page';
 
-afterEach(cleanup);
+afterEach(() => { cleanup(); requestEmail.mockReset(); });
 
 describe('Campaign report entry page', () => {
   it('pre-fills location, leader and date and omits the follow-up field', async () => {
@@ -88,5 +93,46 @@ describe('Campaign report entry page', () => {
 
     fireEvent.change(screen.getByPlaceholderText('Name 2'), { target: { value: 'Bob' } });
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  async function fillValidReport() {
+    render(<Page />);
+    await screen.findByLabelText('Location');
+    fireEvent.change(screen.getByLabelText('Number of Partial Presentations *'), { target: { value: '0' } });
+    fireEvent.change(screen.getByLabelText('Number of Full Presentations *'), { target: { value: '1' } });
+    fireEvent.change(screen.getByPlaceholderText('Name 1'), { target: { value: 'Ann' } });
+    fireEvent.change(screen.getByLabelText('Number of Sinners Prayers *'), { target: { value: '0' } });
+  }
+
+  it('does not email anything while the form is invalid', async () => {
+    render(<Page />);
+    await screen.findByLabelText('Location');
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(requestEmail).not.toHaveBeenCalled();
+  });
+
+  it('emails the counts (never the names) when Save is clicked on a valid form', async () => {
+    requestEmail.mockResolvedValue('sent');
+    await fillValidReport();
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(await screen.findByText('Report saved and emailed to management.')).toBeInTheDocument();
+    expect(requestEmail).toHaveBeenCalledWith('c1', { partial: 0, full: 1, sinnersPrayers: 0 });
+  });
+
+  it('says so when emailing is switched off', async () => {
+    requestEmail.mockResolvedValue('disabled');
+    await fillValidReport();
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(await screen.findByText(/Emailing is switched off/)).toBeInTheDocument();
+  });
+
+  it('shows an error and allows another try when the email fails', async () => {
+    requestEmail.mockRejectedValueOnce(new Error('The report could not be emailed.')).mockResolvedValueOnce('sent');
+    await fillValidReport();
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('The report could not be emailed. Please try again.');
+    expect(screen.getByRole('button', { name: 'Save' })).not.toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(await screen.findByText('Report saved and emailed to management.')).toBeInTheDocument();
   });
 });

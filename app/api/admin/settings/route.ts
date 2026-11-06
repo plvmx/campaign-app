@@ -14,6 +14,12 @@ import { enforceOrigin } from '@/lib/corsUtils';
 import { verifyAdminCaller } from '@/lib/services/adminCallerService';
 import { normalizeHotkey } from '@/lib/techInsights/hotkey';
 import { TECH_INSIGHTS_ENABLED_KEY, TECH_INSIGHTS_HOTKEY_KEY } from '@/lib/techInsights/settings';
+import {
+  CAMPAIGN_REPORT_EMAIL_ENABLED_KEY,
+  CAMPAIGN_REPORT_EMAIL_RECIPIENTS_KEY,
+  parseRecipientList,
+  validateRecipientList,
+} from '@/lib/campaignReportEmailSettings';
 import { PUBLIC_LINKS, publicLinkTitleSettingKey, publicLinkDescriptionSettingKey } from '@/lib/publicLinks';
 
 // Public link keys are derived from PUBLIC_LINKS so a new entry there is
@@ -25,6 +31,8 @@ const ALLOWED_SETTING_KEYS = new Set([
   'slide_view_admin',
   TECH_INSIGHTS_ENABLED_KEY,
   TECH_INSIGHTS_HOTKEY_KEY,
+  CAMPAIGN_REPORT_EMAIL_ENABLED_KEY,
+  CAMPAIGN_REPORT_EMAIL_RECIPIENTS_KEY,
   ...PUBLIC_LINKS.flatMap((link) => [publicLinkTitleSettingKey(link.slug), publicLinkDescriptionSettingKey(link.slug)]),
 ]);
 
@@ -83,6 +91,15 @@ export async function POST(request: NextRequest) {
   }
   if (key === TECH_INSIGHTS_ENABLED_KEY && value !== 'true' && value !== 'false') {
     return NextResponse.json({ error: 'Value must be true or false' }, { status: 400 });
+  }
+
+  // Management's report email: a flag, and at most four valid, distinct addresses.
+  if (key === CAMPAIGN_REPORT_EMAIL_ENABLED_KEY && value !== 'true' && value !== 'false') {
+    return NextResponse.json({ error: 'Value must be true or false' }, { status: 400 });
+  }
+  if (key === CAMPAIGN_REPORT_EMAIL_RECIPIENTS_KEY) {
+    const recipientError = validateRecipientList(parseRecipientList(value));
+    if (recipientError) return NextResponse.json({ error: recipientError }, { status: 400 });
   }
 
   const { error: upsertError } = await supabaseAdmin

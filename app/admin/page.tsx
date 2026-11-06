@@ -17,6 +17,7 @@ import { getErrorMessage } from '@/lib/errorUtils';
 import { trackEvent } from '@/lib/analytics';
 import UserGuideUploadCard from './components/UserGuideUploadCard';
 import TechInsightsSettingsCard from './components/TechInsightsSettingsCard';
+import CampaignReportEmailCard from './components/CampaignReportEmailCard';
 
 /** Most-recent row from weekly_refresh_log (new columns may be null on older rows). */
 interface LastRefreshInfo {
@@ -346,6 +347,9 @@ export default function AdminPage() {
 
           {/* CAS User Guide ("USER GUIDE" button) */}
           <UserGuideUploadCard />
+
+          {/* TWOL Campaign Report management email: on/off + recipients */}
+          <CampaignReportEmailCard />
 
           {/* Tech Insights (on-screen technical details, desktop admins only) */}
           <TechInsightsSettingsCard />
