@@ -60,4 +60,16 @@ describe('CampaignReportEmailCard', () => {
     await waitFor(() => expect(setConfig).toHaveBeenCalledWith({ enabled: true, recipients: ['a@example.com', 'b@example.com'] }));
     expect(await screen.findByText('Saved. Report emails are on.')).toBeInTheDocument();
   });
+
+  it('gives each address box its own name and keeps phone autofill from treating them as one field', async () => {
+    render(<CampaignReportEmailCard />);
+    await waitFor(() => expect(boxes()[0].value).toBe('a@example.com'));
+    // Without distinct names, a phone's address suggestion filled all four boxes at once.
+    expect(new Set(boxes().map((b) => b.name)).size).toBe(4);
+    for (const box of boxes()) {
+      expect(box).toHaveAttribute('autocomplete', 'off');
+      expect(box).toHaveAttribute('inputmode', 'email');
+      expect(box).not.toHaveAttribute('type', 'email');
+    }
+  });
 });

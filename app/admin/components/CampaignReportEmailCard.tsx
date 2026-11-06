@@ -104,9 +104,15 @@ export default function CampaignReportEmailCard() {
             </label>
             <input
               id={`report-email-recipient-${i}`}
-              type="email"
+              // A phone's address suggestion fills every email-type box that
+              // shares a name (here: none) — so each box gets its own name and
+              // is a text box with the email keyboard, not type="email".
+              name={`report-email-recipient-${i + 1}`}
+              type="text"
               inputMode="email"
               autoComplete="off"
+              autoCapitalize="none"
+              spellCheck={false}
               maxLength={254}
               disabled={!loaded || busy}
               value={value}
