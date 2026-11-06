@@ -6,13 +6,14 @@ import MobileLayout from '@/components/MobileLayout';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import { useUser } from '@/contexts/UserContext';
 import { getCampaignById } from '@/lib/services/campaignService';
-import { combinePlaceAndSite } from '@/lib/placeSite';
+import { requestCampaignReportEmail } from '@/lib/services/campaignReportEmailClient';
 import { getErrorMessage } from '@/lib/errorUtils';
 import {
   REPORT_COUNT_FIELDS,
   NAME_MAX_LENGTH,
   type ReportCountField,
   formatReportDate,
+  formatReportLocation,
   nameFieldCount,
   resizeNames,
   sanitizeCountInput,
@@ -51,6 +52,8 @@ function CampaignReportEntryContent() {
     sinnersPrayers: '',
   });
   const [countErrors, setCountErrors] = useState<Partial<Record<ReportCountField, string>>>({});
+  const [sendState, setSendState] = useState<'idle' | 'sending' | 'sent' | 'off'>('idle');
+  const [sendError, setSendError] = useState<string | null>(null);
   const [nameErrors, setNameErrors] = useState<Partial<Record<ReportCountField, number[]>>>({});
   const [names, setNames] = useState<Record<ReportCountField, string[]>>({
     partial: [],
@@ -72,7 +75,7 @@ function CampaignReportEntryContent() {
         if (cancelled) return;
         if (!c) { setError('Campaign not found.'); return; }
         setCampaign({
-          location: `${combinePlaceAndSite(c.place, c.site)} ${c.state}`.trim(),
+          location: formatReportLocation(c),
           leader: c.leader,
           date: formatReportDate(c.date),
         });
@@ -85,6 +88,8 @@ function CampaignReportEntryContent() {
 
   const handleCountChange = (field: ReportCountField, raw: string) => {
     const value = sanitizeCountInput(raw);
+    setSendState('idle');
+    setSendError(null);
     setCounts((prev) => ({ ...prev, [field]: value }));
     setCountErrors((prev) => ({ ...prev, [field]: undefined }));
     setNameErrors((prev) => ({ ...prev, [field]: undefined }));
@@ -93,6 +98,8 @@ function CampaignReportEntryContent() {
 
   const handleNameChange = (field: ReportCountField, index: number, raw: string) => {
     const value = sanitizeNameInput(raw);
+    setSendState('idle');
+    setSendError(null);
     setNames((prev) => ({
       ...prev,
       [field]: prev[field].map((n, i) => (i === index ? value : n)),
@@ -103,14 +110,30 @@ function CampaignReportEntryContent() {
     });
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (sendState === 'sending') return;
     const errors = validateCounts(counts);
     const missingNames = validateNames(names);
     setCountErrors(errors);
     setNameErrors(missingNames);
-    if (Object.keys(errors).length > 0 || Object.keys(missingNames).length > 0) return;
-    // No action yet — saving to campaign_reports comes in a later step.
+    if (Object.keys(errors).length > 0 || Object.keys(missingNames).length > 0 || !campaignId) return;
+
+    setSendState('sending');
+    setSendError(null);
+    try {
+      // Only the counts go to management — names stay in the app.
+      const outcome = await requestCampaignReportEmail(campaignId, {
+        partial: Number(counts.partial),
+        full: Number(counts.full),
+        sinnersPrayers: Number(counts.sinnersPrayers),
+      });
+      setSendState(outcome === 'sent' ? 'sent' : 'off');
+    } catch (err: unknown) {
+      setSendState('idle');
+      setSendError(getErrorMessage(err, 'The report could not be emailed.'));
+    }
+    // Saving to campaign_reports comes in a later step.
   };
 
   if (!campaign && !error) {
@@ -198,10 +221,20 @@ function CampaignReportEntryContent() {
 
             <button
               type="submit"
-              className="w-full rounded-md border-2 border-gray-800 bg-green-600 px-6 py-5 text-2xl font-extrabold text-white hover:bg-green-700 dark:border-gray-600"
+              disabled={sendState === 'sending'}
+              className="disabled:cursor-not-allowed disabled:opacity-60 w-full rounded-md border-2 border-gray-800 bg-green-600 px-6 py-5 text-2xl font-extrabold text-white hover:bg-green-700 dark:border-gray-600"
             >
-              Save
+              {sendState === 'sending' ? 'Saving…' : 'Save'}
             </button>
+            {sendState === 'sent' && (
+              <p role="status" className="text-lg font-semibold text-green-700 dark:text-green-300">Report saved and emailed to management.</p>
+            )}
+            {sendState === 'off' && (
+              <p role="status" className="text-lg font-semibold text-gray-800 dark:text-gray-200">Report saved. Emailing is switched off, so nothing was sent.</p>
+            )}
+            {sendError && (
+              <p role="alert" className="text-lg font-semibold text-red-700 dark:text-red-400">{sendError} Please try again.</p>
+            )}
           </form>
         )}
       </div>

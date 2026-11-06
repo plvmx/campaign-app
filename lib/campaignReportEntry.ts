@@ -2,6 +2,7 @@
  * Input rules for the combined "Record Results" + campaign report entry page
  * (`/record-results/report`). Pure helpers so the rules can be unit tested.
  */
+import { combinePlaceAndSite } from './placeSite';
 
 export const COUNT_MAX_DIGITS = 2;
 export const NAME_MAX_LENGTH = 20;
@@ -72,4 +73,14 @@ export function validateNames(
     if (blank.length > 0) errors[key] = blank;
   }
   return errors;
+}
+
+/** The Location line on the report: the campaign's place (with site number) and state, e.g. "Orange 1 VIC". */
+export function formatReportLocation(campaign: { place: string; site: string; state: string }): string {
+  return `${combinePlaceAndSite(campaign.place, campaign.site)} ${campaign.state}`.trim();
+}
+
+/** True for a whole number 0-99 (what the form's count boxes allow). */
+export function isValidCount(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 99;
 }

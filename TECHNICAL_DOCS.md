@@ -228,7 +228,7 @@ campaign-app/
 │   │   ├── generate-week-campaigns/ # Route: /admin/generate-week-campaigns — "Single Week Campaigns" JPEG
 │   │   ├── registered-interest/    # Route: /admin/registered-interest — everyone who registered interest
 │   │   ├── stuck-leaders/          # Route: /admin/stuck-leaders — leaders stuck on email/2FA setup
-│   │   ├── components/             # Admin hub cards: UserGuideUploadCard, TechInsightsSettingsCard
+│   │   ├── components/             # Admin hub cards: UserGuideUploadCard, TechInsightsSettingsCard, CampaignReportEmailCard
 │   │   ├── generate-report/        # Route: /admin/generate-report — canvas-based PDF report
 │   │   ├── generate-slides/        # Route: /admin/generate-slides — JPEG slide ZIP download
 │   │   ├── leader-shares/          # Route: /admin/leader-shares — leader-to-leader sharing links
@@ -268,7 +268,7 @@ campaign-app/
 │       │                                          #   propose-email, confirm-email, request-mfa-setup, complete-mfa-setup
 │       ├── leader/                                # check-registration, interest-counts (signed-in leaders)
 │       ├── registry/                              # manage-summary, manage-record, manage-edit-log, manage-whatsapp-invite-log, manage-registration-log (§17)
-│       ├── admin/{check-registration,stuck-leaders,tech-insights,reset-mfa,user-guide/upload-url}
+│       ├── admin/{check-registration,stuck-leaders,tech-insights,reset-mfa,user-guide/upload-url,campaign-report-email}
 │       ├── admin/geocode-address/route.ts
 │       ├── admin/geocode-place/route.ts
 │       ├── admin/invalidate-user-session/route.ts
@@ -331,6 +331,10 @@ campaign-app/
 │   ├── siteUrl.ts              # Absolute site origin (for OG tags, canonical URLs)
 │   ├── leafletMarkerIcon.ts    # State-tinted map pin icons (shared by every map)
 │   ├── campaignReportEntry.ts  # Input rules for /record-results/report (2-digit counts, 20-char letters-and-spaces names)
+│   ├── campaignReportEmail.ts  # Builds the management email (title, subject, html + text; counts only)
+│   ├── campaignReportEmailSettings.ts  # app_settings keys + recipient rules (max 4, valid, distinct)
+│   ├── resendClient.ts         # sendEmail() — Resend HTTP API from the Next.js app
+│   ├── emailFormat.ts          # isValidEmail (import-free; re-exported by validation.ts)
 │   ├── recordResultsDraft.ts   # Local-only draft recovery for /record-results/detail
 │   ├── resultsLog.ts           # Audit logging for results changes
 │   ├── resultsMetrics.ts       # Aggregation for /admin/results-metrics
@@ -800,7 +804,7 @@ There is no separate permissions module. Role logic is kept inline wherever it i
 /training-interest/[campaignId]       Who registered interest in one training session (2FA required)
 /record-results                       Select a campaign to record results for
 /record-results/detail                Enter result names + counts
-/record-results/report                Combined results + TWOL Campaign Report entry (AD only, past campaigns; Save validates the counts and that every name box is filled, but does nothing else yet)
+/record-results/report                Combined results + TWOL Campaign Report entry (AD only, past campaigns; Save validates the counts and that every name box is filled, emails the counts to management, but does nothing else yet)
 /results                              View result summaries (signed-in JPEG slide viewer)
 /capture                              Geolocation-based campaign capture
 /view-slides                          Public, no-login JPEG slide viewer
@@ -1494,6 +1498,8 @@ If the fix and the test live in the same file (rare), use `git show HEAD~1:path/
 | `NEXT_PUBLIC_ADMIN_EMAILS` | Referenced but not actively enforced | No |
 | `NEXT_PUBLIC_SITE_URL` | `lib/siteUrl.ts` — absolute links in emails/SMS/OG tags (falls back to Vercel's production URL, then localhost) | Production |
 | `NEXT_PUBLIC_SUPPORT_MOBILE` | `lib/supportContact.ts` — support number on `/help/2fa` and the stuck-leaders Call/Text links | No |
+| `RESEND_API_KEY` | `lib/resendClient.ts` — TWOL Campaign Report email to management; missing key makes Save show an error | For the report email |
+| `CAMPAIGN_REPORT_EMAIL_FROM` | `lib/resendClient.ts` — sender, must be on a Resend-verified domain (default `AFJ <noreply@afj.org.au>`) | No |
 | `CLICKSEND_USERNAME`, `CLICKSEND_API_KEY` | `lib/clickSendClient.ts` — "text the leader" SMS; missing config makes sends fail (logged, never blocks the registrant) | For SMS |
 | `VERCEL_PROJECT_PRODUCTION_URL` | Auto-injected by Vercel; `siteUrl.ts` fallback | Auto |
 
@@ -2023,6 +2029,14 @@ Three modules: `lib/ariseLayout.ts` (constants, `AriseCampaign`, `apx()`, `simul
 Aggregate per-campaign tallies (Partial/Full Presentations, Sinner's Prayer, Information Requests) from an external Google Sheet, in `campaign_reports`. `lib/campaignReportParser.ts` (`parseTallyValue`, `parseCampaignDate`, `normalizeCampaignReportRow`) owns the messy-data parsing rules, shared by the initial load (`scripts/campaign_reports_xlsx_to_json.py` + `scripts/import_campaign_reports.ts`) and the incremental catch-up import. `location_raw`/`leader_raw` are free text with no FK; every tally/date column has a paired `*_raw` and `needs_review` flags rows the parser couldn't resolve; `submitted_at` is unique (the de-dup key for re-imports); `campaign_id` is a nullable unenforced best-effort link. `derived_state`/`derived_location`/`derived_leader` are populated for every row by `lib/campaignReportMatcher.ts`. **`derived_location` is `state_places.location` — the physical location — not the `place` site label** (several places share one location: "Perth CBD 1…4", "Orange 1/2"; `derived_place` is the earlier, now unused column). The matcher compares the typed text with both and answers with the location; a state typed in the text is authoritative; a confirmed `campaign_report_location_aliases` row beats every heuristic.ts` — a state typed in the location ("Brighton SA") is authoritative and a confirmed `campaign_report_location_aliases` row beats every heuristic; the cleanup step fills only empty fields so hand-entered values survive. `/admin/campaign-reports` (`campaignReportManageService`; `GET/PATCH /api/admin/campaign-reports/manage`) is the management console — search, filter by state / place / year / needs-review, sortable columns, and a View/Edit toggle to fill in State, Location and Leader (a location must be a State Places location or be added after a confirmation; changing the state clears a location/leader that isn't in it); every change is logged to `campaign_report_edits` and shown at `/admin/campaign-reports/edit-log`. `/admin/campaign-report-locations` (`campaignReportLocationsService`, `GET/POST /api/admin/campaign-reports/locations`) is where an admin maps each remaining location to a state and `state_places` place, or adds it as a new place; the daily sync logs one line with how many locations still have no place (`scripts/derive_campaign_reports_fields.ts`), null when not confidently resolvable — never guessed. Admin-only RLS. **Live sheet sync (temporary, 2026-10-24):** `/api/cron/campaign-report-sync` (daily, 16:30 UTC, `vercel.json`) runs `campaignReportSyncService.syncCampaignReportsFromSheet` — reads the link-shared sheet (`campaignReportSheetReader.ts` merges its public CSV export for text with its `gviz` JSON feed for true dates; no API key or xlsx library), inserts only rows whose `submitted_at` isn't stored yet (`source = 'google_sheet_sync'`; existing rows are never modified), then fills any empty derived state/place/leader. Sheet timestamps are read as Australia/Melbourne wall-clock. Remove it, its cron entry and env var when the app's own numbers replace the sheet. See `docs/campaign-report/BRIEF.md`.
 
 ---
+
+### 19.3 TWOL Campaign Report email to management
+
+When an AD presses **Save** on `/record-results/report` (after the count/name validation passes) the page calls `requestCampaignReportEmail(campaignId, counts)` → `POST /api/admin/campaign-report-email` (`authorizeAdminRequest`: AD + 2FA; 10 requests / 10 min per admin). `campaignReportEmailService.sendCampaignReportEmail(client, { campaignId, counts })` reads the switch and recipients **fresh** from `app_settings`, loads location/leader/date from the `campaigns` row (never from the request), builds the email with `campaignReportEmail.buildCampaignReportEmail` (title "TWOL Campaign Report"; Location, Campaign Leader, Campaign Date and the three "Number of …" counts — **no names**, no follow-up field, no variant/URL) and sends one message to every recipient through `resendClient.sendEmail` (Resend HTTP API). Results: `sent`, `disabled` (switch off — the page says nothing was sent), `no_recipients`; a send failure is a 502 and the page shows "The report could not be emailed. Please try again." (nothing else is saved yet, so Save can simply be pressed again; the button is disabled while sending and edits clear any previous result).
+
+**Admin settings** — the "TWOL Campaign Report email" card on `/admin` (`CampaignReportEmailCard`): an on/off switch and four address boxes, one **Save**. Stored in `app_settings` as `campaign_report_email_enabled` (`true`/`false`, off by default) and `campaign_report_email_recipients` (comma-separated). Rules live in `campaignReportEmailSettings.ts` and are enforced both in the card and by `/api/admin/settings`: at most 4 addresses, each a plausible email (≤ 254 chars), no case-insensitive repeats, and sending can't be switched on with none listed.
+
+**Setup needed in Vercel:** `RESEND_API_KEY` (the existing Resend account; the registry Edge Function has its own copy of the key) and, if the default sender isn't right, `CAMPAIGN_REPORT_EMAIL_FROM`. The sender domain must be verified in Resend.
 
 ## 20. UI Conventions
 

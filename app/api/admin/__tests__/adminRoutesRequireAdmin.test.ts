@@ -39,6 +39,7 @@ const ROUTES: Array<[string, () => Promise<{ POST?: Handler; GET?: Handler; PATC
   ['check-registration', () => import('../check-registration/route'), 'POST'],
   ['user-guide/upload-url', () => import('../user-guide/upload-url/route'), 'POST'],
   ['tech-insights', () => import('../tech-insights/route'), 'GET'],
+  ['campaign-report-email', () => import('../campaign-report-email/route'), 'POST'],
 ];
 
 function makeRequest(name: string, token?: string, method: Method = 'POST') {

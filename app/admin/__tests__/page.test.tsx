@@ -48,6 +48,8 @@ vi.mock('@/lib/appSettings', () => ({
   getTechInsightsConfig: vi.fn().mockResolvedValue({ enabled: false, hotkey: 'Ctrl+Alt+I' }),
   setTechInsightsEnabled: vi.fn(),
   setTechInsightsHotkey: vi.fn(),
+  getCampaignReportEmailConfig: vi.fn().mockResolvedValue({ enabled: false, recipients: [] }),
+  setCampaignReportEmailConfig: vi.fn(),
 }));
 
 vi.mock('@/lib/services/weeklyRefreshService', () => ({
