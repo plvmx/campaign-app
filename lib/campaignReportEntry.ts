@@ -7,12 +7,13 @@ import { combinePlaceAndSite } from './placeSite';
 export const COUNT_MAX_DIGITS = 2;
 export const NAME_MAX_LENGTH = 20;
 
-export type ReportCountField = 'partial' | 'full' | 'sinnersPrayers';
+export type ReportCountField = 'partial' | 'full' | 'sinnersPrayers' | 'followUp';
 
 export const REPORT_COUNT_FIELDS: ReadonlyArray<{ key: ReportCountField; label: string }> = [
   { key: 'partial', label: 'Number of Partial Presentations' },
   { key: 'full', label: 'Number of Full Presentations' },
   { key: 'sinnersPrayers', label: 'Number of Sinners Prayers' },
+  { key: 'followUp', label: 'Number of Requests for Follow-up/Info' },
 ];
 
 /** Keeps digits only, at most two of them. */

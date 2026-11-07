@@ -2,7 +2,7 @@
  * Admin-only: email a submitted TWOL Campaign Report to management — see
  * lib/services/campaignReportEmailService.ts. Caller must be a full admin (AD)
  * signed in with 2FA (lib/adminRouteGuard.ts).
- * POST body: { campaignId: string, partial: number, full: number, sinnersPrayers: number }
+ * POST body: { campaignId: string, partial: number, full: number, sinnersPrayers: number, followUp: number }
  * Responds { status: 'sent' | 'disabled' | 'no_recipients' }; 502 if sending failed.
  */
 import { NextRequest, NextResponse } from 'next/server';

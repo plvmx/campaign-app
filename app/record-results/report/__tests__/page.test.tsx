@@ -26,12 +26,14 @@ import Page from '../page';
 afterEach(() => { cleanup(); requestEmail.mockReset(); });
 
 describe('Campaign report entry page', () => {
-  it('pre-fills location, leader and date and omits the follow-up field', async () => {
+  it('pre-fills location, leader and date and shows all four count fields', async () => {
     render(<Page />);
     expect(await screen.findByLabelText('Location')).toHaveValue('Orange 1 VIC');
     expect(screen.getByLabelText('Campaign Leader')).toHaveValue('Jane Smith');
     expect(screen.getByLabelText('Campaign Date')).toHaveValue('31/10/2026');
-    expect(screen.queryByText(/Follow-up/)).not.toBeInTheDocument();
+    for (const label of ['Partial Presentations', 'Full Presentations', 'Sinners Prayers', 'Requests for Follow-up/Info']) {
+      expect(screen.getByLabelText(`Number of ${label} *`)).toBeInTheDocument();
+    }
     expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument();
   });
 
@@ -66,13 +68,15 @@ describe('Campaign report entry page', () => {
     await screen.findByLabelText('Location');
     fireEvent.change(screen.getByLabelText('Number of Full Presentations *'), { target: { value: '0' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-    expect(screen.getAllByRole('alert')).toHaveLength(2);
+    expect(screen.getAllByRole('alert')).toHaveLength(3);
     expect(screen.getByLabelText('Number of Partial Presentations *')).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByLabelText('Number of Requests for Follow-up/Info *')).toHaveAttribute('aria-invalid', 'true');
     expect(screen.getByLabelText('Number of Full Presentations *')).toHaveAttribute('aria-invalid', 'false');
 
     fireEvent.change(screen.getByLabelText('Number of Partial Presentations *'), { target: { value: '0' } });
-    expect(screen.getAllByRole('alert')).toHaveLength(1);
+    expect(screen.getAllByRole('alert')).toHaveLength(2);
     fireEvent.change(screen.getByLabelText('Number of Sinners Prayers *'), { target: { value: '0' } });
+    fireEvent.change(screen.getByLabelText('Number of Requests for Follow-up/Info *'), { target: { value: '0' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
@@ -83,6 +87,7 @@ describe('Campaign report entry page', () => {
     fireEvent.change(screen.getByLabelText('Number of Partial Presentations *'), { target: { value: '2' } });
     fireEvent.change(screen.getByLabelText('Number of Full Presentations *'), { target: { value: '0' } });
     fireEvent.change(screen.getByLabelText('Number of Sinners Prayers *'), { target: { value: '0' } });
+    fireEvent.change(screen.getByLabelText('Number of Requests for Follow-up/Info *'), { target: { value: '0' } });
     fireEvent.change(screen.getByLabelText('Number of Partial Presentations *'), { target: { value: '2' } });
     fireEvent.change(screen.getByPlaceholderText('Name 1'), { target: { value: 'Ann' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
@@ -102,6 +107,7 @@ describe('Campaign report entry page', () => {
     fireEvent.change(screen.getByLabelText('Number of Full Presentations *'), { target: { value: '1' } });
     fireEvent.change(screen.getByPlaceholderText('Name 1'), { target: { value: 'Ann' } });
     fireEvent.change(screen.getByLabelText('Number of Sinners Prayers *'), { target: { value: '0' } });
+    fireEvent.change(screen.getByLabelText('Number of Requests for Follow-up/Info *'), { target: { value: '0' } });
   }
 
   it('does not email anything while the form is invalid', async () => {
@@ -116,7 +122,7 @@ describe('Campaign report entry page', () => {
     await fillValidReport();
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     expect(await screen.findByText('Report saved and emailed to management.')).toBeInTheDocument();
-    expect(requestEmail).toHaveBeenCalledWith('c1', { partial: 0, full: 1, sinnersPrayers: 0 });
+    expect(requestEmail).toHaveBeenCalledWith('c1', { partial: 0, full: 1, sinnersPrayers: 0, followUp: 0 });
   });
 
   it('says so when emailing is switched off', async () => {
@@ -134,5 +140,15 @@ describe('Campaign report entry page', () => {
     expect(screen.getByRole('button', { name: 'Save' })).not.toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     expect(await screen.findByText('Report saved and emailed to management.')).toBeInTheDocument();
+  });
+
+  it('has the follow-up/info count, which reveals name boxes like the others', async () => {
+    render(<Page />);
+    const followUp = await screen.findByLabelText('Number of Requests for Follow-up/Info *');
+    fireEvent.change(followUp, { target: { value: 'x25' } });
+    expect(followUp).toHaveValue('25');
+    fireEvent.change(followUp, { target: { value: '2' } });
+    expect(screen.getAllByPlaceholderText(/^Name \d+$/)).toHaveLength(2);
+    expect(screen.getByLabelText('Number of Requests for Follow-up/Info — name 1')).toBeInTheDocument();
   });
 });

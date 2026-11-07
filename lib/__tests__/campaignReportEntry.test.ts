@@ -54,26 +54,27 @@ describe('formatReportDate', () => {
 
 describe('validateCounts', () => {
   it('accepts a number (including 0) in every field', () => {
-    expect(validateCounts({ partial: '0', full: '5', sinnersPrayers: '12' })).toEqual({});
+    expect(validateCounts({ partial: '0', full: '5', sinnersPrayers: '12', followUp: '0' })).toEqual({});
   });
 
   it('flags each blank field', () => {
-    expect(validateCounts({ partial: '', full: '3', sinnersPrayers: '' })).toEqual({
+    expect(validateCounts({ partial: '', full: '3', sinnersPrayers: '', followUp: '' })).toEqual({
       partial: COUNT_REQUIRED_MESSAGE,
       sinnersPrayers: COUNT_REQUIRED_MESSAGE,
+      followUp: COUNT_REQUIRED_MESSAGE,
     });
   });
 });
 
 describe('validateNames', () => {
   it('accepts fully populated name lists, including empty ones', () => {
-    expect(validateNames({ partial: ['Ann', 'Bob'], full: [], sinnersPrayers: ['Cy'] })).toEqual({});
+    expect(validateNames({ partial: ['Ann', 'Bob'], full: [], sinnersPrayers: ['Cy'], followUp: [] })).toEqual({});
   });
 
   it('reports the blank boxes per field, treating spaces-only as blank', () => {
     expect(
-      validateNames({ partial: ['Ann', '', '  '], full: ['Bob'], sinnersPrayers: [''] }),
-    ).toEqual({ partial: [1, 2], sinnersPrayers: [0] });
+      validateNames({ partial: ['Ann', '', '  '], full: ['Bob'], sinnersPrayers: [''], followUp: ['Di', ' '] }),
+    ).toEqual({ partial: [1, 2], sinnersPrayers: [0], followUp: [1] });
   });
 });
 
