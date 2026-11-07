@@ -5,7 +5,7 @@ const input = {
   location: 'Sylvania NSW',
   leader: 'Marie H',
   date: '30/09/2024',
-  counts: { partial: 0, full: 5, sinnersPrayers: 5 },
+  counts: { partial: 0, full: 5, sinnersPrayers: 5, followUp: 2 },
 };
 
 describe('buildCampaignReportEmail', () => {
@@ -19,14 +19,15 @@ describe('buildCampaignReportEmail', () => {
       expect(body).toContain('Number of Partial Presentations');
       expect(body).toContain('Number of Full Presentations');
       expect(body).toContain('Number of Sinners Prayers');
+      expect(body).toContain('Number of Requests for Follow-up/Info');
     }
     expect(text).toContain('Number of Full Presentations: 5');
+    expect(text).toContain('Number of Requests for Follow-up/Info: 2');
   });
 
-  it('leaves out the follow-up field, the variant and the page URL', () => {
+  it('leaves out the variant and the page URL', () => {
     const { html, text } = buildCampaignReportEmail(input);
     for (const body of [html, text]) {
-      expect(body).not.toMatch(/follow-up/i);
       expect(body).not.toMatch(/variant/i);
       expect(body).not.toMatch(/https?:\/\//);
     }

@@ -50,6 +50,7 @@ function CampaignReportEntryContent() {
     partial: '',
     full: '',
     sinnersPrayers: '',
+    followUp: '',
   });
   const [countErrors, setCountErrors] = useState<Partial<Record<ReportCountField, string>>>({});
   const [sendState, setSendState] = useState<'idle' | 'sending' | 'sent' | 'off'>('idle');
@@ -59,6 +60,7 @@ function CampaignReportEntryContent() {
     partial: [],
     full: [],
     sinnersPrayers: [],
+    followUp: [],
   });
 
   const isFullAdmin = adminStatus === 'AD';
@@ -127,6 +129,7 @@ function CampaignReportEntryContent() {
         partial: Number(counts.partial),
         full: Number(counts.full),
         sinnersPrayers: Number(counts.sinnersPrayers),
+        followUp: Number(counts.followUp),
       });
       setSendState(outcome === 'sent' ? 'sent' : 'off');
     } catch (err: unknown) {

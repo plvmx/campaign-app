@@ -3,7 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { parseReportCounts, sendCampaignReportEmail } from '../campaignReportEmailService';
 import { makeQueryBuilder } from './supabaseMock';
 
-const counts = { partial: 0, full: 5, sinnersPrayers: 5 };
+const counts = { partial: 0, full: 5, sinnersPrayers: 5, followUp: 3 };
 const campaignRow = { date: '2024-09-30', state: 'NSW', place: 'Sylvania', site: '', leader: 'Marie H' };
 
 function makeClient(opts: { settings?: Array<{ setting_key: string; setting_value: string }>; campaign?: unknown; settingsError?: boolean }) {
@@ -20,10 +20,17 @@ const on = (recipients: string) => [
 ];
 
 describe('parseReportCounts', () => {
-  it('accepts three whole numbers 0-99', () => {
-    expect(parseReportCounts({ partial: 0, full: 5, sinnersPrayers: 99, extra: 1 })).toEqual({ partial: 0, full: 5, sinnersPrayers: 99 });
+  it('accepts four whole numbers 0-99', () => {
+    expect(parseReportCounts({ partial: 0, full: 5, sinnersPrayers: 99, followUp: 7, extra: 1 })).toEqual({ partial: 0, full: 5, sinnersPrayers: 99, followUp: 7 });
   });
-  it.each([null, 'x', {}, { partial: 1, full: 2 }, { partial: '1', full: 2, sinnersPrayers: 3 }, { partial: 100, full: 0, sinnersPrayers: 0 }, { partial: -1, full: 0, sinnersPrayers: 0 }])(
+  it.each([
+    null, 'x', {}, { partial: 1, full: 2 },
+    { partial: 1, full: 2, sinnersPrayers: 3 }, // follow-up missing
+    { partial: '1', full: 2, sinnersPrayers: 3, followUp: 0 },
+    { partial: 100, full: 0, sinnersPrayers: 0, followUp: 0 },
+    { partial: -1, full: 0, sinnersPrayers: 0, followUp: 0 },
+    { partial: 0, full: 0, sinnersPrayers: 0, followUp: 100 },
+  ])(
     'rejects %j', (body) => expect(parseReportCounts(body)).toBeNull(),
   );
 });
@@ -38,6 +45,7 @@ describe('sendCampaignReportEmail', () => {
     expect(sent.subject).toBe('TWOL Campaign Report — Sylvania NSW — 30/09/2024');
     expect(sent.text).toContain('Campaign Leader: Marie H');
     expect(sent.text).toContain('Number of Full Presentations: 5');
+    expect(sent.text).toContain('Number of Requests for Follow-up/Info: 3');
   });
 
   it('does nothing when the switch is off or unset, without loading the campaign', async () => {

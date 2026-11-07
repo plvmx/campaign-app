@@ -23,12 +23,12 @@ export type SendReportEmailResult =
   | { status: 'no_recipients' }
   | { status: 'campaign_not_found' };
 
-/** Pulls the three counts out of an untrusted request body; null if any is not a whole number 0-99. */
+/** Pulls the four counts out of an untrusted request body; null if any is not a whole number 0-99. */
 export function parseReportCounts(body: unknown): Record<ReportCountField, number> | null {
   if (!body || typeof body !== 'object') return null;
-  const { partial, full, sinnersPrayers } = body as Record<string, unknown>;
-  if (!isValidCount(partial) || !isValidCount(full) || !isValidCount(sinnersPrayers)) return null;
-  return { partial, full, sinnersPrayers };
+  const { partial, full, sinnersPrayers, followUp } = body as Record<string, unknown>;
+  if (!isValidCount(partial) || !isValidCount(full) || !isValidCount(sinnersPrayers) || !isValidCount(followUp)) return null;
+  return { partial, full, sinnersPrayers, followUp };
 }
 
 export async function sendCampaignReportEmail(

@@ -75,7 +75,7 @@ export default function CampaignReportEmailCard() {
     <div data-ti="app/admin/components/CampaignReportEmailCard.tsx" className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
       <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">TWOL Campaign Report email</h2>
       <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-        When a TWOL Campaign Report is saved, email the details (location, leader, date and the three counts — no
+        When a TWOL Campaign Report is saved, email the details (location, leader, date and the four counts — no
         names) to these addresses. Up to {MAX_REPORT_EMAIL_RECIPIENTS}.
       </p>
 
