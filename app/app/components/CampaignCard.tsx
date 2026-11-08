@@ -167,7 +167,7 @@ export default function CampaignCard({
               onClick={onRecordCampaignReport}
               className="basis-full text-center text-base font-bold text-blue-600 underline hover:text-blue-700 dark:text-blue-400"
             >
-              Record Results + Campaign Report (new)
+              Experimental Campaign Reporting (DO NOT USE)
             </button>
           )}
         </div>
