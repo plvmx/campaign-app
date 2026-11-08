@@ -100,7 +100,7 @@ describe('CampaignCard — campaign interest callout', () => {
 });
 
 describe('CampaignCard — combined results + campaign report link', () => {
-  const linkText = /Record Results \+ Campaign Report/;
+  const linkText = /Experimental Campaign Reporting \(DO NOT USE\)/;
 
   it('is shown to a full admin on a past campaign and fires its handler', () => {
     const onClick = vi.fn();
