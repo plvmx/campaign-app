@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach, vi } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
 
 vi.mock('@/lib/supabaseClient', () => ({ supabase: { auth: {}, from: vi.fn() } }));
@@ -21,9 +21,15 @@ vi.mock('@/lib/services/campaignReportEmailClient', () => ({
   requestCampaignReportEmail: (...a: unknown[]) => requestEmail(...a),
 }));
 
+const requestSave = vi.fn();
+vi.mock('@/lib/services/campaignReportSaveClient', () => ({
+  requestCampaignReportSave: (...a: unknown[]) => requestSave(...a),
+}));
+
 import Page from '../page';
 
-afterEach(() => { cleanup(); requestEmail.mockReset(); });
+beforeEach(() => { requestSave.mockResolvedValue(undefined); });
+afterEach(() => { cleanup(); requestEmail.mockReset(); requestSave.mockReset(); });
 
 describe('Campaign report entry page', () => {
   it('pre-fills location, leader and date and shows all four count fields', async () => {
@@ -110,11 +116,34 @@ describe('Campaign report entry page', () => {
     fireEvent.change(screen.getByLabelText('Number of Requests for Follow-up/Info *'), { target: { value: '0' } });
   }
 
-  it('does not email anything while the form is invalid', async () => {
+  it('does not save or email anything while the form is invalid', async () => {
     render(<Page />);
     await screen.findByLabelText('Location');
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(requestSave).not.toHaveBeenCalled();
     expect(requestEmail).not.toHaveBeenCalled();
+  });
+
+  it('saves the counts and the typed names, then emails only the counts', async () => {
+    requestEmail.mockResolvedValue('sent');
+    await fillValidReport();
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(await screen.findByText('Report saved and emailed to management.')).toBeInTheDocument();
+    expect(requestSave).toHaveBeenCalledWith(
+      'c1',
+      { partial: 0, full: 1, sinnersPrayers: 0, followUp: 0 },
+      { partial: [], full: ['Ann'], sinnersPrayers: [], followUp: [] },
+    );
+    expect(requestEmail).toHaveBeenCalledWith('c1', { partial: 0, full: 1, sinnersPrayers: 0, followUp: 0 });
+  });
+
+  it('shows an error and sends no email when saving fails', async () => {
+    requestSave.mockRejectedValueOnce(new Error('The report could not be saved.'));
+    await fillValidReport();
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('The report could not be saved. Please try again.');
+    expect(requestEmail).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Save' })).not.toBeDisabled();
   });
 
   it('emails the counts (never the names) when Save is clicked on a valid form', async () => {
@@ -132,11 +161,11 @@ describe('Campaign report entry page', () => {
     expect(await screen.findByText(/Emailing is switched off/)).toBeInTheDocument();
   });
 
-  it('shows an error and allows another try when the email fails', async () => {
+  it('says the report was saved but not emailed, and allows another try, when the email fails', async () => {
     requestEmail.mockRejectedValueOnce(new Error('The report could not be emailed.')).mockResolvedValueOnce('sent');
     await fillValidReport();
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('The report could not be emailed. Please try again.');
+    expect(await screen.findByRole('alert')).toHaveTextContent('The report was saved, but the email to management could not be sent. Please try again.');
     expect(screen.getByRole('button', { name: 'Save' })).not.toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     expect(await screen.findByText('Report saved and emailed to management.')).toBeInTheDocument();

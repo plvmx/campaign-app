@@ -7,6 +7,7 @@ import LoadingSpinner from '@/components/LoadingSpinner';
 import { useUser } from '@/contexts/UserContext';
 import { getCampaignById } from '@/lib/services/campaignService';
 import { requestCampaignReportEmail } from '@/lib/services/campaignReportEmailClient';
+import { requestCampaignReportSave } from '@/lib/services/campaignReportSaveClient';
 import { getErrorMessage } from '@/lib/errorUtils';
 import {
   REPORT_COUNT_FIELDS,
@@ -123,20 +124,30 @@ function CampaignReportEntryContent() {
 
     setSendState('sending');
     setSendError(null);
+    const numericCounts = {
+      partial: Number(counts.partial),
+      full: Number(counts.full),
+      sinnersPrayers: Number(counts.sinnersPrayers),
+      followUp: Number(counts.followUp),
+    };
+    try {
+      // Counts go to campaign_reports and names to results (both tagged experimental);
+      // saving again replaces the earlier save for this campaign.
+      await requestCampaignReportSave(campaignId, numericCounts, names);
+    } catch (err: unknown) {
+      setSendState('idle');
+      setSendError(getErrorMessage(err, 'The report could not be saved.'));
+      return;
+    }
     try {
       // Only the counts go to management — names stay in the app.
-      const outcome = await requestCampaignReportEmail(campaignId, {
-        partial: Number(counts.partial),
-        full: Number(counts.full),
-        sinnersPrayers: Number(counts.sinnersPrayers),
-        followUp: Number(counts.followUp),
-      });
+      const outcome = await requestCampaignReportEmail(campaignId, numericCounts);
       setSendState(outcome === 'sent' ? 'sent' : 'off');
     } catch (err: unknown) {
       setSendState('idle');
-      setSendError(getErrorMessage(err, 'The report could not be emailed.'));
+      console.error('Campaign report email failed:', err);
+      setSendError('The report was saved, but the email to management could not be sent.');
     }
-    // Saving to campaign_reports comes in a later step.
   };
 
   if (!campaign && !error) {
