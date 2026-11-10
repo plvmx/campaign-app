@@ -9,7 +9,8 @@
  * be found and deleted later without touching real data, and saving the same
  * campaign again REPLACES its earlier experimental rows rather than adding
  * duplicates. Location, leader and date come from the campaign row, never from
- * the request.
+ * the request. The derived state / location / leader are filled from the
+ * campaign too (location = the matching State Places row's `location`).
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
@@ -17,6 +18,8 @@ import {
   formatReportLocation,
   type ReportCountField,
 } from '@/lib/campaignReportEntry';
+import { locationOf } from '@/lib/campaignReportMatcher';
+import { combinePlaceAndSite } from '@/lib/placeSite';
 import { parseReportCounts } from '@/lib/services/campaignReportEmailService';
 
 /** `source` value on every row the experimental page writes (campaign_reports and results). */
@@ -79,6 +82,19 @@ export async function saveCampaignReport(
   if (campaignError) throw new Error(`Could not load the campaign: ${campaignError.message}`);
   if (!campaign) return { status: 'campaign_not_found' };
 
+  // The campaign already says which state and leader this is, and its place maps to a State Places
+  // location, so fill the derived fields now rather than guessing from text later.
+  const { data: places, error: placesError } = await client
+    .from('state_places')
+    .select('place, site, location')
+    .eq('state', campaign.state);
+  if (placesError) throw new Error(`Could not look up the location: ${placesError.message}`);
+  const wanted = combinePlaceAndSite(campaign.place, campaign.site).trim().toLowerCase();
+  const stateLocation = (places ?? []).find(
+    (p: { place: string; site: string | null; location: string | null }) =>
+      combinePlaceAndSite(p.place, p.site ?? '').trim().toLowerCase() === wanted,
+  );
+
   // Replace, don't duplicate: clear this campaign's earlier experimental rows (and only those).
   await deleteExperimentalRows(client, input.campaignId);
 
@@ -98,6 +114,9 @@ export async function saveCampaignReport(
     sinners_prayer_raw: String(counts.sinnersPrayers),
     information_requests: counts.followUp,
     information_requests_raw: String(counts.followUp),
+    derived_state: campaign.state,
+    derived_location: stateLocation ? locationOf({ ...stateLocation, state: campaign.state }) : null,
+    derived_leader: campaign.leader?.trim() || null,
     needs_review: false,
     source: EXPERIMENTAL_REPORT_SOURCE,
   });
