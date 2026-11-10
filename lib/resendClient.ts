@@ -2,14 +2,14 @@
  * Resend adapter for emails sent from the Next.js app (the registry Edge
  * Function has its own in supabase/functions/ac-sync/emailClient.ts).
  *
- * Requires RESEND_API_KEY; the sender defaults to AFJ's address and can be
+ * Requires RESEND_API_KEY; the sender defaults to TWOL's address and can be
  * overridden with CAMPAIGN_REPORT_EMAIL_FROM — it must be on a domain verified
  * in Resend. Always throws on failure, including missing config, so callers
  * decide what to show (never a silent success).
  */
 
 const RESEND_API_URL = 'https://api.resend.com/emails';
-export const DEFAULT_EMAIL_FROM = 'AFJ <noreply@afj.org.au>';
+export const DEFAULT_EMAIL_FROM = 'TWOL <noreply@afj.org.au>';
 
 export interface OutgoingEmail { to: string[]; subject: string; html: string; text: string }
 

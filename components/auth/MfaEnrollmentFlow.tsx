@@ -29,7 +29,7 @@ export const MFA_ABANDON_AFTER_MS = 15 * 60 * 1000;
 // colliding with a factor enrolled through a completely different flow
 // (confirmed live, 2026-09-26: a leader with an existing /registry TOTP
 // factor got a "friendly name \"\" already exists" error here).
-const TOTP_FRIENDLY_NAME = 'AFJ Campaign App (Authenticator)';
+const TOTP_FRIENDLY_NAME = 'TWOL Campaign Activity System (Authenticator)';
 
 export type MfaEnrollmentOutcome = 'success' | 'cancelled' | 'expired';
 type Screen = 'checking' | 'step-up' | 'totp';
@@ -270,12 +270,12 @@ export function MfaEnrollmentFlow({
   const keyBlock = totpSecret && (
     <div className="space-y-4 rounded-md border-2 border-gray-800 p-4 dark:border-gray-600">
       <p className="text-center font-bold text-gray-900 dark:text-gray-100">
-        {ios ? 'Add AFJ to your authenticator app' : 'Neither way working? Type the setup key'}
+        {ios ? 'Add TWOL to your authenticator app' : 'Neither way working? Type the setup key'}
       </p>
       <ol className="list-decimal space-y-1 pl-6 text-xl text-gray-800 dark:text-gray-200">
         <li>Tap <strong>Copy key</strong> below.</li>
         <li>Open your authenticator app (Google or Microsoft Authenticator) and tap the <strong>+</strong> button.</li>
-        <li>Choose <strong>Enter a setup key</strong> (or &quot;Enter code manually&quot;). Name it AFJ, paste the key, and pick <strong>Time based</strong>.</li>
+        <li>Choose <strong>Enter a setup key</strong> (or &quot;Enter code manually&quot;). Name it TWOL, paste the key, and pick <strong>Time based</strong>.</li>
         <li>Come back to this page and type the 6-digit number the app shows.</li>
       </ol>
       <code className="inline-block break-all rounded bg-gray-200 px-2 py-1 text-2xl text-gray-900 dark:bg-gray-800 dark:text-gray-100">{totpSecret}</code>
@@ -287,8 +287,8 @@ export function MfaEnrollmentFlow({
     <CodeEntryScreen
       title="Authenticator app"
       description={`You need a free authenticator app on your phone — for example Google Authenticator or Microsoft Authenticator (install one from your phone's app store first if you don't have one). ${
-        ios ? 'Add AFJ to the app using the steps below' : 'Add AFJ to the app using ONE of the ways below'
-      }, then type the 6-digit number the app shows. If you set up AFJ in your app on an earlier try, delete that old entry first — only the one from this page will work.`}
+        ios ? 'Add TWOL to the app using the steps below' : 'Add TWOL to the app using ONE of the ways below'
+      }, then type the 6-digit number the app shows. If you set up TWOL in your app on an earlier try, delete that old entry first — only the one from this page will work.`}
       code={totpCode}
       onCodeChange={setTotpCode}
       onVerify={handleVerifyTotp}

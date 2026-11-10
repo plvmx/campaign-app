@@ -1,7 +1,7 @@
-// AFJ CAS Service Worker
+// TWOL CAS Service Worker
 // Bump this version string whenever this file changes, so the cache-cleanup in
 // 'activate' actually purges entries cached under the old worker.
-const CACHE_NAME = 'afj-cas-v3';
+const CACHE_NAME = 'twol-cas-v4';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();

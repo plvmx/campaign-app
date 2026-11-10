@@ -1,11 +1,11 @@
 {
-  "name": "AFJ Campaign App",
-  "short_name": "AFJ CAS",
-  "description": "AFJ Campaign Activity System",
+  "name": "The Way of Life Campaign Activity System",
+  "short_name": "TWOL CAS",
+  "description": "The Way of Life Campaign Activity System",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#1e3a5f",
-  "theme_color": "#1e3a5f",
+  "background_color": "#ffffff",
+  "theme_color": "#7bbf43",
   "orientation": "portrait-primary",
   "icons": [
     {

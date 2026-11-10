@@ -60,10 +60,10 @@ export default function TwoFactorGuidePage() {
         <p>If you already have one on your phone, you can use it.</p>
       </Step>
 
-      <Step n={3} title="Add AFJ to the app">
+      <Step n={3} title="Add TWOL to the app">
         <p>
           <strong>On your phone:</strong> on the app&apos;s setup screen, tap <strong>Add to my authenticator app</strong>. Your
-          authenticator app should open and add AFJ by itself. (This button only works on a phone.)
+          authenticator app should open and add TWOL by itself. (This button only works on a phone.)
         </p>
         <p>
           <strong>On a computer:</strong> that button does nothing. Instead open the authenticator app on your phone, choose{' '}
@@ -74,15 +74,15 @@ export default function TwoFactorGuidePage() {
         <ol className="list-decimal space-y-2 pl-6">
           <li>On the setup screen, tap <strong>Copy key</strong>.</li>
           <li>Open your authenticator app and choose <strong>Add</strong> (the + button), then <strong>Enter a setup key</strong>.</li>
-          <li>Account name: type <strong>AFJ</strong>. Key: paste what you copied.</li>
+          <li>Account name: type <strong>TWOL</strong>. Key: paste what you copied.</li>
           <li>If it asks for the type of key, choose <strong>Time based</strong>.</li>
         </ol>
-        <p><strong>Already have an old AFJ entry in your app from an earlier try?</strong> Delete it first. Only the newest one works.</p>
+        <p><strong>Already have an old TWOL entry in your app from an earlier try?</strong> Delete it first. Only the newest one works.</p>
       </Step>
 
       <Step n={4} title="Type the 6-digit number">
         <p>
-          Go back to the AFJ setup screen. Type the <strong>6-digit number from your authenticator app</strong> and press{' '}
+          Go back to the TWOL setup screen. Type the <strong>6-digit number from your authenticator app</strong> and press{' '}
           <strong>Verify and continue</strong>. Type it before it changes.
         </p>
         <div className="rounded-md border-2 border-gray-800 bg-yellow-50 p-4">
@@ -105,7 +105,7 @@ export default function TwoFactorGuidePage() {
       <section className="mt-10 break-inside-avoid rounded-md border-2 border-gray-800 bg-gray-50 p-5">
         <h2 className="text-2xl font-bold">If the 6-digit number is rejected</h2>
         <ul className="mt-3 list-disc space-y-2 pl-6 text-lg leading-relaxed">
-          <li>Check you are reading the <strong>newest</strong> AFJ entry in your app. Delete any older AFJ entries.</li>
+          <li>Check you are reading the <strong>newest</strong> TWOL entry in your app. Delete any older TWOL entries.</li>
           <li>Check your phone&apos;s date and time are set to <strong>automatic</strong> (Settings → Date &amp; Time).</li>
           <li>Type the number straight away — it changes every 30 seconds.</li>
           <li>Stay on the setup screen while you add the key. If the page reloads, it will show the same key again.</li>

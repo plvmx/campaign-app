@@ -70,7 +70,7 @@ describe('ConfirmEmailPage', () => {
     mockListFactors.mockReset().mockResolvedValue({ data: { all: [] }, error: null });
     mockUnenroll.mockReset().mockResolvedValue({ data: {}, error: null });
     mockEnroll.mockReset().mockResolvedValue({
-      data: { id: 'totp-factor-1', totp: { uri: 'otpauth://totp/AFJ:test@example.com?secret=SECRETKEY', secret: 'SECRETKEY' } },
+      data: { id: 'totp-factor-1', totp: { uri: 'otpauth://totp/TWOL:test@example.com?secret=SECRETKEY', secret: 'SECRETKEY' } },
       error: null,
     });
     mockChallengeAndVerify.mockReset().mockResolvedValue({ error: null });
@@ -221,7 +221,7 @@ describe('ConfirmEmailPage', () => {
 
     it('tells a leader who ends up in a different browser what to do, so a sign-in screen is not a dead end', async () => {
       await confirmEmail();
-      expect(screen.getByText(/go back to the AFJ app where you started signing in/i)).toBeInTheDocument();
+      expect(screen.getByText(/go back to the TWOL app where you started signing in/i)).toBeInTheDocument();
     });
 
     it('"Set up two-factor authentication" goes straight to the QR code with no second email, then completes on the same session', async () => {

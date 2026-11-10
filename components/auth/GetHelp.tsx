@@ -2,7 +2,7 @@ import { HELP_GUIDE_PATH } from '@/lib/supportContact';
 
 /**
  * "Stuck?" line shown on the email-confirmation and 2FA screens: a link to the
- * printable step-by-step guide, plus the place to ask a person — the AFJ TWOL
+ * printable step-by-step guide, plus the place to ask a person — the TWOL TWOL
  * Leaders WhatsApp group (shown on every device, in bold). It used to be a
  * pre-filled "text us for help" `sms:` link, which does nothing on a PC and
  * sent one person's phone every leader's problem; the group is where leaders
@@ -20,7 +20,7 @@ export function GetHelp() {
       >
         Open the step-by-step guide
       </a>{' '}
-      or <strong>ask for help on the AFJ TWOL Leaders WhatsApp group</strong>.
+      or <strong>ask for help on the TWOL Leaders WhatsApp group</strong>.
     </p>
   );
 }

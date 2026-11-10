@@ -97,13 +97,13 @@ export function buildLeaderSmsMessage(
   if (campaigns.length === 1) {
     const c = campaigns[0];
     const placeLabel = combinePlaceAndSite(c.place, c.site);
-    return `<Important AFJ Notification> ${registrantFirstName} has registered interest ("${typeLabel}") in your campaign at ${placeLabel}, ${formatShortDate(c.date)} ${c.time}. View details here: ${link}`;
+    return `<Important TWOL Notification> ${registrantFirstName} has registered interest ("${typeLabel}") in your campaign at ${placeLabel}, ${formatShortDate(c.date)} ${c.time}. View details here: ${link}`;
   }
 
   const list = campaigns
     .map((c) => `${combinePlaceAndSite(c.place, c.site)} (${formatShortDate(c.date)})`)
     .join(', ');
-  return `<Important AFJ Notification> ${registrantFirstName} has registered interest ("${typeLabel}") in ${campaigns.length} of your campaigns: ${list}. View details here: ${link}`;
+  return `<Important TWOL Notification> ${registrantFirstName} has registered interest ("${typeLabel}") in ${campaigns.length} of your campaigns: ${list}. View details here: ${link}`;
 }
 
 interface NotifyLeadersParams {

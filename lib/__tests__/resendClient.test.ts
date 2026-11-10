@@ -28,10 +28,10 @@ describe('sendEmail', () => {
 
   it('uses CAMPAIGN_REPORT_EMAIL_FROM when set', async () => {
     process.env.RESEND_API_KEY = 'key';
-    process.env.CAMPAIGN_REPORT_EMAIL_FROM = 'AFJ Reports <reports@afj.org.au>';
+    process.env.CAMPAIGN_REPORT_EMAIL_FROM = 'TWOL Reports <reports@afj.org.au>';
     const fetchImpl = okFetch();
     await sendEmail(email, fetchImpl);
-    expect(JSON.parse((vi.mocked(fetchImpl).mock.calls[0][1] as RequestInit).body as string).from).toBe('AFJ Reports <reports@afj.org.au>');
+    expect(JSON.parse((vi.mocked(fetchImpl).mock.calls[0][1] as RequestInit).body as string).from).toBe('TWOL Reports <reports@afj.org.au>');
   });
 
   it("throws Resend's message when the request is rejected", async () => {
