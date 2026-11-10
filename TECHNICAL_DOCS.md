@@ -566,6 +566,7 @@ The app has **two sign-in paths**, both ending in a Supabase session plus an `ap
 
 - Supabase SDK stores the session token in `localStorage` automatically.
 - On every page load, `UserContext` calls `getAuthenticatedUser()` to verify and restore the session.
+- Only the first load sets `isLoading`; later reloads (the auth client re-announces `SIGNED_IN` whenever the tab regains focus, e.g. after a file picker closes) happen silently so pages don't swap to a spinner and lose in-progress input.
 - If the session expires or is revoked, `onAuthStateChange` fires `SIGNED_OUT`, and `UserContext` clears all state — the user is redirected to `/login`.
 
 ### 6.3 Key Auth Files
