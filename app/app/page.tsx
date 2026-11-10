@@ -564,8 +564,8 @@ function AppPageContent() {
                 to a second line instead. */}
             <div className="px-4 py-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                {dateFilter === 'past' && `Past Campaigns (${filteredCampaigns.length})`}
-                {dateFilter === 'future' && `Future Campaigns (${filteredCampaigns.length})`}
+                {dateFilter === 'past' && `Past TWOL Campaigns (${filteredCampaigns.length})`}
+                {dateFilter === 'future' && `Future TWOL Campaigns (${filteredCampaigns.length})`}
               </h2>
               {/* View / Edit toggle — only rendered when the feature is enabled for this role */}
               {slideViewEnabled && (
