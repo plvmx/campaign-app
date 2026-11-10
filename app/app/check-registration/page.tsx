@@ -51,7 +51,7 @@ function ResultCard({ checked }: { checked: CheckedResult }) {
       <div role="status" className="rounded-lg border-2 border-green-700 bg-green-50 p-4 text-green-900 dark:border-green-600 dark:bg-green-900/20 dark:text-green-100">
         <h2 className="text-lg font-bold">✅ Registered</h2>
         <p className="mt-1 text-sm">
-          {name} is registered with TWOL, under the {matched} you entered.
+          {name} is registered with AFJ, under the {matched} you entered.
         </p>
         {unmatchedNote}
       </div>
@@ -169,7 +169,7 @@ export default function CheckRegistrationPage() {
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Check Registration</h1>
           <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-            Check whether a member has registered with TWOL. Enter their name and the email address or mobile
+            Check whether a member has registered with AFJ. Enter their name and the email address or mobile
             number they would have registered with — both if you have them.
           </p>
         </div>

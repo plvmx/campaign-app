@@ -65,7 +65,7 @@ interface SelectedCell {
 
 type PaneMode = 'view' | 'edit';
 
-const DEFAULT_SELECTED_CELL: SelectedCell = { row: 'all', rowLabel: 'All TWOL Registrations', column: 'total', columnLabel: 'Total' };
+const DEFAULT_SELECTED_CELL: SelectedCell = { row: 'all', rowLabel: 'All AFJ Registrations', column: 'total', columnLabel: 'Total' };
 
 type SaveEditResult = { ok: true } | { ok: false; error: string };
 
@@ -750,7 +750,7 @@ export default function RegistryManagePage() {
   const [isLoading, setIsLoading] = useState(false);
   const [primaryPeriod, setPrimaryPeriod] = useState<FilterPeriod>('last_7_days');
   const [otherFilterCategory, setOtherFilterCategory] = useState<OtherFilterCategory>('unsubscribed');
-  // Opens on the whole database (All TWOL Registrations × Total) so the full
+  // Opens on the whole database (All AFJ Registrations × Total) so the full
   // list is there to sort and page through without clicking anything first.
   const [selectedCell, setSelectedCell] = useState<SelectedCell | null>(DEFAULT_SELECTED_CELL);
   const [paneMode, setPaneMode] = useState<PaneMode>('view');
@@ -991,10 +991,10 @@ export default function RegistryManagePage() {
               <tbody>
                 <ConsoleRow
                   rowKey="all"
-                  label="All TWOL Registrations"
+                  label="All AFJ Registrations"
                   counts={allCounts}
                   selectedCell={selectedCell}
-                  onSelectCell={selectCell('all', 'All TWOL Registrations')}
+                  onSelectCell={selectCell('all', 'All AFJ Registrations')}
                 />
                 <ConsoleRow
                   rowKey="primary"
@@ -1021,7 +1021,7 @@ export default function RegistryManagePage() {
               <> ({(summary.registrants.length - (rows?.length ?? 0)).toLocaleString('en-AU')} excluded as unsubscribed/NFC)</>
             )}
             . &quot;Unknown&quot; covers registrants with no state on file, or a state outside VIC/NSW/ACT/QLD/NT/WA/SA/TAS.
-            A registrant with no recorded registration date can never match Primary Filter, but is still counted in All TWOL Registrations and Other Filters (which isn&apos;t date-based). Click any non-zero number to list its records below.
+            A registrant with no recorded registration date can never match Primary Filter, but is still counted in All AFJ Registrations and Other Filters (which isn&apos;t date-based). Click any non-zero number to list its records below.
           </p>
 
           {selectedCell ? (

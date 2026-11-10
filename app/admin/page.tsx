@@ -249,7 +249,7 @@ export default function AdminPage() {
               Registry Lookup
             </h2>
             <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-              Look up an TWOL registration by mobile number or email address
+              Look up an AFJ registration by mobile number or email address
             </p>
             <button
               onClick={() => router.push('/admin/check-registration')}

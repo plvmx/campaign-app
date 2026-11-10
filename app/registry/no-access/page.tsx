@@ -15,7 +15,7 @@ export default function RegistryNoAccessPage() {
   return (
     <RegistryAuthLayout title="No registry access">
       <p className={registryBodyTextClass}>
-        Your sign-in succeeded, but this account isn&apos;t set up with access to the TWOL registry portal. Contact a national admin if you believe this is a mistake.
+        Your sign-in succeeded, but this account isn&apos;t set up with access to the AFJ registry portal. Contact a national admin if you believe this is a mistake.
       </p>
       <button type="button" onClick={handleSignOut} className={registrySecondaryButtonClass}>Sign out</button>
     </RegistryAuthLayout>

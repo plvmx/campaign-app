@@ -252,7 +252,7 @@ export function MfaEnrollmentFlow({
     return (
       <CodeEntryScreen
         title="Verify your identity"
-        description="This account already has two-factor authentication set up elsewhere (e.g. the TWOL Registry portal). Enter a code from your existing authenticator app to finish setup here — no need to set up a separate one."
+        description="This account already has two-factor authentication set up elsewhere (e.g. the AFJ Registry portal). Enter a code from your existing authenticator app to finish setup here — no need to set up a separate one."
         code={stepUpCode}
         onCodeChange={setStepUpCode}
         onVerify={handleStepUpVerify}

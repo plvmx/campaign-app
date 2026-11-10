@@ -44,7 +44,7 @@ export default function RegistryHomePage() {
   if (gate.status === 'loading') return null;
 
   return (
-    <RegistryAuthLayout title="TWOL Registry">
+    <RegistryAuthLayout title="AFJ Registry">
       <p className={registryBodyTextClass}>
         Signed in as {email ?? '…'}.<br />
         Role: {gate.leaderRole?.role ?? 'unknown'}.

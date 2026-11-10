@@ -15,10 +15,10 @@ export function RegistryAuthLayout({ title, children }: { title: string; childre
         <div className="flex flex-col items-center">
           <div className="mb-4 flex justify-center">
             <Image
-              src="/twol_banner.png"
-              alt="The Way of Life"
-              width={280}
-              height={121}
+              src="/afj_graphic.png"
+              alt="AFJ Graphic"
+              width={200}
+              height={200}
               className="h-auto w-auto max-w-full"
               priority
             />
