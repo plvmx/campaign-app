@@ -84,6 +84,6 @@ describe('buildWhatsAppInviteEmail', () => {
   it('still includes the WhatsApp invite link and sign-off when the campaigns-near-me section is present', () => {
     const { text } = buildWhatsAppInviteEmail('Jane', 'https://chat.whatsapp.com/abc123', 'https://campaign.afj.org.au/public/campaigns-near-me?r=abc-123');
     expect(text).toContain('https://chat.whatsapp.com/abc123');
-    expect(text).toContain('The AFJ Team');
+    expect(text).toContain('The TWOL Team');
   });
 });

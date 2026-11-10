@@ -247,7 +247,7 @@ const FULL_DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 
 
 /**
  * The Sunday named in the Campaign Results public link's notice ("will not be
- * stored by AFJ in any form beyond …"), given the Monday of the week being
+ * stored by TWOL in any form beyond …"), given the Monday of the week being
  * displayed: the end of the week *after* the one in which that week is on
  * screen. A displayed week is actually deleted a week earlier than this, by
  * the Sunday refresh that ends its time on screen (e.g. the 28 Sep - 4 Oct

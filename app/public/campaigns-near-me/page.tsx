@@ -10,8 +10,8 @@ import CampaignsNearMeClient from './CampaignsNearMeClient';
 // computing (unlike /public/training/[campaignId], which names the actual
 // campaign).
 export const metadata: Metadata = {
-  title: 'Upcoming AFJ Campaigns Near You',
-  description: 'See upcoming AFJ campaigns near you and register your interest.',
+  title: 'Upcoming TWOL Campaigns Near You',
+  description: 'See upcoming TWOL campaigns near you and register your interest.',
 };
 
 export default function CampaignsNearMePage() {

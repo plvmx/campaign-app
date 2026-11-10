@@ -24,13 +24,13 @@ export const metadata: Metadata = {
   // pages' own metadata, e.g. app/public/*/page.tsx) to resolve to absolute
   // URLs — link previews in WhatsApp/iMessage/etc. need absolute URLs.
   metadataBase: new URL(getSiteUrl()),
-  title: "AFJ Campaign App",
-  description: "AFJ Campaign Activity System",
+  title: "TWOL Campaign Activity System",
+  description: "TWOL Campaign Activity System",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "AFJ CAS",
+    title: "TWOL CAS",
   },
   icons: {
     apple: "/icons/apple-touch-icon.png",
@@ -40,7 +40,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#1e3a5f",
+  themeColor: "#7bbf43",
 };
 
 export default function RootLayout({

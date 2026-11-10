@@ -37,8 +37,8 @@ vi.mock('@/lib/emailConfirmSupabaseClient', () => ({
 import { MfaEnrollmentFlow } from '../MfaEnrollmentFlow';
 import { savePendingTotpEnrollment, readPendingTotpEnrollment } from '@/lib/pendingTotpEnrollment';
 
-const FIRST = { id: 'factor-1', totp: { uri: 'otpauth://totp/AFJ:a@x.com?secret=FIRSTKEY', secret: 'FIRSTKEY' } };
-const SECOND = { id: 'factor-2', totp: { uri: 'otpauth://totp/AFJ:a@x.com?secret=SECONDKEY', secret: 'SECONDKEY' } };
+const FIRST = { id: 'factor-1', totp: { uri: 'otpauth://totp/TWOL:a@x.com?secret=FIRSTKEY', secret: 'FIRSTKEY' } };
+const SECOND = { id: 'factor-2', totp: { uri: 'otpauth://totp/TWOL:a@x.com?secret=SECONDKEY', secret: 'SECONDKEY' } };
 
 beforeEach(() => {
   mockIsIos.mockReset().mockReturnValue(false);

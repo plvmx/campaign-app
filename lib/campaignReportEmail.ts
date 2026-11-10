@@ -64,7 +64,7 @@ export function buildCampaignReportEmail(input: CampaignReportEmailInput): Built
         </td>
       </tr>
       <tr>
-        <td style="padding:16px 20px;border-top:1px solid #e5e7eb;font-size:13px;color:#6b7280;">Sent automatically by the AFJ Campaign App.</td>
+        <td style="padding:16px 20px;border-top:1px solid #e5e7eb;font-size:13px;color:#6b7280;">Sent automatically by the TWOL Campaign Activity System.</td>
       </tr>
     </table>
   </body>
@@ -77,7 +77,7 @@ export function buildCampaignReportEmail(input: CampaignReportEmailInput): Built
     '',
     ...rows.map(({ label, value }) => `${label}: ${value}`),
     '',
-    'Sent automatically by the AFJ Campaign App.',
+    'Sent automatically by the TWOL Campaign Activity System.',
   ].join('\n');
 
   return { subject: `${CAMPAIGN_REPORT_EMAIL_TITLE} — ${input.location} — ${input.date}`, html, text };

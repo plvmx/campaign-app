@@ -112,7 +112,7 @@ export default function RegistryAuthCallbackPage() {
 
   if (tokenHash) {
     return (
-      <RegistryAuthLayout title="AFJ Registry">
+      <RegistryAuthLayout title="TWOL Registry">
         <TapToContinue
           title="One last step"
           description="Tap the button below to finish signing in."
@@ -128,7 +128,7 @@ export default function RegistryAuthCallbackPage() {
   }
 
   return (
-    <RegistryAuthLayout title="AFJ Registry">
+    <RegistryAuthLayout title="TWOL Registry">
       <p className={registryBodyTextClass}>Signing you in…</p>
     </RegistryAuthLayout>
   );

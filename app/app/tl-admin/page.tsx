@@ -140,7 +140,7 @@ export default function TLAdminPage() {
               Check Registration
             </h2>
             <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-              Check whether a member has registered with AFJ, using their name and email address or mobile number.
+              Check whether a member has registered with TWOL, using their name and email address or mobile number.
             </p>
             <button
               onClick={() => router.push('/app/check-registration')}

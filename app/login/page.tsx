@@ -727,16 +727,16 @@ export default function LoginPage() {
         <div className="flex flex-col items-center">
           <div className="mb-4 flex justify-center">
             <Image
-              src="/afj_graphic.png"
-              alt="AFJ Graphic"
-              width={200}
-              height={200}
+              src="/twol_banner.png"
+              alt="The Way of Life"
+              width={280}
+              height={121}
               className="h-auto w-auto max-w-full"
               priority
             />
           </div>
           <h2 className="text-center text-2xl font-bold text-gray-900 dark:text-gray-100">
-            AFJ Campaign Activity System
+            TWOL Campaign Activity System
           </h2>
         </div>
 

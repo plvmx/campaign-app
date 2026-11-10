@@ -7,7 +7,7 @@
  * postcode, registered_at, unsubscribed/nfc status, the four webinar/Code-of-Conduct
  * fields (see lib/registryPipeline/tagDerivedFields.ts), plus whether it matches a public.state_leaders
  * row by normalized phone (lib/registryPipeline/leaderMatch.ts — every
- * AFJ leader is expected to also be a registrant, so Peter wanted this
+ * TWOL leader is expected to also be a registrant, so Peter wanted this
  * visible in the record list, just as a yes/no next to their name — not
  * which state they lead; computed live on every request, not a
  * synced/stored column, since state_leaders is small and this is the

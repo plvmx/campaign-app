@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Public, unauthenticated "Final AFJ Campaign Lists" page — a read-only view
+ * Public, unauthenticated "Final TWOL Campaign Lists" page — a read-only view
  * of the same fortnight shown on /public/temporary-upcoming-campaigns, once
  * leaders are done making changes there. Same list display and data source,
  * but Download-only (no Edit button, no leader instructions) — see that
@@ -21,7 +21,7 @@ import { generateAndDownloadSlidesFromData, type PublicSlideDay } from '@/lib/sl
 import type { AriseCampaign } from '@/lib/ariseLayout';
 import type { FinalCampaignListsResponse } from '@/app/api/public/final-campaign-lists/route';
 
-const TITLE = 'Final AFJ Campaign Lists';
+const TITLE = 'Final TWOL Campaign Lists';
 const DESCRIPTION = 'Here are the final campaign lists for this fortnight';
 
 export default function FinalCampaignListsClient() {

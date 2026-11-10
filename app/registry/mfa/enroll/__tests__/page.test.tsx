@@ -50,7 +50,7 @@ vi.mock('next/navigation', () => ({
 import RegistryMfaEnrollPage from '../page';
 
 const FRESH_ENROLL_RESPONSE = {
-  data: { id: 'factor-1', totp: { uri: 'otpauth://totp/AFJ:test@example.com?secret=SECRETKEY&issuer=AFJ', secret: 'SECRETKEY' } },
+  data: { id: 'factor-1', totp: { uri: 'otpauth://totp/TWOL:test@example.com?secret=SECRETKEY&issuer=TWOL', secret: 'SECRETKEY' } },
   error: null,
 };
 

@@ -87,14 +87,14 @@ export default function RegistryLoginPage() {
 
   if (checkingSession) {
     return (
-      <RegistryAuthLayout title="AFJ Registry Sign In">
+      <RegistryAuthLayout title="TWOL Registry Sign In">
         <p className={registryBodyTextClass}>Checking sign-in status…</p>
       </RegistryAuthLayout>
     );
   }
 
   return (
-    <RegistryAuthLayout title="AFJ Registry Sign In">
+    <RegistryAuthLayout title="TWOL Registry Sign In">
       <p className={registryBodyTextClass}>
         Registry Management (the registrations console) is built for a desktop or tablet screen — please use one of those rather than a mobile phone for the best experience.
       </p>

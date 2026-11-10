@@ -36,7 +36,7 @@ const DAY = 24 * HOUR;
 
 // One recent (within the last 7 days), one mid-range (within the last
 // month but outside the last 7 days), one old + state-less (only shows
-// up in the unfiltered "All AFJ Registrations" row's Unknown column).
+// up in the unfiltered "All TWOL Registrations" row's Unknown column).
 const SAMPLE_REGISTRANTS = [
   {
     id: 'r1', firstName: 'Vicky', lastName: 'Vale', email: 'vicky@example.com', phone: '+61400000001',
@@ -111,14 +111,14 @@ describe('RegistryManagePage', () => {
   it('renders the unfiltered total row across every registrant, regardless of date', async () => {
     mockUseRegistryGate.mockReturnValue({ status: 'ready', leaderRole: { role: 'national_admin', mfa_required: true } });
     render(<RegistryManagePage />);
-    const row = requireRow(await screen.findByText('All AFJ Registrations'));
+    const row = requireRow(await screen.findByText('All TWOL Registrations'));
     expect(row).toHaveTextContent(/3/); // total
   });
 
   it('labels the registration-date column "Registered" and shows a date only, no time', async () => {
     mockUseRegistryGate.mockReturnValue({ status: 'ready', leaderRole: { role: 'national_admin', mfa_required: true } });
     render(<RegistryManagePage />);
-    const allRow = requireRow(await screen.findByText('All AFJ Registrations'));
+    const allRow = requireRow(await screen.findByText('All TWOL Registrations'));
     fireEvent.click(within(allRow).getByRole('button', { name: '3' }));
 
     const table = await screen.findByRole('table', { name: 'Matching records' });
@@ -135,7 +135,7 @@ describe('RegistryManagePage', () => {
   it('updates the Primary Filter row counts when a different period is selected', async () => {
     mockUseRegistryGate.mockReturnValue({ status: 'ready', leaderRole: { role: 'national_admin', mfa_required: true } });
     render(<RegistryManagePage />);
-    await screen.findByText('All AFJ Registrations');
+    await screen.findByText('All TWOL Registrations');
 
     // Default "Last 7 days" only catches the 1-hour-old VIC registrant.
     const primaryRow = requireRow(screen.getByLabelText('Primary Filter period'));
@@ -149,7 +149,7 @@ describe('RegistryManagePage', () => {
   it('opens with the whole database listed, without clicking anything', async () => {
     mockUseRegistryGate.mockReturnValue({ status: 'ready', leaderRole: { role: 'national_admin', mfa_required: true } });
     render(<RegistryManagePage />);
-    expect(await screen.findByText(/All AFJ Registrations — Total \(3\)/)).toBeInTheDocument();
+    expect(await screen.findByText(/All TWOL Registrations — Total \(3\)/)).toBeInTheDocument();
     const table = recordsTable();
     for (const email of ['vicky@example.com', 'nat@example.com', 'uma@example.com']) {
       expect(within(table).getByText(email)).toBeInTheDocument();
@@ -194,7 +194,7 @@ describe('RegistryManagePage', () => {
   it('shows no record pane, and plain "0" text (not a button), for every zero-count cell', async () => {
     mockUseRegistryGate.mockReturnValue({ status: 'ready', leaderRole: { role: 'national_admin', mfa_required: true } });
     render(<RegistryManagePage />);
-    const allRow = requireRow(await screen.findByText('All AFJ Registrations'));
+    const allRow = requireRow(await screen.findByText('All TWOL Registrations'));
     // ACT/QLD/NT/WA/SA/TAS all have no registrants in the sample data — none of those cells should be clickable.
     for (const zeroCell of within(allRow).getAllByText('0')) {
       expect(zeroCell.tagName).not.toBe('BUTTON');
@@ -206,9 +206,9 @@ describe('RegistryManagePage', () => {
   it('lists the matching records and highlights the clicked cell when a non-zero number is clicked', async () => {
     mockUseRegistryGate.mockReturnValue({ status: 'ready', leaderRole: { role: 'national_admin', mfa_required: true } });
     render(<RegistryManagePage />);
-    const allRow = requireRow(await screen.findByText('All AFJ Registrations'));
+    const allRow = requireRow(await screen.findByText('All TWOL Registrations'));
 
-    // "All AFJ Registrations" x VIC = 1 (Vicky Vale, unfiltered). Total is 3,
+    // "All TWOL Registrations" x VIC = 1 (Vicky Vale, unfiltered). Total is 3,
     // so VIC and NSW are the only two "1" cells in this row — VIC comes
     // first (column order: Total, VIC, NSW, ...).
     fireEvent.click(within(allRow).getAllByRole('button', { name: '1' })[0]);
@@ -216,7 +216,7 @@ describe('RegistryManagePage', () => {
     await screen.findByRole('table', { name: 'Matching records' });
     expect(within(recordsTable()).getByText('vicky@example.com')).toBeInTheDocument();
     expect(within(recordsTable()).queryByText('nat@example.com')).not.toBeInTheDocument();
-    expect(screen.getByText(/All AFJ Registrations — VIC/)).toBeInTheDocument();
+    expect(screen.getByText(/All TWOL Registrations — VIC/)).toBeInTheDocument();
 
     // The clicked cell's shading intensifies (VIC's normal column tint is 0.14).
     const clickedCell = screen.getByRole('button', { name: '1', pressed: true }).closest('td');
@@ -226,7 +226,7 @@ describe('RegistryManagePage', () => {
   it('shows a leader icon next to the name of a registrant who matches a state_leaders row, and only that one', async () => {
     mockUseRegistryGate.mockReturnValue({ status: 'ready', leaderRole: { role: 'national_admin', mfa_required: true } });
     render(<RegistryManagePage />);
-    const allRow = requireRow(await screen.findByText('All AFJ Registrations'));
+    const allRow = requireRow(await screen.findByText('All TWOL Registrations'));
     fireEvent.click(within(allRow).getByRole('button', { name: '3' })); // Total — all three sample registrants
 
     const table = await screen.findByRole('table', { name: 'Matching records' });
@@ -240,7 +240,7 @@ describe('RegistryManagePage', () => {
   it('clears the record pane via "Clear selection"', async () => {
     mockUseRegistryGate.mockReturnValue({ status: 'ready', leaderRole: { role: 'national_admin', mfa_required: true } });
     render(<RegistryManagePage />);
-    const allRow = requireRow(await screen.findByText('All AFJ Registrations'));
+    const allRow = requireRow(await screen.findByText('All TWOL Registrations'));
     fireEvent.click(within(allRow).getAllByRole('button', { name: '1' })[0]);
     await screen.findByRole('table', { name: 'Matching records' });
 
@@ -253,7 +253,7 @@ describe('RegistryManagePage', () => {
   it('re-filters the record pane live when the selected row\'s own period dropdown changes', async () => {
     mockUseRegistryGate.mockReturnValue({ status: 'ready', leaderRole: { role: 'national_admin', mfa_required: true } });
     render(<RegistryManagePage />);
-    await screen.findByText('All AFJ Registrations');
+    await screen.findByText('All TWOL Registrations');
 
     // Primary Filter x Total, default "Last 7 days": only Vicky (1 hour ago)
     // — Total and VIC are both "1" here too; Total is the first (leftmost).
@@ -290,12 +290,12 @@ describe('RegistryManagePage', () => {
       }) as unknown as typeof fetch;
     }
 
-    // Selects "All AFJ Registrations" x VIC (Vicky Vale — id r1) — every
+    // Selects "All TWOL Registrations" x VIC (Vicky Vale — id r1) — every
     // edit test starts from here.
     async function selectAllVicCell() {
       mockUseRegistryGate.mockReturnValue({ status: 'ready', leaderRole: { role: 'national_admin', mfa_required: true } });
       render(<RegistryManagePage />);
-      const allRow = requireRow(await screen.findByText('All AFJ Registrations'));
+      const allRow = requireRow(await screen.findByText('All TWOL Registrations'));
       fireEvent.click(within(allRow).getAllByRole('button', { name: '1' })[0]);
       await screen.findByRole('table', { name: 'Matching records' });
     }
@@ -385,8 +385,8 @@ describe('RegistryManagePage', () => {
       fireEvent.change(await screen.findByLabelText('state'), { target: { value: 'NSW' } });
 
       // Vicky was VIC's only registrant; correcting her to NSW should give
-      // "All AFJ Registrations" 0 VIC and 2 NSW (Nat + the corrected Vicky).
-      const allRow = requireRow(screen.getByText('All AFJ Registrations'));
+      // "All TWOL Registrations" 0 VIC and 2 NSW (Nat + the corrected Vicky).
+      const allRow = requireRow(screen.getByText('All TWOL Registrations'));
       await waitFor(() => expect(within(allRow).getAllByText('0').length).toBeGreaterThan(0));
       expect(within(allRow).getAllByRole('button', { name: '2' })[0]).toBeInTheDocument();
     });
@@ -419,12 +419,12 @@ describe('RegistryManagePage', () => {
   });
 
   describe('lookup filters', () => {
-    // Selects "All AFJ Registrations" x Total — all three sample
+    // Selects "All TWOL Registrations" x Total — all three sample
     // registrants (Vicky, Nat, Uma), unfiltered by date or state.
     async function selectAllTotalCell() {
       mockUseRegistryGate.mockReturnValue({ status: 'ready', leaderRole: { role: 'national_admin', mfa_required: true } });
       render(<RegistryManagePage />);
-      const allRow = requireRow(await screen.findByText('All AFJ Registrations'));
+      const allRow = requireRow(await screen.findByText('All TWOL Registrations'));
       fireEvent.click(within(allRow).getByRole('button', { name: '3' }));
       await screen.findByRole('table', { name: 'Matching records' });
     }
@@ -556,12 +556,12 @@ describe('RegistryManagePage', () => {
   });
 
   describe('sorting the record pane', () => {
-    // Selects "All AFJ Registrations" x Total — all three sample
+    // Selects "All TWOL Registrations" x Total — all three sample
     // registrants (Vicky/VIC/3000, Nat/NSW/2000, Uma/null-state/null-postcode).
     async function selectAllTotalCell() {
       mockUseRegistryGate.mockReturnValue({ status: 'ready', leaderRole: { role: 'national_admin', mfa_required: true } });
       render(<RegistryManagePage />);
-      const allRow = requireRow(await screen.findByText('All AFJ Registrations'));
+      const allRow = requireRow(await screen.findByText('All TWOL Registrations'));
       fireEvent.click(within(allRow).getByRole('button', { name: '3' }));
       await screen.findByRole('table', { name: 'Matching records' });
     }
@@ -675,7 +675,7 @@ describe('RegistryManagePage', () => {
       expect(screen.queryByLabelText('Exclude unsubscribed registrants')).not.toBeInTheDocument();
       expect(screen.queryByLabelText('Exclude No Further Contact (NFC) registrants')).not.toBeInTheDocument();
 
-      const row = requireRow(await screen.findByText('All AFJ Registrations'));
+      const row = requireRow(await screen.findByText('All TWOL Registrations'));
       expect(row).toHaveTextContent(/5/);
       expect(screen.getByLabelText('Exclude unsubscribed registrants')).not.toBeChecked();
       expect(screen.getByLabelText('Exclude No Further Contact (NFC) registrants')).not.toBeChecked();
@@ -684,7 +684,7 @@ describe('RegistryManagePage', () => {
     it('drops unsubscribed registrants from the grid counts and the record pane once checked', async () => {
       mockUseRegistryGate.mockReturnValue({ status: 'ready', leaderRole: { role: 'national_admin', mfa_required: true } });
       render(<RegistryManagePage />);
-      const allRow = requireRow(await screen.findByText('All AFJ Registrations'));
+      const allRow = requireRow(await screen.findByText('All TWOL Registrations'));
       expect(allRow).toHaveTextContent(/5/);
 
       fireEvent.click(await screen.findByLabelText('Exclude unsubscribed registrants'));
@@ -700,7 +700,7 @@ describe('RegistryManagePage', () => {
     it('drops NFC registrants from the grid counts and the record pane once checked', async () => {
       mockUseRegistryGate.mockReturnValue({ status: 'ready', leaderRole: { role: 'national_admin', mfa_required: true } });
       render(<RegistryManagePage />);
-      const allRow = requireRow(await screen.findByText('All AFJ Registrations'));
+      const allRow = requireRow(await screen.findByText('All TWOL Registrations'));
       expect(allRow).toHaveTextContent(/5/);
 
       fireEvent.click(await screen.findByLabelText('Exclude No Further Contact (NFC) registrants'));
@@ -715,7 +715,7 @@ describe('RegistryManagePage', () => {
     it('combines both toggles', async () => {
       mockUseRegistryGate.mockReturnValue({ status: 'ready', leaderRole: { role: 'national_admin', mfa_required: true } });
       render(<RegistryManagePage />);
-      const allRow = requireRow(await screen.findByText('All AFJ Registrations'));
+      const allRow = requireRow(await screen.findByText('All TWOL Registrations'));
 
       fireEvent.click(await screen.findByLabelText('Exclude unsubscribed registrants'));
       fireEvent.click(screen.getByLabelText('Exclude No Further Contact (NFC) registrants'));
@@ -725,7 +725,7 @@ describe('RegistryManagePage', () => {
     it('restores excluded registrants when unchecked', async () => {
       mockUseRegistryGate.mockReturnValue({ status: 'ready', leaderRole: { role: 'national_admin', mfa_required: true } });
       render(<RegistryManagePage />);
-      const allRow = requireRow(await screen.findByText('All AFJ Registrations'));
+      const allRow = requireRow(await screen.findByText('All TWOL Registrations'));
       const checkbox = await screen.findByLabelText('Exclude unsubscribed registrants');
 
       fireEvent.click(checkbox);

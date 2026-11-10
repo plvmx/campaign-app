@@ -148,7 +148,7 @@ function tally<T extends RegistrantForCount>(rows: T[], include: (row: T) => boo
   return { total, byState, unknown };
 }
 
-/** The unfiltered "All AFJ Registrations" row — every row counts, regardless of registeredAt. */
+/** The unfiltered "All TWOL Registrations" row — every row counts, regardless of registeredAt. */
 export function countAllRegistrants<T extends RegistrantForCount>(rows: T[]): PeriodCounts {
   return tally(rows, () => true);
 }
@@ -188,7 +188,7 @@ export function countRegistrantsByCategory<T extends RegistrantForCategoryCount>
 /**
  * The actual records behind one grid cell — what a national admin sees in
  * the record pane after clicking a non-zero count. `period: null` matches
- * the unfiltered "All AFJ Registrations" row (date is ignored entirely,
+ * the unfiltered "All TWOL Registrations" row (date is ignored entirely,
  * same as countAllRegistrants); otherwise mirrors countRegistrantsForPeriod's
  * window. Generic over T so callers get back their own richer row type
  * (e.g. ManageRegistrant, with name/email/phone) rather than being

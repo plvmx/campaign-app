@@ -218,7 +218,7 @@ export async function POST(request: NextRequest) {
       // is NOT NULL on campaign_interest, and while every registrant should
       // have one (mapAcFields always attempts to capture it), a national
       // admin could have cleared it via /registry/manage's Edit mode.
-      first_name: registrant.first_name?.trim() || 'AFJ Registrant',
+      first_name: registrant.first_name?.trim() || 'TWOL Registrant',
       // registry.registrants.phone is E.164 ('+61...'); campaign_interest's
       // other rows are in the local '0XXXXXXXXX' format the rest of the app
       // uses (whatever a visitor typed into the public form) — normalized
@@ -237,7 +237,7 @@ export async function POST(request: NextRequest) {
     try {
       await notifyLeadersOfCampaignInterest(supabaseAdmin, {
         campaignIds: [campaignId],
-        registrantFirstName: registrant.first_name?.trim() || 'AFJ Registrant',
+        registrantFirstName: registrant.first_name?.trim() || 'TWOL Registrant',
         interestType: interestType as CampaignInterestType,
       });
     } catch (notifyErr) {

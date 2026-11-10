@@ -21,7 +21,7 @@ import { generateAndDownloadSlidesFromData, type PublicSlideDay } from '@/lib/sl
 import type { AriseCampaign } from '@/lib/ariseLayout';
 import type { TemporaryUpcomingCampaignsResponse } from '@/app/api/public/temporary-upcoming-campaigns/route';
 
-const TITLE = 'Temporary AFJ Campaign Lists';
+const TITLE = 'Temporary TWOL Campaign Lists';
 const INTRO_TEXT = 'Here is the temporary upcoming campaign list for this fortnight.';
 
 /** Each step as [text, bold?] segments so the key words can be styled inline. */

@@ -1,5 +1,5 @@
 /**
- * Public, unauthenticated data source for the "Final AFJ Campaign Lists"
+ * Public, unauthenticated data source for the "Final TWOL Campaign Lists"
  * page (/public/final-campaign-lists). Same fortnight, same all-states data
  * as /api/public/temporary-upcoming-campaigns — the query itself lives in
  * lib/services/publicCampaignListService.ts and is shared between the two

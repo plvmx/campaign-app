@@ -62,7 +62,7 @@ export function buildWhatsAppInviteEmail(firstName: string | null, inviteUrl: st
   const safeName = escapeHtml(name);
   const safeUrl = escapeHtml(inviteUrl);
 
-  const subject = "You're invited: join the AFJ WhatsApp group";
+  const subject = "You're invited: join the TWOL WhatsApp group";
 
   const textLines = [
     `Hi ${name},`,
@@ -91,8 +91,8 @@ export function buildWhatsAppInviteEmail(firstName: string | null, inviteUrl: st
     );
   }
 
-  textLines.push('', 'God bless,', 'The AFJ Team');
-  htmlLines.push(`<p>God bless,<br/>The AFJ Team</p>`);
+  textLines.push('', 'God bless,', 'The TWOL Team');
+  htmlLines.push(`<p>God bless,<br/>The TWOL Team</p>`);
 
   return { subject, text: textLines.join('\n'), html: htmlLines.join('\n') };
 }

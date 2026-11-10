@@ -221,7 +221,7 @@ export default function UpcomingCampaignsClient() {
   return (
     <div data-ti="app/public/upcoming-campaigns/UpcomingCampaignsClient.tsx" className="mx-auto flex min-h-[100dvh] max-w-4xl flex-col p-4">
       <div className="mb-3">
-        <h1 className="text-2xl font-bold text-gray-900">Upcoming AFJ Campaigns</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Upcoming TWOL Campaigns</h1>
         <ol className="mt-2 space-y-1 rounded-lg border border-blue-200 bg-blue-50 p-3 text-base font-medium text-blue-900">
           <li><span className="font-bold">1.</span> Choose a week below.</li>
           <li><span className="font-bold">2.</span> {viewMode === 'map' ? 'Tap a coloured circle on the map (or type your postcode) to see the campaign.' : 'Tick the campaigns you are interested in.'}</li>

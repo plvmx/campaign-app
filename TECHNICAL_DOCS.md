@@ -625,10 +625,10 @@ Admins can also set a leader's `email` directly on `/admin/state-leaders` with n
 **`MfaEnrollmentFlow`** (shared by `/setup-mfa` and `/confirm-email`):
 - AAL2 step-up first if the account already has a verified factor (Supabase refuses to enrol another factor below AAL2, regardless of `friendlyName`). The shared Supabase user pool means a leader may already have a `/registry` TOTP factor. Cancelling shows a "2FA **was not set up**" screen.
 - A successful step-up goes straight to completion — the existing verified factor already satisfies MFA, and a second QR code would only confuse.
-- Stale unverified factors are cleaned up (scoped by `factor_type`) before a fresh `enroll()`; `enroll()` passes `friendlyName` "AFJ Campaign App (Authenticator)" to avoid a name collision.
+- Stale unverified factors are cleaned up (scoped by `factor_type`) before a fresh `enroll()`; `enroll()` passes `friendlyName` "TWOL Campaign Activity System (Authenticator)" to avoid a name collision.
 - The QR is rendered client-side from `data.totp.uri`. Two boxed options: **Way 1 — on your phone** (an "Add to my authenticator app" `otpauth://` link, phone only) and **Way 2 — on a computer: scan the square code**; plus a **Copy key** button and "pick *Time based*" guidance for manual entry. **On iOS** (`lib/isIosDevice.ts` — iPhone/iPod/iPad, including iPadOS reporting as a Mac) the phone-only link and the QR code are hidden and the numbered typed-key steps (Copy key → app's "Enter a setup key" → *Time based* → type the 6-digit code) come first, because an `otpauth://` link may open Apple Passwords instead of an authenticator app and a QR code can't be scanned from the phone's own screen (Mark, admin on iPhone, 2026-10-19). A collapsed "I don't have an authenticator app yet" lists the store links in `lib/authenticatorApps.ts`.
 - The unfinished factor survives a page reload: `lib/pendingTotpEnrollment.ts` stores `{factorId, uri, secret}` for 15 minutes and reuses it **only if** `listFactors()` still shows it as an unverified TOTP on the signed-in account. (Previously a reload — which iPhones do when you switch to copy the key — created a *new* secret and every typed code failed.)
-- A rejected code is explained by `lib/mfaErrors.ts`'s `describeMfaVerifyError()` (stale "AFJ Campaign App" entry in the phone app, phone clock not automatic, code changed while typing; also expired-challenge, rate-limit, missing-factor).
+- A rejected code is explained by `lib/mfaErrors.ts`'s `describeMfaVerifyError()` (stale "TWOL Campaign Activity System" entry in the phone app, phone clock not automatic, code changed while typing; also expired-challenge, rate-limit, missing-factor).
 
 SMS/phone MFA was built then removed before it was ever enabled (Peter chose authenticator-app only). `lib/clickSendClient.ts`'s unrelated "text the leader" SMS is untouched.
 
@@ -706,7 +706,7 @@ For older leaders with reading difficulties, the constants in `components/auth/C
 | Symptom | Likely cause / where to look |
 |---|---|
 | "Link already used" right after clicking | A mail client/scanner opened it first. Use the emailed code; confirm the scanner-proof template is live (§6.9). Supabase Dashboard → Logs → Auth shows the caller of a `login` event |
-| Authenticator code rejected | Old "AFJ Campaign App" entry in the phone app, clock not automatic, code changed while typing (`describeMfaVerifyError`). Exact failure is in Dashboard → Logs → Auth (`/factors/<id>/verify`) |
+| Authenticator code rejected | Old "TWOL Campaign Activity System" entry in the phone app, clock not automatic, code changed while typing (`describeMfaVerifyError`). Exact failure is in Dashboard → Logs → Auth (`/factors/<id>/verify`) |
 | Taken "straight into the app" instead of QR screen | Pressed Cancel (then "Back to sign in" lands in the still-signed-in main session); link never opened; or a non-allow-listed redirect host (§6.9) |
 | Stuck on "Loading…" / "Checking sign-in status…" | Stuck tab holding the auth lock (fixed by `supabaseLock.ts`) or a server-rejected session (fixed by `getVerifiedSession()`) |
 | Admin can't sign in with mobile+name | Intended — mandatory 2FA (§6.7). Unenrolled admins complete the no-skip steps; "Reset 2FA" is for a lost authenticator |
@@ -2086,3 +2086,6 @@ Check against this list:
 ---
 
 *Last updated: 16 October 2026*
+
+### Branding (2026-11-10)
+The app is "The Way of Life Campaign Activity System" (short: "TWOL Campaign Activity System" / "TWOL CAS"), no longer "AFJ". Brand art is cut from the Way of Life logo: `public/twol_banner.png` (tree mark + "THE WAY OF LIFE", transparent; shown on `/login` and the `/registry` sign-in screens) and the tree-circle mark as the PWA/home-screen icons (`public/icons/icon-192x192.png`, `icon-512x512.png`, `apple-touch-icon.png`, `app/favicon.ico`). Manifest/theme colour is the logo green `#7bbf43`. The service-worker cache name was bumped (`twol-cas-v4`) so installed apps drop the old icons. The `afj.org.au` email domain and AC form/sheet names in the registry docs are unchanged.

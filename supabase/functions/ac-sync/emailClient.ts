@@ -27,7 +27,7 @@ const RESEND_API_URL = 'https://api.resend.com/emails';
 
 // Must be a verified sending address on the Resend account/domain in use —
 // update if AFJ's verified sending domain differs from this placeholder.
-const FROM_ADDRESS = 'AFJ <noreply@afj.org.au>';
+const FROM_ADDRESS = 'TWOL <noreply@afj.org.au>';
 
 /**
  * The Next.js app's own public origin, for the personalized

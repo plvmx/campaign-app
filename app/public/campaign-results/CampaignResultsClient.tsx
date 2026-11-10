@@ -111,7 +111,7 @@ export default function CampaignResultsClient({ onClose }: { onClose?: () => voi
           <h2 className="text-base font-bold text-red-800 dark:text-red-200">IMPORTANT NOTICE</h2>
           <p className="mt-1 text-sm text-red-900 dark:text-red-100">
             The first names listed on the screens below are presented STRICTLY for the purposes of prayer, and
-            they will not be stored by AFJ in any form beyond{' '}
+            they will not be stored by TWOL in any form beyond{' '}
             {noticeDateLabel ? (
               <span className="whitespace-nowrap font-bold">{noticeDateLabel}</span>
             ) : (
