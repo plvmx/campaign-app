@@ -37,13 +37,20 @@ describe('parseReportSubmission', () => {
   ])('rejects %s', (_label, body) => expect(parseReportSubmission(body)).toBeNull());
 });
 
-function makeClient(opts: { campaign?: unknown; failTable?: string } = {}) {
+const placeRows = [
+  { place: 'Orange 1', site: '', location: 'Orange' },
+  { place: 'Sylvania', site: '', location: null },
+];
+
+function makeClient(opts: { campaign?: unknown; failTable?: string; places?: unknown } = {}) {
   const builders: Array<{ table: string; builder: MockQueryBuilder }> = [];
   const from = vi.fn((table: string) => {
     const result =
       table === 'campaigns'
         ? { data: opts.campaign === undefined ? campaignRow : opts.campaign, error: null }
-        : { data: null, error: null };
+        : table === 'state_places'
+          ? { data: opts.places === undefined ? placeRows : opts.places, error: null }
+          : { data: null, error: null };
     const builder = makeQueryBuilder(result);
     // Fail only the insert (not the clean-up delete) for the chosen table.
     if (opts.failTable === table) builder.insert.mockResolvedValue({ data: null, error: { message: 'boom' } });
@@ -76,6 +83,27 @@ describe('saveCampaignReport', () => {
       source: EXPERIMENTAL_REPORT_SOURCE,
     });
     expect(Number.isNaN(Date.parse(row.submitted_at))).toBe(false);
+  });
+
+  it('fills the derived state, location and leader from the campaign', async () => {
+    const { client, builders } = makeClient();
+    await saveCampaignReport(client, input);
+    const [{ builder }] = calls(builders, 'campaign_reports', 'insert');
+    expect(builder.insert.mock.calls[0][0]).toMatchObject({
+      derived_state: 'VIC',
+      derived_location: 'Orange',
+      derived_leader: 'Jane Smith',
+    });
+  });
+
+  it('uses the place name as the location when State Places has none, and leaves it empty for an unknown place', async () => {
+    const sylvania = makeClient({ campaign: { ...campaignRow, place: 'Sylvania', site: '' } });
+    await saveCampaignReport(sylvania.client, input);
+    expect(calls(sylvania.builders, 'campaign_reports', 'insert')[0].builder.insert.mock.calls[0][0].derived_location).toBe('Sylvania');
+
+    const unknown = makeClient({ places: [] });
+    await saveCampaignReport(unknown.client, input);
+    expect(calls(unknown.builders, 'campaign_reports', 'insert')[0].builder.insert.mock.calls[0][0].derived_location).toBeNull();
   });
 
   it('writes every name to results under its category, tagged and attributed to the admin', async () => {
