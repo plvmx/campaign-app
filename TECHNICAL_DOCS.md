@@ -466,6 +466,7 @@ training_interest
   same shape for BOTJ/TLT sessions (per-campaign public link); same RLS
 
 campaign_interest_sms_log
+legacy_report_visits
   campaign_ids[], leader, status 'sent' | 'failed' | 'skipped_no_mobile', error
   admin SELECT only; writes via service role
 
@@ -481,7 +482,7 @@ results_changes_log, campaign_messages, app_settings …  (see their create_*.sq
 
 The registry data lives in separate `staging` and `registry` schemas (§17.1).
 
-**Backups.** `BACKUP_TABLE_CONFIG` in `lib/services/backupService.ts` is the single source of truth for what `/admin/backup` exports and in what order — FK-safe (a table appears only after every table it references), because "replace" restore inserts top-to-bottom but deletes bottom-to-top. Bump the export format `version` (see the comment above it) when adding/renaming a table or a backed-up column. Log/audit tables (`campaign_changes_log`, `state_leader_email_changes`, `state_leader_mfa_resets`, `campaign_interest_sms_log`) are excluded.
+**Backups.** `BACKUP_TABLE_CONFIG` in `lib/services/backupService.ts` is the single source of truth for what `/admin/backup` exports and in what order — FK-safe (a table appears only after every table it references), because "replace" restore inserts top-to-bottom but deletes bottom-to-top. Bump the export format `version` (see the comment above it) when adding/renaming a table or a backed-up column. Log/audit tables (`campaign_changes_log`, `state_leader_email_changes`, `state_leader_mfa_resets`, `campaign_interest_sms_log`, `legacy_report_visits`) are excluded.
 
 
 ### 5.2 Key Naming Conventions
@@ -794,6 +795,7 @@ There is no separate permissions module. Role logic is kept inline wherever it i
 /public/final-campaign-lists          Public read-only fortnight list (download only)
 /public/campaign-results              Public campaign results for the last-refreshed week
 /public/register-interest             Public: tick campaigns, "Yes I'm In" / "Tell Me More"
+/public/campaign-reporting-moved      Public: where the old campaign results report (australiaforjesus.org.au/campaignreport/) redirects leaders — says reporting is now in the CAS App; counts visits
 /public/campaigns-near-me             Public: personalised map for a registry registrant (?r=<id>)
 /public/training/[campaignId]         Public: one training session + interest form
 /registry/*                           Registry portal (own auth + MFA) — see §17
@@ -1946,6 +1948,7 @@ No-login pages, each registered in `lib/publicLinks.ts` (single source of truth 
 | `/public/temporary-upcoming-campaigns` | Leader-facing fortnight list — check / edit-redirect / download |
 | `/public/final-campaign-lists` | Read-only version of the same list once leaders are done editing (Download only). Same data source (`publicCampaignListService`: `getUpcomingFortnightDateStrings()` — also a cache key — and `fetchFortnightCampaignDays()`) |
 | `/public/campaign-results` | Results for the week the last Weekly Refresh *kept*, shown until the next refresh (`publicCampaignResultsService`: `getLastSuccessfulWeeklyRefreshAt()` + pure `getDisplayedResultsWeekStart()`). Per-page JPEG downloads. An "IMPORTANT NOTICE" says first names are for prayer only and won't be kept beyond a named Sunday — deliberately one week *after* the actual deletion (`lib/campaignDates.ts`'s `getCampaignResultsNoticeDate()`), giving people time to delete downloaded copies. Names are really removed by the Sunday weekly refresh deleting past campaigns (their `results` rows go too); `lib/resultsLog.ts` logs category codes only, never first names, so the log can't outlive them |
+| `/public/campaign-reporting-moved` | Landing page for leaders redirected from the old campaign results report (`australiaforjesus.org.au/campaignreport/` — the redirect itself is set up on that site, not in this repo). Way of Life banner, "all campaign reporting must now be done in the TWOL CAS App", the steps (sign in with name + mobile → find the past campaign → green Record Results button) and a button to `/login`. Each browser session POSTs once to `/api/public/legacy-report-visit` (`legacy_report_visits`: random per-browser `device_id` + time, no personal data — `scripts/create_legacy_report_visits_table.sql`); admins see 7-day/30-day/all-time/different-device counts on the `/admin` hub (`LegacyReportVisitsCard`, `GET /api/admin/legacy-report-visits`, `lib/legacyReportVisits.ts` + `lib/services/legacyReportVisitService.ts`). Delete page, table, card and routes once the old link stops being used |
 | `/public/register-interest` | Tick upcoming campaigns and register "Yes I'm In" / "Tell Me More" with first name + validated mobile and/or email (`lib/validation.ts`). The only `/public/*` page with a POST |
 | `/public/upcoming-campaigns` | Public map of upcoming campaigns, all states, This Week / Next Week toggle (replaced the admin-only `/admin/campaign-map`). Groups by place using cached `state_places` coordinates only. A postcode box (`/api/public/geocode-postcode`) recentres the map. Marker actions collect name + mobile/email inline (`PublicMapRegisterInterestActions`) |
 | `/public/campaigns-near-me?r=<registrantId>` | Personalised map for one registry registrant, reached from their WhatsApp-invite email. Centres on their postcode (state fallback) for 7 days from today within 60 km. The URL carries only the opaque id — never name/email/mobile. Tapping a marker action (`PublicCampaignInterestActions`) shows the consent modal then POSTs `{registrantId, campaignId, interestType}`; the route re-derives name/mobile/email from `registry.registrants` server-side. Not in `publicLinks.ts` and not cached (personalised) |

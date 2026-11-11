@@ -395,6 +395,18 @@ CREATE POLICY "campaign_interest_sms_log: admin can read"
 
 
 -- =============================================================================
+-- legacy_report_visits  (visits to the "campaign reporting has moved" page)
+-- Admins can read. Only the service role writes (public API route).
+-- =============================================================================
+ALTER TABLE legacy_report_visits ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "legacy_report_visits: admin can read" ON legacy_report_visits;
+CREATE POLICY "legacy_report_visits: admin can read"
+  ON legacy_report_visits FOR SELECT TO authenticated
+  USING (public.is_admin());
+
+
+-- =============================================================================
 -- app_events  (analytics, append-only)
 -- =============================================================================
 ALTER TABLE app_events ENABLE ROW LEVEL SECURITY;
