@@ -43,6 +43,12 @@ export const PUBLIC_LINK_OG_IMAGE = {
 
 export const PUBLIC_LINKS: PublicLink[] = [
   {
+    slug: 'campaign-reporting-moved',
+    title: 'Campaign Reporting Has Moved',
+    description: 'Campaign results are now recorded in the TWOL CAS App — here is how.',
+    path: '/public/campaign-reporting-moved',
+  },
+  {
     slug: 'week1-campaigns',
     title: 'Week 1 Campaigns',
     description: 'Always-current Week 1 Campaigns list, all states — no login required.',
