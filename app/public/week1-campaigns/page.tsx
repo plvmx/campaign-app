@@ -39,7 +39,7 @@ export async function generateMetadata(): Promise<Metadata> {
       // Some clients (Slack, iMessage) show this friendlier label instead of
       // the bare domain under the preview card. WhatsApp shows the domain
       // regardless, as its own transparency feature — not controllable here.
-      siteName: 'AFJ Campaign App',
+      siteName: 'TWOL Campaign Activity System',
       // Branded app icon. Without an explicit image, some clients (iMessage
       // link previews on macOS) fall back to a generic placeholder — in this
       // case a default Vercel image — rather than no image at all, which

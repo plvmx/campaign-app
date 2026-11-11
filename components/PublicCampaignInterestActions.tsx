@@ -79,7 +79,7 @@ export default function PublicCampaignInterestActions({ registrantId, campaignId
   }
 
   return (
-    <div className="mt-2">
+    <div data-ti="components/PublicCampaignInterestActions.tsx" className="mt-2">
       <div className="flex gap-2">
         <button
           type="button"

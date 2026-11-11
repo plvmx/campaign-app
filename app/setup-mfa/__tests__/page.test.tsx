@@ -55,7 +55,7 @@ import SetupMfaPage from '../page';
 
 const SESSION = { access_token: 'tok-123', user: { id: 'user-1' } };
 const TOTP_ENROLL_RESPONSE = {
-  data: { id: 'totp-factor-1', totp: { uri: 'otpauth://totp/AFJ:test@example.com?secret=SECRETKEY&issuer=AFJ', secret: 'SECRETKEY' } },
+  data: { id: 'totp-factor-1', totp: { uri: 'otpauth://totp/TWOL:test@example.com?secret=SECRETKEY&issuer=TWOL', secret: 'SECRETKEY' } },
   error: null,
 };
 
@@ -211,7 +211,7 @@ describe('SetupMfaPage', () => {
 
       await waitFor(() => expect(mockUnenroll).toHaveBeenCalledTimes(1));
       expect(mockUnenroll).toHaveBeenCalledWith({ factorId: 'stale-totp' });
-      expect(mockEnroll).toHaveBeenCalledWith({ factorType: 'totp', friendlyName: 'AFJ Campaign App (Authenticator)' });
+      expect(mockEnroll).toHaveBeenCalledWith({ factorType: 'totp', friendlyName: 'TWOL Campaign Activity System (Authenticator)' });
     });
 
     it('completes enrollment, posts to complete-mfa-setup, signs out, and shows Continue', async () => {
@@ -239,7 +239,7 @@ describe('SetupMfaPage', () => {
       fireEvent.click(screen.getByRole('button', { name: /verify and continue/i }));
 
       const alert = await screen.findByRole('alert');
-      expect(alert).toHaveTextContent(/newest "AFJ Campaign App" entry/);
+      expect(alert).toHaveTextContent(/newest "TWOL Campaign Activity System" entry/);
       expect(alert).toHaveTextContent(/date and time/i);
       expect(alert).not.toHaveTextContent(/TOTP/);
       expect(global.fetch).not.toHaveBeenCalledWith('/api/auth/complete-mfa-setup', expect.anything());

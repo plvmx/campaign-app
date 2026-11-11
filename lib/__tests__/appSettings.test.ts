@@ -10,7 +10,7 @@ vi.mock('../supabaseAdmin', () => ({
 
 import { supabase } from '../supabaseClient';
 import { supabaseAdmin } from '../supabaseAdmin';
-import { getSettingServer, setPublicLinkTitle, setPublicLinkDescription } from '../appSettings';
+import { getSettingServer, setPublicLinkTitle, setPublicLinkDescription, getTechInsightsConfig, setTechInsightsHotkey } from '../appSettings';
 
 const mockAdminFrom = vi.mocked(supabaseAdmin.from) as unknown as ReturnType<typeof vi.fn>;
 const mockGetSession = vi.mocked(supabase.auth.getSession);
@@ -109,5 +109,42 @@ describe('setPublicLinkTitle / setPublicLinkDescription', () => {
     });
 
     await expect(setPublicLinkTitle('week1-campaigns', 'x')).rejects.toThrow('Forbidden');
+  });
+});
+
+describe('Tech Insights settings', () => {
+  const mockFrom = vi.mocked(supabase.from) as unknown as ReturnType<typeof vi.fn>;
+
+  it('is off with the default shortcut when nothing is stored', async () => {
+    mockFrom.mockReturnValue(makeQueryBuilder({ data: [], error: null }));
+    expect(await getTechInsightsConfig()).toEqual({ enabled: false, hotkey: 'Ctrl+Alt+I' });
+  });
+
+  it('reads both settings in one query', async () => {
+    const builder = makeQueryBuilder({
+      data: [
+        { setting_key: 'tech_insights_enabled', setting_value: 'true' },
+        { setting_key: 'tech_insights_hotkey', setting_value: 'Alt+Ctrl+J' },
+      ],
+      error: null,
+    });
+    mockFrom.mockReturnValue(builder);
+    expect(await getTechInsightsConfig()).toEqual({ enabled: true, hotkey: 'Ctrl+Alt+J' });
+    expect(builder.in).toHaveBeenCalledWith('setting_key', ['tech_insights_enabled', 'tech_insights_hotkey']);
+    expect(mockFrom).toHaveBeenCalledTimes(1);
+  });
+
+  it('falls back to the default shortcut when the stored one is invalid, and stays off on a read error', async () => {
+    mockFrom.mockReturnValue(makeQueryBuilder({ data: [{ setting_key: 'tech_insights_hotkey', setting_value: 'banana' }], error: null }));
+    expect((await getTechInsightsConfig()).hotkey).toBe('Ctrl+Alt+I');
+
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockFrom.mockReturnValue(makeQueryBuilder({ data: null, error: { message: 'boom' } }));
+    expect(await getTechInsightsConfig()).toEqual({ enabled: false, hotkey: 'Ctrl+Alt+I' });
+  });
+
+  it('refuses to save an invalid shortcut without calling the server', async () => {
+    await expect(setTechInsightsHotkey('Shift+I')).rejects.toThrow(/not a valid shortcut/);
+    expect(global.fetch).not.toHaveBeenCalled();
   });
 });

@@ -24,7 +24,7 @@ interface MapPopupActionsProps {
 
 export default function MapPopupActions({ campaignId, place, state }: MapPopupActionsProps) {
   return (
-    <div className="mt-2 flex gap-2">
+    <div data-ti="components/MapPopupActions.tsx" className="mt-2 flex gap-2">
       <button
         type="button"
         onClick={() => console.log(`"Yes I'm In" clicked — campaign ${campaignId} at ${place}, ${state}`)}

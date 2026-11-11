@@ -7,7 +7,7 @@ import { formatGuideDate, validateUserGuideFile, type UserGuideView } from '@/li
 
 /**
  * Admin hub card: shows the CAS User Guide leaders currently see behind the
- * "OPEN GUIDE" button, and lets an admin replace it with a new PDF.
+ * "USER GUIDE" button, and lets an admin replace it with a new PDF.
  */
 export default function UserGuideUploadCard() {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -67,10 +67,10 @@ export default function UserGuideUploadCard() {
   };
 
   return (
-    <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
+    <div data-ti="app/admin/components/UserGuideUploadCard.tsx" className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
       <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">CAS User Guide</h2>
       <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-        The PDF leaders open with the &ldquo;OPEN GUIDE&rdquo; button. Uploading a new PDF replaces it straight away.
+        The PDF leaders open with the &ldquo;USER GUIDE&rdquo; button. Uploading a new PDF replaces it straight away.
       </p>
 
       <p className="mt-3 text-sm text-gray-800 dark:text-gray-200">

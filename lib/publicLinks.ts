@@ -38,7 +38,7 @@ export const PUBLIC_LINK_OG_IMAGE = {
   url: '/icons/icon-192x192.png',
   width: 192,
   height: 192,
-  alt: 'AFJ Campaign App',
+  alt: 'TWOL Campaign Activity System',
 };
 
 export const PUBLIC_LINKS: PublicLink[] = [
@@ -56,13 +56,13 @@ export const PUBLIC_LINKS: PublicLink[] = [
   },
   {
     slug: 'temporary-upcoming-campaigns',
-    title: 'Temporary AFJ Campaign Lists',
+    title: 'Temporary TWOL Campaign Lists',
     description: 'Check your upcoming campaign details for this fortnight — no login required.',
     path: '/public/temporary-upcoming-campaigns',
   },
   {
     slug: 'final-campaign-lists',
-    title: 'Final AFJ Campaign Lists',
+    title: 'Final TWOL Campaign Lists',
     description: 'Here are the final campaign lists for this fortnight',
     path: '/public/final-campaign-lists',
   },
@@ -80,8 +80,8 @@ export const PUBLIC_LINKS: PublicLink[] = [
   },
   {
     slug: 'upcoming-campaigns',
-    title: 'Upcoming AFJ Campaigns Map',
-    description: 'See upcoming AFJ campaigns on an interactive map and register your interest — no login required.',
+    title: 'Upcoming TWOL Campaigns Map',
+    description: 'See upcoming TWOL campaigns on an interactive map and register your interest — no login required.',
     path: '/public/upcoming-campaigns',
   },
 ];

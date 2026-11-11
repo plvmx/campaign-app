@@ -1,5 +1,103 @@
 # Campaign Report project — brief
 
+## Live sheet sync (2026-10-24) — temporary
+
+Peter was given a live, link-shared Google Sheet with the full report history
+from 2021 (same 8 columns as the earlier export; one tab, "Sheet1"). Checked
+against `campaign_reports`: 6,454 sheet rows vs 6,203 stored; every stored row
+matches the sheet on every parsed value (a few free-text `*_raw` cells differ
+cosmetically), nothing stored is missing from the sheet, and 250 are new (to
+2026-10-23). So the table is fully compatible and the sheet is simply a
+superset. One repeated `submitted_at` exists (a 2026-08-31 "Testing" pair —
+the first row wins, as in the original load).
+
+A daily Vercel Cron job (`/api/cron/campaign-report-sync`) now inserts new
+rows and re-derives state/place/leader — see `lib/services/campaignReportSyncService.ts`
+and `TECHNICAL_DOCS.md` §19.2. Temporary: it is to be removed when the app's
+own campaign-report numbers replace the sheet (this supersedes the
+"no new rows written into it" note below only for this bridge; new rows carry
+`source = 'google_sheet_sync'` so they are easy to identify). Why not the
+xlsx export: it would need an xlsx parser in the server bundle (the CVE
+concern in `campaign_reports_xlsx_to_json.py`); why not the Sheets API: it
+needs a Google Cloud API key. Known limitation: a leader-name cell that
+Google has formatted as a date comes through as a date string, not the
+original number (5 such historical cells; cosmetic).
+
+## Location matching for analysis (2026-10-24)
+
+Peter wants an admin analysis page, which needs a state and a `state_places`
+place on every report. The 2026-05-06 derive cutoff was lifted (whole history).
+Measured on the full history: ~93% resolve a state; ~1,365 rows (573 distinct
+locations) still have no place because `state_places` has ~213 places against
+~1,350 distinct sheet spellings (many real places were never in the table).
+Fixes: (1) a state typed in the location is now authoritative — the old
+matcher got ~5% of those wrong (e.g. "Brighton SA" -> NSW's "Brighton Le S",
+"Ayr Qld" -> VIC via the leader); (2) `campaign_report_location_aliases` +
+`/admin/campaign-report-locations` let an admin map each spelling once, adding
+historical-only places to `state_places` (Peter's decision; they will show in
+campaign dropdowns); (3) derive fills only empty fields so manual edits stick;
+(4) the daily sync logs one line with the number of locations still unmapped.
+
+## Management screen (2026-10-26)
+
+After mapping the frequent locations (395 left, almost all one-offs), Peter
+chose to stop mapping for analysis and asked for a management console like
+`/registry/manage`: `/admin/campaign-reports` — search, filter, sort and a
+View/Edit toggle to fill in missing State / Place / Leader, with an audit log
+(`campaign_report_edits`, `/admin/campaign-reports/edit-log`). Manual edits
+survive the daily sync because it only fills empty fields.
+
+## Cleanup screen retired (2026-10-28)
+
+`/admin/campaign-reports-cleanup` (per-row, only reports since 2026-05-06, no
+validation or audit log) was removed once `/admin/campaign-reports` did the
+same job for every report. `/admin/campaign-report-locations` stays as the
+bulk tool (one decision per location spelling, applied to existing and future
+reports) and is labelled "(bulk)" on the Admin hub.
+
+## New places get a location and coordinates (2026-10-29)
+
+Places added from the Campaign Report screens (the "Add as new place" paths)
+were inserted as bare `{state, place}` — no `location` text, no coordinates —
+so they were invisible on the public maps and showed as ungeocoded in State
+Places. All three creation paths now share `lib/services/newStatePlace.ts`
+(location always set; coordinates when found inside the right state), and 32
+existing rows were repaired. `/admin/campaign-report-locations` can now be
+sorted by number of records, location or state.
+
+## Mobile pickers (2026-10-30)
+
+The Edit-mode Place/Leader cells used a text box with an HTML `<datalist>`,
+which phone browsers barely support (no choices appeared). They are now
+`components/campaignReports/PickCell.tsx`, a native `<select>` (with a
+"+ Add a new place…" choice for new places). Overseas records are being left
+with a blank state for now (no 'OS' state).
+
+## "Location" means the physical location, not the place label (2026-10-30)
+
+Peter's observation: a report's typed location should map to
+`state_places.location` (the real physical location), not `state_places.place`.
+Checked against the data: `place` is a campaign-form site label — 33 of 254
+rows differ from their location, and 7 locations are shared by several places
+("Perth CBD 1…4" + "Perth Metro", "Frankston 1/2", "Orange 1/2", three Yagan
+Square variants) — while a typed "Frankston" can't say which site was meant,
+so mapping to `place` forced arbitrary or blank choices. Now:
+
+- `campaign_reports.derived_location` and `campaign_report_location_aliases.location`
+  (new, additive columns, backfilled from the old `derived_place`/`place` via
+  `scripts/add_derived_location_to_campaign_reports.sql`); the old columns are
+  left in place, unused.
+- The matcher, daily sync, bulk Locations screen, Campaign Reports screen, its
+  audit log and the "Add a new location" flow all use `location`. A new
+  location is a `state_places` row whose place and location are both the new
+  name (geocoded).
+- Reports whose old place no longer exists in `state_places` (7 at the time)
+  have no location after the backfill and appear for re-mapping.
+- Data worth checking in State Places: place "Campbelltown" has location
+  "Sydney", place "Ryde" has location "St Anne's, Church St.", and "TestPlace"
+  is located at "Ashburton" — reports typed with those names now resolve to
+  those locations.
+
 ## Resumed with narrowed scope (2026-09-02)
 
 The "may not be required" hold from 2026-09-01 (below) was resolved: Peter

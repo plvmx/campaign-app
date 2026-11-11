@@ -60,7 +60,7 @@ export default function RequireTwoFactorForMemberDetails({ children }: { childre
 
   return (
     <MobileLayout>
-      <div className="mx-auto max-w-xl space-y-6 p-4">
+      <div data-ti="components/auth/RequireTwoFactorForMemberDetails.tsx" className="mx-auto max-w-xl space-y-6 p-4">
         <h1 className={headingClass}>Extra security needed</h1>
         <p className={bodyTextClass}>
           To protect the personal details of people who register interest, you need two-factor authentication (a code from an

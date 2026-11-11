@@ -5,6 +5,9 @@ import {
   matchPlace,
   matchLeader,
   deriveCampaignReportFields,
+  extractStateHint,
+  locationKey,
+  type LocationAliasRef,
   type PlaceRef,
   type LeaderRef,
 } from '../campaignReportMatcher';
@@ -138,13 +141,13 @@ describe('matchLeader', () => {
 });
 
 describe('deriveCampaignReportFields', () => {
-  it('resolves state, place, and leader when the place uniquely determines the state', () => {
+  it('resolves state, location, and leader when the place uniquely determines the state', () => {
     const result = deriveCampaignReportFields(
       { location_raw: 'Dandenong', leader_raw: 'Brent' },
       PLACES,
       LEADERS,
     );
-    expect(result).toEqual({ state: 'VIC', place: 'Dandenong', leader: null }); // 'Brent' isn't in the fixture leader list
+    expect(result).toEqual({ state: 'VIC', location: 'Dandenong', leader: null }); // 'Brent' isn't in the fixture leader list
   });
 
   it('uses the leader to disambiguate a place name that exists in multiple states', () => {
@@ -154,7 +157,7 @@ describe('deriveCampaignReportFields', () => {
       LEADERS,
     );
     // 'Armadale' is VIC or WA; 'Chris' is VIC or NSW — the only state in both is VIC.
-    expect(result).toEqual({ state: 'VIC', place: 'Armadale', leader: 'Chris' });
+    expect(result).toEqual({ state: 'VIC', location: 'Armadale', leader: 'Chris' });
   });
 
   it('resolves state from the leader alone when the place has no match', () => {
@@ -163,16 +166,16 @@ describe('deriveCampaignReportFields', () => {
       PLACES,
       LEADERS,
     );
-    expect(result).toEqual({ state: 'NSW', place: null, leader: 'Steve G' });
+    expect(result).toEqual({ state: 'NSW', location: null, leader: 'Steve G' });
   });
 
-  it('leaves place null when the state resolves but the site number is ambiguous', () => {
+  it('leaves location null when the state resolves but the candidates are different locations (Orange 1 / Orange 2 with no shared location)', () => {
     const result = deriveCampaignReportFields(
       { location_raw: 'Orange nsw', leader_raw: 'Steve G' },
       PLACES,
       LEADERS,
     );
-    expect(result).toEqual({ state: 'NSW', place: null, leader: 'Steve G' });
+    expect(result).toEqual({ state: 'NSW', location: null, leader: 'Steve G' });
   });
 
   it('returns all-null when neither place nor leader resolves a state (never guesses)', () => {
@@ -181,7 +184,7 @@ describe('deriveCampaignReportFields', () => {
       PLACES,
       LEADERS,
     );
-    expect(result).toEqual({ state: null, place: null, leader: null });
+    expect(result).toEqual({ state: null, location: null, leader: null });
   });
 
   it('trusts a unique place match over a non-corroborating leader, leaving leader unresolved', () => {
@@ -190,7 +193,7 @@ describe('deriveCampaignReportFields', () => {
       PLACES,
       LEADERS,
     );
-    expect(result).toEqual({ state: 'NSW', place: 'Cronulla', leader: null });
+    expect(result).toEqual({ state: 'NSW', location: 'Cronulla', leader: null });
   });
 
   it('returns all-null when an ambiguous place and an ambiguous leader share no common state', () => {
@@ -199,6 +202,96 @@ describe('deriveCampaignReportFields', () => {
       PLACES,
       LEADERS,
     );
-    expect(result).toEqual({ state: null, place: null, leader: null });
+    expect(result).toEqual({ state: null, location: null, leader: null });
+  });
+});
+
+describe('extractStateHint', () => {
+  it.each([
+    ['Brighton SA', 'SA'],
+    ['Ayr  Nth Qld', 'QLD'],
+    ['Hoppers Crossing Vic', 'VIC'],
+    ['Queanbeyan, NSW', 'NSW'],
+    ['Midwest WA', 'WA'],
+    ['Foo (Tasmania)', 'TAS'],
+  ])('reads the typed state from %s', (raw, state) => {
+    expect(extractStateHint(raw)).toBe(state);
+  });
+
+  it('returns null when no state is typed, or the letters are only part of a word', () => {
+    expect(extractStateHint('Dandenong')).toBeNull();
+    expect(extractStateHint('Pisa')).toBeNull();
+    expect(extractStateHint(null)).toBeNull();
+  });
+});
+
+describe('deriveCampaignReportFields — a typed state is authoritative', () => {
+  const places: PlaceRef[] = [...PLACES, { state: 'NSW', place: 'Brighton Le S' }, { state: 'ACT', place: 'Queanbeyan' }, { state: 'NSW', place: 'Queanbeyan' }];
+  const leaders: LeaderRef[] = [...LEADERS, { state: 'NSW', leader: 'Anne Mills' }];
+
+  it('does not match a same-named place in another state', () => {
+    const r = deriveCampaignReportFields({ location_raw: 'Brighton SA', leader_raw: 'Anne Mills' }, places, leaders);
+    expect(r.state).toBe('SA');
+    expect(r.location).toBeNull();
+  });
+
+  it('is not overridden by the leader\'s usual state', () => {
+    const r = deriveCampaignReportFields({ location_raw: 'Aberfoyle Park SA', leader_raw: 'Anne Mills' }, places, leaders);
+    expect(r).toEqual({ state: 'SA', location: null, leader: null });
+  });
+
+  it('still finds the place within the typed state', () => {
+    const r = deriveCampaignReportFields({ location_raw: 'Queanbeyan, NSW', leader_raw: null }, places, leaders);
+    expect(r).toEqual({ state: 'NSW', location: 'Queanbeyan', leader: null });
+  });
+});
+
+describe('deriveCampaignReportFields — confirmed aliases', () => {
+  const aliases = new Map<string, LocationAliasRef>([
+    [locationKey('Rundle Mall - Adelaide'), { location_key: locationKey('Rundle Mall - Adelaide'), state: 'SA', location: 'Adelaide CBD' }],
+  ]);
+
+  it('uses the alias over any heuristic, and still matches the leader within that state', () => {
+    const r = deriveCampaignReportFields({ location_raw: 'Rundle Mall - Adelaide', leader_raw: 'Maria' }, PLACES, LEADERS, aliases);
+    expect(r).toEqual({ state: 'SA', location: 'Adelaide CBD', leader: 'Maria' });
+  });
+
+  it('keeps a state-only alias as state-only', () => {
+    const only = new Map([['herberton', { location_key: 'herberton', state: 'QLD', location: null }]]);
+    expect(deriveCampaignReportFields({ location_raw: 'Herberton', leader_raw: null }, PLACES, LEADERS, only))
+      .toEqual({ state: 'QLD', location: null, leader: null });
+  });
+});
+
+describe('deriveCampaignReportFields — maps to the physical location, not the place label', () => {
+  const places: PlaceRef[] = [
+    { state: 'NSW', place: 'Orange 1', location: 'Orange' },
+    { state: 'NSW', place: 'Orange 2', location: 'Orange' },
+    { state: 'WA', place: 'Perth CBD 1', location: 'Perth CBD' },
+    { state: 'WA', place: 'Perth CBD 2', location: 'Perth CBD' },
+    { state: 'WA', place: 'Perth Metro', location: 'Perth CBD' },
+    { state: 'NSW', place: 'Pt Macquarie', location: 'Port Macquarie' },
+    { state: 'NSW', place: 'Campbelltown', location: 'Sydney' },
+  ];
+
+  it('two numbered sites at one location resolve to that location instead of being ambiguous', () => {
+    expect(deriveCampaignReportFields({ location_raw: 'Orange', leader_raw: null }, places, []))
+      .toEqual({ state: 'NSW', location: 'Orange', leader: null });
+  });
+
+  it('matches typed text against the location name or any place label, and answers with the location', () => {
+    expect(deriveCampaignReportFields({ location_raw: 'Perth CBD1', leader_raw: null }, places, []).location).toBe('Perth CBD');
+    expect(deriveCampaignReportFields({ location_raw: 'Port Macquarie', leader_raw: null }, places, []).location).toBe('Port Macquarie');
+    expect(deriveCampaignReportFields({ location_raw: 'Pt Macquarie', leader_raw: null }, places, []).location).toBe('Port Macquarie');
+  });
+
+  it('a place whose location is elsewhere resolves to that location (place Campbelltown -> location Sydney)', () => {
+    expect(deriveCampaignReportFields({ location_raw: 'Campbelltown', leader_raw: null }, places, []))
+      .toEqual({ state: 'NSW', location: 'Sydney', leader: null });
+  });
+
+  it('falls back to the place name when a row has no location text', () => {
+    expect(deriveCampaignReportFields({ location_raw: 'Lone', leader_raw: null }, [{ state: 'VIC', place: 'Lone', location: null }], []))
+      .toEqual({ state: 'VIC', location: 'Lone', leader: null });
   });
 });

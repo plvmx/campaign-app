@@ -30,15 +30,16 @@ beforeEach(() => {
 });
 afterEach(() => cleanup());
 
-describe('LoginPage — OPEN GUIDE', () => {
+describe('LoginPage — User Guide', () => {
   it('opens the guide from the sign-in form without signing in, and Close returns to the form as it was', async () => {
     render(<LoginPage />);
     fireEvent.change(await screen.findByLabelText(/mobile number/i), { target: { value: '0400 000 000' } });
 
-    // Low-key, same as the bottom-bar button: stacked gold label, no box.
-    const button = screen.getByRole('button', { name: 'OPEN GUIDE' });
-    expect(button.className).not.toMatch(/border|bg-white/);
-    expect(button.querySelector('.text-amber-500')).toHaveTextContent('OPENGUIDE');
+    // A plain sentence with a "Click Here" link (Peter, 2026-10-22).
+    expect(
+      screen.getByText(/if you need help using this app please/i),
+    ).toHaveTextContent('If you need help using this app please Click Here to read the User Guide');
+    const button = screen.getByRole('button', { name: 'Click Here' });
 
     fireEvent.click(button);
     expect(await screen.findByTestId('viewer')).toHaveTextContent('https://signed/guide.pdf');

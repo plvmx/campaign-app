@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatCampaignDateTimeDisplay, getEarliestCampaign } from '../campaignUtils';
+import { formatCampaignDateTimeDisplay, getEarliestCampaign, sortCampaignsChronologically } from '../campaignUtils';
 
 describe('formatCampaignDateTimeDisplay', () => {
   it('combines the date and time into a single readable line', () => {
@@ -41,5 +41,20 @@ describe('getEarliestCampaign', () => {
     const c = { date: '2026-07-10', time: '08:00:00' };
     expect(getEarliestCampaign([a, b, c])).toBe(c);
     expect(getEarliestCampaign([c, b, a])).toBe(c);
+  });
+});
+
+describe('sortCampaignsChronologically', () => {
+  it('sorts by date, then time, without mutating the input', () => {
+    const a = { date: '2026-10-20', time: '14:00' };
+    const b = { date: '2026-10-19', time: '18:00' };
+    const c = { date: '2026-10-19', time: '09:00' };
+    const input = [a, b, c];
+    expect(sortCampaignsChronologically(input)).toEqual([c, b, a]);
+    expect(input).toEqual([a, b, c]);
+  });
+
+  it('returns an empty list for no campaigns', () => {
+    expect(sortCampaignsChronologically([])).toEqual([]);
   });
 });

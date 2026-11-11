@@ -20,6 +20,13 @@
  * who was originally MailChimp-imported but later also genuinely
  * registered keeps that legitimate attribution" rule.
  *
+ * !! CORRECTION (2026-10-27): the claim below was wrong. A CSV-reloaded row
+ * that ac-sync touched after the reload (same email) gains registration_events
+ * and, if its only AC event was List [2], looked "List [2] only" and was moved
+ * and deleted — ~31 people from Lorraine's sheet were lost this way (e.g. a
+ * 2023 registrant with a webinar session). Restored by
+ * scripts/restore_missing_registrants_from_sheet.ts. Do not re-run this script.
+ *
  * CSV-reloaded rows (ac_contact_id IS NULL) are automatically out of
  * scope: they have zero registration_events (the reload never wrote any),
  * so they can never match "List [2] only" — confirmed live 2026-09-14.

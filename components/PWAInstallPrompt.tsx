@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 
 type Platform = 'ios' | 'android' | 'desktop' | null;
@@ -33,14 +33,23 @@ export default function PWAInstallPrompt() {
   const pathname = usePathname();
   const isPublicPage = pathname?.startsWith('/public/') ?? false;
 
-  // Lazy initializer runs once on the client — avoids any setState call inside an effect.
-  // null = hidden; non-null = visible with the detected platform.
-  const [platform, setPlatform] = useState<Platform>(() => {
-    if (typeof window === 'undefined') return null;
-    if (isStandalone()) return null;
-    if (localStorage.getItem(DISMISSED_KEY)) return null;
-    return detectPlatform();
-  });
+  // null = hidden; non-null = visible with the detected platform. Starts null so the
+  // first client render matches the server's (which can't see window/localStorage);
+  // the real value is filled in after mount.
+  const [platform, setPlatform] = useState<Platform>(null);
+
+  // setState goes through a Promise callback (react-hooks/set-state-in-effect).
+  useEffect(() => {
+    let cancelled = false;
+    Promise.resolve().then(() => {
+      if (cancelled) return;
+      if (isStandalone() || localStorage.getItem(DISMISSED_KEY)) return;
+      setPlatform(detectPlatform());
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // showInstructions: true once the user asks how to install (iOS always; Android fallback)
   const [showInstructions, setShowInstructions] = useState(false);
@@ -63,31 +72,10 @@ export default function PWAInstallPrompt() {
     setShowInstructions(false);
   };
 
-  // This banner renders in the root layout, above (outside) MobileLayout, so it
-  // pushes every page's content down by its own height in normal flow — a height
-  // that varies (dismissible; wraps to more lines on narrow screens; grows when
-  // "How to install" instructions expand). Pages that size a full-height element
-  // via a fixed `calc(100dvh - ...)` (e.g. the admin map pages) have no way to
-  // know that height unless it's published somewhere, so it's exposed here as a
-  // CSS custom property on the root element for them to subtract.
-  const bannerRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const el = bannerRef.current;
-    if (isPublicPage || !platform || !el) {
-      document.documentElement.style.setProperty('--pwa-banner-height', '0px');
-      return;
-    }
-    const updateHeight = () => {
-      document.documentElement.style.setProperty('--pwa-banner-height', `${el.offsetHeight}px`);
-    };
-    updateHeight();
-    const observer = new ResizeObserver(updateHeight);
-    observer.observe(el);
-    return () => {
-      observer.disconnect();
-      document.documentElement.style.setProperty('--pwa-banner-height', '0px');
-    };
-  }, [platform, isPublicPage]);
+  // Rendered as a fixed overlay above the bottom nav, not in normal flow: it only
+  // appears after hydration (it needs localStorage / the user agent), so an in-flow
+  // banner pushed the whole page down once it mounted — a layout shift on every
+  // first visit. An overlay moves nothing, so pages need no knowledge of its height.
 
   const handleInstallClick = async () => {
     if (deferredPrompt) {
@@ -108,7 +96,7 @@ export default function PWAInstallPrompt() {
   const isAndroid = platform === 'android';
 
   return (
-    <div ref={bannerRef} className="bg-[#1e3a5f] text-white px-4 py-3 text-sm">
+    <div data-ti="components/PWAInstallPrompt.tsx" className="fixed inset-x-0 bottom-20 z-20 max-h-[60dvh] overflow-y-auto bg-[#1e3a5f] text-white px-4 py-3 text-sm shadow-lg">
       <div className="flex items-start justify-between gap-3 max-w-lg mx-auto">
         <div className="flex-1 min-w-0">
           {!showInstructions ? (

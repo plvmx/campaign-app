@@ -22,7 +22,7 @@ function withoutNames(rows: ResultsLogRow[]): { category_code: string }[] {
  *
  * Names are deliberately NOT written to the log — only each attempted row's
  * `category_code`. Recorded first names are shown publicly strictly for prayer
- * with a promise that AFJ doesn't keep them beyond the week (see the notice on
+ * with a promise that TWOL doesn't keep them beyond the week (see the notice on
  * /public/campaign-results), and this table is never pruned, so a name logged
  * here would outlive that promise indefinitely. The per-category counts are
  * still enough to tell "the client never sent it" from "the save failed".

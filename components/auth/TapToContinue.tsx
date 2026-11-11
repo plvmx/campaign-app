@@ -29,7 +29,7 @@ export function TapToContinue({
   buttonClassName?: string;
 }) {
   return (
-    <div className="space-y-6">
+    <div data-ti="components/auth/TapToContinue.tsx" className="space-y-6">
       <h2 className={titleClassName}>{title}</h2>
       <p className={bodyClassName}>{description}</p>
       <button onClick={onTap} disabled={isBusy} className={buttonClassName}>

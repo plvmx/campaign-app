@@ -56,6 +56,8 @@ interface Props {
   onDelete: () => void;
   onToggleCheckbox: (field: 'tl_ok' | 'sr_ok', currentValue: boolean) => void;
   onRecordResults: () => void;
+  /** Opens the combined results + campaign report page. Shown to full admins (AD) on past campaigns only. */
+  onRecordCampaignReport?: () => void;
   onViewTrainingInterest: () => void;
   onViewCampaignInterest: () => void;
 }
@@ -63,7 +65,7 @@ interface Props {
 export default function CampaignCard({
   campaign, dateFilter, isAdmin, adminStatus, userState, userMobileAndLeader,
   sharedWithMeOwners, savedCheckboxId, campaignInterestCount, onEdit, onDelete, onToggleCheckbox, onRecordResults,
-  onViewTrainingInterest, onViewCampaignInterest,
+  onRecordCampaignReport, onViewTrainingInterest, onViewCampaignInterest,
 }: Props) {
   const stateColor = getStateColor(campaign.state);
   const displayTime = formatCampaignTimeDisplay(campaign.time);
@@ -71,9 +73,10 @@ export default function CampaignCard({
   const showCategoryBadge = campaignCat !== 'TWOL';
   const showRecordResults = canRecordResults(campaign, adminStatus, userState, userMobileAndLeader, sharedWithMeOwners);
   const showTrainingInterest = isTrainingCategory(campaignCat);
+  const showCampaignReportLink = dateFilter === 'past' && adminStatus === 'AD' && !!onRecordCampaignReport;
 
   return (
-    <div className={`p-4 sm:p-5 ${stateColor.bg} border-b-2 border-gray-800 dark:border-gray-600`}>
+    <div data-ti="app/app/components/CampaignCard.tsx" className={`p-4 sm:p-5 ${stateColor.bg} border-b-2 border-gray-800 dark:border-gray-600`}>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="flex-1 min-w-0">
           <div className={`flex items-center justify-between gap-2 text-lg sm:text-xl font-bold ${stateColor.text} mb-2 break-words`}>
@@ -158,6 +161,15 @@ export default function CampaignCard({
           >
             Delete
           </button>
+          {showCampaignReportLink && (
+            <button
+              type="button"
+              onClick={onRecordCampaignReport}
+              className="basis-full text-center text-base font-bold text-blue-600 underline hover:text-blue-700 dark:text-blue-400"
+            >
+              Experimental Campaign Reporting (DO NOT USE)
+            </button>
+          )}
         </div>
       </div>
     </div>

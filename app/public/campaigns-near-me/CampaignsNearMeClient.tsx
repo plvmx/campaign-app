@@ -77,8 +77,8 @@ export default function CampaignsNearMeClient() {
   }, [registrantId]);
 
   return (
-    <div className="mx-auto max-w-2xl p-4">
-      <h1 className="text-2xl font-bold text-gray-900">Upcoming AFJ Campaigns Near You</h1>
+    <div data-ti="app/public/campaigns-near-me/CampaignsNearMeClient.tsx" className="mx-auto max-w-2xl p-4">
+      <h1 className="text-2xl font-bold text-gray-900">Upcoming TWOL Campaigns Near You</h1>
 
       {isLoading && <p className="mt-3 text-sm text-gray-600">Loading…</p>}
       {error && <p className="mt-3 text-sm text-red-600" role="alert">{error}</p>}

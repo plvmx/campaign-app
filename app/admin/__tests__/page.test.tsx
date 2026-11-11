@@ -1,7 +1,8 @@
 /**
- * Regression test: PR #174 shipped /admin/campaign-reports-cleanup but never
- * added a card for it on this hub page, so it was only reachable by typing
- * the URL directly (no admin ever saw it).
+ * Regression test: PR #174 shipped a Campaign Report screen but never added a
+ * card for it on this hub page, so it was only reachable by typing the URL
+ * directly (no admin ever saw it). Pins that each Campaign Report screen has a
+ * card here.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, cleanup, waitFor } from '@testing-library/react';
@@ -44,6 +45,11 @@ vi.mock('@/lib/appSettings', () => ({
   setCampaignLoggingEnabled: vi.fn(),
   getSlideViewEnabled: vi.fn().mockResolvedValue(false),
   setSlideViewEnabled: vi.fn(),
+  getTechInsightsConfig: vi.fn().mockResolvedValue({ enabled: false, hotkey: 'Ctrl+Alt+I' }),
+  setTechInsightsEnabled: vi.fn(),
+  setTechInsightsHotkey: vi.fn(),
+  getCampaignReportEmailConfig: vi.fn().mockResolvedValue({ enabled: false, recipients: [] }),
+  setCampaignReportEmailConfig: vi.fn(),
 }));
 
 vi.mock('@/lib/services/weeklyRefreshService', () => ({
@@ -67,15 +73,23 @@ beforeEach(() => {
   });
 });
 
-describe('Admin hub — Campaign Report Cleanup link', () => {
-  it('links to /admin/campaign-reports-cleanup', async () => {
+describe('Admin hub — Campaign Reports link', () => {
+  it('links to /admin/campaign-reports', async () => {
     render(<AdminPage />);
+    await waitFor(() => expect(screen.getByText('Campaign Reports')).toBeInTheDocument());
+    const headings = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent?.trim());
+    expect(headings.indexOf('Campaign Reports')).toBe(headings.indexOf('Registry Lookup') + 1);
+    screen.getByRole('button', { name: 'Manage Reports' }).click();
+    expect(mockPush).toHaveBeenCalledWith('/admin/campaign-reports');
+  });
+});
 
-    await waitFor(() => expect(screen.getByText('Campaign Report Cleanup')).toBeInTheDocument());
-
-    const button = screen.getByRole('button', { name: /Review Records/i });
-    button.click();
-    expect(mockPush).toHaveBeenCalledWith('/admin/campaign-reports-cleanup');
+describe('Admin hub — Campaign Report Locations link', () => {
+  it('links to /admin/campaign-report-locations', async () => {
+    render(<AdminPage />);
+    await waitFor(() => expect(screen.getByText('Campaign Report Locations (bulk)')).toBeInTheDocument());
+    screen.getByRole('button', { name: 'Match Locations (bulk)' }).click();
+    expect(mockPush).toHaveBeenCalledWith('/admin/campaign-report-locations');
   });
 });
 

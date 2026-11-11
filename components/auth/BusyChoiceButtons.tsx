@@ -28,7 +28,7 @@ export function BusyChoiceButtons({
   choices, selectedId, busy, onSelect, baseClass, idleClass, selectedClass, otherClass, busyText = 'Signing in…',
 }: BusyChoiceButtonsProps) {
   return (
-    <div className="flex flex-col gap-3">
+    <div data-ti="components/auth/BusyChoiceButtons.tsx" className="flex flex-col gap-3">
       {choices.map(choice => {
         const isSelected = busy && selectedId === choice.id;
         const isOther = busy && !isSelected;

@@ -232,7 +232,7 @@ export default function ConfirmEmailPage() {
 
   const continueNote = (
     <p className={bodyTextClass}>
-      If you are taken to a sign-in screen, go back to the AFJ app where you started signing in — your email is already confirmed.
+      If you are taken to a sign-in screen, go back to the TWOL app where you started signing in — your email is already confirmed.
     </p>
   );
 

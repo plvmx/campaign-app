@@ -31,7 +31,7 @@ import path from 'path';
 import { createClient } from '@supabase/supabase-js';
 import { parseCsv, stripBom } from '../lib/registryPipeline/csvParse';
 import { transformRow, dedupeByEmail, type RawCsvRow, type TransformedRegistrant } from '../lib/registryPipeline/csvRegistrantTransform';
-import { normalizePhone } from '../lib/registryPipeline/phone';
+import { toRegistrantInsertRow } from '../lib/registryPipeline/sheetRestorePlan';
 
 const envPath = path.join(__dirname, '..', '.env.local');
 fs.readFileSync(envPath, 'utf-8').split('\n').forEach((line) => {
@@ -153,26 +153,7 @@ async function main() {
 
   console.log(`\nregistry.registrants is empty — inserting ${deduped.length} registrants in batches of ${BATCH_SIZE}...`);
   for (let i = 0; i < deduped.length; i += BATCH_SIZE) {
-    const batch = deduped.slice(i, i + BATCH_SIZE).map((r) => ({
-      ac_contact_id: null,
-      first_name: r.firstName,
-      last_name: r.lastName,
-      // Lower-cased at the write boundary — see prepare_registrants_for_csv_reload.sql's
-      // note on why the unique index is a plain column, not lower(email).
-      email: r.email ? r.email.toLowerCase() : null,
-      phone: normalizePhone(r.phoneRaw),
-      phone_raw: r.phoneRaw,
-      state: r.state,
-      postcode: r.postcode,
-      church_name: r.churchName,
-      registered_at: r.registeredAt,
-      unsubscribed: r.unsubscribed,
-      nfc: r.nfc,
-      webinar_session_at: r.webinarSessionAt,
-      webinar_attended: r.webinarAttended,
-      code_of_conduct_agreed: r.codeOfConductAgreed,
-      code_of_conduct_agreed_at: r.codeOfConductAgreedAt,
-    }));
+    const batch = deduped.slice(i, i + BATCH_SIZE).map(toRegistrantInsertRow);
     const { error } = await supabase.schema('registry').from('registrants').insert(batch);
     if (error) throw error;
     console.log(`  inserted ${Math.min(i + BATCH_SIZE, deduped.length)} / ${deduped.length}`);

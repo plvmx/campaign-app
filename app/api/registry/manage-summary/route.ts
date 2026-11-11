@@ -96,7 +96,7 @@ export async function GET(request: NextRequest) {
       const { data, error } = await supabaseAdmin
         .schema('registry')
         .from('registrants')
-        .select('id, first_name, last_name, email, phone, state, postcode, registered_at, webinar_session_at, webinar_attended, code_of_conduct_agreed, code_of_conduct_agreed_at, unsubscribed, nfc')
+        .select('id, first_name, last_name, email, phone, state, postcode, registered_at, webinar_session_at, webinar_attended, code_of_conduct_agreed, code_of_conduct_agreed_at, unsubscribed, nfc, church_name')
         .range(offset, offset + PAGE_SIZE - 1);
       if (error) throw error;
       if (!data || data.length === 0) break;
@@ -115,6 +115,7 @@ export async function GET(request: NextRequest) {
         codeOfConductAgreedAt: r.code_of_conduct_agreed_at,
         unsubscribed: r.unsubscribed,
         nfc: r.nfc,
+        churchName: r.church_name,
       })));
       if (data.length < PAGE_SIZE) break;
     }

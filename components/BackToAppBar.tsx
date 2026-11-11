@@ -25,7 +25,7 @@ export default function BackToAppBar() {
   if (searchParams.get(FROM_APP_PARAM) !== FROM_APP_VALUE) return null;
 
   return (
-    <div className="sticky top-0 z-10 border-b border-gray-300 bg-gray-100 px-4 py-2 dark:border-gray-800 dark:bg-gray-950">
+    <div data-ti="components/BackToAppBar.tsx" className="sticky top-0 z-10 border-b border-gray-300 bg-gray-100 px-4 py-2 dark:border-gray-800 dark:bg-gray-950">
       <Link
         href="/app"
         className="inline-block rounded-md border-2 border-gray-800 bg-purple-600 px-4 py-2 text-sm font-bold text-white hover:bg-purple-700 dark:border-gray-600"

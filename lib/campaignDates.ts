@@ -193,6 +193,21 @@ export function formatWeekDateRangeString(monday: Date): string {
 }
 
 /**
+ * Compact Monday–Sunday range for buttons, e.g. "19–25 Oct", or
+ * "28 Oct – 3 Nov" when the week spans two months.
+ */
+export function formatShortWeekRange(monday: Date): string {
+  const sunday = new Date(monday);
+  sunday.setDate(sunday.getDate() + 6);
+  const startMonth = SHORT_MONTH_NAMES[monday.getMonth()];
+  const endMonth = SHORT_MONTH_NAMES[sunday.getMonth()];
+  if (monday.getMonth() === sunday.getMonth()) {
+    return `${monday.getDate()}–${sunday.getDate()} ${endMonth}`;
+  }
+  return `${monday.getDate()} ${startMonth} – ${sunday.getDate()} ${endMonth}`;
+}
+
+/**
  * Format a Monday-start fortnight (14 days — the combined upcoming + second
  * week period) as a full date range string, e.g. "Mon 10th Aug 26 - Sun 23rd
  * Aug 26". Same format as formatWeekDateRangeString but spans two weeks.
@@ -232,7 +247,7 @@ const FULL_DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 
 
 /**
  * The Sunday named in the Campaign Results public link's notice ("will not be
- * stored by AFJ in any form beyond …"), given the Monday of the week being
+ * stored by TWOL in any form beyond …"), given the Monday of the week being
  * displayed: the end of the week *after* the one in which that week is on
  * screen. A displayed week is actually deleted a week earlier than this, by
  * the Sunday refresh that ends its time on screen (e.g. the 28 Sep - 4 Oct

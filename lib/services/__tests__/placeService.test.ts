@@ -39,14 +39,14 @@ describe('addNewPlaceForState', () => {
     ]);
   });
 
-  it('inserts state+place only, with no location/coordinates, when geocoding finds nothing', async () => {
+  it('inserts the location text but no coordinates when geocoding finds nothing', async () => {
     mockGeocodePlace.mockResolvedValue(null);
     const builder = makeQueryBuilder({ data: null, error: null });
     mockFrom.mockReturnValue(builder);
 
     await addNewPlaceForState('VIC', 'Some Venue Name');
 
-    expect(builder.insert).toHaveBeenCalledWith([{ state: 'VIC', place: 'Some Venue Name' }]);
+    expect(builder.insert).toHaveBeenCalledWith([{ state: 'VIC', place: 'Some Venue Name', location: 'Some Venue Name' }]);
   });
 
   it('silently ignores a duplicate place (23505)', async () => {

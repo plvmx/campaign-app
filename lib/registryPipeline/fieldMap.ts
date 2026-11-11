@@ -22,12 +22,15 @@ import { normalizeAcDate } from './tagDerivedFields.ts';
  * response prayer?, [12] How much would you like to give?, [13] How can
  * you support AFJ?, [20] Music Leader, [21] Website (an AC *field* ID —
  * unrelated to AC *tag* [21] used for source attribution, see
- * sourceAttribution.ts), [29] Webinar Replay Link, [8] Church, [11]
+ * sourceAttribution.ts), [29] Webinar Replay Link, [11]
  * Country, and the wayoflife-responder response-outcome fields.
  *
  * [10]/[28] Church Leader? and [14]/[26] Church Name / What Church do you
  * attend? were ALSO originally excluded here on the same basis — reversed
- * 2026-09-01, Peter confirmed both are now needed.
+ * 2026-09-01, Peter confirmed both are now needed. [8] Church was excluded
+ * with them, but it is the field the current "AFJ Register Commitment" form
+ * actually writes the church to — reversed 2026-11-03 (every registrant
+ * synced since 10 Sept had a blank church because only [26]/[14] were read).
  */
 export const ALLOWED_CUSTOM_FIELD_IDS = {
   /** [6] State (free text) — confirmed canonical, populated on all tested List-1 pages. */
@@ -66,6 +69,8 @@ export const ALLOWED_CUSTOM_FIELD_IDS = {
    */
   CHURCH_NAME: '26',
   CHURCH_NAME_FALLBACK: '14',
+  /** [8] Church — what the current Register Commitment form writes (see the note above). Last in the fallback order. */
+  CHURCH_NAME_FALLBACK_2: '8',
   /**
    * [23] BOTJ Webinar Rego Date (date-only). Confirmed live/populated and
    * included per plan 3.4, but registry.registrants has no column for it —
@@ -111,7 +116,8 @@ export function mapAcFields(payload: RawAcContactPayload): MappedRegistrantField
 
   const churchName =
     findFieldValue(fieldValues, ALLOWED_CUSTOM_FIELD_IDS.CHURCH_NAME) ??
-    findFieldValue(fieldValues, ALLOWED_CUSTOM_FIELD_IDS.CHURCH_NAME_FALLBACK);
+    findFieldValue(fieldValues, ALLOWED_CUSTOM_FIELD_IDS.CHURCH_NAME_FALLBACK) ??
+    findFieldValue(fieldValues, ALLOWED_CUSTOM_FIELD_IDS.CHURCH_NAME_FALLBACK_2);
 
   return {
     firstName: contact.firstName?.trim() || null,

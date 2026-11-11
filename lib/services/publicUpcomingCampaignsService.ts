@@ -55,10 +55,11 @@ export interface BuildUpcomingMarkersResult {
 }
 
 /**
- * Groups already-upcoming, in-window campaigns by place and resolves each
+ * Groups in-window campaigns by place and resolves each
  * place's coordinates from `placeCoords` (cached state_places rows only).
  * Callers are responsible for having already filtered `campaigns` to the
- * desired date range and excluded past ones (isCampaignPast).
+ * desired date range. Past campaigns within the range are kept — the page
+ * shows the whole selected week.
  */
 export function buildUpcomingCampaignMarkers(
   campaigns: PublicUpcomingCampaignRow[],

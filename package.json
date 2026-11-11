@@ -3,7 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "tech-insights": "tsx scripts/build-tech-insights.ts",
+    "predev": "npm run tech-insights",
     "dev": "next dev",
+    "prebuild": "npm run tech-insights",
     "build": "next build",
     "start": "next start",
     "lint": "eslint app/ components/ lib/ --ext .ts,.tsx",

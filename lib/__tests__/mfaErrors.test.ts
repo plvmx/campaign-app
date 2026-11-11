@@ -4,8 +4,8 @@ import { describeMfaVerifyError } from '../mfaErrors';
 describe('describeMfaVerifyError', () => {
   it('explains a wrong code in terms of what to check, not Supabase jargon', () => {
     const text = describeMfaVerifyError({ message: 'Invalid TOTP code entered', code: 'mfa_verification_failed' });
-    expect(text).toMatch(/newest "AFJ Campaign App" entry/);
-    expect(text).toMatch(/delete any older AFJ entries/i);
+    expect(text).toMatch(/newest "TWOL Campaign Activity System" entry/);
+    expect(text).toMatch(/delete any older TWOL entries/i);
     expect(text).toMatch(/date and time/i);
     expect(text).not.toMatch(/TOTP/);
   });

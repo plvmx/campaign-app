@@ -34,6 +34,12 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // Tech Insights reads these generated files from disk at runtime (see
+  // lib/techInsights/manifestStore.ts); nothing imports them, so without this
+  // the serverless function would be deployed without them.
+  outputFileTracingIncludes: {
+    '/api/admin/tech-insights': ['./generated/tech-insights/**/*'],
+  },
   async headers() {
     return [
       {

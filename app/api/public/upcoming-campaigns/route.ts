@@ -17,7 +17,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { enforceOrigin } from '@/lib/corsUtils';
 import { createRateLimiter, getClientIp } from '@/lib/rateLimit';
-import { isCampaignPast } from '@/lib/campaignUtils';
 import type { AriseCampaign } from '@/lib/ariseLayout';
 import {
   buildUpcomingCampaignMarkers,
@@ -93,11 +92,13 @@ export async function GET(request: NextRequest) {
     if (campaignError) throw campaignError;
     if (placeError) throw placeError;
 
-    // Typed as AriseCampaign (carries `site`, unlike PublicUpcomingCampaignRow)
-    // since this same filtered list also becomes the response's flat
-    // `campaigns` field for the List View toggle — it structurally
-    // satisfies PublicUpcomingCampaignRow[] for marker-building below too.
-    const upcoming = ((campaignRows ?? []) as AriseCampaign[]).filter((c) => !isCampaignPast(c.date, c.time));
+    // The whole selected week is shown, including campaigns that have
+    // already happened (Peter, 2026-10-17) — deliberately no isCampaignPast
+    // filter. Typed as AriseCampaign (carries `site`, unlike
+    // PublicUpcomingCampaignRow) since this same list also becomes the
+    // response's flat `campaigns` field for the List View toggle — it
+    // structurally satisfies PublicUpcomingCampaignRow[] for marker-building too.
+    const upcoming = (campaignRows ?? []) as AriseCampaign[];
     const placeCoords = (placeRows ?? []) as PublicUpcomingPlaceCoords[];
 
     const { markers, unresolvedCount } = buildUpcomingCampaignMarkers(upcoming, placeCoords);
