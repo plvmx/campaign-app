@@ -86,13 +86,12 @@ export async function saveCampaignReport(
   // location, so fill the derived fields now rather than guessing from text later.
   const { data: places, error: placesError } = await client
     .from('state_places')
-    .select('place, site, location')
+    .select('place, location')
     .eq('state', campaign.state);
   if (placesError) throw new Error(`Could not look up the location: ${placesError.message}`);
   const wanted = combinePlaceAndSite(campaign.place, campaign.site).trim().toLowerCase();
   const stateLocation = (places ?? []).find(
-    (p: { place: string; site: string | null; location: string | null }) =>
-      combinePlaceAndSite(p.place, p.site ?? '').trim().toLowerCase() === wanted,
+    (p: { place: string; location: string | null }) => p.place.trim().toLowerCase() === wanted,
   );
 
   // Replace, don't duplicate: clear this campaign's earlier experimental rows (and only those).

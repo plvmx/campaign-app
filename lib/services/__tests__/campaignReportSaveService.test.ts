@@ -37,9 +37,11 @@ describe('parseReportSubmission', () => {
   ])('rejects %s', (_label, body) => expect(parseReportSubmission(body)).toBeNull());
 });
 
+// state_places has no `site` column any more (site was folded into place), so rows never carry one.
 const placeRows = [
-  { place: 'Orange 1', site: '', location: 'Orange' },
-  { place: 'Sylvania', site: '', location: null },
+  { place: 'Orange 1', location: 'Orange' },
+  { place: 'Sylvania', location: null },
+  { place: 'TestPlace', location: 'Ashburton ' },
 ];
 
 function makeClient(opts: { campaign?: unknown; failTable?: string; places?: unknown } = {}) {
@@ -94,6 +96,20 @@ describe('saveCampaignReport', () => {
       derived_location: 'Orange',
       derived_leader: 'Jane Smith',
     });
+  });
+
+  it('only asks state_places for columns that exist (place, location) — there is no site column', async () => {
+    const { client, builders } = makeClient();
+    await saveCampaignReport(client, input);
+    const [{ builder }] = builders.filter((b) => b.table === 'state_places');
+    const selected = builder.select.mock.calls[0][0] as string;
+    expect(selected.split(',').map((c) => c.trim()).sort()).toEqual(['location', 'place']);
+  });
+
+  it('trims the location it takes from State Places', async () => {
+    const { client, builders } = makeClient({ campaign: { ...campaignRow, place: 'TestPlace', site: '' } });
+    await saveCampaignReport(client, input);
+    expect(calls(builders, 'campaign_reports', 'insert')[0].builder.insert.mock.calls[0][0].derived_location).toBe('Ashburton');
   });
 
   it('uses the place name as the location when State Places has none, and leaves it empty for an unknown place', async () => {
