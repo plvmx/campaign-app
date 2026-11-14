@@ -7,6 +7,8 @@ import {
   isValidAustralianPostcode,
   isValidRegistrantState,
   isValidNfcFlag,
+  isValidChurchName,
+  CHURCH_NAME_MAX_LENGTH,
   isValidRegistrantFieldValue,
 } from '../registrantValidation';
 
@@ -33,6 +35,7 @@ describe('EDITABLE_FIELD_COLUMNS', () => {
       state: 'state',
       postcode: 'postcode',
       nfc: 'nfc',
+      churchName: 'church_name',
     });
   });
 });
@@ -107,6 +110,19 @@ describe('isValidNfcFlag', () => {
   });
 });
 
+describe('isValidChurchName', () => {
+  it('accepts free text, including blank/null (which clears it)', () => {
+    expect(isValidChurchName('St Mary\'s Anglican, Box Hill')).toBe(true);
+    expect(isValidChurchName('')).toBe(true);
+    expect(isValidChurchName(null)).toBe(true);
+  });
+
+  it('rejects anything longer than the cap', () => {
+    expect(isValidChurchName('x'.repeat(CHURCH_NAME_MAX_LENGTH))).toBe(true);
+    expect(isValidChurchName('x'.repeat(CHURCH_NAME_MAX_LENGTH + 1))).toBe(false);
+  });
+});
+
 describe('isValidRegistrantFieldValue', () => {
   it('dispatches postcode values to isValidAustralianPostcode', () => {
     expect(isValidRegistrantFieldValue('postcode', '3000')).toBe(true);
@@ -121,6 +137,11 @@ describe('isValidRegistrantFieldValue', () => {
   it('dispatches nfc values to isValidNfcFlag', () => {
     expect(isValidRegistrantFieldValue('nfc', 'Yes')).toBe(true);
     expect(isValidRegistrantFieldValue('nfc', 'No')).toBe(false);
+  });
+
+  it('dispatches churchName values to isValidChurchName', () => {
+    expect(isValidRegistrantFieldValue('churchName', 'Grace Church')).toBe(true);
+    expect(isValidRegistrantFieldValue('churchName', 'x'.repeat(CHURCH_NAME_MAX_LENGTH + 1))).toBe(false);
   });
 
   it('imposes no format constraint on name fields', () => {

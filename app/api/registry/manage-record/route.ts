@@ -52,7 +52,7 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: 'id is required' }, { status: 400 });
   }
   if (typeof field !== 'string' || !isEditableRegistrantField(field)) {
-    return NextResponse.json({ error: 'field must be one of firstName, lastName, state, postcode, nfc' }, { status: 400 });
+    return NextResponse.json({ error: 'field must be one of firstName, lastName, state, postcode, nfc, churchName' }, { status: 400 });
   }
   if (value !== null && typeof value !== 'string') {
     return NextResponse.json({ error: 'value must be a string or null' }, { status: 400 });
@@ -74,7 +74,7 @@ export async function PATCH(request: NextRequest) {
     const { data: existing, error: fetchError } = await supabaseAdmin
       .schema('registry')
       .from('registrants')
-      .select('first_name, last_name, state, postcode, nfc')
+      .select('first_name, last_name, state, postcode, nfc, church_name')
       .eq('id', id)
       .maybeSingle();
     if (fetchError) throw fetchError;

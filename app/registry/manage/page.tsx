@@ -25,7 +25,7 @@ import {
   type OtherFilterCategory,
   type PeriodCounts,
 } from '@/lib/registryPipeline/registrantCounts';
-import type { EditableRegistrantField } from '@/lib/registryPipeline/registrantValidation';
+import { CHURCH_NAME_MAX_LENGTH, type EditableRegistrantField } from '@/lib/registryPipeline/registrantValidation';
 import {
   LOOKUP_FIELDS,
   LOOKUP_FIELD_LABELS,
@@ -236,10 +236,11 @@ const TEXT_FIELD_SIZE: Partial<Record<EditableRegistrantField, { maxLength: numb
   postcode: { maxLength: 4, width: '4.5rem' },
   firstName: { maxLength: 20, width: '12rem' },
   lastName: { maxLength: 20, width: '12rem' },
+  churchName: { maxLength: CHURCH_NAME_MAX_LENGTH, width: '16rem' },
 };
 const editErrorStyle: CSSProperties = { color: 'crimson', fontSize: '0.75rem', marginTop: '0.15rem' };
 
-/** A free-text editable cell (First name / Last name / Postcode) — saves on blur or Enter, only if the value actually changed; reverts to the last-known-good value and shows an error inline if the save is rejected. */
+/** A free-text editable cell (First name / Last name / Postcode / Church) — saves on blur or Enter, only if the value actually changed; reverts to the last-known-good value and shows an error inline if the save is rejected. */
 function EditableTextCell({
   recordId,
   field,
@@ -651,7 +652,7 @@ function RecordsPane({
 
       {mode === 'edit' && (
         <p style={{ color: '#6b7280', fontSize: '0.85rem', marginTop: '0.35rem' }}>
-          Editing First name, Last name, State, Postcode, and NFC — each field saves on its own as soon as you leave it (or change the selection, for State/NFC). Email, Mobile, Date registered, and the webinar/Code of Conduct fields can&apos;t be changed here.
+          Editing First name, Last name, State, Postcode, NFC, and Church — each field saves on its own as soon as you leave it (or change the selection, for State/NFC). Email, Mobile, Date registered, and the webinar/Code of Conduct fields can&apos;t be changed here.
         </p>
       )}
 
@@ -723,7 +724,11 @@ function RecordsPane({
                   ) : (
                     <td style={{ padding: '0.5rem' }}>{r.nfc ?? '—'}</td>
                   )}
-                  <td style={{ padding: '0.5rem' }}>{r.churchName ?? '—'}</td>
+                  {mode === 'edit' ? (
+                    <EditableTextCell recordId={r.id} field="churchName" value={r.churchName} onSave={onSaveEdit} />
+                  ) : (
+                    <td style={{ padding: '0.5rem' }}>{r.churchName ?? '—'}</td>
+                  )}
                   <td style={{ padding: '0.5rem' }}>{formatDateOnly(r.registeredAt)}</td>
                   <td style={{ padding: '0.5rem' }}>{formatDateTime(r.webinarSessionAt)}</td>
                   <td style={{ padding: '0.5rem' }}>{r.webinarAttended ?? '—'}</td>
