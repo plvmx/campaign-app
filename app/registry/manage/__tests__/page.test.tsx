@@ -340,6 +340,25 @@ describe('RegistryManagePage', () => {
       ));
     });
 
+    it('edits the church name in place and saves it on blur', async () => {
+      installFetchMock();
+      await selectAllVicCell();
+      fireEvent.click(screen.getByLabelText('Edit'));
+
+      const churchInput = await screen.findByLabelText('churchName');
+      expect(churchInput).toHaveValue('Grace Community Church');
+      fireEvent.change(churchInput, { target: { value: 'Grace Baptist Church' } });
+      fireEvent.blur(churchInput);
+
+      await waitFor(() => expect(global.fetch).toHaveBeenCalledWith(
+        '/api/registry/manage-record',
+        expect.objectContaining({
+          method: 'PATCH',
+          body: JSON.stringify({ id: 'r1', field: 'churchName', value: 'Grace Baptist Church' }),
+        }),
+      ));
+    });
+
     it('renders NFC as a Yes/blank select in Edit mode, defaulting to blank when unset', async () => {
       installFetchMock();
       await selectAllVicCell();

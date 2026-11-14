@@ -19,8 +19,12 @@ import { AUSTRALIAN_STATES } from '../constants';
  * to flag it while cross-referencing Lorraine's updated spreadsheet found
  * cases neither ac-sync nor the CSV backfill could resolve on their own
  * (see docs/registry-pipeline/OPERATIONS.md's entry of that date).
+ *
+ * `churchName` added 2026-11-14 at Lorraine's request — the synced church is
+ * free text typed by the registrant (often misspelt or a placeholder), so she
+ * needs to tidy it by hand.
  */
-export const EDITABLE_REGISTRANT_FIELDS = ['firstName', 'lastName', 'state', 'postcode', 'nfc'] as const;
+export const EDITABLE_REGISTRANT_FIELDS = ['firstName', 'lastName', 'state', 'postcode', 'nfc', 'churchName'] as const;
 export type EditableRegistrantField = (typeof EDITABLE_REGISTRANT_FIELDS)[number];
 
 /** camelCase field name -> the actual registry.registrants column it writes. */
@@ -30,6 +34,7 @@ export const EDITABLE_FIELD_COLUMNS: Record<EditableRegistrantField, string> = {
   state: 'state',
   postcode: 'postcode',
   nfc: 'nfc',
+  churchName: 'church_name',
 };
 
 export function isEditableRegistrantField(value: string): value is EditableRegistrantField {
@@ -48,6 +53,7 @@ export const EDITABLE_FIELD_LABELS: Record<string, string> = {
   state: 'State',
   postcode: 'Postcode',
   nfc: 'NFC (No Further Contact)',
+  church_name: 'Church',
 };
 
 /** Australian postcodes are exactly 4 digits. Blank/null is valid too — postcode is optional, and this is how a national admin clears a bad one. */
@@ -69,12 +75,21 @@ export function isValidNfcFlag(value: string | null): boolean {
   return value === null || value.trim() === '' || value === 'Yes';
 }
 
+/** Longest church name accepted — generous for a free-text name, but stops a pasted paragraph. */
+export const CHURCH_NAME_MAX_LENGTH = 200;
+
+/** Church is free text; blank/null is valid (clears it). Only a length cap — spelling and capitalisation are the admin's call. */
+export function isValidChurchName(value: string | null): boolean {
+  return value === null || value.trim().length <= CHURCH_NAME_MAX_LENGTH;
+}
+
 /** Dispatches to the right rule for whichever field is being edited. Name fields have no format constraint beyond what the caller trims. */
 export function isValidRegistrantFieldValue(field: EditableRegistrantField, value: string | null): boolean {
   switch (field) {
     case 'postcode': return isValidAustralianPostcode(value);
     case 'state': return isValidRegistrantState(value);
     case 'nfc': return isValidNfcFlag(value);
+    case 'churchName': return isValidChurchName(value);
     case 'firstName':
     case 'lastName':
       return true;
