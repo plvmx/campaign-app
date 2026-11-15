@@ -2,12 +2,15 @@ import { describe, it, expect, vi } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   EXPERIMENTAL_REPORT_SOURCE,
+  REPORT_SOURCE,
+  getSavedReportNames,
+  loadReportCampaign,
   parseReportSubmission,
   saveCampaignReport,
 } from '../campaignReportSaveService';
 import { makeQueryBuilder, type MockQueryBuilder } from './supabaseMock';
 
-const campaignRow = { date: '2026-10-31', state: 'VIC', place: 'Orange', site: '1', leader: 'Jane Smith' };
+const campaignRow = { date: '2026-10-31', state: 'VIC', place: 'Orange', site: '1', leader: 'Jane Smith', mobile: '0400123456' };
 const counts = { partial: 1, full: 2, sinnersPrayers: 0, followUp: 1 };
 const names = { partial: ['Ann'], full: ['Bob', 'Cy Lee'], sinnersPrayers: [], followUp: ['Di'] };
 const valid = { campaignId: 'c1', ...counts, names };
@@ -44,34 +47,51 @@ const placeRows = [
   { place: 'TestPlace', location: 'Ashburton ' },
 ];
 
-function makeClient(opts: { campaign?: unknown; failTable?: string; places?: unknown } = {}) {
-  const builders: Array<{ table: string; builder: MockQueryBuilder }> = [];
+type Method = 'insert' | 'delete' | 'select';
+interface Call { table: string; builder: MockQueryBuilder }
+
+/**
+ * Each from() call gets its own builder, so the several calls the service makes to one table can return
+ * different things: the earlier rows it will replace, the id of the row it inserts, and so on.
+ */
+function makeClient(opts: {
+  places?: unknown;
+  oldReports?: Array<{ id: string }>;
+  oldResults?: Array<{ id: string }>;
+  failInsertOn?: 'campaign_reports' | 'results';
+  failDeleteOn?: 'campaign_reports' | 'results';
+} = {}) {
+  const calls: Call[] = [];
+  const seen: Record<string, number> = {};
   const from = vi.fn((table: string) => {
-    const result =
-      table === 'campaigns'
-        ? { data: opts.campaign === undefined ? campaignRow : opts.campaign, error: null }
-        : table === 'state_places'
-          ? { data: opts.places === undefined ? placeRows : opts.places, error: null }
-          : { data: null, error: null };
+    const n = (seen[table] = (seen[table] ?? 0) + 1);
+    let result: { data: unknown; error: unknown } = { data: null, error: null };
+    if (table === 'state_places') result = { data: opts.places === undefined ? placeRows : opts.places, error: null };
+    if (table === 'campaign_reports') result = { data: n === 1 ? opts.oldReports ?? [] : { id: 'new-report' }, error: null };
+    if (table === 'results' && n === 1) result = { data: opts.oldResults ?? [], error: null };
     const builder = makeQueryBuilder(result);
-    // Fail only the insert (not the clean-up delete) for the chosen table.
-    if (opts.failTable === table) builder.insert.mockResolvedValue({ data: null, error: { message: 'boom' } });
-    builders.push({ table, builder });
+    // Make this table's insert (and, later, delete) fail when asked.
+    if (opts.failInsertOn === table) builder.insert.mockImplementation(() => {
+      const failing = makeQueryBuilder({ data: null, error: { message: 'boom' } });
+      builder.select.mockReturnValue(failing); builder.single.mockResolvedValue({ data: null, error: { message: 'boom' } });
+      Object.assign(builder, { then: failing.then });
+      return builder;
+    });
+    calls.push({ table, builder });
     return builder;
   });
-  return { client: { from } as unknown as SupabaseClient, builders };
+  return { client: { from } as unknown as SupabaseClient, calls };
 }
-const calls = (b: ReturnType<typeof makeClient>['builders'], table: string, method: 'insert' | 'delete') =>
-  b.filter((x) => x.table === table && x.builder[method].mock.calls.length > 0);
+const used = (calls: Call[], table: string, method: Method) =>
+  calls.filter((c) => c.table === table && c.builder[method].mock.calls.length > 0);
 
 describe('saveCampaignReport', () => {
-  const input = { ...parseReportSubmission(valid)!, actorUserId: 'admin-1' };
+  const input = { ...parseReportSubmission(valid)!, campaign: campaignRow, actorUserId: 'admin-1' };
 
-  it('writes one tagged campaign_reports row taken from the campaign, not the request', async () => {
-    const { client, builders } = makeClient();
+  it('writes one report row tagged app_report, with the campaign\'s own location, leader and date', async () => {
+    const { client, calls } = makeClient();
     await expect(saveCampaignReport(client, input)).resolves.toEqual({ status: 'saved', names: 4 });
-    const [{ builder }] = calls(builders, 'campaign_reports', 'insert');
-    const row = builder.insert.mock.calls[0][0];
+    const row = used(calls, 'campaign_reports', 'insert')[0].builder.insert.mock.calls[0][0];
     expect(row).toMatchObject({
       campaign_id: 'c1',
       campaign_date: '2026-10-31',
@@ -82,16 +102,16 @@ describe('saveCampaignReport', () => {
       sinners_prayer: 0,
       information_requests: 1,
       needs_review: false,
-      source: EXPERIMENTAL_REPORT_SOURCE,
+      source: REPORT_SOURCE,
     });
+    expect(REPORT_SOURCE).toBe('app_report');
     expect(Number.isNaN(Date.parse(row.submitted_at))).toBe(false);
   });
 
   it('fills the derived state, location and leader from the campaign', async () => {
-    const { client, builders } = makeClient();
+    const { client, calls } = makeClient();
     await saveCampaignReport(client, input);
-    const [{ builder }] = calls(builders, 'campaign_reports', 'insert');
-    expect(builder.insert.mock.calls[0][0]).toMatchObject({
+    expect(used(calls, 'campaign_reports', 'insert')[0].builder.insert.mock.calls[0][0]).toMatchObject({
       derived_state: 'VIC',
       derived_location: 'Orange',
       derived_leader: 'Jane Smith',
@@ -99,35 +119,31 @@ describe('saveCampaignReport', () => {
   });
 
   it('only asks state_places for columns that exist (place, location) — there is no site column', async () => {
-    const { client, builders } = makeClient();
+    const { client, calls } = makeClient();
     await saveCampaignReport(client, input);
-    const [{ builder }] = builders.filter((b) => b.table === 'state_places');
-    const selected = builder.select.mock.calls[0][0] as string;
+    const selected = calls.find((c) => c.table === 'state_places')!.builder.select.mock.calls[0][0] as string;
     expect(selected.split(',').map((c) => c.trim()).sort()).toEqual(['location', 'place']);
   });
 
-  it('trims the location it takes from State Places', async () => {
-    const { client, builders } = makeClient({ campaign: { ...campaignRow, place: 'TestPlace', site: '' } });
-    await saveCampaignReport(client, input);
-    expect(calls(builders, 'campaign_reports', 'insert')[0].builder.insert.mock.calls[0][0].derived_location).toBe('Ashburton');
-  });
+  it('trims the location from State Places, falls back to the place name\'s row, and leaves it empty for an unknown place', async () => {
+    const test = makeClient();
+    await saveCampaignReport(test.client, { ...input, campaign: { ...campaignRow, place: 'TestPlace', site: '' } });
+    expect(used(test.calls, 'campaign_reports', 'insert')[0].builder.insert.mock.calls[0][0].derived_location).toBe('Ashburton');
 
-  it('uses the place name as the location when State Places has none, and leaves it empty for an unknown place', async () => {
-    const sylvania = makeClient({ campaign: { ...campaignRow, place: 'Sylvania', site: '' } });
-    await saveCampaignReport(sylvania.client, input);
-    expect(calls(sylvania.builders, 'campaign_reports', 'insert')[0].builder.insert.mock.calls[0][0].derived_location).toBe('Sylvania');
+    const sylvania = makeClient();
+    await saveCampaignReport(sylvania.client, { ...input, campaign: { ...campaignRow, place: 'Sylvania', site: '' } });
+    expect(used(sylvania.calls, 'campaign_reports', 'insert')[0].builder.insert.mock.calls[0][0].derived_location).toBe('Sylvania');
 
     const unknown = makeClient({ places: [] });
     await saveCampaignReport(unknown.client, input);
-    expect(calls(unknown.builders, 'campaign_reports', 'insert')[0].builder.insert.mock.calls[0][0].derived_location).toBeNull();
+    expect(used(unknown.calls, 'campaign_reports', 'insert')[0].builder.insert.mock.calls[0][0].derived_location).toBeNull();
   });
 
-  it('writes every name to results under its category, tagged and attributed to the admin', async () => {
-    const { client, builders } = makeClient();
+  it('writes every name to results under its category, tagged and attributed to the caller', async () => {
+    const { client, calls } = makeClient();
     await saveCampaignReport(client, input);
-    const [{ builder }] = calls(builders, 'results', 'insert');
-    const rows = builder.insert.mock.calls[0][0];
-    const base = { campaign_id: 'c1', user_id: 'admin-1', source: EXPERIMENTAL_REPORT_SOURCE };
+    const rows = used(calls, 'results', 'insert')[0].builder.insert.mock.calls[0][0];
+    const base = { campaign_id: 'c1', user_id: 'admin-1', source: REPORT_SOURCE };
     expect(rows).toEqual([
       { ...base, first_name: 'Ann', category_code: 'P' },
       { ...base, first_name: 'Bob', category_code: 'F' },
@@ -136,39 +152,80 @@ describe('saveCampaignReport', () => {
     ]);
   });
 
-  it('replaces an earlier save: clears only this campaign\'s experimental rows first', async () => {
-    const { client, builders } = makeClient();
+  it('replaces an earlier save: looks up this campaign\'s earlier rows (any screen\'s names, this page\'s reports incl. test ones, never TM) and removes them by id', async () => {
+    const { client, calls } = makeClient({ oldReports: [{ id: 'old-r1' }], oldResults: [{ id: 'old-n1' }, { id: 'old-n2' }] });
     await saveCampaignReport(client, input);
-    for (const table of ['results', 'campaign_reports']) {
-      const [{ builder }] = calls(builders, table, 'delete');
-      expect(builder.eq).toHaveBeenCalledWith('campaign_id', 'c1');
-      expect(builder.eq).toHaveBeenCalledWith('source', EXPERIMENTAL_REPORT_SOURCE);
-    }
+
+    const reportLookup = calls.find((c) => c.table === 'campaign_reports')!.builder;
+    expect(reportLookup.eq).toHaveBeenCalledWith('campaign_id', 'c1');
+    expect(reportLookup.in).toHaveBeenCalledWith('source', [REPORT_SOURCE, EXPERIMENTAL_REPORT_SOURCE]);
+
+    const resultsLookup = calls.find((c) => c.table === 'results')!.builder;
+    expect(resultsLookup.in).toHaveBeenCalledWith('category_code', ['P', 'F', 'SP', 'IR']);
+
+    expect(used(calls, 'results', 'delete')[0].builder.in).toHaveBeenCalledWith('id', ['old-n1', 'old-n2']);
+    expect(used(calls, 'campaign_reports', 'delete')[0].builder.in).toHaveBeenCalledWith('id', ['old-r1']);
   });
 
-  it('skips the results insert when there are no names', async () => {
-    const { client, builders } = makeClient();
+  it('writes the new rows BEFORE removing the old ones, so a failure can never lose what was saved', async () => {
+    const { client, calls } = makeClient({ oldReports: [{ id: 'old-r1' }], oldResults: [{ id: 'old-n1' }] });
+    await saveCampaignReport(client, input);
+    const order = calls.map((c) => ['insert', 'delete'].find((m) => c.builder[m as Method].mock.calls.length > 0)).filter(Boolean);
+    expect(order.indexOf('delete')).toBeGreaterThan(order.lastIndexOf('insert'));
+  });
+
+  it('removes nothing when there was nothing earlier, and skips the results insert when there are no names', async () => {
+    const { client, calls } = makeClient();
     const none = { ...input, counts: { partial: 0, full: 0, sinnersPrayers: 0, followUp: 0 }, names: { partial: [], full: [], sinnersPrayers: [], followUp: [] } };
     await expect(saveCampaignReport(client, none)).resolves.toEqual({ status: 'saved', names: 0 });
-    expect(calls(builders, 'results', 'insert')).toHaveLength(0);
+    expect(used(calls, 'results', 'insert')).toHaveLength(0);
+    expect(used(calls, 'results', 'delete')).toHaveLength(0);
+    expect(used(calls, 'campaign_reports', 'delete')).toHaveLength(0);
   });
 
-  it('writes nothing when the campaign does not exist', async () => {
-    const { client, builders } = makeClient({ campaign: null });
-    await expect(saveCampaignReport(client, input)).resolves.toEqual({ status: 'campaign_not_found' });
-    expect(calls(builders, 'campaign_reports', 'insert')).toHaveLength(0);
-    expect(calls(builders, 'results', 'insert')).toHaveLength(0);
-  });
-
-  it('throws if the report row cannot be saved', async () => {
-    const { client } = makeClient({ failTable: 'campaign_reports' });
+  it('throws, keeping the earlier rows, if the report row cannot be saved', async () => {
+    const { client, calls } = makeClient({ oldReports: [{ id: 'old-r1' }], oldResults: [{ id: 'old-n1' }], failInsertOn: 'campaign_reports' });
     await expect(saveCampaignReport(client, input)).rejects.toThrow('Could not save the report');
+    expect(used(calls, 'results', 'delete')).toHaveLength(0);
   });
 
-  it('undoes the report row and throws if the names cannot be saved', async () => {
-    const { client, builders } = makeClient({ failTable: 'results' });
+  it('takes back the new report row and keeps the earlier rows if the names cannot be saved', async () => {
+    const { client, calls } = makeClient({ oldReports: [{ id: 'old-r1' }], oldResults: [{ id: 'old-n1' }], failInsertOn: 'results' });
     await expect(saveCampaignReport(client, input)).rejects.toThrow('Could not save the names');
-    // initial clear + undo = two delete rounds on campaign_reports
-    expect(calls(builders, 'campaign_reports', 'delete')).toHaveLength(2);
+    const deletes = used(calls, 'campaign_reports', 'delete');
+    expect(deletes).toHaveLength(1);
+    expect(deletes[0].builder.eq).toHaveBeenCalledWith('id', 'new-report');
+    expect(used(calls, 'results', 'delete')).toHaveLength(0);
+  });
+});
+
+describe('loadReportCampaign', () => {
+  it('returns the campaign row, or null when there is none', async () => {
+    const found = vi.fn(() => makeQueryBuilder({ data: campaignRow, error: null }));
+    await expect(loadReportCampaign({ from: found } as unknown as SupabaseClient, 'c1')).resolves.toEqual(campaignRow);
+    const none = vi.fn(() => makeQueryBuilder({ data: null, error: null }));
+    await expect(loadReportCampaign({ from: none } as unknown as SupabaseClient, 'c1')).resolves.toBeNull();
+  });
+});
+
+describe('getSavedReportNames', () => {
+  it('groups the campaign\'s saved names by count field, whichever screen wrote them, ignoring other categories', async () => {
+    const builder = makeQueryBuilder({
+      data: [
+        { first_name: 'Ann', category_code: 'P' },
+        { first_name: 'Bob', category_code: 'F' },
+        { first_name: 'Cy', category_code: 'SP' },
+        { first_name: 'Di', category_code: 'IR' },
+        { first_name: 'Ed', category_code: 'F' },
+        { first_name: 'Teammate', category_code: 'TM' },
+      ],
+      error: null,
+    });
+    const client = { from: vi.fn(() => builder) } as unknown as SupabaseClient;
+    await expect(getSavedReportNames(client, 'c1')).resolves.toEqual({
+      partial: ['Ann'], full: ['Bob', 'Ed'], sinnersPrayers: ['Cy'], followUp: ['Di'],
+    });
+    expect(builder.in).toHaveBeenCalledWith('category_code', ['P', 'F', 'SP', 'IR']);
+    expect(builder.order).toHaveBeenCalledWith('created_at', { ascending: true });
   });
 });

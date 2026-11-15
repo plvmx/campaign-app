@@ -3,7 +3,7 @@ import type { Campaign } from '@/lib/types';
 import type { LeaderShareOwner } from '@/lib/types';
 import { getStateColor } from '@/lib/stateColors';
 import { formatCampaignTimeDisplay, isCampaignPast } from '@/lib/campaignUtils';
-import { normalizeName, normalizeMobile } from '@/lib/auth';
+import { canRecordResultsFor } from '@/lib/recordResultsAccess';
 import { isRecognizedAdminStatus } from '@/lib/campaignFilter';
 import { combinePlaceAndSite } from '@/lib/placeSite';
 import { isTrainingCategory } from '@/lib/services/trainingInterestService';
@@ -22,23 +22,11 @@ function canRecordResults(
   sharedWithMeOwners: LeaderShareOwner[],
 ): boolean {
   if (!isCampaignPast(campaign.date, campaign.time)) return false;
-  if (adminStatus === 'AD') return true;
-  if (adminStatus === 'SR') {
-    return (campaign.state || '').toUpperCase().trim() === (userState || '').toUpperCase().trim();
-  }
-  const isOwn =
-    !!userMobileAndLeader?.leader &&
-    !!userState &&
-    normalizeName(campaign.leader || '') === normalizeName(userMobileAndLeader.leader) &&
-    (campaign.state || '').toUpperCase().trim() === userState.toUpperCase().trim() &&
-    !!userMobileAndLeader.mobile &&
-    normalizeMobile(campaign.mobile || '') === normalizeMobile(userMobileAndLeader.mobile);
-  const isShared = sharedWithMeOwners.some(
-    (o) =>
-      (o.owner_state || '').toUpperCase().trim() === (campaign.state || '').toUpperCase().trim() &&
-      normalizeName(o.owner_leader) === normalizeName(campaign.leader || ''),
+  return canRecordResultsFor(
+    campaign,
+    { adminStatus, state: userState, leader: userMobileAndLeader?.leader ?? null, mobile: userMobileAndLeader?.mobile ?? null },
+    sharedWithMeOwners,
   );
-  return isOwn || isShared;
 }
 
 interface Props {
@@ -56,8 +44,6 @@ interface Props {
   onDelete: () => void;
   onToggleCheckbox: (field: 'tl_ok' | 'sr_ok', currentValue: boolean) => void;
   onRecordResults: () => void;
-  /** Opens the combined results + campaign report page. Shown to full admins (AD) on past campaigns only. */
-  onRecordCampaignReport?: () => void;
   onViewTrainingInterest: () => void;
   onViewCampaignInterest: () => void;
 }
@@ -65,7 +51,7 @@ interface Props {
 export default function CampaignCard({
   campaign, dateFilter, isAdmin, adminStatus, userState, userMobileAndLeader,
   sharedWithMeOwners, savedCheckboxId, campaignInterestCount, onEdit, onDelete, onToggleCheckbox, onRecordResults,
-  onRecordCampaignReport, onViewTrainingInterest, onViewCampaignInterest,
+  onViewTrainingInterest, onViewCampaignInterest,
 }: Props) {
   const stateColor = getStateColor(campaign.state);
   const displayTime = formatCampaignTimeDisplay(campaign.time);
@@ -73,7 +59,6 @@ export default function CampaignCard({
   const showCategoryBadge = campaignCat !== 'TWOL';
   const showRecordResults = canRecordResults(campaign, adminStatus, userState, userMobileAndLeader, sharedWithMeOwners);
   const showTrainingInterest = isTrainingCategory(campaignCat);
-  const showCampaignReportLink = dateFilter === 'past' && adminStatus === 'AD' && !!onRecordCampaignReport;
 
   return (
     <div data-ti="app/app/components/CampaignCard.tsx" className={`p-4 sm:p-5 ${stateColor.bg} border-b-2 border-gray-800 dark:border-gray-600`}>
@@ -161,15 +146,6 @@ export default function CampaignCard({
           >
             Delete
           </button>
-          {showCampaignReportLink && (
-            <button
-              type="button"
-              onClick={onRecordCampaignReport}
-              className="basis-full text-center text-base font-bold text-blue-600 underline hover:text-blue-700 dark:text-blue-400"
-            >
-              Experimental Campaign Reporting (DO NOT USE)
-            </button>
-          )}
         </div>
       </div>
     </div>

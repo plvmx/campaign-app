@@ -2,34 +2,41 @@ import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
 
 vi.mock('@/lib/supabaseClient', () => ({ supabase: { auth: {}, from: vi.fn() } }));
+const push = vi.fn();
+const router = { push }; // one stable object, like Next's router (a new one per render would re-run the page's loading effect)
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => router,
   useSearchParams: () => new URLSearchParams('id=c1&returnFilter=past'),
 }));
 vi.mock('@/components/MobileLayout', () => ({ default: ({ children }: { children: React.ReactNode }) => <div>{children}</div> }));
+
+// A plain team leader (no admin status) — the page is now open to every leader who may record results.
+let currentUser: { id: string } | null = { id: 'u1' };
 vi.mock('@/contexts/UserContext', () => ({
-  useUser: () => ({ user: { id: 'u1' }, adminStatus: 'AD', isLoading: false }),
-}));
-vi.mock('@/lib/services/campaignService', () => ({
-  getCampaignById: vi.fn().mockResolvedValue({
-    id: 'c1', date: '2026-10-31', state: 'VIC', place: 'Orange', site: '1', time: '10:00', leader: 'Jane Smith',
-  }),
+  useUser: () => ({ user: currentUser, adminStatus: null, isLoading: false }),
 }));
 
-const requestEmail = vi.fn();
-vi.mock('@/lib/services/campaignReportEmailClient', () => ({
-  requestCampaignReportEmail: (...a: unknown[]) => requestEmail(...a),
-}));
-
-const requestSave = vi.fn();
-vi.mock('@/lib/services/campaignReportSaveClient', () => ({
-  requestCampaignReportSave: (...a: unknown[]) => requestSave(...a),
+const fetchReport = vi.fn();
+const submitReport = vi.fn();
+vi.mock('@/lib/services/campaignReportClient', () => ({
+  fetchCampaignReport: (...a: unknown[]) => fetchReport(...a),
+  submitCampaignReport: (...a: unknown[]) => submitReport(...a),
 }));
 
 import Page from '../page';
 
-beforeEach(() => { requestSave.mockResolvedValue(undefined); });
-afterEach(() => { cleanup(); requestEmail.mockReset(); requestSave.mockReset(); });
+const emptyView = {
+  campaign: { location: 'Orange 1 VIC', leader: 'Jane Smith', date: '31/10/2026' },
+  names: { partial: [], full: [], sinnersPrayers: [], followUp: [] },
+};
+
+beforeEach(() => {
+  currentUser = { id: 'u1' };
+  fetchReport.mockResolvedValue(emptyView);
+  submitReport.mockResolvedValue('sent');
+  push.mockReset();
+});
+afterEach(() => { cleanup(); fetchReport.mockReset(); submitReport.mockReset(); });
 
 describe('Campaign report entry page', () => {
   it('pre-fills location, leader and date and shows all four count fields', async () => {
@@ -40,7 +47,7 @@ describe('Campaign report entry page', () => {
     for (const label of ['Partial Presentations', 'Full Presentations', 'Sinners Prayers', 'Requests for Follow-up/Info']) {
       expect(screen.getByLabelText(`Number of ${label} *`)).toBeInTheDocument();
     }
-    expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save & Submit' })).toBeInTheDocument();
   });
 
   it('limits counts to two digits and shows one name box per counted person', async () => {
@@ -73,7 +80,7 @@ describe('Campaign report entry page', () => {
     render(<Page />);
     await screen.findByLabelText('Location');
     fireEvent.change(screen.getByLabelText('Number of Full Presentations *'), { target: { value: '0' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save & Submit' }));
     expect(screen.getAllByRole('alert')).toHaveLength(3);
     expect(screen.getByLabelText('Number of Partial Presentations *')).toHaveAttribute('aria-invalid', 'true');
     expect(screen.getByLabelText('Number of Requests for Follow-up/Info *')).toHaveAttribute('aria-invalid', 'true');
@@ -83,7 +90,7 @@ describe('Campaign report entry page', () => {
     expect(screen.getAllByRole('alert')).toHaveLength(2);
     fireEvent.change(screen.getByLabelText('Number of Sinners Prayers *'), { target: { value: '0' } });
     fireEvent.change(screen.getByLabelText('Number of Requests for Follow-up/Info *'), { target: { value: '0' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save & Submit' }));
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
@@ -96,7 +103,7 @@ describe('Campaign report entry page', () => {
     fireEvent.change(screen.getByLabelText('Number of Requests for Follow-up/Info *'), { target: { value: '0' } });
     fireEvent.change(screen.getByLabelText('Number of Partial Presentations *'), { target: { value: '2' } });
     fireEvent.change(screen.getByPlaceholderText('Name 1'), { target: { value: 'Ann' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save & Submit' }));
 
     expect(screen.getByRole('alert')).toHaveTextContent('Please enter a name in every box.');
     expect(screen.getByPlaceholderText('Name 1')).toHaveAttribute('aria-invalid', 'false');
@@ -116,59 +123,81 @@ describe('Campaign report entry page', () => {
     fireEvent.change(screen.getByLabelText('Number of Requests for Follow-up/Info *'), { target: { value: '0' } });
   }
 
-  it('does not save or email anything while the form is invalid', async () => {
+  it('does not save anything while the form is invalid', async () => {
     render(<Page />);
     await screen.findByLabelText('Location');
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-    expect(requestSave).not.toHaveBeenCalled();
-    expect(requestEmail).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Save & Submit' }));
+    expect(submitReport).not.toHaveBeenCalled();
   });
 
-  it('saves the counts and the typed names, then emails only the counts', async () => {
-    requestEmail.mockResolvedValue('sent');
+  it('saves the counts and the typed names through the server, and says when management was emailed', async () => {
     await fillValidReport();
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-    expect(await screen.findByText('Report saved and emailed to management.')).toBeInTheDocument();
-    expect(requestSave).toHaveBeenCalledWith(
+    fireEvent.click(screen.getByRole('button', { name: 'Save & Submit' }));
+    expect(await screen.findByText('Report saved and sent to management.')).toBeInTheDocument();
+    expect(submitReport).toHaveBeenCalledWith(
       'c1',
       { partial: 0, full: 1, sinnersPrayers: 0, followUp: 0 },
       { partial: [], full: ['Ann'], sinnersPrayers: [], followUp: [] },
     );
-    expect(requestEmail).toHaveBeenCalledWith('c1', { partial: 0, full: 1, sinnersPrayers: 0, followUp: 0 });
   });
 
-  it('shows an error and sends no email when saving fails', async () => {
-    requestSave.mockRejectedValueOnce(new Error('The report could not be saved.'));
+  it('just says "Report saved." when management emailing is switched off', async () => {
+    submitReport.mockResolvedValue('disabled');
     await fillValidReport();
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save & Submit' }));
+    expect(await screen.findByText('Report saved.')).toBeInTheDocument();
+  });
+
+  it('says the report was saved but the email failed, without an error that would prompt a re-save', async () => {
+    submitReport.mockResolvedValue('failed');
+    await fillValidReport();
+    fireEvent.click(screen.getByRole('button', { name: 'Save & Submit' }));
+    expect(await screen.findByText(/Report saved, but the email to management could not be sent/)).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('shows an error and allows another try when saving fails', async () => {
+    submitReport.mockRejectedValueOnce(new Error('The report could not be saved.'));
+    await fillValidReport();
+    fireEvent.click(screen.getByRole('button', { name: 'Save & Submit' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('The report could not be saved. Please try again.');
-    expect(requestEmail).not.toHaveBeenCalled();
-    expect(screen.getByRole('button', { name: 'Save' })).not.toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Save & Submit' })).not.toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Save & Submit' }));
+    expect(await screen.findByText('Report saved and sent to management.')).toBeInTheDocument();
   });
 
-  it('emails the counts (never the names) when Save is clicked on a valid form', async () => {
-    requestEmail.mockResolvedValue('sent');
-    await fillValidReport();
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-    expect(await screen.findByText('Report saved and emailed to management.')).toBeInTheDocument();
-    expect(requestEmail).toHaveBeenCalledWith('c1', { partial: 0, full: 1, sinnersPrayers: 0, followUp: 0 });
+  it('is open to a plain team leader: loads the campaign by id and is not bounced to /app', async () => {
+    render(<Page />);
+    expect(await screen.findByLabelText('Location')).toHaveValue('Orange 1 VIC');
+    expect(fetchReport).toHaveBeenCalledWith('c1');
+    expect(push).not.toHaveBeenCalled();
   });
 
-  it('says so when emailing is switched off', async () => {
-    requestEmail.mockResolvedValue('disabled');
-    await fillValidReport();
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-    expect(await screen.findByText(/Emailing is switched off/)).toBeInTheDocument();
+  it('sends a signed-out visitor to the login page', async () => {
+    currentUser = null;
+    render(<Page />);
+    await waitFor(() => expect(push).toHaveBeenCalledWith('/login'));
+    expect(fetchReport).not.toHaveBeenCalled();
   });
 
-  it('says the report was saved but not emailed, and allows another try, when the email fails', async () => {
-    requestEmail.mockRejectedValueOnce(new Error('The report could not be emailed.')).mockResolvedValueOnce('sent');
-    await fillValidReport();
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('The report was saved, but the email to management could not be sent. Please try again.');
-    expect(screen.getByRole('button', { name: 'Save' })).not.toBeDisabled();
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-    expect(await screen.findByText('Report saved and emailed to management.')).toBeInTheDocument();
+  it('shows the server\'s message when the leader may not record results for the campaign', async () => {
+    fetchReport.mockRejectedValue(new Error("You can't record results for this campaign."));
+    render(<Page />);
+    expect(await screen.findByText("You can't record results for this campaign.")).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Save & Submit' })).not.toBeInTheDocument();
+  });
+
+  it('pre-fills the counts and name boxes from names already saved for the campaign, so they are edited not re-typed', async () => {
+    fetchReport.mockResolvedValue({
+      ...emptyView,
+      names: { partial: ['Ann'], full: ['Bob', 'Cy Lee'], sinnersPrayers: [], followUp: [] },
+    });
+    render(<Page />);
+    expect(await screen.findByLabelText('Number of Full Presentations *')).toHaveValue('2');
+    expect(screen.getByLabelText('Number of Partial Presentations *')).toHaveValue('1');
+    expect(screen.getByLabelText('Number of Sinners Prayers *')).toHaveValue('');
+    expect(screen.getByLabelText('Number of Full Presentations — name 2')).toHaveValue('Cy Lee');
+    expect(screen.getByLabelText('Number of Partial Presentations — name 1')).toHaveValue('Ann');
   });
 
   it('has the follow-up/info count, which reveals name boxes like the others', async () => {

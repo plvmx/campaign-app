@@ -5,16 +5,12 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import MobileLayout from '@/components/MobileLayout';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import { useUser } from '@/contexts/UserContext';
-import { getCampaignById } from '@/lib/services/campaignService';
-import { requestCampaignReportEmail } from '@/lib/services/campaignReportEmailClient';
-import { requestCampaignReportSave } from '@/lib/services/campaignReportSaveClient';
+import { fetchCampaignReport, submitCampaignReport } from '@/lib/services/campaignReportClient';
 import { getErrorMessage } from '@/lib/errorUtils';
 import {
   REPORT_COUNT_FIELDS,
   NAME_MAX_LENGTH,
   type ReportCountField,
-  formatReportDate,
-  formatReportLocation,
   nameFieldCount,
   resizeNames,
   sanitizeCountInput,
@@ -43,7 +39,7 @@ function CampaignReportEntryContent() {
   const searchParams = useSearchParams();
   const campaignId = searchParams.get('id');
   const returnFilter = searchParams.get('returnFilter') ?? 'past';
-  const { user, adminStatus, isLoading: isUserLoading } = useUser();
+  const { user, isLoading: isUserLoading } = useUser();
 
   const [campaign, setCampaign] = useState<PrefilledCampaign | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -54,7 +50,7 @@ function CampaignReportEntryContent() {
     followUp: '',
   });
   const [countErrors, setCountErrors] = useState<Partial<Record<ReportCountField, string>>>({});
-  const [sendState, setSendState] = useState<'idle' | 'sending' | 'sent' | 'off'>('idle');
+  const [sendState, setSendState] = useState<'idle' | 'sending' | 'sent' | 'saved' | 'email-failed'>('idle');
   const [sendError, setSendError] = useState<string | null>(null);
   const [nameErrors, setNameErrors] = useState<Partial<Record<ReportCountField, number[]>>>({});
   const [names, setNames] = useState<Record<ReportCountField, string[]>>({
@@ -64,30 +60,35 @@ function CampaignReportEntryContent() {
     followUp: [],
   });
 
-  const isFullAdmin = adminStatus === 'AD';
-
   useEffect(() => {
     if (isUserLoading) return;
     if (!user) { router.push('/login'); return; }
-    if (!isFullAdmin) { router.push('/app'); return; }
     if (!campaignId) { setTimeout(() => setError('No campaign was selected.'), 0); return; }
 
     let cancelled = false;
-    getCampaignById(campaignId)
-      .then((c) => {
+    // The server decides whether this leader may record results for the campaign, and returns what is
+    // already saved for it so they edit rather than re-type.
+    fetchCampaignReport(campaignId)
+      .then((view) => {
         if (cancelled) return;
-        if (!c) { setError('Campaign not found.'); return; }
-        setCampaign({
-          location: formatReportLocation(c),
-          leader: c.leader,
-          date: formatReportDate(c.date),
+        const saved = {} as Record<ReportCountField, string[]>;
+        for (const { key } of REPORT_COUNT_FIELDS) {
+          saved[key] = view.names[key].map((n) => sanitizeNameInput(n)).slice(0, 99);
+        }
+        setCampaign(view.campaign);
+        setNames(saved);
+        setCounts({
+          partial: saved.partial.length ? String(saved.partial.length) : '',
+          full: saved.full.length ? String(saved.full.length) : '',
+          sinnersPrayers: saved.sinnersPrayers.length ? String(saved.sinnersPrayers.length) : '',
+          followUp: saved.followUp.length ? String(saved.followUp.length) : '',
         });
       })
       .catch((err: unknown) => {
         if (!cancelled) setError(getErrorMessage(err, 'Failed to load campaign'));
       });
     return () => { cancelled = true; };
-  }, [isUserLoading, user, isFullAdmin, campaignId, router]);
+  }, [isUserLoading, user, campaignId, router]);
 
   const handleCountChange = (field: ReportCountField, raw: string) => {
     const value = sanitizeCountInput(raw);
@@ -131,22 +132,13 @@ function CampaignReportEntryContent() {
       followUp: Number(counts.followUp),
     };
     try {
-      // Counts go to campaign_reports and names to results (both tagged experimental);
-      // saving again replaces the earlier save for this campaign.
-      await requestCampaignReportSave(campaignId, numericCounts, names);
+      // Saves the counts and names, then the server emails the counts (never the names) to management.
+      // Saving again replaces the earlier save for this campaign.
+      const email = await submitCampaignReport(campaignId, numericCounts, names);
+      setSendState(email === 'sent' ? 'sent' : email === 'failed' ? 'email-failed' : 'saved');
     } catch (err: unknown) {
       setSendState('idle');
       setSendError(getErrorMessage(err, 'The report could not be saved.'));
-      return;
-    }
-    try {
-      // Only the counts go to management — names stay in the app.
-      const outcome = await requestCampaignReportEmail(campaignId, numericCounts);
-      setSendState(outcome === 'sent' ? 'sent' : 'off');
-    } catch (err: unknown) {
-      setSendState('idle');
-      console.error('Campaign report email failed:', err);
-      setSendError('The report was saved, but the email to management could not be sent.');
     }
   };
 
@@ -238,13 +230,18 @@ function CampaignReportEntryContent() {
               disabled={sendState === 'sending'}
               className="disabled:cursor-not-allowed disabled:opacity-60 w-full rounded-md border-2 border-gray-800 bg-green-600 px-6 py-5 text-2xl font-extrabold text-white hover:bg-green-700 dark:border-gray-600"
             >
-              {sendState === 'sending' ? 'Saving…' : 'Save'}
+              {sendState === 'sending' ? 'Saving…' : 'Save & Submit'}
             </button>
             {sendState === 'sent' && (
-              <p role="status" className="text-lg font-semibold text-green-700 dark:text-green-300">Report saved and emailed to management.</p>
+              <p role="status" className="text-lg font-semibold text-green-700 dark:text-green-300">Report saved and sent to management.</p>
             )}
-            {sendState === 'off' && (
-              <p role="status" className="text-lg font-semibold text-gray-800 dark:text-gray-200">Report saved. Emailing is switched off, so nothing was sent.</p>
+            {sendState === 'saved' && (
+              <p role="status" className="text-lg font-semibold text-green-700 dark:text-green-300">Report saved.</p>
+            )}
+            {sendState === 'email-failed' && (
+              <p role="status" className="text-lg font-semibold text-gray-800 dark:text-gray-200">
+                Report saved, but the email to management could not be sent. Please let an administrator know.
+              </p>
             )}
             {sendError && (
               <p role="alert" className="text-lg font-semibold text-red-700 dark:text-red-400">{sendError} Please try again.</p>

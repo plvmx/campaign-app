@@ -87,10 +87,7 @@ export default function RecordResultsPage() {
       throw new Error('No campaign found with the selected values. Please create the campaign first or select different values.');
     }
 
-    router.push(`/record-results/detail?${new URLSearchParams({
-      id: existingCampaign.id,
-      date: data.date, state: data.state, place: data.place, site: data.site, time: data.time, leader: data.leader,
-    }).toString()}`);
+    router.push(`/record-results/report?${new URLSearchParams({ id: existingCampaign.id }).toString()}`);
   };
 
   if (isUserLoading || isLoading) {
