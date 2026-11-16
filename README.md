@@ -39,7 +39,6 @@ For the full architecture, page-by-page route map, database schema, testing poli
    NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
    SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
    CRON_SECRET=any-random-string-for-local-testing
-   CAMPAIGN_REPORT_SHEET_ID=id_of_the_link_shared_campaign_report_google_sheet
    RESEND_API_KEY=your_resend_api_key
    CLICKSEND_USERNAME=your_clicksend_username
    CLICKSEND_API_KEY=your_clicksend_api_key
@@ -47,7 +46,6 @@ For the full architecture, page-by-page route map, database schema, testing poli
 
    - `SUPABASE_SERVICE_ROLE_KEY` is required for the server-side leader-lookup and cron API routes (`app/api/auth/validate-leader`, `app/api/cron/weekly-refresh`) — keep it out of anything committed.
    - `CRON_SECRET` just needs to match what you send when hitting the cron route manually in dev; it doesn't need to be the real production value.
-   - `CAMPAIGN_REPORT_SHEET_ID` is only needed by the temporary Google Sheet → `campaign_reports` sync (`app/api/cron/campaign-report-sync`, `scripts/sync_campaign_reports_from_sheet.ts`).
    - `RESEND_API_KEY` (and optionally `CAMPAIGN_REPORT_EMAIL_FROM`, a sender on a Resend-verified domain) is needed to email the TWOL Campaign Report to management when a leader presses Save on `/record-results/report` — without it the report is still saved, but the page tells the leader the email could not be sent. Switch it on and set the recipients on the `/admin` hub.
    - `CLICKSEND_USERNAME`/`CLICKSEND_API_KEY` are required for `lib/clickSendClient.ts` to text a campaign's leader when someone registers interest (`lib/services/campaignInterestSmsService.ts`) — without them, that notification fails (and is logged to `campaign_interest_sms_log` as `failed`), but registering interest itself still succeeds.
 

@@ -3,10 +3,6 @@
     {
       "path": "/api/cron/weekly-refresh",
       "schedule": "0 1 * * 0"
-    },
-    {
-      "path": "/api/cron/campaign-report-sync",
-      "schedule": "30 16 * * *"
     }
   ]
 }
