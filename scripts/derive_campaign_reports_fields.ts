@@ -10,8 +10,7 @@
  * scripts/add_derived_location_to_campaign_reports.sql to already have been run
  * in the Supabase SQL Editor.
  *
- * Idempotent — safe to re-run any time (e.g. after tuning the matcher; the
- * /api/cron/campaign-report-sync job already runs the same step after each sheet sync): recomputes from
+ * Idempotent — safe to re-run any time (e.g. after tuning the matcher): recomputes from
  * scratch and only writes rows whose derived values actually changed.
  *
  * Usage:
@@ -23,7 +22,7 @@
 import fs from 'fs';
 import path from 'path';
 import { createClient } from '@supabase/supabase-js';
-import { deriveCampaignReportFieldsSince, DERIVE_SINCE } from '../lib/services/campaignReportSyncService';
+import { deriveCampaignReportFieldsSince, DERIVE_SINCE } from '../lib/services/campaignReportDeriveService';
 
 const envPath = path.join(__dirname, '..', '.env.local');
 fs.readFileSync(envPath, 'utf-8').split('\n').forEach((line) => {

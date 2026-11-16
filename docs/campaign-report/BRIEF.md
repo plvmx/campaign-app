@@ -11,9 +11,11 @@ cosmetically), nothing stored is missing from the sheet, and 250 are new (to
 superset. One repeated `submitted_at` exists (a 2026-08-31 "Testing" pair —
 the first row wins, as in the original load).
 
-A daily Vercel Cron job (`/api/cron/campaign-report-sync`) now inserts new
-rows and re-derives state/place/leader — see `lib/services/campaignReportSyncService.ts`
-and `TECHNICAL_DOCS.md` §19.2. Temporary: it is to be removed when the app's
+(Removed 2026-11-16: a daily Vercel Cron job, `/api/cron/campaign-report-sync`, used to insert new
+rows from the sheet. The app's own report page replaced the sheet; derivation lives in
+`lib/services/campaignReportDeriveService.ts`.)
+
+Former note — see `TECHNICAL_DOCS.md` §19.2. Temporary: it is to be removed when the app's
 own campaign-report numbers replace the sheet (this supersedes the
 "no new rows written into it" note below only for this bridge; new rows carry
 `source = 'google_sheet_sync'` so they are easy to identify). Why not the
