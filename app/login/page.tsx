@@ -687,18 +687,11 @@ export default function LoginPage() {
             </h2>
             <div className="flex flex-col gap-3">
               {recentCampaigns.map(campaign => {
-                const detailParams = new URLSearchParams({
-                  id:     campaign.id,
-                  date:   campaign.date,
-                  state:  campaign.state,
-                  place:  campaign.place,
-                  time:   campaign.time,
-                  leader: campaign.leader,
-                });
+                const reportParams = new URLSearchParams({ id: campaign.id });
                 return (
                   <button
                     key={campaign.id}
-                    onClick={() => router.push(`/record-results/detail?${detailParams.toString()}`)}
+                    onClick={() => router.push(`/record-results/report?${reportParams.toString()}`)}
                     className="w-full rounded-md bg-green-600 px-4 py-3 text-base font-bold text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 border-2 border-gray-800 dark:border-gray-600"
                   >
                     {formatCampaignLabel(campaign.date, campaign.time, campaign.place)}
