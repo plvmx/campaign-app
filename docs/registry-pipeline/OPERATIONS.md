@@ -2154,3 +2154,36 @@ placeholders (13) deliberately skipped; 388 registrants have no church in AC.
 **Registration Log.** `/registry/manage/registration-log` shows what the
 sync did with each submission (see TECHNICAL_DOCS §17.4). Not distinguishable:
 a plain AC contact edit looks like a re-submission.
+
+## Duplicate / malformed emails from the CSV reload (2026-11-17)
+
+Lorraine reported duplicates in `/registry/manage`. Read-only investigation
+of the live registry (9,401 registrants): no email or `ac_contact_id` appears
+twice, but 193 emails carry stray whitespace or a trailing spreadsheet
+footnote digit (`kifinti52@hotmail.com    1` marks a second person on a
+shared address; `shippys @iinet.net.au` is a typo). They came from the CSV
+reload; `ac-sync` was not creating duplicates (none of the suspect rows were
+registered after Sept 2026).
+
+Cleaned, those emails give 134 shared addresses / 273 rows: **18 true
+duplicates** (same name), **116 couples** (different names — never merged),
+plus 76 same-name + same-phone groups with different emails that only a
+person can judge.
+
+**Tool.** `scripts/cleanup_registrant_duplicates.ts` (planner:
+`lib/registryPipeline/duplicateCleanupPlan.ts`). Dry run by default; always
+writes a backup JSON and a review CSV to `backups/`. Steps:
+
+1. Run `scripts/add_email_and_church_to_registrant_edits_check.sql` in the
+   Supabase SQL Editor (lets the audit table record `email` and `church_name`).
+2. `npx tsx scripts/cleanup_registrant_duplicates.ts` — read the plan.
+3. `... --apply` — merges certain duplicates, repairs safe emails.
+   `--include-guessed-emails` also applies repairs that delete spaces inside
+   an address (e.g. `laurie. msc@gmail.com`); review them first.
+4. Give Lorraine the review CSV; apply her decisions by hand in
+   `/registry/manage` or a follow-up script.
+
+Left alone on purpose: couples sharing an address (the second partner keeps
+the dirty email — the unique index allows an address on one row only), and
+emails that can't be repaired (`ann.harding`, `...@hotmail`). A longer-term
+fix for couples would be matching on email + name, a larger design change.
