@@ -25,6 +25,7 @@ import {
 } from '@/lib/campaignReportEntry';
 import { locationOf } from '@/lib/campaignReportMatcher';
 import { combinePlaceAndSite } from '@/lib/placeSite';
+import { isValidTeamSize } from '@/lib/campaignReportEntry';
 import { parseReportCounts } from '@/lib/services/campaignReportEmailService';
 
 /** `source` value on every row this page writes (campaign_reports and results). */
@@ -44,6 +45,8 @@ export const REPORT_FIELD_CATEGORY: Record<ReportCountField, 'P' | 'F' | 'SP' | 
 export interface ParsedReportSubmission {
   campaignId: string;
   counts: Record<ReportCountField, number>;
+  /** People on the team including the leader, 1-99. */
+  teamSize: number;
   names: Record<ReportCountField, string[]>;
 }
 
@@ -59,6 +62,8 @@ export function parseReportSubmission(body: unknown): ParsedReportSubmission | n
   const raw = body as { campaignId?: unknown; names?: unknown };
   if (typeof raw.campaignId !== 'string' || raw.campaignId === '') return null;
   const counts = parseReportCounts(body);
+  const teamSize = (body as { teamSize?: unknown }).teamSize;
+  if (!isValidTeamSize(teamSize)) return null;
   if (!counts || !raw.names || typeof raw.names !== 'object') return null;
 
   const namesIn = raw.names as Record<string, unknown>;
@@ -73,7 +78,7 @@ export function parseReportSubmission(body: unknown): ParsedReportSubmission | n
       names[field].push(name);
     }
   }
-  return { campaignId: raw.campaignId, counts, names };
+  return { campaignId: raw.campaignId, counts, teamSize, names };
 }
 
 export interface ReportCampaign {
@@ -120,6 +125,20 @@ export async function getSavedReportNames(
   return names;
 }
 
+/** The team size on the campaign's latest saved report, or null if none (or unreadable — never blocks the page). */
+export async function getSavedTeamSize(client: SupabaseClient, campaignId: string): Promise<number | null> {
+  const { data, error } = await client
+    .from('campaign_reports')
+    .select('team_size')
+    .eq('campaign_id', campaignId)
+    .in('source', [REPORT_SOURCE, EXPERIMENTAL_REPORT_SOURCE])
+    .order('submitted_at', { ascending: false })
+    .limit(1);
+  if (error) return null;
+  const value = ((data ?? [])[0] as { team_size: number | null } | undefined)?.team_size;
+  return isValidTeamSize(value) ? value : null;
+}
+
 const idsOf = (rows: unknown): string[] => ((rows ?? []) as Array<{ id: string }>).map((r) => r.id);
 
 export async function saveCampaignReport(
@@ -163,6 +182,7 @@ export async function saveCampaignReport(
       campaign_date_raw: campaign.date,
       location_raw: formatReportLocation(campaign),
       leader_raw: campaign.leader,
+      team_size: input.teamSize,
       partial_presentations: counts.partial,
       partial_presentations_raw: String(counts.partial),
       full_presentations: counts.full,

@@ -14,6 +14,9 @@ import {
   nameFieldCount,
   resizeNames,
   sanitizeCountInput,
+  sanitizeTeamSizeInput,
+  validateTeamSize,
+  TEAM_SIZE_LABEL,
   sanitizeNameInput,
   validateCounts,
   validateNames,
@@ -49,6 +52,8 @@ function CampaignReportEntryContent() {
     sinnersPrayers: '',
     followUp: '',
   });
+  const [teamSize, setTeamSize] = useState('');
+  const [teamSizeError, setTeamSizeError] = useState<string | null>(null);
   const [countErrors, setCountErrors] = useState<Partial<Record<ReportCountField, string>>>({});
   const [sendState, setSendState] = useState<'idle' | 'sending' | 'sent' | 'saved' | 'email-failed'>('idle');
   const [sendError, setSendError] = useState<string | null>(null);
@@ -76,6 +81,7 @@ function CampaignReportEntryContent() {
           saved[key] = view.names[key].map((n) => sanitizeNameInput(n)).slice(0, 99);
         }
         setCampaign(view.campaign);
+        if (view.teamSize) setTeamSize(String(view.teamSize));
         setNames(saved);
         setCounts({
           partial: saved.partial.length ? String(saved.partial.length) : '',
@@ -89,6 +95,13 @@ function CampaignReportEntryContent() {
       });
     return () => { cancelled = true; };
   }, [isUserLoading, user, campaignId, router]);
+
+  const handleTeamSizeChange = (raw: string) => {
+    setSendState('idle');
+    setSendError(null);
+    setTeamSize(sanitizeTeamSizeInput(raw));
+    setTeamSizeError(null);
+  };
 
   const handleCountChange = (field: ReportCountField, raw: string) => {
     const value = sanitizeCountInput(raw);
@@ -117,11 +130,13 @@ function CampaignReportEntryContent() {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (sendState === 'sending') return;
+    const teamError = validateTeamSize(teamSize);
+    setTeamSizeError(teamError);
     const errors = validateCounts(counts);
     const missingNames = validateNames(names);
     setCountErrors(errors);
     setNameErrors(missingNames);
-    if (Object.keys(errors).length > 0 || Object.keys(missingNames).length > 0 || !campaignId) return;
+    if (teamError || Object.keys(errors).length > 0 || Object.keys(missingNames).length > 0 || !campaignId) return;
 
     setSendState('sending');
     setSendError(null);
@@ -134,7 +149,7 @@ function CampaignReportEntryContent() {
     try {
       // Saves the counts and names, then the server emails the counts (never the names) to management.
       // Saving again replaces the earlier save for this campaign.
-      const email = await submitCampaignReport(campaignId, numericCounts, names);
+      const email = await submitCampaignReport(campaignId, Number(teamSize), numericCounts, names);
       setSendState(email === 'sent' ? 'sent' : email === 'failed' ? 'email-failed' : 'saved');
     } catch (err: unknown) {
       setSendState('idle');
@@ -178,6 +193,26 @@ function CampaignReportEntryContent() {
             <div>
               <label htmlFor="report-date" className={labelClass}>Campaign Date</label>
               <input id="report-date" type="text" readOnly value={campaign.date} className={readOnlyClass} />
+            </div>
+
+            <div>
+              <label htmlFor="report-team-size" className={labelClass}>{TEAM_SIZE_LABEL} *</label>
+              <input
+                id="report-team-size"
+                type="text"
+                inputMode="numeric"
+                autoComplete="off"
+                value={teamSize}
+                onChange={(e) => handleTeamSizeChange(e.target.value)}
+                aria-invalid={!!teamSizeError}
+                aria-describedby={teamSizeError ? 'report-team-size-error' : undefined}
+                className={`${inputClass} ${teamSizeError ? errorInputClass : ''}`}
+              />
+              {teamSizeError && (
+                <p id="report-team-size-error" role="alert" className="mt-1 text-base font-semibold text-red-700 dark:text-red-400">
+                  {teamSizeError}
+                </p>
+              )}
             </div>
 
             {REPORT_COUNT_FIELDS.map(({ key, label }) => (

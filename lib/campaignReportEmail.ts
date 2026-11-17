@@ -4,13 +4,15 @@
  * content is unit tested without any network. Table layout with inline styles
  * because email clients ignore stylesheets.
  */
-import { REPORT_COUNT_FIELDS, type ReportCountField } from './campaignReportEntry';
+import { REPORT_COUNT_FIELDS, formatLeaderWithTeam, type ReportCountField } from './campaignReportEntry';
 
 export const CAMPAIGN_REPORT_EMAIL_TITLE = 'TWOL Campaign Report';
 
 export interface CampaignReportEmailInput {
   location: string;
   leader: string;
+  /** People on the team including the leader; shown after the leader's name as (+N) when more than 1. */
+  teamSize: number;
   /** dd/mm/yyyy, as on the report form. */
   date: string;
   counts: Record<ReportCountField, number>;
@@ -30,7 +32,7 @@ function escapeHtml(value: string): string {
 export function buildCampaignReportEmail(input: CampaignReportEmailInput): BuiltEmail {
   const rows: { label: string; value: string }[] = [
     { label: 'Location', value: input.location },
-    { label: 'Campaign Leader', value: input.leader },
+    { label: 'Campaign Leader', value: formatLeaderWithTeam(input.leader, input.teamSize) },
     { label: 'Campaign Date', value: input.date },
     ...REPORT_COUNT_FIELDS.map(({ key, label }) => ({ label, value: String(input.counts[key]) })),
   ];

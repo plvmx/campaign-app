@@ -39,11 +39,11 @@ describe('sendCampaignReportEmail', () => {
   it('sends one email to every recipient with the campaign details and counts', async () => {
     const sender = vi.fn().mockResolvedValue({ messageId: 'm' });
     const { client } = makeClient({ settings: on('a@x.com, b@x.com') });
-    await expect(sendCampaignReportEmail(client, { campaignId: 'c1', counts }, sender)).resolves.toEqual({ status: 'sent', recipients: 2 });
+    await expect(sendCampaignReportEmail(client, { campaignId: 'c1', counts, teamSize: 1 }, sender)).resolves.toEqual({ status: 'sent', recipients: 2 });
     const sent = sender.mock.calls[0][0];
     expect(sent.to).toEqual(['a@x.com', 'b@x.com']);
     expect(sent.subject).toBe('TWOL Campaign Report — Sylvania NSW — 30/09/2024');
-    expect(sent.text).toContain('Campaign Leader: Marie H');
+    expect(sent.text).toContain('Campaign Leader: Marie H\n');
     expect(sent.text).toContain('Number of Full Presentations: 5');
     expect(sent.text).toContain('Number of Requests for Follow-up/Info: 3');
   });
@@ -52,7 +52,7 @@ describe('sendCampaignReportEmail', () => {
     const sender = vi.fn();
     for (const settings of [[], [{ setting_key: 'campaign_report_email_enabled', setting_value: 'false' }]]) {
       const { client, from } = makeClient({ settings });
-      await expect(sendCampaignReportEmail(client, { campaignId: 'c1', counts }, sender)).resolves.toEqual({ status: 'disabled' });
+      await expect(sendCampaignReportEmail(client, { campaignId: 'c1', counts, teamSize: 1 }, sender)).resolves.toEqual({ status: 'disabled' });
       expect(from).not.toHaveBeenCalledWith('campaigns');
     }
     expect(sender).not.toHaveBeenCalled();
@@ -62,7 +62,7 @@ describe('sendCampaignReportEmail', () => {
     const sender = vi.fn();
     for (const list of ['', 'not-an-email']) {
       const { client } = makeClient({ settings: on(list) });
-      await expect(sendCampaignReportEmail(client, { campaignId: 'c1', counts }, sender)).resolves.toEqual({ status: 'no_recipients' });
+      await expect(sendCampaignReportEmail(client, { campaignId: 'c1', counts, teamSize: 1 }, sender)).resolves.toEqual({ status: 'no_recipients' });
     }
     expect(sender).not.toHaveBeenCalled();
   });
@@ -70,13 +70,13 @@ describe('sendCampaignReportEmail', () => {
   it('reports a missing campaign without sending', async () => {
     const sender = vi.fn();
     const { client } = makeClient({ settings: on('a@x.com'), campaign: null });
-    await expect(sendCampaignReportEmail(client, { campaignId: 'nope', counts }, sender)).resolves.toEqual({ status: 'campaign_not_found' });
+    await expect(sendCampaignReportEmail(client, { campaignId: 'nope', counts, teamSize: 1 }, sender)).resolves.toEqual({ status: 'campaign_not_found' });
     expect(sender).not.toHaveBeenCalled();
   });
 
   it('throws when the settings cannot be read or sending fails', async () => {
-    await expect(sendCampaignReportEmail(makeClient({ settingsError: true }).client, { campaignId: 'c1', counts }, vi.fn())).rejects.toThrow(/email settings/);
+    await expect(sendCampaignReportEmail(makeClient({ settingsError: true }).client, { campaignId: 'c1', counts, teamSize: 1 }, vi.fn())).rejects.toThrow(/email settings/);
     const failing = vi.fn().mockRejectedValue(new Error('Resend down'));
-    await expect(sendCampaignReportEmail(makeClient({ settings: on('a@x.com') }).client, { campaignId: 'c1', counts }, failing)).rejects.toThrow('Resend down');
+    await expect(sendCampaignReportEmail(makeClient({ settings: on('a@x.com') }).client, { campaignId: 'c1', counts, teamSize: 1 }, failing)).rejects.toThrow('Resend down');
   });
 });

@@ -28,6 +28,7 @@ import Page from '../page';
 const emptyView = {
   campaign: { location: 'Orange 1 VIC', leader: 'Jane Smith', date: '31/10/2026' },
   names: { partial: [], full: [], sinnersPrayers: [], followUp: [] },
+  teamSize: null as number | null,
 };
 
 beforeEach(() => {
@@ -79,6 +80,7 @@ describe('Campaign report entry page', () => {
   it('requires a number in every count field when Save is clicked', async () => {
     render(<Page />);
     await screen.findByLabelText('Location');
+    fireEvent.change(screen.getByLabelText('Team Size (including Leader) *'), { target: { value: '2' } });
     fireEvent.change(screen.getByLabelText('Number of Full Presentations *'), { target: { value: '0' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save & Submit' }));
     expect(screen.getAllByRole('alert')).toHaveLength(3);
@@ -97,6 +99,7 @@ describe('Campaign report entry page', () => {
   it('requires a name in every revealed name box when Save is clicked', async () => {
     render(<Page />);
     await screen.findByLabelText('Location');
+    fireEvent.change(screen.getByLabelText('Team Size (including Leader) *'), { target: { value: '2' } });
     fireEvent.change(screen.getByLabelText('Number of Partial Presentations *'), { target: { value: '2' } });
     fireEvent.change(screen.getByLabelText('Number of Full Presentations *'), { target: { value: '0' } });
     fireEvent.change(screen.getByLabelText('Number of Sinners Prayers *'), { target: { value: '0' } });
@@ -116,12 +119,45 @@ describe('Campaign report entry page', () => {
   async function fillValidReport() {
     render(<Page />);
     await screen.findByLabelText('Location');
+    fireEvent.change(screen.getByLabelText('Team Size (including Leader) *'), { target: { value: '3' } });
     fireEvent.change(screen.getByLabelText('Number of Partial Presentations *'), { target: { value: '0' } });
     fireEvent.change(screen.getByLabelText('Number of Full Presentations *'), { target: { value: '1' } });
     fireEvent.change(screen.getByPlaceholderText('Name 1'), { target: { value: 'Ann' } });
     fireEvent.change(screen.getByLabelText('Number of Sinners Prayers *'), { target: { value: '0' } });
     fireEvent.change(screen.getByLabelText('Number of Requests for Follow-up/Info *'), { target: { value: '0' } });
   }
+
+  it('has a mandatory, digits-only Team Size box of two characters between Campaign Date and the counts', async () => {
+    render(<Page />);
+    const team = await screen.findByLabelText('Team Size (including Leader) *');
+    fireEvent.change(team, { target: { value: 'a1b2c3' } });
+    expect(team).toHaveValue('12');
+    const order = [screen.getByLabelText('Campaign Date'), team, screen.getByLabelText('Number of Partial Presentations *')];
+    expect(order[0].compareDocumentPosition(order[1]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(order[1].compareDocumentPosition(order[2]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    fireEvent.change(team, { target: { value: '' } });
+    fireEvent.change(screen.getByLabelText('Number of Partial Presentations *'), { target: { value: '0' } });
+    fireEvent.change(screen.getByLabelText('Number of Full Presentations *'), { target: { value: '0' } });
+    fireEvent.change(screen.getByLabelText('Number of Sinners Prayers *'), { target: { value: '0' } });
+    fireEvent.change(screen.getByLabelText('Number of Requests for Follow-up/Info *'), { target: { value: '0' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save & Submit' }));
+    expect(team).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByRole('alert')).toHaveTextContent('team size');
+    expect(submitReport).not.toHaveBeenCalled();
+
+    fireEvent.change(team, { target: { value: '0' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save & Submit' }));
+    expect(team).toHaveAttribute('aria-invalid', 'true');
+    fireEvent.change(team, { target: { value: '1' } });
+    expect(team).toHaveAttribute('aria-invalid', 'false');
+  });
+
+  it('pre-fills the team size from the earlier saved report', async () => {
+    fetchReport.mockResolvedValue({ ...emptyView, teamSize: 4 });
+    render(<Page />);
+    expect(await screen.findByLabelText('Team Size (including Leader) *')).toHaveValue('4');
+  });
 
   it('does not save anything while the form is invalid', async () => {
     render(<Page />);
@@ -136,6 +172,7 @@ describe('Campaign report entry page', () => {
     expect(await screen.findByText('Report saved and sent to management.')).toBeInTheDocument();
     expect(submitReport).toHaveBeenCalledWith(
       'c1',
+      3,
       { partial: 0, full: 1, sinnersPrayers: 0, followUp: 0 },
       { partial: [], full: ['Ann'], sinnersPrayers: [], followUp: [] },
     );

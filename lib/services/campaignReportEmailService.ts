@@ -33,7 +33,7 @@ export function parseReportCounts(body: unknown): Record<ReportCountField, numbe
 
 export async function sendCampaignReportEmail(
   client: SupabaseClient,
-  input: { campaignId: string; counts: Record<ReportCountField, number> },
+  input: { campaignId: string; counts: Record<ReportCountField, number>; teamSize: number },
   sender: typeof sendEmail = sendEmail,
 ): Promise<SendReportEmailResult> {
   const { data: settings, error: settingsError } = await client
@@ -60,6 +60,7 @@ export async function sendCampaignReportEmail(
   const email = buildCampaignReportEmail({
     location: formatReportLocation(campaign),
     leader: campaign.leader,
+    teamSize: input.teamSize,
     date: formatReportDate(campaign.date),
     counts: input.counts,
   });

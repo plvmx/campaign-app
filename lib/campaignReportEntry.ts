@@ -45,6 +45,27 @@ export function formatReportDate(dbDate: string): string {
   return m ? `${m[3]}/${m[2]}/${m[1]}` : dbDate;
 }
 
+export const TEAM_SIZE_LABEL = 'Team Size (including Leader)';
+export const TEAM_SIZE_REQUIRED_MESSAGE = 'Please enter the team size, including the leader (1 or more).';
+
+/** Team size box: digits only, at most two (same typing rule as the count boxes). */
+export const sanitizeTeamSizeInput = sanitizeCountInput;
+
+/** The error for a (sanitized) team size string, or null when valid: 1-99, as the leader counts themself. */
+export function validateTeamSize(value: string): string | null {
+  return /^\d{1,2}$/.test(value) && Number(value) >= 1 ? null : TEAM_SIZE_REQUIRED_MESSAGE;
+}
+
+/** True for a whole number 1-99. */
+export function isValidTeamSize(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 99;
+}
+
+/** "Maria" for a team of 1, "Maria (+1)" for 2 — the number is the people besides the leader. */
+export function formatLeaderWithTeam(leader: string, teamSize: number): string {
+  return teamSize > 1 ? `${leader} (+${teamSize - 1})` : leader;
+}
+
 export const COUNT_REQUIRED_MESSAGE = 'Please enter a number (enter 0 if there were none).';
 
 /** One error per count field left blank; an empty object means the counts are valid. */
