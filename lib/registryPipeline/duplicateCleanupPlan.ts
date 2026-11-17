@@ -102,7 +102,7 @@ export function nameKey(r: Pick<DedupRegistrant, 'first_name' | 'last_name'>): s
 
 const blank = (v: string | null | undefined) => v === null || v === undefined || v.trim() === '';
 
-export type MergeReason = 'same_email_and_name' | 'same_phone_and_name_no_email';
+export type MergeReason = 'same_email_and_name' | 'same_phone_and_name_no_email' | 'review_keep_newest';
 
 export interface MergePlan {
   reason: MergeReason;
@@ -294,4 +294,31 @@ export function planDuplicateCleanup(rows: DedupRegistrant[]): DuplicateCleanupP
   reviewPairs.sort((a, b) => a.name.localeCompare(b.name));
 
   return { merges, emailFixes, sharedEmailLeftAlone, unfixable, reviewPairs };
+}
+
+/** Newest registration wins; on a tie, the row with an AC contact id, then the lowest id. */
+function pickNewestSurvivor(rows: DedupRegistrant[]): DedupRegistrant {
+  return [...rows].sort((a, b) => {
+    const ad = a.registered_at ?? '';
+    const bd = b.registered_at ?? '';
+    if (ad !== bd) return ad < bd ? 1 : -1;
+    const acDiff = (b.ac_contact_id ? 1 : 0) - (a.ac_contact_id ? 1 : 0);
+    if (acDiff !== 0) return acDiff;
+    return a.id < b.id ? -1 : 1;
+  })[0];
+}
+
+/**
+ * Turns the "same name + same phone, different emails" review groups into
+ * merges, once a human (Lorraine, 2026-11-17) has said they are the same
+ * person and the older registration(s) should go. The newest registration's
+ * row survives (its email is the one kept); blanks are filled from the older
+ * rows and an unsubscribe / No-Further-Contact flag is never lost.
+ */
+export function planKeepNewestMerges(pairs: ReviewPair[], allRows: DedupRegistrant[]): MergePlan[] {
+  const byId = new Map(allRows.map((r) => [r.id, r]));
+  return pairs.map((pair) => {
+    const rows = pair.rows.map((r) => byId.get(r.id)).filter((r): r is DedupRegistrant => !!r);
+    return buildMerge('review_keep_newest', rows, allRows, pickNewestSurvivor(rows));
+  });
 }

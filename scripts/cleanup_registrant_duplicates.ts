@@ -16,6 +16,10 @@
  *     case / outer whitespace are applied by default; spaces *inside* an
  *     address ("laurie. msc@gmail.com") are a guess, applied only with
  *     --include-guessed-emails.
+ *  2b. KEEP NEWEST (--keep-newest-for-review) — the same-name + same-phone
+ *     review groups, once Lorraine has confirmed they are the same person and
+ *     said to drop the older registration: the newest row survives (its email
+ *     is kept), blanks/flags/AC id are carried over from the older ones.
  *  3. Never touched: couples sharing an address (different names), and
  *     same-name + same-phone rows with different emails — those go into a
  *     review CSV for Lorraine to decide.
@@ -35,12 +39,15 @@
  *   npx tsx scripts/cleanup_registrant_duplicates.ts                          # dry run
  *   npx tsx scripts/cleanup_registrant_duplicates.ts --apply
  *   npx tsx scripts/cleanup_registrant_duplicates.ts --apply --include-guessed-emails
+ *   npx tsx scripts/cleanup_registrant_duplicates.ts --keep-newest-for-review          # dry run
+ *   npx tsx scripts/cleanup_registrant_duplicates.ts --keep-newest-for-review --apply
  */
 import fs from 'fs';
 import path from 'path';
 import { createClient } from '@supabase/supabase-js';
 import {
   planDuplicateCleanup,
+  planKeepNewestMerges,
   type DedupRegistrant,
   type DuplicateCleanupPlan,
   type MergePlan,
@@ -57,6 +64,7 @@ fs.readFileSync(envPath, 'utf-8').split('\n').forEach((line) => {
 const args = process.argv.slice(2);
 const apply = args.includes('--apply');
 const includeGuessed = args.includes('--include-guessed-emails');
+const keepNewest = args.includes('--keep-newest-for-review');
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -114,6 +122,11 @@ function printPlan(plan: DuplicateCleanupPlan, byId: Map<string, DedupRegistrant
     if (Object.keys(m.updates).length) console.log(`      fill: ${JSON.stringify(m.updates)}`);
     if (m.emailChange) console.log(`      email: "${m.emailChange.from}" -> "${m.emailChange.to}"`);
     m.conflicts.forEach((c) => console.log(`      conflict — ${c}`));
+    for (const id of m.loserIds) {
+      const l = byId.get(id);
+      if (l?.unsubscribed === 'Yes' || l?.nfc === 'Yes') console.log(`      note — removed row carried Unsubscribed/NFC; carried over to the kept row`);
+      if (l?.ac_contact_id && l.ac_contact_id !== s?.ac_contact_id) console.log(`      note — removed row had AC contact ${l.ac_contact_id}`);
+    }
   }
   console.log('\n=== EMAIL FIXES ===');
   for (const f of plan.emailFixes) console.log(`  ${f.risk === 'review' ? '[guessed] ' : ''}${label(byId.get(f.registrantId)).padEnd(28)} "${f.from}" -> "${f.to}"`);
@@ -171,6 +184,10 @@ async function main() {
   console.log(`Registry holds ${registrants.length} registrants.`);
   const byId = new Map(registrants.map((r) => [r.id, r]));
   const plan = planDuplicateCleanup(registrants);
+  if (keepNewest) {
+    plan.merges.push(...planKeepNewestMerges(plan.reviewPairs, registrants));
+    plan.reviewPairs = [];
+  }
   printPlan(plan, byId);
 
   const fixes = plan.emailFixes.filter((f) => includeGuessed || f.risk === 'safe');

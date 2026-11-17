@@ -3,6 +3,7 @@ import {
   cleanRegistrantEmail,
   nameKey,
   planDuplicateCleanup,
+  planKeepNewestMerges,
   type DedupRegistrant,
 } from '../duplicateCleanupPlan';
 
@@ -184,5 +185,39 @@ describe('planDuplicateCleanup', () => {
     const a = reg({ first_name: 'charlotte', last_name: 'clado', email: 'c@x.com', ac_contact_id: '1' });
     const b = reg({ first_name: 'Charlotte', last_name: 'Clado', email: 'c@x.com 1' });
     expect(planDuplicateCleanup([a, b]).merges[0].conflicts).toEqual([]);
+  });
+});
+
+describe('planKeepNewestMerges', () => {
+  const pairOf = (...rows: DedupRegistrant[]) => planDuplicateCleanup(rows).reviewPairs;
+
+  it('keeps the newest registration and its email, removing the older one', () => {
+    const old = reg({ first_name: 'A', last_name: 'B', email: 'old@x.com', phone: '+61400000010', registered_at: '2020-01-01T00:00:00Z' });
+    const neu = reg({ first_name: 'A', last_name: 'B', email: 'new@x.com', phone: '+61400000010', registered_at: '2024-01-01T00:00:00Z' });
+    const [m] = planKeepNewestMerges(pairOf(old, neu), [old, neu]);
+    expect(m.reason).toBe('review_keep_newest');
+    expect(m.survivorId).toBe(neu.id);
+    expect(m.loserIds).toEqual([old.id]);
+    expect(m.emailChange).toBeNull();
+  });
+
+  it('carries the older row\'s flags, AC id and earliest date across', () => {
+    const old = reg({ first_name: 'A', last_name: 'B', email: 'old@x.com', phone: '+61400000011', registered_at: '2020-01-01T00:00:00Z', unsubscribed: 'Yes', ac_contact_id: '9' });
+    const neu = reg({ first_name: 'A', last_name: 'B', email: 'new@x.com', phone: '+61400000011', registered_at: '2024-01-01T00:00:00Z' });
+    const [m] = planKeepNewestMerges(pairOf(old, neu), [old, neu]);
+    expect(m.updates).toEqual({ ac_contact_id: '9', unsubscribed: 'Yes', registered_at: '2020-01-01T00:00:00Z' });
+  });
+
+  it('on a tie prefers the row with an AC id', () => {
+    const a = reg({ first_name: 'A', last_name: 'B', email: 'a@x.com', phone: '+61400000012', registered_at: '2024-01-01T00:00:00Z' });
+    const b = reg({ first_name: 'A', last_name: 'B', email: 'b@x.com', phone: '+61400000012', registered_at: '2024-01-01T00:00:00Z', ac_contact_id: '3' });
+    expect(planKeepNewestMerges(pairOf(a, b), [a, b])[0].survivorId).toBe(b.id);
+  });
+
+  it('handles three rows, keeping only the newest', () => {
+    const r = ['2019', '2021', '2023'].map((y, i) => reg({ first_name: 'A', last_name: 'B', email: `e${i}@x.com`, phone: '+61400000013', registered_at: `${y}-01-01T00:00:00Z` }));
+    const [m] = planKeepNewestMerges(pairOf(...r), r);
+    expect(m.survivorId).toBe(r[2].id);
+    expect([...m.loserIds].sort()).toEqual([r[0].id, r[1].id].sort());
   });
 });
