@@ -55,7 +55,10 @@ describe('PickCell', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(onSave).toHaveBeenCalledWith('Sale'));
 
-    fireEvent.change(screen.getByRole('combobox'), { target: { value: '__add_new__' } });
+    // onSave being called is not the same as the save having finished: the
+    // select only comes back (and is enabled) once the async commit resolves,
+    // so wait for it rather than racing it under a slow CI runner.
+    fireEvent.change(await screen.findByRole('combobox'), { target: { value: '__add_new__' } });
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(screen.getByRole('combobox')).toBeInTheDocument();
   });
