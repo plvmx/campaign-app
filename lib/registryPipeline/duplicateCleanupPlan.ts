@@ -161,7 +161,12 @@ function pickSurvivor(rows: DedupRegistrant[]): DedupRegistrant {
   return [...rows].sort((a, b) => score(b) - score(a) || byRegisteredThenId(a, b))[0];
 }
 
-function buildMerge(reason: MergeReason, rows: DedupRegistrant[], forcedSurvivor?: DedupRegistrant): MergePlan {
+function buildMerge(
+  reason: MergeReason,
+  rows: DedupRegistrant[],
+  allRows: DedupRegistrant[],
+  forcedSurvivor?: DedupRegistrant,
+): MergePlan {
   const survivor = forcedSurvivor ?? pickSurvivor(rows);
   const losers = rows.filter((r) => r.id !== survivor.id).sort(byRegisteredThenId);
   const updates: Record<string, string> = {};
@@ -169,7 +174,8 @@ function buildMerge(reason: MergeReason, rows: DedupRegistrant[], forcedSurvivor
 
   for (const field of MERGE_FILL_FIELDS) {
     if (!blank(survivor[field])) {
-      const other = losers.find((l) => !blank(l[field]) && l[field] !== survivor[field]);
+      const same = (a: string | null, b: string | null) => (field === 'first_name' || field === 'last_name' ? a?.toLowerCase() === b?.toLowerCase() : a === b);
+      const other = losers.find((l) => !blank(l[field]) && !same(l[field], survivor[field]));
       if (other && field !== 'phone_raw') conflicts.push(`${field}: kept "${survivor[field]}", other row had "${other[field]}"`);
       continue;
     }
@@ -183,7 +189,12 @@ function buildMerge(reason: MergeReason, rows: DedupRegistrant[], forcedSurvivor
   if (dates.length && dates[0] !== survivor.registered_at) updates.registered_at = dates[0];
 
   const cleaned = survivor.email === null ? null : cleanRegistrantEmail(survivor.email).email;
-  const emailChange = cleaned && cleaned !== survivor.email ? { from: survivor.email, to: cleaned } : null;
+  // Another person (not part of this merge) may already hold the cleaned
+  // address — the unique index would reject the update after the losers are
+  // gone, so leave the survivor's email as it is in that case.
+  const mergeIds = new Set(rows.map((r) => r.id));
+  const heldByOther = cleaned !== null && allRows.some((o) => !mergeIds.has(o.id) && o.email === cleaned);
+  const emailChange = cleaned && cleaned !== survivor.email && !heldByOther ? { from: survivor.email, to: cleaned } : null;
   return { reason, survivorId: survivor.id, loserIds: losers.map((l) => l.id), updates, emailChange, conflicts };
 }
 
@@ -211,7 +222,7 @@ export function planDuplicateCleanup(rows: DedupRegistrant[]): DuplicateCleanupP
     if (group.length < 2) continue;
     for (const sameName of groupBy(group, nameKey).values()) {
       if (sameName.length < 2) continue;
-      const merge = buildMerge('same_email_and_name', sameName);
+      const merge = buildMerge('same_email_and_name', sameName, rows);
       merges.push(merge);
       sameName.forEach((r) => inMerge.add(r.id));
       merge.loserIds.forEach((id) => mergedAway.add(id));
@@ -234,7 +245,7 @@ export function planDuplicateCleanup(rows: DedupRegistrant[]): DuplicateCleanupP
     const members = owners.length === 1 ? [owners[0], ...group] : group;
     if (members.length < 2 || members.some((m) => inMerge.has(m.id))) continue;
     // The email-bearing row must survive — email is not a fill-in field.
-    const merge = buildMerge('same_phone_and_name_no_email', members, owners[0]);
+    const merge = buildMerge('same_phone_and_name_no_email', members, rows, owners[0]);
     merges.push(merge);
     members.forEach((r) => inMerge.add(r.id));
     merge.loserIds.forEach((id) => mergedAway.add(id));

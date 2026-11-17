@@ -170,4 +170,19 @@ describe('planDuplicateCleanup', () => {
     const plan = planDuplicateCleanup([reg({ first_name: 'A', last_name: 'B', email: 'a@b.com' }), reg({ first_name: 'C', last_name: 'D', email: 'c@d.com' })]);
     expect(plan).toEqual({ merges: [], emailFixes: [], sharedEmailLeftAlone: [], unfixable: [], reviewPairs: [] });
   });
+
+  it('does not change a survivor\'s email to an address another person already holds', () => {
+    const a = reg({ first_name: 'A', last_name: 'B', email: 'x@y.com   1' });
+    const b = reg({ first_name: 'A', last_name: 'B', email: 'x@y.com  1' });
+    const partner = reg({ first_name: 'C', last_name: 'B', email: 'x@y.com' });
+    const plan = planDuplicateCleanup([a, b, partner]);
+    expect(plan.merges).toHaveLength(1);
+    expect(plan.merges[0].emailChange).toBeNull();
+  });
+
+  it('does not report a case-only name difference as a conflict', () => {
+    const a = reg({ first_name: 'charlotte', last_name: 'clado', email: 'c@x.com', ac_contact_id: '1' });
+    const b = reg({ first_name: 'Charlotte', last_name: 'Clado', email: 'c@x.com 1' });
+    expect(planDuplicateCleanup([a, b]).merges[0].conflicts).toEqual([]);
+  });
 });
