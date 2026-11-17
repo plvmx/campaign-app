@@ -4,6 +4,7 @@ import {
   EXPERIMENTAL_REPORT_SOURCE,
   REPORT_SOURCE,
   getSavedReportNames,
+  getSavedTeamSize,
   loadReportCampaign,
   parseReportSubmission,
   saveCampaignReport,
@@ -13,19 +14,24 @@ import { makeQueryBuilder, type MockQueryBuilder } from './supabaseMock';
 const campaignRow = { date: '2026-10-31', state: 'VIC', place: 'Orange', site: '1', leader: 'Jane Smith', mobile: '0400123456' };
 const counts = { partial: 1, full: 2, sinnersPrayers: 0, followUp: 1 };
 const names = { partial: ['Ann'], full: ['Bob', 'Cy Lee'], sinnersPrayers: [], followUp: ['Di'] };
-const valid = { campaignId: 'c1', ...counts, names };
+const valid = { campaignId: 'c1', teamSize: 3, ...counts, names };
 
 describe('parseReportSubmission', () => {
   it('accepts counts with exactly that many valid names (trimmed)', () => {
     expect(parseReportSubmission({ ...valid, names: { ...names, partial: ['  Ann '] } })).toEqual({
       campaignId: 'c1',
       counts,
+      teamSize: 3,
       names,
     });
   });
 
   it.each<[string, unknown]>([
     ['no body', null],
+    ['no team size', { ...valid, teamSize: undefined }],
+    ['a team size of 0', { ...valid, teamSize: 0 }],
+    ['a team size over 99', { ...valid, teamSize: 100 }],
+    ['a team size as text', { ...valid, teamSize: '3' }],
     ['no campaign id', { ...valid, campaignId: '' }],
     ['a count missing', { ...valid, followUp: undefined }],
     ['no names object', { ...valid, names: undefined }],
@@ -97,6 +103,7 @@ describe('saveCampaignReport', () => {
       campaign_date: '2026-10-31',
       location_raw: 'Orange 1 VIC',
       leader_raw: 'Jane Smith',
+      team_size: 3,
       partial_presentations: 1,
       full_presentations: 2,
       sinners_prayer: 0,
@@ -227,5 +234,18 @@ describe('getSavedReportNames', () => {
     });
     expect(builder.in).toHaveBeenCalledWith('category_code', ['P', 'F', 'SP', 'IR']);
     expect(builder.order).toHaveBeenCalledWith('created_at', { ascending: true });
+  });
+});
+
+describe('getSavedTeamSize', () => {
+  const clientWith = (result: { data: unknown; error: unknown }) =>
+    ({ from: vi.fn(() => makeQueryBuilder(result)) }) as unknown as SupabaseClient;
+  it('returns the latest saved team size', async () => {
+    await expect(getSavedTeamSize(clientWith({ data: [{ team_size: 4 }], error: null }), 'c1')).resolves.toBe(4);
+  });
+  it('is null when there is no report, an invalid value, or the column cannot be read', async () => {
+    await expect(getSavedTeamSize(clientWith({ data: [], error: null }), 'c1')).resolves.toBeNull();
+    await expect(getSavedTeamSize(clientWith({ data: [{ team_size: null }], error: null }), 'c1')).resolves.toBeNull();
+    await expect(getSavedTeamSize(clientWith({ data: null, error: { message: 'no column' } }), 'c1')).resolves.toBeNull();
   });
 });

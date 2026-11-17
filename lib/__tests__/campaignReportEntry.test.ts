@@ -9,6 +9,11 @@ import {
   validateNames,
   formatReportLocation,
   isValidCount,
+  validateTeamSize,
+  isValidTeamSize,
+  formatLeaderWithTeam,
+  sanitizeTeamSizeInput,
+  TEAM_SIZE_REQUIRED_MESSAGE,
   COUNT_REQUIRED_MESSAGE,
 } from '../campaignReportEntry';
 
@@ -89,5 +94,22 @@ describe('isValidCount', () => {
   it('accepts whole numbers 0-99 only', () => {
     expect([0, 5, 99].every(isValidCount)).toBe(true);
     expect([-1, 100, 1.5, '3', null, undefined, NaN].some(isValidCount)).toBe(false);
+  });
+});
+
+describe('team size', () => {
+  it('keeps digits only, at most two', () => {
+    expect(sanitizeTeamSizeInput('a1b2c3')).toBe('12');
+  });
+  it('is mandatory, whole, 1-99', () => {
+    expect(['1', '2', '99'].map(validateTeamSize)).toEqual([null, null, null]);
+    for (const bad of ['', '0', '00', '100', 'x', '1.5', ' 3']) expect(validateTeamSize(bad)).toBe(TEAM_SIZE_REQUIRED_MESSAGE);
+    expect([1, 99].every(isValidTeamSize)).toBe(true);
+    expect([0, 100, 1.5, '2', null, undefined].some(isValidTeamSize)).toBe(false);
+  });
+  it('shows the extra people after the leader only when the team is more than one', () => {
+    expect(formatLeaderWithTeam('Maria', 1)).toBe('Maria');
+    expect(formatLeaderWithTeam('Maria', 2)).toBe('Maria (+1)');
+    expect(formatLeaderWithTeam('Maria', 12)).toBe('Maria (+11)');
   });
 });

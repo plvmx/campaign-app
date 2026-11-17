@@ -6,6 +6,8 @@ export interface CampaignReportView {
   campaign: { location: string; leader: string; date: string };
   /** Names already saved for the campaign, per count field. */
   names: Record<ReportCountField, string[]>;
+  /** Team size on the earlier saved report, if any. */
+  teamSize: number | null;
 }
 
 export type ReportEmailOutcome = 'sent' | 'disabled' | 'no_recipients' | 'failed';
@@ -31,13 +33,14 @@ export async function fetchCampaignReport(campaignId: string): Promise<CampaignR
 /** Saves the report, then (server-side) emails the counts. A failed email is reported, never thrown. */
 export async function submitCampaignReport(
   campaignId: string,
+  teamSize: number,
   counts: Record<ReportCountField, number>,
   names: Record<ReportCountField, string[]>,
 ): Promise<ReportEmailOutcome> {
   const res = await fetch('/api/leader/campaign-report', {
     method: 'POST',
     headers: { Authorization: await authHeader(), 'Content-Type': 'application/json' },
-    body: JSON.stringify({ campaignId, ...counts, names }),
+    body: JSON.stringify({ campaignId, teamSize, ...counts, names }),
   });
   const json = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error((json as { error?: string }).error || 'The report could not be saved.');

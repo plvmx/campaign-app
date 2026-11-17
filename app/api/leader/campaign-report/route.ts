@@ -3,9 +3,9 @@
  * record results for it (lib/recordResultsAccess.ts: the campaign's own or
  * shared leader, a state reporter in that state, or a full admin).
  *
- *  GET  ?campaignId=…  → { campaign: { location, leader, date }, names } — what the page
+ *  GET  ?campaignId=…  → { campaign: { location, leader, date }, names, teamSize } — what the page
  *                         pre-fills, including names already saved for it.
- *  POST { campaignId, partial, full, sinnersPrayers, followUp, names: {…} }
+ *  POST { campaignId, teamSize, partial, full, sinnersPrayers, followUp, names: {…} }
  *                      → { status: 'saved', names, email: 'sent' | 'disabled' | 'no_recipients' | 'failed' }
  *                         Saves the counts to campaign_reports and the names to results
  *                         (lib/services/campaignReportSaveService.ts), then emails the
@@ -20,6 +20,7 @@ import { canRecordResultsFor } from '@/lib/recordResultsAccess';
 import { formatReportDate, formatReportLocation } from '@/lib/campaignReportEntry';
 import {
   getSavedReportNames,
+  getSavedTeamSize,
   loadReportCampaign,
   parseReportSubmission,
   saveCampaignReport,
@@ -51,6 +52,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       campaign: { location: formatReportLocation(campaign), leader: campaign.leader, date: formatReportDate(campaign.date) },
       names: await getSavedReportNames(supabaseAdmin, campaignId),
+      teamSize: await getSavedTeamSize(supabaseAdmin, campaignId),
     });
   } catch (err) {
     console.error('[leader/campaign-report] load failed:', err);
@@ -68,7 +70,7 @@ export async function POST(request: NextRequest) {
   const submission = parseReportSubmission(await request.json().catch(() => null));
   if (!submission) {
     return NextResponse.json(
-      { error: 'A campaign, a number from 0 to 99 for each count, and one valid name for every counted person are required.' },
+      { error: 'A campaign, a team size from 1 to 99, a number from 0 to 99 for each count, and one valid name for every counted person are required.' },
       { status: 400 },
     );
   }
@@ -95,7 +97,7 @@ export async function POST(request: NextRequest) {
 
   let email: 'sent' | 'disabled' | 'no_recipients' | 'failed';
   try {
-    const result = await sendCampaignReportEmail(supabaseAdmin, { campaignId: submission.campaignId, counts: submission.counts });
+    const result = await sendCampaignReportEmail(supabaseAdmin, { campaignId: submission.campaignId, counts: submission.counts, teamSize: submission.teamSize });
     email = result.status === 'sent' || result.status === 'disabled' || result.status === 'no_recipients' ? result.status : 'failed';
   } catch (err) {
     console.error('[leader/campaign-report] email failed:', err);

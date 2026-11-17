@@ -4,11 +4,21 @@ import { buildCampaignReportEmail } from '../campaignReportEmail';
 const input = {
   location: 'Sylvania NSW',
   leader: 'Marie H',
+  teamSize: 1,
   date: '30/09/2024',
   counts: { partial: 0, full: 5, sinnersPrayers: 5, followUp: 2 },
 };
 
 describe('buildCampaignReportEmail', () => {
+  it('shows the extra team members in brackets after the leader, and nothing for a team of one', () => {
+    const two = buildCampaignReportEmail({ ...input, teamSize: 2 });
+    expect(two.text).toContain('Campaign Leader: Marie H (+1)');
+    expect(two.html).toContain('Marie H (+1)');
+    const one = buildCampaignReportEmail({ ...input, teamSize: 1 });
+    expect(one.text).toContain('Campaign Leader: Marie H\n');
+    expect(one.html).not.toContain('(+');
+  });
+
   it('has the title, subject and every report field in html and text', () => {
     const { subject, html, text } = buildCampaignReportEmail(input);
     expect(subject).toBe('TWOL Campaign Report — Sylvania NSW — 30/09/2024');

@@ -9,11 +9,13 @@ vi.mock('@/lib/leaderRouteGuard', () => ({ authorizeLeaderRequest: (...a: unknow
 
 const loadCampaign = vi.fn();
 const savedNames = vi.fn();
+const savedTeamSize = vi.fn();
 const save = vi.fn();
 vi.mock('@/lib/services/campaignReportSaveService', async (orig) => ({
   ...(await orig<typeof import('@/lib/services/campaignReportSaveService')>()),
   loadReportCampaign: (...a: unknown[]) => loadCampaign(...a),
   getSavedReportNames: (...a: unknown[]) => savedNames(...a),
+  getSavedTeamSize: (...a: unknown[]) => savedTeamSize(...a),
   saveCampaignReport: (...a: unknown[]) => save(...a),
 }));
 const sendEmail = vi.fn();
@@ -28,6 +30,7 @@ const campaign = { date: '2026-10-31', state: 'VIC', place: 'Orange', site: '1',
 const owner = { ok: true, userId: 'u1', caller: { adminStatus: null, state: 'VIC', leader: 'Jane Smith', mobile: '0400123456' }, sharedWithMeOwners: [] };
 const stranger = { ...owner, caller: { adminStatus: null, state: 'VIC', leader: 'John Other', mobile: '0411111111' } };
 const body = {
+  teamSize: 2,
   campaignId: 'c1', partial: 1, full: 0, sinnersPrayers: 0, followUp: 0,
   names: { partial: ['Ann'], full: [], sinnersPrayers: [], followUp: [] },
 };
@@ -37,10 +40,11 @@ const post = (b: unknown = body) =>
 const get = (qs = '?campaignId=c1') => GET(new NextRequest(`http://localhost/api/leader/campaign-report${qs}`));
 
 beforeEach(() => {
-  for (const m of [authorize, loadCampaign, savedNames, save, sendEmail]) m.mockReset();
+  for (const m of [authorize, loadCampaign, savedNames, savedTeamSize, save, sendEmail]) m.mockReset();
   authorize.mockResolvedValue(owner);
   loadCampaign.mockResolvedValue(campaign);
   savedNames.mockResolvedValue({ partial: ['Ann'], full: [], sinnersPrayers: [], followUp: [] });
+  savedTeamSize.mockResolvedValue(null);
   save.mockResolvedValue({ status: 'saved', names: 1 });
   sendEmail.mockResolvedValue({ status: 'sent', recipients: 2 });
 });
@@ -87,6 +91,7 @@ describe('GET /api/leader/campaign-report', () => {
     expect(await res.json()).toEqual({
       campaign: { location: 'Orange 1 VIC', leader: 'Jane Smith', date: '31/10/2026' },
       names: { partial: ['Ann'], full: [], sinnersPrayers: [], followUp: [] },
+      teamSize: null,
     });
   });
 
@@ -98,6 +103,7 @@ describe('GET /api/leader/campaign-report', () => {
 describe('POST /api/leader/campaign-report', () => {
   it('rejects an invalid body (400) without saving', async () => {
     expect((await post({ ...body, names: { ...body.names, partial: [] } })).status).toBe(400);
+    expect((await post({ ...body, teamSize: undefined })).status).toBe(400);
     expect(save).not.toHaveBeenCalled();
   });
 
@@ -105,7 +111,7 @@ describe('POST /api/leader/campaign-report', () => {
     const res = await post();
     expect(await res.json()).toEqual({ status: 'saved', names: 1, email: 'sent' });
     expect(save).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ campaign, actorUserId: 'u1', campaignId: 'c1' }));
-    expect(sendEmail).toHaveBeenCalledWith(expect.anything(), { campaignId: 'c1', counts: { partial: 1, full: 0, sinnersPrayers: 0, followUp: 0 } });
+    expect(sendEmail).toHaveBeenCalledWith(expect.anything(), { campaignId: 'c1', counts: { partial: 1, full: 0, sinnersPrayers: 0, followUp: 0 }, teamSize: 2 });
   });
 
   it('reports "disabled" when management emailing is switched off', async () => {
