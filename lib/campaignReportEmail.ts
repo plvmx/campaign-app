@@ -7,6 +7,8 @@
 import { REPORT_COUNT_FIELDS, formatLeaderWithTeam, type ReportCountField } from './campaignReportEntry';
 
 export const CAMPAIGN_REPORT_EMAIL_TITLE = 'TWOL Campaign Report';
+/** Title of the on-screen summary leaders see (and screenshot) after saving. */
+export const CAMPAIGN_REPORT_SUMMARY_TITLE = 'TWOL Campaign Summary';
 
 export interface CampaignReportEmailInput {
   location: string;
@@ -29,13 +31,18 @@ function escapeHtml(value: string): string {
     .replace(/'/g, '&#39;');
 }
 
-export function buildCampaignReportEmail(input: CampaignReportEmailInput): BuiltEmail {
-  const rows: { label: string; value: string }[] = [
+/** The label/value lines shared by the management email and the on-screen summary (counts only, no names). */
+export function buildCampaignReportRows(input: CampaignReportEmailInput): { label: string; value: string }[] {
+  return [
     { label: 'Location', value: input.location },
     { label: 'Campaign Leader', value: formatLeaderWithTeam(input.leader, input.teamSize) },
     { label: 'Campaign Date', value: input.date },
     ...REPORT_COUNT_FIELDS.map(({ key, label }) => ({ label, value: String(input.counts[key]) })),
   ];
+}
+
+export function buildCampaignReportEmail(input: CampaignReportEmailInput): BuiltEmail {
+  const rows = buildCampaignReportRows(input);
 
   const rowHtml = rows
     .map(
