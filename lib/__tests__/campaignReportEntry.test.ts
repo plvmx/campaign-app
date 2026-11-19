@@ -5,6 +5,7 @@ import {
   nameFieldCount,
   resizeNames,
   formatReportDate,
+  formatShortReportDate,
   validateCounts,
   validateNames,
   formatReportLocation,
@@ -111,5 +112,14 @@ describe('team size', () => {
     expect(formatLeaderWithTeam('Maria', 1)).toBe('Maria');
     expect(formatLeaderWithTeam('Maria', 2)).toBe('Maria (+1)');
     expect(formatLeaderWithTeam('Maria', 12)).toBe('Maria (+11)');
+  });
+});
+
+describe('formatShortReportDate', () => {
+  it('shortens a database date to DD/MM/YY', () => {
+    expect(formatShortReportDate('2026-10-31')).toBe('31/10/26');
+  });
+  it('returns anything unrecognised unchanged', () => {
+    expect(formatShortReportDate('next week')).toBe('next week');
   });
 });
