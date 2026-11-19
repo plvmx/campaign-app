@@ -265,7 +265,7 @@ campaign-app/
 │   └── api/                    # Server-side API routes
 │       ├── auth/                                  # validate-leader, grant-session-access, revoke-session-access,
 │       │                                          #   propose-email, confirm-email, request-mfa-setup, complete-mfa-setup
-│       ├── leader/                                # check-registration, interest-counts, campaign-report (signed-in leaders)
+│       ├── leader/                                # check-registration, interest-counts, campaign-report, my-campaign-results (signed-in leaders)
 │       ├── registry/                              # manage-summary, manage-record, manage-edit-log, manage-whatsapp-invite-log, manage-registration-log (§17)
 │       ├── admin/{check-registration,stuck-leaders,tech-insights,reset-mfa,user-guide/upload-url}
 │       ├── admin/geocode-address/route.ts
@@ -799,7 +799,7 @@ There is no separate permissions module. Role logic is kept inline wherever it i
 /help/2fa                             Public printable 2FA setup guide
 /app                                  Main campaign feed (home screen)
 /app/sr-admin                         State Reporter dashboard
-/app/tl-admin                         "My Admin" for plain team leaders (campaign rules, check registration, extra security)
+/app/tl-admin                         "My Admin" for plain team leaders (campaign rules, My Campaign Results, check registration, extra security)
 /app/guide                            USER GUIDE — CAS User Guide PDF, full screen
 /app/check-registration               Leader check: is this person registered? (no registry data shown)
 /campaign-interest                    People who registered interest in my campaigns (2FA required)
@@ -1115,6 +1115,7 @@ All take an **injected Supabase client** (always `supabaseAdmin` in practice) so
 | `campaignInterestService.ts`, `trainingInterestService.ts` | Leader/admin views of registered interest; `TRAINING_CATEGORIES` / `isTrainingCategory()` |
 | `campaignInterestSmsService.ts` | One combined ClickSend text per owning leader; logs to `campaign_interest_sms_log`; never throws |
 | `publicCampaignListService.ts`, `publicCampaignResultsService.ts`, `publicCampaignsNearMeService.ts`, `publicUpcomingCampaignsService.ts` | Data/grouping logic behind the `/public/*` pages (cached coordinates only, no on-demand geocoding) |
+| `myCampaignResultsService.ts` (+ `myCampaignResultsClient.ts`, `components/MyCampaignResultsCard.tsx`) | "My Campaign Results" block on My Admin: `getMyCampaignResults(client, {state, leader})` — the caller's own `campaign_reports` rows (`derived_state` + `derived_leader` equal to their `state_leaders` row; date, location, four tallies only, never names). Served by `GET /api/leader/my-campaign-results`, scoped from the session, never the query string; loaded when the leader opens the block |
 | `campaignReportManageService.ts` (UI: `components/campaignReports/PickCell.tsx`, a native select so the pickers work on mobile) | `/admin/campaign-reports`: `getManageData`, audited `applyReportEdit` (state / location / leader), `getEditLog` (browser filters in `lib/campaignReportManageFilters.ts`) |
 | `campaignReportLocationsService.ts`, `stateLocations.ts` | `/admin/campaign-report-locations`: unmapped typed locations, `saveLocationAlias` (maps to a `state_places.location`, optionally adding a geocoded row); `stateLocations.ts` = the distinct per-state locations and `ensureStateLocation` |
 | `campaignReportDeriveService.ts` | `deriveCampaignReportFieldsSince` — fills derived state/location/leader on `campaign_reports` (the live Google Sheet sync was removed 2026-11-16) |
