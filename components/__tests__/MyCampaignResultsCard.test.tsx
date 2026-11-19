@@ -22,7 +22,8 @@ describe('MyCampaignResultsCard', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Show my results' }));
     await waitFor(() => expect(screen.getByText('31/10/2026')).toBeTruthy());
     expect(screen.getByText('Orange')).toBeTruthy();
-    expect(screen.getAllByRole('columnheader')).toHaveLength(6);
+    expect(screen.getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['Campaign Date', 'Location', 'PP', 'FP', 'SP', 'IR']);
+    expect(screen.getByText(/Partial Presentations/)).toBeTruthy(); // key explaining the abbreviations
     expect(screen.getByText('–')).toBeTruthy(); // the missing follow-up count
   });
 
