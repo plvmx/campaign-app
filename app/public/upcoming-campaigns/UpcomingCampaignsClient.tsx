@@ -50,6 +50,7 @@ export default function UpcomingCampaignsClient() {
 
   // Week 1 is the upcoming campaign week; Week 2 is the one after it.
   const [selectedWeek, setSelectedWeek] = useState<1 | 2>(1);
+  const [showInstructions, setShowInstructions] = useState(false);
 
   const weeks = useMemo(() => {
     if (!campaignDates) return null;
@@ -222,11 +223,23 @@ export default function UpcomingCampaignsClient() {
     <div data-ti="app/public/upcoming-campaigns/UpcomingCampaignsClient.tsx" className="mx-auto flex min-h-[100dvh] max-w-4xl flex-col p-4">
       <div className="mb-3">
         <h1 className="text-2xl font-bold text-gray-900">Upcoming TWOL Campaigns</h1>
-        <ol className="mt-2 space-y-1 rounded-lg border border-blue-200 bg-blue-50 p-3 text-base font-medium text-blue-900">
+        {/* Collapsed by default so visitors can see more of the map/list. */}
+        <button
+          type="button"
+          onClick={() => setShowInstructions((v) => !v)}
+          aria-expanded={showInstructions}
+          aria-controls="visitor-instructions"
+          className="mt-2 text-base font-bold text-blue-700 underline"
+        >
+          CLICK HERE FOR INSTRUCTIONS
+        </button>
+        {showInstructions && (
+        <ol id="visitor-instructions" className="mt-1 space-y-1 rounded-lg border border-blue-200 bg-blue-50 p-3 text-base font-medium text-blue-900">
           <li><span className="font-bold">1.</span> Choose a week below.</li>
           <li><span className="font-bold">2.</span> {viewMode === 'map' ? 'Tap a coloured circle on the map (or type your postcode) to see the campaign.' : 'Tick the campaigns you are interested in.'}</li>
           <li><span className="font-bold">3.</span> Tap the orange <span className="font-bold">Contact Me</span> button and a leader will be in touch.</li>
         </ol>
+        )}
       </div>
 
       {weeks && (
