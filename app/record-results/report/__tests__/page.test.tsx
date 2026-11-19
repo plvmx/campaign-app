@@ -178,6 +178,46 @@ describe('Campaign report entry page', () => {
     );
   });
 
+  it('shows the TWOL Campaign Summary after a successful save, with the same lines as the email and no names', async () => {
+    await fillValidReport();
+    fireEvent.click(screen.getByRole('button', { name: 'Save & Submit' }));
+    const card = await screen.findByRole('region', { name: 'TWOL Campaign Summary' });
+    expect(card).toHaveTextContent('TWOL Campaign Summary');
+    for (const text of [
+      'Location', 'Orange 1 VIC', 'Campaign Leader', 'Jane Smith (+2)', 'Campaign Date', '31/10/2026',
+      'Number of Partial Presentations', 'Number of Full Presentations', 'Number of Sinners Prayers',
+      'Number of Requests for Follow-up/Info',
+    ]) expect(card).toHaveTextContent(text);
+    // Not part of the screenshot-able card: the email's "submitted" intro and "sent automatically" footer, and names.
+    expect(card).not.toHaveTextContent(/submitted|Sent automatically|Ann/);
+    // The form is replaced, and the saved/sent message sits outside the card.
+    expect(screen.queryByLabelText('Team Size (including Leader) *')).not.toBeInTheDocument();
+    expect(screen.getByText('Report saved and sent to management.')).toBeInTheDocument();
+    expect(card).not.toContainElement(screen.getByText('Report saved and sent to management.'));
+  });
+
+  it('does not show the summary when saving fails or the form is invalid', async () => {
+    render(<Page />);
+    await screen.findByLabelText('Location');
+    fireEvent.click(screen.getByRole('button', { name: 'Save & Submit' }));
+    expect(screen.queryByRole('region', { name: 'TWOL Campaign Summary' })).not.toBeInTheDocument();
+    cleanup();
+    submitReport.mockRejectedValueOnce(new Error('The report could not be saved.'));
+    await fillValidReport();
+    fireEvent.click(screen.getByRole('button', { name: 'Save & Submit' }));
+    await screen.findByText(/The report could not be saved/);
+    expect(screen.queryByRole('region', { name: 'TWOL Campaign Summary' })).not.toBeInTheDocument();
+  });
+
+  it('"Edit this report" goes back to the form with what was typed', async () => {
+    await fillValidReport();
+    fireEvent.click(screen.getByRole('button', { name: 'Save & Submit' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit this report' }));
+    expect(screen.queryByRole('region', { name: 'TWOL Campaign Summary' })).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Team Size (including Leader) *')).toHaveValue('3');
+    expect(screen.getByLabelText('Number of Full Presentations *')).toHaveValue('1');
+  });
+
   it('just says "Report saved." when management emailing is switched off', async () => {
     submitReport.mockResolvedValue('disabled');
     await fillValidReport();

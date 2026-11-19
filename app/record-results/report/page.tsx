@@ -4,6 +4,8 @@ import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import MobileLayout from '@/components/MobileLayout';
 import LoadingSpinner from '@/components/LoadingSpinner';
+import CampaignReportSummary from '@/components/CampaignReportSummary';
+import type { CampaignReportEmailInput } from '@/lib/campaignReportEmail';
 import { useUser } from '@/contexts/UserContext';
 import { fetchCampaignReport, submitCampaignReport } from '@/lib/services/campaignReportClient';
 import { getErrorMessage } from '@/lib/errorUtils';
@@ -56,6 +58,7 @@ function CampaignReportEntryContent() {
   const [teamSizeError, setTeamSizeError] = useState<string | null>(null);
   const [countErrors, setCountErrors] = useState<Partial<Record<ReportCountField, string>>>({});
   const [sendState, setSendState] = useState<'idle' | 'sending' | 'sent' | 'saved' | 'email-failed'>('idle');
+  const [summary, setSummary] = useState<CampaignReportEmailInput | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
   const [nameErrors, setNameErrors] = useState<Partial<Record<ReportCountField, number[]>>>({});
   const [names, setNames] = useState<Record<ReportCountField, string[]>>({
@@ -151,6 +154,10 @@ function CampaignReportEntryContent() {
       // Saving again replaces the earlier save for this campaign.
       const email = await submitCampaignReport(campaignId, Number(teamSize), numericCounts, names);
       setSendState(email === 'sent' ? 'sent' : email === 'failed' ? 'email-failed' : 'saved');
+      // What was just saved, for the on-screen summary leaders screenshot (same lines as the email).
+      if (campaign) {
+        setSummary({ location: campaign.location, leader: campaign.leader, date: campaign.date, teamSize: Number(teamSize), counts: numericCounts });
+      }
     } catch (err: unknown) {
       setSendState('idle');
       setSendError(getErrorMessage(err, 'The report could not be saved.'));
@@ -174,13 +181,37 @@ function CampaignReportEntryContent() {
         >
           ← Back to Campaigns
         </button>
-        <h1 className="mb-6 text-3xl font-bold text-gray-900 dark:text-gray-100">TWOL Campaign Report</h1>
+        {summary && (
+          <div className="space-y-5">
+            <CampaignReportSummary report={summary} />
+            {sendState === 'sent' && (
+              <p role="status" className="text-lg font-semibold text-green-700 dark:text-green-300">Report saved and sent to management.</p>
+            )}
+            {sendState === 'saved' && (
+              <p role="status" className="text-lg font-semibold text-green-700 dark:text-green-300">Report saved.</p>
+            )}
+            {sendState === 'email-failed' && (
+              <p role="status" className="text-lg font-semibold text-gray-800 dark:text-gray-200">
+                Report saved, but the email to management could not be sent. Please let an administrator know.
+              </p>
+            )}
+            <button
+              type="button"
+              onClick={() => { setSummary(null); setSendState('idle'); }}
+              className="w-full rounded-md border-2 border-gray-800 bg-white px-6 py-4 text-xl font-bold text-gray-900 hover:bg-gray-100 dark:border-gray-600"
+            >
+              Edit this report
+            </button>
+          </div>
+        )}
+
+        {!summary && <h1 className="mb-6 text-3xl font-bold text-gray-900 dark:text-gray-100">TWOL Campaign Report</h1>}
 
         {error && (
           <p className="rounded-md bg-red-100 p-3 text-base font-semibold text-red-700 dark:bg-red-900/30 dark:text-red-300">{error}</p>
         )}
 
-        {campaign && (
+        {campaign && !summary && (
           <form onSubmit={handleSave} noValidate className="space-y-5">
             <div>
               <label htmlFor="report-location" className={labelClass}>Location</label>
@@ -267,17 +298,6 @@ function CampaignReportEntryContent() {
             >
               {sendState === 'sending' ? 'Saving…' : 'Save & Submit'}
             </button>
-            {sendState === 'sent' && (
-              <p role="status" className="text-lg font-semibold text-green-700 dark:text-green-300">Report saved and sent to management.</p>
-            )}
-            {sendState === 'saved' && (
-              <p role="status" className="text-lg font-semibold text-green-700 dark:text-green-300">Report saved.</p>
-            )}
-            {sendState === 'email-failed' && (
-              <p role="status" className="text-lg font-semibold text-gray-800 dark:text-gray-200">
-                Report saved, but the email to management could not be sent. Please let an administrator know.
-              </p>
-            )}
             {sendError && (
               <p role="alert" className="text-lg font-semibold text-red-700 dark:text-red-400">{sendError} Please try again.</p>
             )}

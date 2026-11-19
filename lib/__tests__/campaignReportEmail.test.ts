@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildCampaignReportEmail } from '../campaignReportEmail';
+import { buildCampaignReportEmail, buildCampaignReportRows, CAMPAIGN_REPORT_SUMMARY_TITLE } from '../campaignReportEmail';
 
 const input = {
   location: 'Sylvania NSW',
@@ -47,5 +47,22 @@ describe('buildCampaignReportEmail', () => {
     const { html } = buildCampaignReportEmail({ ...input, leader: '<script>alert(1)</script> & "Co"' });
     expect(html).not.toContain('<script>');
     expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt; &amp; &quot;Co&quot;');
+  });
+});
+
+describe('buildCampaignReportRows', () => {
+  it('gives the same lines the email shows, in order, with the team size after the leader', () => {
+    expect(buildCampaignReportRows({ ...input, teamSize: 2 })).toEqual([
+      { label: 'Location', value: 'Sylvania NSW' },
+      { label: 'Campaign Leader', value: 'Marie H (+1)' },
+      { label: 'Campaign Date', value: '30/09/2024' },
+      { label: 'Number of Partial Presentations', value: '0' },
+      { label: 'Number of Full Presentations', value: '5' },
+      { label: 'Number of Sinners Prayers', value: '5' },
+      { label: 'Number of Requests for Follow-up/Info', value: '2' },
+    ]);
+  });
+  it('titles the on-screen summary "TWOL Campaign Summary"', () => {
+    expect(CAMPAIGN_REPORT_SUMMARY_TITLE).toBe('TWOL Campaign Summary');
   });
 });
