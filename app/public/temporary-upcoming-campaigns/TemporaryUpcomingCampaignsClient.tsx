@@ -35,6 +35,7 @@ export default function TemporaryUpcomingCampaignsClient() {
   const router = useRouter();
   const [days, setDays] = useState<PublicSlideDay[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [showInstructions, setShowInstructions] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState('');
   const [downloadError, setDownloadError] = useState<string | null>(null);
@@ -82,17 +83,31 @@ export default function TemporaryUpcomingCampaignsClient() {
       <div className="mb-3">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{TITLE}</h1>
         <p className="mt-1 text-base text-gray-600 dark:text-gray-400">{INTRO_TEXT}</p>
-        <p className="mt-2 text-base font-bold text-gray-900 dark:text-gray-100">ALL LEADERS please:</p>
-        <ol className="mt-1 space-y-1 rounded-lg border border-blue-200 bg-blue-50 p-3 text-base font-medium text-blue-900 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-100">
-          {LEADER_BULLETS.map((segments, index) => (
-            <li key={index}>
-              <span className="font-bold">{index + 1}.</span>{' '}
-              {segments.map(([text, bold], i) =>
-                bold ? <span key={i} className="font-bold">{text}</span> : text,
-              )}
-            </li>
-          ))}
-        </ol>
+        {/* Collapsed by default so leaders can see more of the list. */}
+        <button
+          type="button"
+          onClick={() => setShowInstructions((v) => !v)}
+          aria-expanded={showInstructions}
+          aria-controls="leader-instructions"
+          className="mt-2 text-base font-bold text-blue-700 underline dark:text-blue-300"
+        >
+          CLICK HERE FOR INSTRUCTIONS
+        </button>
+        {showInstructions && (
+          <ol
+            id="leader-instructions"
+            className="mt-1 space-y-1 rounded-lg border border-blue-200 bg-blue-50 p-3 text-base font-medium text-blue-900 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-100"
+          >
+            {LEADER_BULLETS.map((segments, index) => (
+              <li key={index}>
+                <span className="font-bold">{index + 1}.</span>{' '}
+                {segments.map(([text, bold], i) =>
+                  bold ? <span key={i} className="font-bold">{text}</span> : text,
+                )}
+              </li>
+            ))}
+          </ol>
+        )}
       </div>
 
       {loadError && (
