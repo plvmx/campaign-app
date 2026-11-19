@@ -20,7 +20,7 @@ describe('MyCampaignResultsCard', () => {
     ]);
     render(<MyCampaignResultsCard />);
     fireEvent.click(screen.getByRole('button', { name: 'Show my results' }));
-    await waitFor(() => expect(screen.getByText('31/10/2026')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('31/10/26')).toBeTruthy());
     expect(screen.getByText('Orange')).toBeTruthy();
     expect(screen.getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['Campaign Date', 'Location', 'PP', 'FP', 'SP', 'IR']);
     expect(screen.getByText(/Partial Presentations/)).toBeTruthy(); // key explaining the abbreviations

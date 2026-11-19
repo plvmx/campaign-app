@@ -45,6 +45,12 @@ export function formatReportDate(dbDate: string): string {
   return m ? `${m[3]}/${m[2]}/${m[1]}` : dbDate;
 }
 
+/** Compact date for narrow screens: 2026-10-31 → 31/10/26. Anything unrecognised is returned unchanged. */
+export function formatShortReportDate(dbDate: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(dbDate);
+  return m ? `${m[3]}/${m[2]}/${m[1].slice(2)}` : dbDate;
+}
+
 export const TEAM_SIZE_LABEL = 'Team Size (including Leader)';
 export const TEAM_SIZE_REQUIRED_MESSAGE = 'Please enter the team size, including the leader (1 or more).';
 

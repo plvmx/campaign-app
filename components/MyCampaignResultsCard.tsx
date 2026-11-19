@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { fetchMyCampaignResults } from '@/lib/services/myCampaignResultsClient';
 import type { MyCampaignResultRow } from '@/lib/services/myCampaignResultsService';
-import { formatReportDate } from '@/lib/campaignReportEntry';
+import { formatShortReportDate } from '@/lib/campaignReportEntry';
 import { getErrorMessage } from '@/lib/errorUtils';
 
 const cell = (n: number | null) => (n === null ? '–' : String(n));
@@ -64,7 +64,7 @@ export default function MyCampaignResultsCard() {
             <tbody>
               {results.map((r) => (
                 <tr key={r.id} className="border-b border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-200">
-                  <td className="whitespace-nowrap py-2 pr-2">{r.campaignDate ? formatReportDate(r.campaignDate) : '–'}</td>
+                  <td className="whitespace-nowrap py-2 pr-2">{r.campaignDate ? formatShortReportDate(r.campaignDate) : '–'}</td>
                   <td className="py-2 pr-2">{r.location || '–'}</td>
                   <td className="py-2 pr-2 text-right">{cell(r.partial)}</td>
                   <td className="py-2 pr-2 text-right">{cell(r.full)}</td>
