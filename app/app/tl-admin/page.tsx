@@ -10,6 +10,7 @@ import { formatDateReadable } from '@/lib/campaignDates';
 import { isRecognizedAdminStatus } from '@/lib/campaignFilter';
 import { startTwoFactorSignIn } from '@/lib/twoFactorSetup';
 import { getErrorMessage } from '@/lib/errorUtils';
+import MyCampaignResultsCard from '@/components/MyCampaignResultsCard';
 
 export default function TLAdminPage() {
   const router = useRouter();
@@ -133,6 +134,8 @@ export default function TLAdminPage() {
               Manage Campaign Rules
             </button>
           </div>
+
+          <MyCampaignResultsCard />
 
           {/* Check Registration */}
           <div className="rounded-lg border-2 border-gray-800 dark:border-gray-600 bg-white p-4 shadow-sm dark:bg-gray-800">
