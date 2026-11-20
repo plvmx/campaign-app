@@ -25,6 +25,7 @@ import {
 import {
   DONORBOX_URL,
   BANK_ACCOUNT_NAME,
+  BANK_NAME,
   BANK_BSB,
   BANK_ACCOUNT_NUMBER,
   BANK_REFERENCE_HINT,
@@ -100,6 +101,7 @@ export default function DonateClient() {
         <p className="mt-2 text-base text-gray-700 dark:text-gray-300">Prefer to transfer directly? Use these details:</p>
         <dl className="mt-3 space-y-1 text-base text-gray-900 dark:text-gray-100">
           <div className="flex justify-between gap-4"><dt className="font-semibold">Account Name</dt><dd>{BANK_ACCOUNT_NAME}</dd></div>
+          <div className="flex justify-between gap-4"><dt className="font-semibold">Bank</dt><dd>{BANK_NAME}</dd></div>
           <div className="flex justify-between gap-4"><dt className="font-semibold">BSB</dt><dd>{BANK_BSB}</dd></div>
           <div className="flex justify-between gap-4"><dt className="font-semibold">Account Number</dt><dd>{BANK_ACCOUNT_NUMBER}</dd></div>
         </dl>
