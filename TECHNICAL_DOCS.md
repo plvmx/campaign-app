@@ -227,7 +227,7 @@ campaign-app/
 │   │   ├── generate-week-campaigns/ # Route: /admin/generate-week-campaigns — "Single Week Campaigns" JPEG
 │   │   ├── registered-interest/    # Route: /admin/registered-interest — everyone who registered interest
 │   │   ├── stuck-leaders/          # Route: /admin/stuck-leaders — leaders stuck on email/2FA setup
-│   │   ├── components/             # Admin hub cards: UserGuideUploadCard, TechInsightsSettingsCard, CampaignReportEmailCard
+│   │   ├── components/             # Admin hub cards: UserGuideUploadCard, TechInsightsSettingsCard, CampaignReportEmailCard, DonationNoticeEmailCard
 │   │   ├── generate-report/        # Route: /admin/generate-report — canvas-based PDF report
 │   │   ├── generate-slides/        # Route: /admin/generate-slides — JPEG slide ZIP download
 │   │   ├── leader-shares/          # Route: /admin/leader-shares — leader-to-leader sharing links
@@ -258,7 +258,8 @@ campaign-app/
 │   │   ├── register-interest/page.tsx
 │   │   ├── upcoming-campaigns/page.tsx
 │   │   ├── campaigns-near-me/page.tsx   # personalised per registry registrant (?r=<id>)
-│   │   └── training/[campaignId]/page.tsx
+│   │   ├── training/[campaignId]/page.tsx
+│   │   └── donate/page.tsx     # Route: /public/donate — Phase 0 donations (§18.5)
 │   │
 │   ├── auth/callback/route.ts  # Route: /auth/callback — Supabase OAuth code exchange, then redirects
 │   │
@@ -332,6 +333,10 @@ campaign-app/
 │   ├── campaignReportEntry.ts  # Input rules for /record-results/report (2-digit counts, 20-char letters-and-spaces names)
 │   ├── campaignReportEmail.ts  # Builds the management email (title, subject, html + text; counts only)
 │   ├── campaignReportEmailSettings.ts  # app_settings keys + recipient rules (max 4, valid, distinct)
+│   ├── donationNotice.ts       # /public/donate: input rules for the optional bank-transfer notice form (§18.5)
+│   ├── donationNoticeEmail.ts  # Builds the donation-notice management email (counts-equivalent: name/email/amount)
+│   ├── donationNoticeEmailSettings.ts  # app_settings keys + recipient rules for the donation notice email
+│   ├── donationBankDetails.ts  # Donorbox URL + bank account placeholder details shown on /public/donate
 │   ├── resendClient.ts         # sendEmail() — Resend HTTP API from the Next.js app
 │   ├── emailFormat.ts          # isValidEmail (import-free; re-exported by validation.ts)
 │   ├── recordResultsDraft.ts   # Local-only draft recovery for /record-results/detail (the old screen)
@@ -822,6 +827,7 @@ There is no separate permissions module. Role logic is kept inline wherever it i
 /public/campaign-reporting-moved      Public: where the old campaign results report (australiaforjesus.org.au/campaignreport/) redirects leaders — says reporting is now in the CAS App; counts visits
 /public/campaigns-near-me             Public: personalised map for a registry registrant (?r=<id>)
 /public/training/[campaignId]         Public: one training session + interest form
+/public/donate                        Public: Phase 0 donations — card (Donorbox link) or direct bank transfer
 /registry/*                           Registry portal (own auth + MFA) — see §17
 /auth/callback                        Supabase OAuth code-exchange handler, not user-facing
 
@@ -1116,6 +1122,7 @@ All take an **injected Supabase client** (always `supabaseAdmin` in practice) so
 | `campaignInterestService.ts`, `trainingInterestService.ts` | Leader/admin views of registered interest; `TRAINING_CATEGORIES` / `isTrainingCategory()` |
 | `campaignInterestSmsService.ts` | One combined ClickSend text per owning leader; logs to `campaign_interest_sms_log`; never throws |
 | `publicCampaignListService.ts`, `publicCampaignResultsService.ts`, `publicCampaignsNearMeService.ts`, `publicUpcomingCampaignsService.ts` | Data/grouping logic behind the `/public/*` pages (cached coordinates only, no on-demand geocoding) |
+| `donationNoticeEmailService.ts` | `/public/donate` (§18.5): `sendDonationNoticeEmail(client, { name, email, amount })` — reads the on/off flag + recipients fresh from `app_settings` and emails management when a bank-transfer donor uses the optional notice form. Email-only — nothing is stored in a table |
 | `myCampaignResultsService.ts` (+ `myCampaignResultsClient.ts`, `components/MyCampaignResultsCard.tsx`) | "My Campaign Results" block on My Admin: `getMyCampaignResults(client, {state, leader})` — the caller's own `campaign_reports` rows (`derived_state` + `derived_leader` equal to their `state_leaders` row; date, location, four tallies only, never names). Served by `GET /api/leader/my-campaign-results`, scoped from the session, never the query string; loaded when the leader opens the block |
 | `campaignReportManageService.ts` (UI: `components/campaignReports/PickCell.tsx`, a native select so the pickers work on mobile) | `/admin/campaign-reports`: `getManageData`, audited `applyReportEdit` (state / location / leader), `getEditLog` (browser filters in `lib/campaignReportManageFilters.ts`) |
 | `campaignReportLocationsService.ts`, `stateLocations.ts` | `/admin/campaign-report-locations`: unmapped typed locations, `saveLocationAlias` (maps to a `state_places.location`, optionally adding a geocoded row); `stateLocations.ts` = the distinct per-state locations and `ensureStateLocation` |
@@ -1995,6 +2002,7 @@ No-login pages, each registered in `lib/publicLinks.ts` (single source of truth 
 | `/public/upcoming-campaigns` | Public map of campaigns, all states, This Week / Next Week toggle — shows the **whole selected week, including campaigns already past** (`GET /api/public/upcoming-campaigns` no longer filters with `isCampaignPast`; Peter, 2026-10-17). The popup has **one** orange button, "Contact Me about This or Other Campaigns at this Location" (`PublicMapRegisterInterestActions`, via `CampaignMap`'s `renderPlaceActions`), which registers interest — type `more` — in every campaign at that place, past or future; past campaigns are not greyed out or disabled (Peter, 2026-10-17). List View has the same single button for the ticked campaigns (replaced the admin-only `/admin/campaign-map`). Groups by place using cached `state_places` coordinates only. A postcode box (`/api/public/geocode-postcode`) recentres the map. Marker actions collect name + mobile/email inline (`PublicMapRegisterInterestActions`). Usability pass 2026-10-17: a 3-step instruction strip (collapsed by default behind a "CLICK HERE FOR INSTRUCTIONS" toggle, 2026-11-19), week buttons showing their dates (`formatShortWeekRange`), a full-width Map / List toggle, a "N campaigns in M places" summary, larger markers (30 px / 0.5 opacity), a "Find campaigns near me" box above the map (postcode **or** a "Use my location" button — browser geolocation, never sent anywhere), the map auto-framing the markers (`CampaignMap`'s `fitToMarkers`, off once a postcode/location target is set), a **Full screen** button on the map (fixed overlay, Escape or ✕ exits; `CampaignMap`'s `resizeKey` makes Leaflet re-measure) — the page is now scrollable (`min-h-[100dvh]`, map `65dvh`/min 360 px) rather than a fixed-height column that squeezed the map on phones — a dismissible first-visit "Tap a circle" hint (hidden on first marker click via `onMarkerOpen`, or after 12 s), and a popup that lists **every** campaign at a place (earliest first, each with its own buttons — it used to show only the earliest) |
 | `/public/campaigns-near-me?r=<registrantId>` | Personalised map for one registry registrant, reached from their WhatsApp-invite email. Centres on their postcode (state fallback) for 7 days from today within 60 km. The URL carries only the opaque id — never name/email/mobile. Tapping a marker action (`PublicCampaignInterestActions`) shows the consent modal then POSTs `{registrantId, campaignId, interestType}`; the route re-derives name/mobile/email from `registry.registrants` server-side. Not in `publicLinks.ts` and not cached (personalised) |
 | `/public/training/[campaignId]` | One BOTJ/TLT training session's details with an interest form → `training_interest`. Dynamic, so *not* in `publicLinks.ts` (metadata from the campaign record in `generateMetadata()`); GET not cached (single indexed lookup). GET+POST in `app/api/public/training-interest/[campaignId]/route.ts` |
+| `/public/donate` | Phase 0 donations (§18.5): card via a direct Donorbox link, or bank transfer details + an optional notice form. The only `/public/*` page whose POST sends an email rather than writing a table row |
 
 **No on-demand geocoding on public pages.** The admin equivalents geocode via the admin-only `geocode-place` route, which anonymous visitors can't call, so public services (`publicCampaignsNearMeService.buildNearbyMarkers()`, `publicUpcomingCampaignsService.buildUpcomingCampaignMarkers()`) are pure functions over already-fetched campaign rows + cached coordinates, unit tested with no mocks. They share `campaignMapService.placeKey()` so place matching is normalised identically. A place missing coordinates is invisible on those maps with no warning — `addNewPlaceForState()` therefore best-effort geocodes new places (`lib/geocoding.ts`'s `geocodePlace()`) and `/admin/state-places` flags any place without coordinates.
 
@@ -2020,6 +2028,16 @@ A PDF guide for leaders, stored in a **private** Supabase Storage bucket `user-g
 - `userGuideService.getUserGuideView(client)` → a 4-hour signed URL, backing `GET /api/public/user-guide` (**no sign-in** — the guide is also offered on the sign-in screen for new leaders; not cached, so a new guide shows straight away). `createUserGuideUploadTarget(client)` → a one-time signed upload target behind `POST /api/admin/user-guide/upload-url` (`verifyAdminCaller`); the browser then uploads straight to Storage (`userGuideClient.uploadUserGuide`), so a large PDF never hits Vercel's ~4.5 MB request limit. Admin upload card: `app/admin/components/UserGuideUploadCard.tsx` on `/admin`.
 - Shown by `components/GuideScreen.tsx` (full screen + ✕ Close): as the `/app/guide` page (plain leaders' bottom-bar USER GUIDE button) and **in place** (`showGuide` state) from the buttons on `/login`'s sign-in form and action chooser — in place so Close returns to exactly where they were (going back to `/login` with a session would jump to `/app`). `components/OpenGuideLabel.tsx` keeps the discreet button styling identical across places.
 - `components/PdfGuideViewer.tsx` draws each page with pdf.js (`pdfjs-dist` pinned to 5.4.x — 6.x needs Node 22 and CI runs 20; the *legacy* build for older phones; loaded only when the guide opens), because browser PDF viewers can't be embedded reliably on phones. Canvas sharpness is capped at 2× (`lib/pdfRenderScale.ts`). pdf.js pauses drawing in a hidden tab, so when testing in a background preview only page 1 appears until visible. Falls back to a plain link if the viewer fails. Not part of `/admin/backup` (a file, not a table) — keep the source PDF.
+
+### 18.5 Donations — Phase 0 (2026-11-20)
+
+The first step of the "Bringing Registration In-House" roadmap: a single page (`/public/donate`, `components/donate/DonateClient.tsx`) replacing the old `www.australiaforjesus.org.au` → `/mobilise` (pre-form) → `/donate-options` → Donorbox chain, which made a donor type their details twice for no reason. Agreed trade-off: a card donation now links **straight** to Donorbox (`lib/donationBankDetails.ts`'s `DONORBOX_URL`, currently `https://donorbox.org/empower-equip-mobilise`) with no pre-form at all — Donorbox already captures the donor's own details on its own page. The pre-form is kept, in lightweight form, **only** for a direct bank transfer, since Donorbox never sees that payment and there would otherwise be no way to match a transfer to a person.
+
+- **Bank transfer section.** Shows the account name/BSB/account number and a reference hint from `lib/donationBankDetails.ts`. **Those three account-detail constants are placeholders** (`[Add account name]` etc.) — replace them with AFJ's real details before this page is told to anyone; the file's own comment says so.
+- **Optional notice form.** Name (required — `sanitizeDonorNameInput`), email and amount (both optional; `sanitizeDonationAmountInput` restricts typing to digits + one decimal point), validated by `lib/donationNotice.ts`'s `validateDonationNoticeForm()` (same restrict-as-typed + validate-on-submit + inline-error pattern as every other form in this app) and re-validated server-side by `POST /api/public/donate`.
+- **Email-only, by design — nothing is stored.** Peter's call for this first pass: `lib/services/donationNoticeEmailService.ts`'s `sendDonationNoticeEmail()` only emails management (via `lib/donationNoticeEmail.ts`'s `buildDonationNoticeEmail()` + `resendClient.sendEmail`) — there is no `bank_transfer_*` table, so nothing shows up in `/admin/backup` or anywhere else in the app. A donor still sees a success message even when sending is switched off or has no recipients configured (an admin misconfiguration isn't the donor's problem; the route logs a server-side warning so the gap gets noticed). Adding a table later, if the lack of a durable record turns out to matter, is a follow-up, not something this pass builds.
+- **Admin settings** — the "Bank Transfer Donation Notice email" card on `/admin` (`DonationNoticeEmailCard`), same on/off-switch-plus-four-addresses shape as the Campaign Report email card (§19.3), stored as `donation_notice_email_enabled`/`donation_notice_email_recipients` in `app_settings` (`lib/donationNoticeEmailSettings.ts`, enforced again by `/api/admin/settings`). Deliberately a near-duplicate of `campaignReportEmailSettings.ts` rather than a shared extraction — noted as a possible follow-up refactor, not done in the same PR as this new page.
+- Registered in `lib/publicLinks.ts` (slug `donate`) like every other `/public/*` page, so it gets the same admin-overridable title/description and appears on `/admin/public-links`.
 
 ---
 
@@ -2102,7 +2120,7 @@ Check against this list:
 
 ---
 
-*Last updated: 16 October 2026*
+*Last updated: 20 November 2026*
 
 ### Branding (2026-11-10)
 The app is "The Way of Life Campaign Activity System" (short: "TWOL Campaign Activity System" / "TWOL CAS"), no longer "AFJ". Brand art is cut from the Way of Life logo: `public/twol_banner.png` (tree mark + "THE WAY OF LIFE", transparent; shown on `/login`; the Registry and registration wording, and the `/registry` sign-in screens with `public/afj_graphic.png`, deliberately stay AFJ) and the tree-circle mark as the PWA/home-screen icons (`public/icons/icon-192x192.png`, `icon-512x512.png`, `apple-touch-icon.png`, `app/favicon.ico`). Manifest/theme colour is the logo green `#7bbf43`. The service-worker cache name was bumped (`twol-cas-v4`) so installed apps drop the old icons. Everything to do with the Registry and registrations (portal, "All AFJ Registrations", check-registration wording, WhatsApp invite email) stays AFJ. The `afj.org.au` domain is unchanged.

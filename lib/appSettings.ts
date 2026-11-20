@@ -10,6 +10,13 @@ import {
   serializeRecipients,
   validateRecipientList,
 } from './campaignReportEmailSettings';
+import {
+  DONATION_NOTICE_EMAIL_ENABLED_KEY,
+  DONATION_NOTICE_EMAIL_RECIPIENTS_KEY,
+  parseRecipientList as parseDonationNoticeRecipientList,
+  serializeRecipients as serializeDonationNoticeRecipients,
+  validateRecipientList as validateDonationNoticeRecipientList,
+} from './donationNoticeEmailSettings';
 
 // ---------------------------------------------------------------------------
 // Server-only read (no user session available, e.g. generateMetadata on a
@@ -298,4 +305,35 @@ export async function setCampaignReportEmailConfig(config: CampaignReportEmailCo
   if (invalid) throw new Error(invalid);
   await setSettingSecure(CAMPAIGN_REPORT_EMAIL_RECIPIENTS_KEY, serializeRecipients(config.recipients), 'Email addresses (comma-separated, max 4) that receive each TWOL Campaign Report');
   await setSettingSecure(CAMPAIGN_REPORT_EMAIL_ENABLED_KEY, config.enabled ? 'true' : 'false', 'Send the TWOL Campaign Report email to management when a report is saved');
+}
+
+// ---------------------------------------------------------------------------
+// Bank Transfer Donation Notice email (see lib/services/donationNoticeEmailService.ts)
+// ---------------------------------------------------------------------------
+
+export interface DonationNoticeEmailConfig { enabled: boolean; recipients: string[] }
+
+/** Off, with nobody listed, until an admin sets it up. */
+export async function getDonationNoticeEmailConfig(): Promise<DonationNoticeEmailConfig> {
+  const { data, error } = await supabase
+    .from('app_settings')
+    .select('setting_key, setting_value')
+    .in('setting_key', [DONATION_NOTICE_EMAIL_ENABLED_KEY, DONATION_NOTICE_EMAIL_RECIPIENTS_KEY]);
+  if (error) {
+    console.error('Error fetching donation notice email settings:', error);
+    return { enabled: false, recipients: [] };
+  }
+  const byKey = new Map((data ?? []).map((r: { setting_key: string; setting_value: string | null }) => [r.setting_key, r.setting_value]));
+  return {
+    enabled: (byKey.get(DONATION_NOTICE_EMAIL_ENABLED_KEY) ?? '').toLowerCase() === 'true',
+    recipients: parseDonationNoticeRecipientList(byKey.get(DONATION_NOTICE_EMAIL_RECIPIENTS_KEY)),
+  };
+}
+
+/** Writes through the server-verified route. Recipients go first so sending is never switched on against a rejected list. */
+export async function setDonationNoticeEmailConfig(config: DonationNoticeEmailConfig): Promise<void> {
+  const invalid = validateDonationNoticeRecipientList(config.recipients);
+  if (invalid) throw new Error(invalid);
+  await setSettingSecure(DONATION_NOTICE_EMAIL_RECIPIENTS_KEY, serializeDonationNoticeRecipients(config.recipients), 'Email addresses (comma-separated, max 4) that receive each bank transfer donation notice');
+  await setSettingSecure(DONATION_NOTICE_EMAIL_ENABLED_KEY, config.enabled ? 'true' : 'false', 'Send the Bank Transfer Donation Notice email to management when a donor uses the notice form on /public/donate');
 }
