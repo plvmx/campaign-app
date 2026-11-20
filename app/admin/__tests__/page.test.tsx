@@ -50,6 +50,8 @@ vi.mock('@/lib/appSettings', () => ({
   setTechInsightsHotkey: vi.fn(),
   getCampaignReportEmailConfig: vi.fn().mockResolvedValue({ enabled: false, recipients: [] }),
   setCampaignReportEmailConfig: vi.fn(),
+  getDonationNoticeEmailConfig: vi.fn().mockResolvedValue({ enabled: false, recipients: [] }),
+  setDonationNoticeEmailConfig: vi.fn(),
 }));
 
 vi.mock('@/lib/services/weeklyRefreshService', () => ({

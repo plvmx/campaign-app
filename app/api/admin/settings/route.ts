@@ -20,6 +20,12 @@ import {
   parseRecipientList,
   validateRecipientList,
 } from '@/lib/campaignReportEmailSettings';
+import {
+  DONATION_NOTICE_EMAIL_ENABLED_KEY,
+  DONATION_NOTICE_EMAIL_RECIPIENTS_KEY,
+  parseRecipientList as parseDonationNoticeRecipientList,
+  validateRecipientList as validateDonationNoticeRecipientList,
+} from '@/lib/donationNoticeEmailSettings';
 import { PUBLIC_LINKS, publicLinkTitleSettingKey, publicLinkDescriptionSettingKey } from '@/lib/publicLinks';
 
 // Public link keys are derived from PUBLIC_LINKS so a new entry there is
@@ -33,6 +39,8 @@ const ALLOWED_SETTING_KEYS = new Set([
   TECH_INSIGHTS_HOTKEY_KEY,
   CAMPAIGN_REPORT_EMAIL_ENABLED_KEY,
   CAMPAIGN_REPORT_EMAIL_RECIPIENTS_KEY,
+  DONATION_NOTICE_EMAIL_ENABLED_KEY,
+  DONATION_NOTICE_EMAIL_RECIPIENTS_KEY,
   ...PUBLIC_LINKS.flatMap((link) => [publicLinkTitleSettingKey(link.slug), publicLinkDescriptionSettingKey(link.slug)]),
 ]);
 
@@ -99,6 +107,15 @@ export async function POST(request: NextRequest) {
   }
   if (key === CAMPAIGN_REPORT_EMAIL_RECIPIENTS_KEY) {
     const recipientError = validateRecipientList(parseRecipientList(value));
+    if (recipientError) return NextResponse.json({ error: recipientError }, { status: 400 });
+  }
+
+  // Bank Transfer Donation Notice email: same shape as the report email above.
+  if (key === DONATION_NOTICE_EMAIL_ENABLED_KEY && value !== 'true' && value !== 'false') {
+    return NextResponse.json({ error: 'Value must be true or false' }, { status: 400 });
+  }
+  if (key === DONATION_NOTICE_EMAIL_RECIPIENTS_KEY) {
+    const recipientError = validateDonationNoticeRecipientList(parseDonationNoticeRecipientList(value));
     if (recipientError) return NextResponse.json({ error: recipientError }, { status: 400 });
   }
 

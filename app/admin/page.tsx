@@ -18,6 +18,7 @@ import { trackEvent } from '@/lib/analytics';
 import UserGuideUploadCard from './components/UserGuideUploadCard';
 import TechInsightsSettingsCard from './components/TechInsightsSettingsCard';
 import CampaignReportEmailCard from './components/CampaignReportEmailCard';
+import DonationNoticeEmailCard from './components/DonationNoticeEmailCard';
 import LegacyReportVisitsCard from './components/LegacyReportVisitsCard';
 
 /** Most-recent row from weekly_refresh_log (new columns may be null on older rows). */
@@ -351,6 +352,9 @@ export default function AdminPage() {
 
           {/* TWOL Campaign Report management email: on/off + recipients */}
           <CampaignReportEmailCard />
+
+          {/* Bank Transfer Donation Notice management email: on/off + recipients */}
+          <DonationNoticeEmailCard />
 
           {/* Tech Insights (on-screen technical details, desktop admins only) */}
           <TechInsightsSettingsCard />

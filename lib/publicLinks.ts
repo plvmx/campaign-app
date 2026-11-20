@@ -84,6 +84,12 @@ export const PUBLIC_LINKS: PublicLink[] = [
     description: 'See upcoming TWOL campaigns on an interactive map and register your interest — no login required.',
     path: '/public/upcoming-campaigns',
   },
+  {
+    slug: 'donate',
+    title: 'Donate',
+    description: 'Support AFJ by card or direct bank transfer — no login required.',
+    path: '/public/donate',
+  },
 ];
 
 /** app_settings key for a public link's title override. */
