@@ -4,6 +4,7 @@ import {
   sanitizeNameInput,
   nameFieldCount,
   resizeNames,
+  growNames,
   formatReportDate,
   formatShortReportDate,
   validateCounts,
@@ -41,6 +42,15 @@ describe('nameFieldCount', () => {
     expect(nameFieldCount('07')).toBe(7);
     expect(nameFieldCount('0')).toBe(0);
     expect(nameFieldCount('')).toBe(0);
+  });
+});
+
+describe('growNames', () => {
+  it('pads with blanks but never drops names typed for a higher count', () => {
+    expect(growNames(['a'], 3)).toEqual(['a', '', '']);
+    expect(growNames(['a', 'b', 'c'], 1)).toEqual(['a', 'b', 'c']);
+    expect(growNames(['a', 'b'], 0)).toEqual(['a', 'b']);
+    expect(growNames([], 2)).toEqual(['', '']);
   });
 });
 
