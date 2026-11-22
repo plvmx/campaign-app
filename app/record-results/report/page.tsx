@@ -7,6 +7,7 @@ import LoadingSpinner from '@/components/LoadingSpinner';
 import CampaignReportSummary from '@/components/CampaignReportSummary';
 import type { CampaignReportEmailInput } from '@/lib/campaignReportEmail';
 import { useUser } from '@/contexts/UserContext';
+import { clearReportDraft, readReportDraft, saveReportDraft } from '@/lib/campaignReportDraft';
 import { fetchCampaignReport, submitCampaignReport } from '@/lib/services/campaignReportClient';
 import { getErrorMessage } from '@/lib/errorUtils';
 import {
@@ -58,6 +59,9 @@ function CampaignReportEntryContent() {
   const [teamSizeError, setTeamSizeError] = useState<string | null>(null);
   const [countErrors, setCountErrors] = useState<Partial<Record<ReportCountField, string>>>({});
   const [sendState, setSendState] = useState<'idle' | 'sending' | 'sent' | 'saved' | 'email-failed'>('idle');
+  // True once the leader has changed something: only then is the form mirrored to the phone (see campaignReportDraft.ts).
+  const [dirty, setDirty] = useState(false);
+  const [draftRestored, setDraftRestored] = useState(false);
   const [summary, setSummary] = useState<CampaignReportEmailInput | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
   const [nameErrors, setNameErrors] = useState<Partial<Record<ReportCountField, number[]>>>({});
@@ -92,6 +96,15 @@ function CampaignReportEntryContent() {
           sinnersPrayers: saved.sinnersPrayers.length ? String(saved.sinnersPrayers.length) : '',
           followUp: saved.followUp.length ? String(saved.followUp.length) : '',
         });
+        // Typing left on this phone (e.g. the page was reloaded while the leader looked something up in
+        // another app) is newer than what the server holds, so it wins.
+        const draft = readReportDraft(campaignId);
+        if (draft) {
+          setTeamSize(draft.teamSize);
+          setCounts(draft.counts);
+          setNames(draft.names);
+          setDraftRestored(true);
+        }
       })
       .catch((err: unknown) => {
         if (!cancelled) setError(getErrorMessage(err, 'Failed to load campaign'));
@@ -99,7 +112,14 @@ function CampaignReportEntryContent() {
     return () => { cancelled = true; };
   }, [isUserLoading, user, campaignId, router]);
 
+  // Mirror the form to the phone after every change the leader makes.
+  useEffect(() => {
+    if (!dirty || !campaign || !campaignId || summary) return;
+    saveReportDraft(campaignId, { teamSize, counts, names });
+  }, [dirty, campaign, campaignId, summary, teamSize, counts, names]);
+
   const handleTeamSizeChange = (raw: string) => {
+    setDirty(true);
     setSendState('idle');
     setSendError(null);
     setTeamSize(sanitizeTeamSizeInput(raw));
@@ -108,6 +128,7 @@ function CampaignReportEntryContent() {
 
   const handleCountChange = (field: ReportCountField, raw: string) => {
     const value = sanitizeCountInput(raw);
+    setDirty(true);
     setSendState('idle');
     setSendError(null);
     setCounts((prev) => ({ ...prev, [field]: value }));
@@ -118,6 +139,7 @@ function CampaignReportEntryContent() {
 
   const handleNameChange = (field: ReportCountField, index: number, raw: string) => {
     const value = sanitizeNameInput(raw);
+    setDirty(true);
     setSendState('idle');
     setSendError(null);
     setNames((prev) => ({
@@ -154,6 +176,10 @@ function CampaignReportEntryContent() {
       // Saving again replaces the earlier save for this campaign.
       const email = await submitCampaignReport(campaignId, Number(teamSize), numericCounts, names);
       setSendState(email === 'sent' ? 'sent' : email === 'failed' ? 'email-failed' : 'saved');
+      // Saved: the phone's backup copy is no longer needed.
+      clearReportDraft(campaignId);
+      setDirty(false);
+      setDraftRestored(false);
       // What was just saved, for the on-screen summary leaders screenshot (same lines as the email).
       if (campaign) {
         setSummary({ location: campaign.location, leader: campaign.leader, date: campaign.date, teamSize: Number(teamSize), counts: numericCounts });
@@ -213,6 +239,11 @@ function CampaignReportEntryContent() {
 
         {campaign && !summary && (
           <form onSubmit={handleSave} noValidate className="space-y-5">
+            {draftRestored && (
+              <p role="status" className="rounded-md bg-yellow-100 p-3 text-base font-semibold text-yellow-900 dark:bg-yellow-900/30 dark:text-yellow-100">
+                We&apos;ve put back what you had typed before you left this page. Check it, then press Save &amp; Submit.
+              </p>
+            )}
             <div>
               <label htmlFor="report-location" className={labelClass}>Location</label>
               <input id="report-location" type="text" readOnly value={campaign.location} className={readOnlyClass} />
