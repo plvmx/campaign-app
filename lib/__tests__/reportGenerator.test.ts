@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { makeQueryBuilder } from '../services/__tests__/supabaseMock';
-import { fetchReportRows, chunkReportRows, type ReportRow } from '../reportGenerator';
+import { fetchReportRows, chunkReportRows, splitFullPresentationNames, type ReportRow } from '../reportGenerator';
 
 // fetchReportRows takes the Supabase client as an option, so it can be faked
 // directly rather than mocking the '@/lib/supabaseClient' module.
@@ -129,5 +129,41 @@ describe('fetchReportRows', () => {
     await expect(
       fetchReportRows({ supabase, startDate: '2026-08-10', endDate: '2026-08-16' }),
     ).rejects.toEqual(error);
+  });
+});
+
+describe('splitFullPresentationNames', () => {
+  it('lists a name only under FP & SP when it is in both Full and Sinner\'s Prayer', () => {
+    expect(splitFullPresentationNames(['Ivy', 'Ann', 'Bob'], ['ann', ' Bob '])).toEqual({
+      fpAndSp: ['ann', ' Bob '],
+      fpOnly: ['Ivy'],
+    });
+  });
+
+  it('matches duplicate names one-for-one', () => {
+    expect(splitFullPresentationNames(['Ivy', 'Ivy'], ['Ivy'])).toEqual({
+      fpAndSp: ['Ivy'],
+      fpOnly: ['Ivy'],
+    });
+  });
+
+  it('keeps an SP-only name under FP & SP', () => {
+    expect(splitFullPresentationNames([], ['Zoe'])).toEqual({ fpAndSp: ['Zoe'], fpOnly: [] });
+  });
+});
+
+describe('fetchReportRows with the separate Sinner\'s Prayer recording', () => {
+  it('puts names recorded under both F and SP only in fpAndSp', async () => {
+    const supabase = makeFakeSupabase(
+      { data: [{ id: 'c1', date: '2026-11-18', state: 'NSW', place: 'Burwood' }], error: null },
+      {
+        data: ['Ivy', 'Ann', 'Bob'].map((n, i) => ({ campaign_id: 'c1', first_name: n, category_code: 'F', created_at: `2026-11-18T0${i}:00:00Z` }))
+          .concat(['Ann', 'Bob'].map((n, i) => ({ campaign_id: 'c1', first_name: n, category_code: 'SP', created_at: `2026-11-18T1${i}:00:00Z` }))),
+        error: null,
+      },
+    );
+    const rows = await fetchReportRows({ supabase, startDate: '2026-11-16', endDate: '2026-11-22' });
+    expect(rows[0].fpOnly).toEqual(['Ivy']);
+    expect(rows[0].fpAndSp).toEqual(['Ann', 'Bob']);
   });
 });
