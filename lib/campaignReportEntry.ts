@@ -32,6 +32,11 @@ export function nameFieldCount(count: string): number {
   return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
+/** Pads a names list with blanks up to `size` but never shortens it, so names typed for a higher count are kept when the count is lowered or briefly blank. */
+export function growNames(names: string[], size: number): string[] {
+  return names.length >= size ? names : [...names, ...Array<string>(size - names.length).fill('')];
+}
+
 /** Grows/shrinks a names list to `size`, keeping what was already typed. */
 export function resizeNames(names: string[], size: number): string[] {
   if (names.length === size) return names;

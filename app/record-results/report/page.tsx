@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import MobileLayout from '@/components/MobileLayout';
 import LoadingSpinner from '@/components/LoadingSpinner';
@@ -14,6 +14,7 @@ import {
   REPORT_COUNT_FIELDS,
   NAME_MAX_LENGTH,
   type ReportCountField,
+  growNames,
   nameFieldCount,
   resizeNames,
   sanitizeCountInput,
@@ -72,6 +73,15 @@ function CampaignReportEntryContent() {
     followUp: [],
   });
 
+  // `names` is a pool: it keeps every name typed even when the count is lowered or briefly blank (typing a new
+  // number means deleting the old one first), so changing 2 to 3 — or 2 to 1 and back — never loses a name.
+  // Only the first <count> names are shown, validated, saved and backed up.
+  const shownNames = useMemo(() => {
+    const out = {} as Record<ReportCountField, string[]>;
+    for (const { key } of REPORT_COUNT_FIELDS) out[key] = resizeNames(names[key], nameFieldCount(counts[key]));
+    return out;
+  }, [names, counts]);
+
   useEffect(() => {
     if (isUserLoading) return;
     if (!user) { router.push('/login'); return; }
@@ -115,8 +125,8 @@ function CampaignReportEntryContent() {
   // Mirror the form to the phone after every change the leader makes.
   useEffect(() => {
     if (!dirty || !campaign || !campaignId || summary) return;
-    saveReportDraft(campaignId, { teamSize, counts, names });
-  }, [dirty, campaign, campaignId, summary, teamSize, counts, names]);
+    saveReportDraft(campaignId, { teamSize, counts, names: shownNames });
+  }, [dirty, campaign, campaignId, summary, teamSize, counts, shownNames]);
 
   const handleTeamSizeChange = (raw: string) => {
     setDirty(true);
@@ -134,7 +144,7 @@ function CampaignReportEntryContent() {
     setCounts((prev) => ({ ...prev, [field]: value }));
     setCountErrors((prev) => ({ ...prev, [field]: undefined }));
     setNameErrors((prev) => ({ ...prev, [field]: undefined }));
-    setNames((prev) => ({ ...prev, [field]: resizeNames(prev[field], nameFieldCount(value)) }));
+    setNames((prev) => ({ ...prev, [field]: growNames(prev[field], nameFieldCount(value)) }));
   };
 
   const handleNameChange = (field: ReportCountField, index: number, raw: string) => {
@@ -158,7 +168,7 @@ function CampaignReportEntryContent() {
     const teamError = validateTeamSize(teamSize);
     setTeamSizeError(teamError);
     const errors = validateCounts(counts);
-    const missingNames = validateNames(names);
+    const missingNames = validateNames(shownNames);
     setCountErrors(errors);
     setNameErrors(missingNames);
     if (teamError || Object.keys(errors).length > 0 || Object.keys(missingNames).length > 0 || !campaignId) return;
@@ -174,7 +184,7 @@ function CampaignReportEntryContent() {
     try {
       // Saves the counts and names, then the server emails the counts (never the names) to management.
       // Saving again replaces the earlier save for this campaign.
-      const email = await submitCampaignReport(campaignId, Number(teamSize), numericCounts, names);
+      const email = await submitCampaignReport(campaignId, Number(teamSize), numericCounts, shownNames);
       setSendState(email === 'sent' ? 'sent' : email === 'failed' ? 'email-failed' : 'saved');
       // Saved: the phone's backup copy is no longer needed.
       clearReportDraft(campaignId);
@@ -296,9 +306,9 @@ function CampaignReportEntryContent() {
                     {countErrors[key]}
                   </p>
                 )}
-                {names[key].length > 0 && (
+                {shownNames[key].length > 0 && (
                   <div className="mt-3 space-y-2 pl-3 border-l-4 border-blue-300 dark:border-blue-700">
-                    {names[key].map((name, i) => (
+                    {shownNames[key].map((name, i) => (
                       <input
                         key={i}
                         type="text"

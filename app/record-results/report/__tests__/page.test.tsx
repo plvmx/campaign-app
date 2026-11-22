@@ -221,6 +221,57 @@ describe('Campaign report entry page', () => {
     });
   });
 
+  describe('changing a count keeps the names already typed', () => {
+    it('keeps both names when 2 is deleted and 3 typed (the box is blank in between)', async () => {
+      render(<Page />);
+      const full = await screen.findByLabelText('Number of Full Presentations *');
+      fireEvent.change(full, { target: { value: '2' } });
+      fireEvent.change(screen.getByPlaceholderText('Name 1'), { target: { value: 'Ann' } });
+      fireEvent.change(screen.getByPlaceholderText('Name 2'), { target: { value: 'Bob' } });
+      fireEvent.change(full, { target: { value: '' } });
+      expect(screen.queryByPlaceholderText('Name 1')).not.toBeInTheDocument();
+      fireEvent.change(full, { target: { value: '3' } });
+      expect(screen.getByPlaceholderText('Name 1')).toHaveValue('Ann');
+      expect(screen.getByPlaceholderText('Name 2')).toHaveValue('Bob');
+      expect(screen.getByPlaceholderText('Name 3')).toHaveValue('');
+    });
+
+    it('lowering 2 to 1 hides only the last box, and raising it again brings that name back', async () => {
+      render(<Page />);
+      const full = await screen.findByLabelText('Number of Full Presentations *');
+      fireEvent.change(full, { target: { value: '2' } });
+      fireEvent.change(screen.getByPlaceholderText('Name 1'), { target: { value: 'Ann' } });
+      fireEvent.change(screen.getByPlaceholderText('Name 2'), { target: { value: 'Bob' } });
+      fireEvent.change(full, { target: { value: '' } });
+      fireEvent.change(full, { target: { value: '1' } });
+      expect(screen.getByPlaceholderText('Name 1')).toHaveValue('Ann');
+      expect(screen.queryByPlaceholderText('Name 2')).not.toBeInTheDocument();
+      fireEvent.change(full, { target: { value: '2' } });
+      expect(screen.getByPlaceholderText('Name 2')).toHaveValue('Bob');
+    });
+
+    it('saves and backs up only the names for the count that is showing', async () => {
+      render(<Page />);
+      const full = await screen.findByLabelText('Number of Full Presentations *');
+      fireEvent.change(screen.getByLabelText('Team Size (including Leader) *'), { target: { value: '2' } });
+      fireEvent.change(screen.getByLabelText('Number of Partial Presentations *'), { target: { value: '0' } });
+      fireEvent.change(screen.getByLabelText('Number of Sinners Prayers *'), { target: { value: '0' } });
+      fireEvent.change(screen.getByLabelText('Number of Requests for Follow-up/Info *'), { target: { value: '0' } });
+      fireEvent.change(full, { target: { value: '2' } });
+      fireEvent.change(screen.getByPlaceholderText('Name 1'), { target: { value: 'Ann' } });
+      fireEvent.change(screen.getByPlaceholderText('Name 2'), { target: { value: 'Bob' } });
+      fireEvent.change(full, { target: { value: '1' } });
+      expect(JSON.parse(localStorage.getItem('afj_campaign_report_draft:c1')!).names.full).toEqual(['Ann']);
+      fireEvent.click(screen.getByRole('button', { name: 'Save & Submit' }));
+      await screen.findByRole('region', { name: 'TWOL Campaign Summary' });
+      expect(submitReport).toHaveBeenCalledWith(
+        'c1', 2,
+        { partial: 0, full: 1, sinnersPrayers: 0, followUp: 0 },
+        { partial: [], full: ['Ann'], sinnersPrayers: [], followUp: [] },
+      );
+    });
+  });
+
   it('does not save anything while the form is invalid', async () => {
     render(<Page />);
     await screen.findByLabelText('Location');
