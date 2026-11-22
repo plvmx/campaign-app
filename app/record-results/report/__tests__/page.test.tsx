@@ -32,6 +32,7 @@ const emptyView = {
 };
 
 beforeEach(() => {
+  localStorage.clear();
   currentUser = { id: 'u1' };
   fetchReport.mockResolvedValue(emptyView);
   submitReport.mockResolvedValue('sent');
@@ -157,6 +158,67 @@ describe('Campaign report entry page', () => {
     fetchReport.mockResolvedValue({ ...emptyView, teamSize: 4 });
     render(<Page />);
     expect(await screen.findByLabelText('Team Size (including Leader) *')).toHaveValue('4');
+  });
+
+  describe('draft recovery (an iPhone can reload the page while the leader looks something up elsewhere)', () => {
+    const DRAFT_KEY = 'afj_campaign_report_draft:c1';
+
+    it('mirrors what is typed to the phone, and forgets it once the form is empty again', async () => {
+      render(<Page />);
+      fireEvent.change(await screen.findByLabelText('Team Size (including Leader) *'), { target: { value: '3' } });
+      fireEvent.change(screen.getByLabelText('Number of Full Presentations *'), { target: { value: '1' } });
+      fireEvent.change(screen.getByPlaceholderText('Name 1'), { target: { value: 'Ann' } });
+      const saved = JSON.parse(localStorage.getItem(DRAFT_KEY)!);
+      expect(saved).toMatchObject({ teamSize: '3', counts: { full: '1' }, names: { full: ['Ann'] } });
+      fireEvent.change(screen.getByLabelText('Team Size (including Leader) *'), { target: { value: '' } });
+      fireEvent.change(screen.getByLabelText('Number of Full Presentations *'), { target: { value: '' } });
+      expect(localStorage.getItem(DRAFT_KEY)).toBeNull();
+    });
+
+    it('puts the typing back when the page is reloaded, with a note, ahead of what the server holds', async () => {
+      fetchReport.mockResolvedValue({ ...emptyView, teamSize: 2, names: { ...emptyView.names, partial: ['Old'] } });
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({
+        savedAt: Date.now(), teamSize: '4',
+        counts: { partial: '', full: '2', sinnersPrayers: '0', followUp: '' },
+        names: { partial: [], full: ['Bob', 'Cy'], sinnersPrayers: [], followUp: [] },
+      }));
+      render(<Page />);
+      expect(await screen.findByLabelText('Team Size (including Leader) *')).toHaveValue('4');
+      expect(screen.getByLabelText('Number of Full Presentations *')).toHaveValue('2');
+      expect(screen.getByLabelText('Number of Partial Presentations *')).toHaveValue('');
+      expect(screen.getByPlaceholderText('Name 1')).toHaveValue('Bob');
+      expect(screen.getByPlaceholderText('Name 2')).toHaveValue('Cy');
+      expect(screen.getByRole('status')).toHaveTextContent("We've put back what you had typed");
+    });
+
+    it('does not mirror untouched server-prefilled values (they could be out of date later)', async () => {
+      fetchReport.mockResolvedValue({ ...emptyView, teamSize: 2 });
+      render(<Page />);
+      expect(await screen.findByLabelText('Team Size (including Leader) *')).toHaveValue('2');
+      expect(localStorage.getItem(DRAFT_KEY)).toBeNull();
+      expect(screen.queryByText(/put back what you had typed/)).not.toBeInTheDocument();
+    });
+
+    it('is cleared after a successful Save & Submit', async () => {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({
+        savedAt: Date.now(), teamSize: '3',
+        counts: { partial: '0', full: '1', sinnersPrayers: '0', followUp: '0' },
+        names: { partial: [], full: ['Ann'], sinnersPrayers: [], followUp: [] },
+      }));
+      render(<Page />);
+      await screen.findByLabelText('Team Size (including Leader) *');
+      fireEvent.click(screen.getByRole('button', { name: 'Save & Submit' }));
+      await screen.findByRole('region', { name: 'TWOL Campaign Summary' });
+      expect(localStorage.getItem(DRAFT_KEY)).toBeNull();
+    });
+
+    it('is kept when saving fails, so nothing is lost', async () => {
+      submitReport.mockRejectedValueOnce(new Error('The report could not be saved.'));
+      await fillValidReport();
+      fireEvent.click(screen.getByRole('button', { name: 'Save & Submit' }));
+      await screen.findByText(/The report could not be saved/);
+      expect(JSON.parse(localStorage.getItem(DRAFT_KEY)!)).toMatchObject({ teamSize: '3', names: { full: ['Ann'] } });
+    });
   });
 
   it('does not save anything while the form is invalid', async () => {
