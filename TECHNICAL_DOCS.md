@@ -188,6 +188,7 @@ campaign-app/
 │   │   └── mfa/                # Route: /login/mfa (email sign-in) + /login/mfa/callback (magic link → TOTP → role picker)
 │   ├── confirm-email/          # Route: /confirm-email — leader email-confirmation magic-link landing page
 │   ├── setup-mfa/              # Route: /setup-mfa — authenticator-app (TOTP) enrolment landing page
+│   ├── member/                 # Routes: /member (signed-in home) and /member/sign-in — member portal (§18.6); layout.tsx sets noindex
 │   ├── help/2fa/               # Route: /help/2fa — public, printable step-by-step setup guide
 │   ├── campaign-interest/      # Route: /campaign-interest — leader view of people who registered interest (2FA-gated)
 │   ├── training-interest/      # Route: /training-interest (+ /[campaignId]) — leader view of training-session interest
@@ -342,6 +343,11 @@ campaign-app/
 │   ├── memberCodeMessages.ts   # Member sign-in: wording of the email and text
 │   ├── memberAuthDeps.ts       # Member sign-in: wires Resend/ClickSend/SMS-ceiling setting
 │   ├── memberRouteGuard.ts     # Member sign-in: authorizeMemberRequest() for /api/member/* routes
+│   ├── memberFormat.ts         # Member sign-in: browser-safe format rules (6-digit codes, AU mobile) shared by server parsing and screens
+│   ├── memberSignInForm.ts     # Member sign-in screens: input restriction + field/form validation (pure)
+│   ├── memberPendingSignIn.ts  # Member sign-in screens: remembers the "codes sent" step on the device across phone reloads
+│   ├── memberAuthClient.ts     # Member sign-in screens: browser fetch wrappers for /api/member/*
+│   ├── memberHelp.ts           # Member sign-in screens: optional NEXT_PUBLIC_MEMBER_HELP_EMAIL for the help screen
 │   ├── donationNoticeEmail.ts  # Builds the donation-notice management email (counts-equivalent: name/email/amount)
 │   ├── donationNoticeEmailSettings.ts  # app_settings keys + recipient rules for the donation notice email
 │   ├── donationBankDetails.ts  # Donorbox URL + bank account details shown on /public/donate
@@ -959,6 +965,7 @@ AppPageContent (app/app/page.tsx)
 | `GuideScreen`, `PdfGuideViewer`, `OpenGuideLabel` | `components/` | CAS User Guide (§18.4) |
 | `BackToAppBar` | `components/` | "← Back to app" bar on public pages opened with `?from=app` |
 | `auth/*` | `components/auth/` | Sign-in and 2FA setup blocks: `CodeEntryScreen` (+ large-text constants), `MfaEnrollmentFlow`, `TapToContinue`, `InlineCodeFallback`, `EmailAndCodeFallback`, `SigningInStuck`, `SetupStep`, `GetHelp`, `RequireTwoFactorForMemberDetails`, `BusyChoiceButtons` (§6) |
+| `member/*` | `components/member/` | Member portal screens (§18.6): `MemberSignIn` (customised-link confirm / typed details / two code boxes / help), `MemberHelp`. Reuse the large-text constants from `components/auth/CodeEntryScreen.tsx` |
 
 ### 9.3 Component Props Quick Reference
 
@@ -1523,6 +1530,7 @@ If the fix and the test live in the same file (rare), use `git show HEAD~1:path/
 | `CAMPAIGN_REPORT_EMAIL_FROM` | `lib/resendClient.ts` — sender, must be on a Resend-verified domain (default `AFJ <noreply@afj.org.au>`) | No |
 | `CLICKSEND_USERNAME`, `CLICKSEND_API_KEY` | `lib/clickSendClient.ts` — "text the leader" SMS; missing config makes sends fail (logged, never blocks the registrant) | For SMS |
 | `MEMBER_AUTH_SECRET` | `lib/memberCodes.ts` — keys the member sign-in code/cookie/IP hashes (§18.6). **At least 32 random characters** (`openssl rand -base64 48`); missing or short makes every `/api/member/*` sign-in route return 500 rather than sign-in weakly. Changing it signs every member out and invalidates pending codes | For member sign-in |
+| `NEXT_PUBLIC_MEMBER_HELP_EMAIL` | `lib/memberHelp.ts` — address shown on the member sign-in help screen (optional; without it the screen asks members to "contact us" in general words) | No |
 | `VERCEL_PROJECT_PRODUCTION_URL` | Auto-injected by Vercel; `siteUrl.ts` fallback | Auto |
 
 Supabase dashboard settings that the code depends on (not env vars): the **Magic Link email template** (`docs/email-templates/`), the **Redirect URLs allow-list** (every sign-in host as `https://<host>/**`, Site URL `https`), and **Email OTP length/expiry**.
@@ -2049,9 +2057,9 @@ The first step of the "Bringing Registration In-House" roadmap: a single page (`
 - **Admin settings** — the "Bank Transfer Donation Notice email" card on `/admin` (`DonationNoticeEmailCard`), same on/off-switch-plus-four-addresses shape as the Campaign Report email card (§19.3), stored as `donation_notice_email_enabled`/`donation_notice_email_recipients` in `app_settings` (`lib/donationNoticeEmailSettings.ts`, enforced again by `/api/admin/settings`). Deliberately a near-duplicate of `campaignReportEmailSettings.ts` rather than a shared extraction — noted as a possible follow-up refactor, not done in the same PR as this new page.
 - Registered in `lib/publicLinks.ts` (slug `donate`) like every other `/public/*` page, so it gets the same admin-overridable title/description and appears on `/admin/public-links`.
 
-### 18.6 Member portal sign-in — backend (Phase 2 step 1, 2026-11-23)
+### 18.6 Member portal sign-in (Phase 2 step 1, 2026-11-23)
 
-Design: `docs/member-portal/SIGN_IN_DESIGN.md` (read it first — it records the decisions and the reasons). **This section covers the backend only; there are no member screens, no middleware guard and no invite sending yet** (next PRs).
+Design: `docs/member-portal/SIGN_IN_DESIGN.md` (read it first — it records the decisions and the reasons). **Built so far:** the backend (PR #360) and the sign-in screens, `/member` shell and middleware guard (below). **Not built yet:** invite generation/sending and everything a member can *do* once signed in.
 
 - **A separate login, not Supabase Auth.** Registrants are not `auth.users`; making them so would give ~9,000 people a database credential and put them in the leaders'/admins' user pool (where any authenticated session can read `state_leaders`). Members instead get a signed httpOnly `member_session` cookie (`lib/memberSession.ts`: `<random id>.<HMAC>`, 90-day sliding, `SameSite=Lax`) and every read/write goes through `/api/member/*` routes using the service role, scoped to the one registrant the session names. No member ever holds a database JWT.
 - **What the member does:** proves they own both the email address and the mobile number we hold — one 6-digit code is emailed (Resend) and one texted (ClickSend) to the details **on file** (never to anything typed), they type both, then Validate. No wording about MFA/2FA/authenticator anywhere (`lib/memberCodeMessages.ts` has a test for that).
@@ -2060,7 +2068,14 @@ Design: `docs/member-portal/SIGN_IN_DESIGN.md` (read it first — it records the
 - **Security properties** (each covered by a test; the key ones were mutation-checked): both codes required; codes hashed with an HMAC bound to verification + channel (a code can't be replayed across channels or verifications); constant-time comparison; 5 tries per verification, the attempt is counted *before* checking and only if the count is unchanged (parallel guesses don't get free tries); single use (the `consumed_at IS NULL` update decides the winner); invite links are lookup keys only — opening one proves nothing and consumes nothing; IPs stored only as a keyed truncated hash; `MEMBER_AUTH_SECRET` missing/short → 500, never weaker sign-in.
 - **Limits** (`lib/memberThrottle.ts`, from `member_auth_events`): 60 s between sends, 3 per 15 min and 10 per day per person, 10 per hour per IP (guesses at contact details count too), a global text-messages-per-day ceiling (default 1,500, overridable via the `member_sms_daily_ceiling` `app_settings` row — no admin card yet), 20 wrong answers per hour per IP.
 - **Eligibility:** needs a usable email (not `noemail@…`/`@example.com`) **and** a mobile on file; otherwise the registrant gets the "help" path (design §9), to be built with the screens.
-- **Not built yet:** the sign-in screens and `/member` shell, the `/member` middleware prefix, bulk invite generation/sending (an admin script, dry-run first), the "unable to verify" admin list, changing details inside the portal, and any other member-data route.
+- **Screens** (`components/member/MemberSignIn.tsx`, pages `app/member/sign-in/page.tsx` and `app/member/page.tsx`, `app/member/layout.tsx` = noindex): entry is a customised link (`/member/sign-in?i=<token>`, masked details, one **Send my codes** tap — it never sends on page load, so link-preview scanners can't trigger SMS) or typed email + mobile; then two boxes — *Code from the email*, *Code from the text message* — and **Validate**; success → `/member`. Wording follows Peter's text and never says 2FA/MFA/authenticator (a test checks). Already-signed-in visitors skip straight to `/member`. Uses the large-text constants (don't wrap in `large-text`). Help screen (`MemberHelp`) for a registrant who can't self-serve or taps "I need help".
+- **Validation** (`lib/memberSignInForm.ts`, pure, tested; the server re-validates via `lib/memberSignInInput.ts`, both on the shared `lib/memberFormat.ts`): email required, no spaces while typing, ≤254, valid; mobile required, only digits/spaces/leading `+` while typing, ≤16, must be an Australian mobile; each code required, digits only, exactly 6 (pasted codes are cleaned before the cap). Inline `role="alert"` message + red border + `aria-invalid` per field, cleared as soon as that field is fixed; nothing is sent while an error remains.
+- **Phone reloads:** leaving to read the email/text makes iPhones reload the page, which would lose the verification id and force a second send (rate limited, costs an SMS). `lib/memberPendingSignIn.ts` therefore keeps `{verificationId, masked email/mobile, via}` in localStorage for 10 minutes (the codes' lifetime) — **never a code and never the real email/mobile** — and restores the code boxes; cleared on success/expiry/start-over. A step saved for one entry route (link vs typed) is not restored on the other.
+- **Resend:** "Send me new codes" is disabled for 60 s after each send (matching the server cooldown); expired/locked codes clear the boxes and require new codes.
+- **Middleware:** `/member` and `/member/*` need a `member_session` cookie or are sent to `/member/sign-in` (presence only — a UX guard; `/api/member/*` verifies the signed cookie and DB session). Independent of `app_session`/`registry_*` (tested: the leader cookie doesn't satisfy it).
+- **Known rough edge:** the global "Install this app" PWA banner (built for the leaders' app) also appears on member pages and can cover the Send button on a small phone; deciding whether members should see it is a follow-up.
+- **Draft backup:** deliberately only the verification-id step above — typed codes are secrets and expire, so they are never mirrored.
+- **Not built yet:** bulk invite generation/sending (an admin script, dry-run first), the "unable to verify" admin list, changing details inside the portal, and any other member-data route.
 - **Open questions** (design §13): SMS sender name/ACMA sender-ID rules, Spam Act review of the invite, final throttle numbers.
 
 ---
