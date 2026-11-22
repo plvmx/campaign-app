@@ -2,10 +2,12 @@
 
 import 'leaflet/dist/leaflet.css';
 import { useEffect, useState, type ReactNode } from 'react';
+import L from 'leaflet';
 import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
-import { getStateMarkerIcon } from '@/lib/leafletMarkerIcon';
-import { formatCampaignDateTimeDisplay, getEarliestCampaign } from '@/lib/campaignUtils';
+import { getStateMarkerIcon, type StateMarkerIconOptions } from '@/lib/leafletMarkerIcon';
+import { formatCampaignDateTimeDisplay, sortCampaignsChronologically } from '@/lib/campaignUtils';
 import MapPopupActions from '@/components/MapPopupActions';
+import TechInsightsMapTag from '@/components/techInsights/TechInsightsMapTag';
 
 /**
  * Just enough of a campaign for this map's popup (id/date/time/leader) —
@@ -63,6 +65,38 @@ function FlyTo({ center, zoom }: FlyToProps) {
   return null;
 }
 
+/**
+ * Frames the map around all markers (capped at a city-level zoom so a single
+ * marker doesn't zoom in absurdly far) whenever the marker set changes —
+ * so the map opens on the campaigns instead of all of Australia. Declared
+ * after FlyTo so it wins on first mount; callers turn it off while a
+ * postcode/location target is being shown.
+ */
+function FitToMarkers({ markers }: { markers: CampaignMapPopupMarker[] }) {
+  const map = useMap();
+  useEffect(() => {
+    if (markers.length === 0) return;
+    const size = map.getSize();
+    if (size.x === 0 || size.y === 0) return;
+    map.fitBounds(L.latLngBounds(markers.map((m): [number, number] => [m.latitude, m.longitude])), { padding: [40, 40], maxZoom: 10 });
+  }, [map, markers]);
+  return null;
+}
+
+/**
+ * Leaflet only notices window resizes, not its container changing size
+ * (e.g. toggling full screen) — tell it to re-measure when `resizeKey` changes.
+ */
+function InvalidateSizeOnChange({ resizeKey }: { resizeKey: unknown }) {
+  const map = useMap();
+  useEffect(() => {
+    // Wait a frame so the container has its new layout size.
+    const id = requestAnimationFrame(() => map.invalidateSize());
+    return () => cancelAnimationFrame(id);
+  }, [map, resizeKey]);
+  return null;
+}
+
 /** Surfaces tile load failures directly instead of leaving the admin staring at a blank grey map. */
 function TileErrorBanner() {
   const [hasError, setHasError] = useState(false);
@@ -91,10 +125,26 @@ interface CampaignMapProps {
    * console.log placeholders — same `renderActions` pattern
    * NearbyCampaignsMap.tsx already established.
    */
+  /** Marker size/opacity — defaults to the small, faint style; the public map passes a larger one so markers read as tappable. */
+  markerStyle?: StateMarkerIconOptions;
+  /** Frame the map around the markers whenever they change (instead of staying on `center`/`zoom`). */
+  fitToMarkers?: boolean;
+  /** Changing this value makes the map re-measure its container (e.g. when the caller toggles full screen). */
+  resizeKey?: unknown;
+  /** Called when a marker is clicked/tapped (e.g. to hide a first-visit hint). */
+  onMarkerOpen?: () => void;
   renderActions?: (props: { campaignId: string; place: string; state: string }) => ReactNode;
+  /**
+   * Place-level alternative to `renderActions`: when given, it is rendered
+   * once under a marker's campaign list (instead of per-campaign actions),
+   * receiving every campaign id at that place. The public Upcoming Campaigns
+   * screen uses this for its single "Contact Me about This or Other
+   * Campaigns at this Location" button.
+   */
+  renderPlaceActions?: (props: { campaignIds: string[]; place: string; state: string }) => ReactNode;
 }
 
-export default function CampaignMap({ center, zoom, markers, renderActions = (props) => <MapPopupActions {...props} /> }: CampaignMapProps) {
+export default function CampaignMap({ center, zoom, markers, markerStyle, fitToMarkers = false, resizeKey, onMarkerOpen, renderPlaceActions, renderActions = (props) => <MapPopupActions {...props} /> }: CampaignMapProps) {
   return (
     <MapContainer
       center={center}
@@ -106,19 +156,30 @@ export default function CampaignMap({ center, zoom, markers, renderActions = (pr
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         url="/api/tiles/{z}/{x}/{y}"
       />
+      <TechInsightsMapTag data-ti="components/CampaignMap.tsx" />
       <TileErrorBanner />
+      <InvalidateSizeOnChange resizeKey={resizeKey} />
       <FlyTo center={center} zoom={zoom} />
+      {fitToMarkers && <FitToMarkers markers={markers} />}
       {markers.map(marker => {
-        const firstCampaign = marker.campaigns ? getEarliestCampaign(marker.campaigns) : undefined;
+        // Every campaign at this place is listed (earliest first) — showing
+        // only the first hid any later day's campaign from a visitor, and
+        // "Yes I'm In" could only ever register interest in that one.
+        const campaigns = marker.campaigns ? sortCampaignsChronologically(marker.campaigns) : [];
         return (
-          <Marker key={`${marker.state}::${marker.place}`} position={[marker.latitude, marker.longitude]} icon={getStateMarkerIcon(marker.state, marker.place)}>
+          <Marker key={`${marker.state}::${marker.place}`} position={[marker.latitude, marker.longitude]} icon={getStateMarkerIcon(marker.state, marker.place, markerStyle)} eventHandlers={onMarkerOpen ? { click: onMarkerOpen } : undefined}>
             <Popup>
-              {firstCampaign ? (
+              {campaigns.length > 0 ? (
                 <div className="text-sm">
                   <p className="font-semibold">{marker.place}, {marker.state}</p>
-                  <p className="mt-1">{formatCampaignDateTimeDisplay(firstCampaign.date, firstCampaign.time)}</p>
-                  <p>Leader: {firstCampaign.leader}</p>
-                  {renderActions({ campaignId: firstCampaign.id, place: marker.place, state: marker.state })}
+                  {campaigns.map(campaign => (
+                    <div key={campaign.id} className="mt-2 border-t border-gray-200 pt-2" data-testid="map-popup-campaign">
+                      <p>{formatCampaignDateTimeDisplay(campaign.date, campaign.time)}</p>
+                      <p>Leader: {campaign.leader}</p>
+                      {!renderPlaceActions && renderActions({ campaignId: campaign.id, place: marker.place, state: marker.state })}
+                    </div>
+                  ))}
+                  {renderPlaceActions?.({ campaignIds: campaigns.map(c => c.id), place: marker.place, state: marker.state })}
                 </div>
               ) : (
                 <p className="text-sm font-semibold">{marker.place} {marker.state}</p>

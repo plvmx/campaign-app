@@ -1,10 +1,10 @@
 import { supabase } from '@/lib/supabaseClient';
-import { geocodePlace } from '@/lib/geocoding';
+import { buildNewStatePlaceRow } from '@/lib/services/newStatePlace';
 
 /**
  * Insert a new place for the given state. Silently ignores duplicate (23505).
  *
- * Best-effort geocodes the place immediately, using the place name itself
+ * Best-effort geocodes the place immediately (see newStatePlace.ts), using the place name itself
  * as the location text — this call site (a leader typing a brand-new place
  * inline while creating a campaign, via useCampaignForm.ts) has no separate
  * "location" field the way the admin Manage State Places page does, so
@@ -20,13 +20,7 @@ import { geocodePlace } from '@/lib/geocoding';
  * coordinates regardless of cause.
  */
 export async function addNewPlaceForState(state: string, place: string): Promise<void> {
-  const normalizedState = state.toUpperCase().trim();
-  const normalizedPlace = place.trim();
-
-  const geocoded = await geocodePlace(normalizedPlace, normalizedState);
-  const row = geocoded
-    ? { state: normalizedState, place: normalizedPlace, location: normalizedPlace, latitude: geocoded.latitude, longitude: geocoded.longitude }
-    : { state: normalizedState, place: normalizedPlace };
+  const row = await buildNewStatePlaceRow(state, place);
 
   const { error } = await supabase.from('state_places').insert([row]);
   if (error && error.code !== '23505')

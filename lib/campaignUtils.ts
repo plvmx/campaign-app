@@ -45,11 +45,18 @@ export function formatCampaignDateTimeDisplay(date: string, time: string): strin
 }
 
 /**
+ * Returns a copy of the list sorted by date, then time — used by map popups
+ * that list every campaign at a place, not just the first. Sorts explicitly
+ * rather than trusting array order, since getCampaignsByDateRange only
+ * guarantees ordering by date, not by time within a date.
+ */
+export function sortCampaignsChronologically<T extends { date: string; time: string }>(campaigns: T[]): T[] {
+  return [...campaigns].sort((a, b) => (a.date === b.date ? a.time.localeCompare(b.time) : a.date.localeCompare(b.date)));
+}
+
+/**
  * Returns the chronologically earliest campaign in a list (by date, then
- * time). Used by map marker popups to show only the first upcoming campaign
- * for a location — sorts explicitly rather than trusting array order, since
- * getCampaignsByDateRange only guarantees ordering by date, not by time
- * within a date. Returns undefined for an empty list.
+ * time), or undefined for an empty list.
  */
 export function getEarliestCampaign<T extends { date: string; time: string }>(campaigns: T[]): T | undefined {
   return campaigns.reduce<T | undefined>((earliest, c) => {

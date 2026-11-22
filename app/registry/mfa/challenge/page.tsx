@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { registrySupabase } from '@/lib/registrySupabaseClient';
 import { setRegistrySessionCookie } from '@/lib/registryAuth';
 import { useRegistryGate } from '@/app/registry/useRegistryGate';
+import { normalizeOtpInput, OTP_CODE_LENGTH } from '@/lib/otpInput';
 import type { MfaGateResult } from '@/lib/registryPipeline/mfaGate';
 import {
   RegistryAuthLayout,
@@ -68,15 +69,14 @@ export default function RegistryMfaChallengePage() {
             id="mfa-code"
             inputMode="numeric"
             pattern="[0-9]*"
-            maxLength={6}
             required
             value={code}
-            onChange={(e) => setCode(e.target.value)}
+            onChange={(e) => setCode(normalizeOtpInput(e.target.value))}
             className={registryInputClass}
           />
         </div>
         {error && <p role="alert" className={registryErrorBannerClass}>{error}</p>}
-        <button type="submit" disabled={isVerifying || !factorId || code.length < 6} className={registryPrimaryButtonClass}>
+        <button type="submit" disabled={isVerifying || !factorId || code.length < OTP_CODE_LENGTH} className={registryPrimaryButtonClass}>
           {isVerifying ? 'Verifying…' : 'Verify'}
         </button>
       </form>

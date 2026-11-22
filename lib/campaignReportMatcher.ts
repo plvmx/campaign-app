@@ -1,8 +1,15 @@
 /**
- * Derives state/place/leader for `campaign_reports` rows submitted since the
- * Campaign Report project's resumed cutoff (2026-05-06, per Peter) by
- * matching the sheet's free-text `location_raw`/`leader_raw` against this
- * app's own `state_places`/`state_leaders` reference tables.
+ * Derives state/location/leader for `campaign_reports` rows by matching the
+ * sheet's free-text `location_raw`/`leader_raw` against this app's own
+ * `state_places`/`state_leaders` reference tables.
+ *
+ * "Location" here is `state_places.location` — the real physical location
+ * (e.g. "Perth CBD", "Frankston", "Orange") — not `state_places.place`, which
+ * is a campaign-form site label that can be numbered ("Perth CBD 3",
+ * "Frankston 2") or a one-off name ("LifeSrce Food"); several places can share
+ * one location, and a typed "Frankston" can't say which numbered site was
+ * meant. A typed name is matched against both, and the result is the
+ * place's location.
  *
  * Full sheet history (2020-2026) was ruled out for this kind of matching in
  * phase 1 — see docs/campaign-report/BRIEF.md — because the text is too
@@ -19,6 +26,8 @@
 export interface PlaceRef {
   state: string;
   place: string;
+  /** state_places.location — the physical location; falls back to `place` when empty. */
+  location?: string | null;
 }
 
 export interface LeaderRef {
@@ -26,10 +35,32 @@ export interface LeaderRef {
   leader: string;
 }
 
+/** A confirmed mapping from a normalized sheet location (see locationKey) to a state and, when known, a state_places location. */
+export interface LocationAliasRef {
+  location_key: string;
+  state: string;
+  location: string | null;
+}
+
 export interface DerivedFields {
   state: string | null;
-  place: string | null;
+  location: string | null;
   leader: string | null;
+}
+
+/** The physical location a state_places row stands for. */
+export function locationOf(p: PlaceRef): string {
+  return (p.location?.trim() || p.place.trim());
+}
+
+/** Distinct physical locations (case-insensitive) among the rows, keeping the first spelling seen. */
+export function distinctLocations(rows: PlaceRef[]): string[] {
+  const seen = new Map<string, string>();
+  for (const r of rows) {
+    const loc = locationOf(r);
+    if (loc && !seen.has(loc.toLowerCase())) seen.set(loc.toLowerCase(), loc);
+  }
+  return [...seen.values()];
 }
 
 // Verified against the live state_places table (each key confirmed to
@@ -88,6 +119,30 @@ export function normalizeLocationForMatch(raw: string | null | undefined): strin
   return s;
 }
 
+/** The key a location is stored/looked up under in campaign_report_location_aliases. */
+export function locationKey(raw: string | null | undefined): string {
+  return normalizeLocationForMatch(raw).toLowerCase();
+}
+
+const STATE_HINT = new RegExp(
+  `(?:^|[\\s,.(\\-])(${STATE_ABBR.join('|')}|${Object.keys(FULL_STATE_NAMES).join('|')})\\)?\\.?\\s*$`,
+  'i',
+);
+
+/**
+ * The state a leader explicitly typed at the end of a location ("Brighton SA",
+ * "Ayr Nth Qld", "Queanbeyan, NSW"), or null. This is the strongest signal we
+ * have — stronger than a place-name match (the same name exists in several
+ * states) and than the leader's usual state (leaders travel).
+ */
+export function extractStateHint(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const m = raw.trim().match(STATE_HINT);
+  if (!m) return null;
+  const token = m[1].toLowerCase();
+  return FULL_STATE_NAMES[token] ?? m[1].toUpperCase();
+}
+
 /**
  * Normalizes a sheet "Campaign Leader" entry for matching: strips trailing
  * team-size annotations ("+2", "(+ 3)", ", 5") and a trailing co-leader
@@ -102,26 +157,29 @@ export function normalizeLeaderForMatch(raw: string | null | undefined): string 
 }
 
 /**
- * Matches a normalized location against state_places, trying (in order):
- * an exact match (after alias substitution), a forward prefix match (the
- * location is the base of a site-numbered place, e.g. "Orange" -> "Orange
- * 1"/"Orange 2"), and a reverse prefix match (the location carries an extra
- * trailing descriptor beyond a real place, e.g. "Perth CBD1" -> "Perth CBD").
- * Returns every candidate row so the caller can resolve state/place together
- * with the leader match — never picks a "best guess" itself.
+ * Matches a normalized sheet location against state_places — by either the
+ * row's physical `location` or its `place` label — trying (in order): an exact
+ * match (after alias substitution), a forward prefix match (the typed text is
+ * the base of a longer name, e.g. "Perth" -> "Perth CBD"), and a reverse prefix
+ * match (the typed text carries an extra trailing descriptor beyond a real name,
+ * e.g. "Perth CBD1" -> "Perth CBD"). Returns every candidate row so the caller
+ * can resolve state/location together with the leader match — never picks a
+ * "best guess" itself.
  */
 export function matchPlace(locationRaw: string | null | undefined, places: PlaceRef[]): PlaceRef[] {
   const normalized = normalizeLocationForMatch(locationRaw);
   if (!normalized) return [];
   const key = (LOCATION_ALIASES[normalized.toLowerCase()] ?? normalized).toLowerCase();
 
-  const exact = places.filter((p) => p.place.trim().toLowerCase() === key);
+  const names = (p: PlaceRef) => [p.place, p.location ?? ''].map((n) => n.trim().toLowerCase()).filter(Boolean);
+
+  const exact = places.filter((p) => names(p).includes(key));
   if (exact.length) return exact;
 
-  const forwardPrefix = places.filter((p) => p.place.trim().toLowerCase().startsWith(`${key} `));
+  const forwardPrefix = places.filter((p) => names(p).some((n) => n.startsWith(`${key} `)));
   if (forwardPrefix.length) return forwardPrefix;
 
-  const reversePrefix = places.filter((p) => key.startsWith(`${p.place.trim().toLowerCase()} `));
+  const reversePrefix = places.filter((p) => names(p).some((n) => key.startsWith(`${n} `)));
   if (reversePrefix.length) return reversePrefix;
 
   return [];
@@ -152,33 +210,48 @@ export function matchLeader(leaderRaw: string | null | undefined, leaders: Leade
 
 /**
  * Combines a place match and a leader match into a single derived
- * state/place/leader, requiring the two to agree when both resolve to a
+ * state/location/leader, requiring the two to agree when both resolve to a
  * state. Each of the three output fields is independently nulled out if it
- * can't be pinned to exactly one value — a resolvable state with an
- * ambiguous place (e.g. "Orange" matching both "Orange 1" and "Orange 2")
- * still yields a confident state with place left null.
+ * can't be pinned to exactly one value. Several places sharing one physical
+ * location (e.g. "Orange 1"/"Orange 2") resolve to that one location; a
+ * resolvable state whose candidates span different locations still yields a
+ * confident state with location left null.
  */
 export function deriveCampaignReportFields(
   row: { location_raw: string | null; leader_raw: string | null },
   places: PlaceRef[],
   leaders: LeaderRef[],
+  aliases: ReadonlyMap<string, LocationAliasRef> = new Map(),
 ): DerivedFields {
-  const placeCandidates = matchPlace(row.location_raw, places);
   const leaderCandidates = matchLeader(row.leader_raw, leaders);
+  const pickLeader = (state: string): string | null => {
+    const inState = leaderCandidates.filter((l) => l.state === state);
+    return inState.length === 1 ? inState[0].leader : null;
+  };
+
+  // A confirmed alias (an admin's decision) beats every heuristic below.
+  const alias = aliases.get(locationKey(row.location_raw));
+  if (alias) return { state: alias.state, location: alias.location, leader: pickLeader(alias.state) };
+
+  const hint = extractStateHint(row.location_raw);
+  const allPlaceCandidates = matchPlace(row.location_raw, places);
+  // An explicit state discards place matches in other states ("Brighton SA" is not NSW's "Brighton Le S").
+  const placeCandidates = hint ? allPlaceCandidates.filter((p) => p.state === hint) : allPlaceCandidates;
 
   const placeStates = [...new Set(placeCandidates.map((p) => p.state))];
   const leaderStates = [...new Set(leaderCandidates.map((l) => l.state))];
 
-  // A unique place match is trusted outright (it's the stronger signal — a
-  // leader mismatch just means that name wasn't resolvable, not that the
-  // place is wrong). No place match at all falls back to a unique leader
-  // match. An *ambiguous* place (matches >1 state) is only resolved if the
-  // leader's state(s) narrow it down to exactly one — a leader match to a
-  // state the place doesn't even support is a real disagreement, not a
-  // tiebreak, so that yields no resolution rather than trusting the leader
-  // blindly.
+  // A typed state is trusted outright. Otherwise a unique place match is
+  // trusted (it's the stronger signal — a leader mismatch just means that name
+  // wasn't resolvable, not that the place is wrong). No place match at all
+  // falls back to a unique leader match. An *ambiguous* place (matches >1
+  // state) is only resolved if the leader's state(s) narrow it down to exactly
+  // one — a leader match to a state the place doesn't even support is a real
+  // disagreement, not a tiebreak, so that yields no resolution.
   let state: string | null = null;
-  if (placeStates.length === 1) {
+  if (hint) {
+    state = hint;
+  } else if (placeStates.length === 1) {
     state = placeStates[0];
   } else if (placeStates.length === 0) {
     if (leaderStates.length === 1) state = leaderStates[0];
@@ -187,14 +260,12 @@ export function deriveCampaignReportFields(
     if (common.length === 1) state = common[0];
   }
 
-  if (!state) return { state: null, place: null, leader: null };
+  if (!state) return { state: null, location: null, leader: null };
 
-  const placeInState = placeCandidates.filter((p) => p.state === state);
-  const leaderInState = leaderCandidates.filter((l) => l.state === state);
-
+  const locationsInState = distinctLocations(placeCandidates.filter((p) => p.state === state));
   return {
     state,
-    place: placeInState.length === 1 ? placeInState[0].place : null,
-    leader: leaderInState.length === 1 ? leaderInState[0].leader : null,
+    location: locationsInState.length === 1 ? locationsInState[0] : null,
+    leader: pickLeader(state),
   };
 }

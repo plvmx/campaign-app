@@ -135,7 +135,9 @@ export function createDb(client: SupabaseClient = createServiceClient()): DbPort
         registered_at: input.registeredAt,
         interested_in_training: input.interestedInTraining,
         church_leader: input.churchLeader,
-        church_name: input.churchName,
+        // Omit-on-undefined, like the fields below: an AC contact with no
+        // church must not blank one already stored (CSV load or earlier sync).
+        ...(input.churchName !== undefined ? { church_name: input.churchName } : {}),
         last_updated_at: new Date().toISOString(),
         // Deliberately omit-on-undefined, not written as `?? null` — these
         // four are the first columns in this adapter with a second,

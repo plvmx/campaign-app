@@ -24,6 +24,9 @@
 # production
 /build
 
+# Tech Insights manifest/sources (generated; contain source code, never commit or publish)
+/generated/
+
 # misc
 .DS_Store
 ._*

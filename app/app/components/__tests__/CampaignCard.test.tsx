@@ -6,7 +6,7 @@
  * full admins ('AD') and state reporters ('SR') should see it.
  */
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 
 // CampaignCard pulls in lib/campaignFilter.ts -> lib/supabaseClient.ts, which
 // requires real env vars at import time. Stub it out (unused here — this test
@@ -35,11 +35,16 @@ const baseCampaign: Campaign = {
   created_at: '2020-01-01T00:00:00.000Z',
 };
 
-function renderCard(adminStatus: string | null, campaignInterestCount?: number) {
+function renderCard(
+  adminStatus: string | null,
+  campaignInterestCount?: number,
+  dateFilter: 'past' | 'future' = 'future',
+  onRecordResults: () => void = () => {},
+) {
   return render(
     <CampaignCard
       campaign={baseCampaign}
-      dateFilter="future"
+      dateFilter={dateFilter}
       isAdmin={adminStatus === 'AD'}
       adminStatus={adminStatus}
       userState="VIC"
@@ -50,7 +55,7 @@ function renderCard(adminStatus: string | null, campaignInterestCount?: number) 
       onEdit={() => {}}
       onDelete={() => {}}
       onToggleCheckbox={() => {}}
-      onRecordResults={() => {}}
+      onRecordResults={onRecordResults}
       onViewTrainingInterest={() => {}}
       onViewCampaignInterest={() => {}}
     />,
@@ -90,5 +95,32 @@ describe('CampaignCard — campaign interest callout', () => {
   it('shows a plural callout for more than one registration', () => {
     renderCard(null, 3);
     expect(screen.getByText(/3 people interested/)).toBeInTheDocument();
+  });
+});
+
+describe('CampaignCard — Record Results button (now opens the campaign report page)', () => {
+  it('is shown to a full admin on a past campaign and fires its handler', () => {
+    const onRecord = vi.fn();
+    renderCard('AD', undefined, 'past', onRecord);
+    fireEvent.click(screen.getByRole('button', { name: 'Record Results' }));
+    expect(onRecord).toHaveBeenCalledTimes(1);
+  });
+
+  it('is shown to a state reporter for a campaign in their own state', () => {
+    renderCard('SR', undefined, 'past');
+    expect(screen.getByRole('button', { name: 'Record Results' })).toBeInTheDocument();
+  });
+
+  it('is hidden from a plain leader who is not this campaign\'s leader', () => {
+    renderCard(null, undefined, 'past');
+    expect(screen.queryByRole('button', { name: 'Record Results' })).not.toBeInTheDocument();
+  });
+
+  it('no longer has the separate "Experimental Campaign Reporting" link for anyone', () => {
+    for (const status of ['AD', 'SR', null]) {
+      renderCard(status, undefined, 'past');
+      expect(screen.queryByText(/Experimental Campaign Reporting/)).not.toBeInTheDocument();
+      cleanup();
+    }
   });
 });

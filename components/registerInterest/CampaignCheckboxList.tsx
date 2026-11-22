@@ -43,7 +43,7 @@ export default function CampaignCheckboxList({ campaigns, checkedIds, onToggle }
 
   return (
     // Force white background so slide state colours (incl. black for NSW) remain legible
-    <div style={{ backgroundColor: '#ffffff' }}>
+    <div data-ti="components/registerInterest/CampaignCheckboxList.tsx" style={{ backgroundColor: '#ffffff' }}>
 
       {/* Colour key — sticky so it stays visible while the lines below it scroll */}
       <div

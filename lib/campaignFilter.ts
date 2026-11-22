@@ -13,6 +13,11 @@ import { normalizeName } from './auth';
  * `admin` column held junk data. Centralizing the check here means it
  * can't drift out of sync at a new call site.
  */
+/** The /app "Extras" link is for plain leaders — whose `admin` is null, not AD/SR. */
+export function shouldShowExtras(admin: string | null | undefined): boolean {
+  return !isRecognizedAdminStatus(admin);
+}
+
 export function isRecognizedAdminStatus(admin: string | null | undefined): admin is 'AD' | 'SR' {
   return admin === 'AD' || admin === 'SR';
 }

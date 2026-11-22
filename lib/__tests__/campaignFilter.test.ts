@@ -11,7 +11,7 @@ vi.mock('../userProfile', () => ({
 import { supabase } from '../supabaseClient';
 import { getUserProfile } from '../userProfile';
 import { makeQueryBuilder } from '../services/__tests__/supabaseMock';
-import { isRecognizedAdminStatus, getUserAdminStatusAndMobile } from '../campaignFilter';
+import { isRecognizedAdminStatus, getUserAdminStatusAndMobile, shouldShowExtras } from '../campaignFilter';
 
 const mockFrom = vi.mocked(supabase.from) as unknown as ReturnType<typeof vi.fn>;
 const mockGetUserProfile = vi.mocked(getUserProfile);
@@ -104,5 +104,15 @@ describe('getUserAdminStatusAndMobile', () => {
     // of passing it through isRecognizedAdminStatus().
     expect(result.admin).toBe('Lorraine');
     expect(isRecognizedAdminStatus(result.admin)).toBe(false);
+  });
+});
+
+describe('shouldShowExtras', () => {
+  it('shows for a plain leader, whose admin status is null', () => {
+    expect(shouldShowExtras(null)).toBe(true);
+  });
+  it('hides for AD and SR', () => {
+    expect(shouldShowExtras('AD')).toBe(false);
+    expect(shouldShowExtras('SR')).toBe(false);
   });
 });

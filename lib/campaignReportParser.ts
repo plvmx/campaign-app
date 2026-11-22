@@ -170,7 +170,7 @@ export function parseCampaignDate(cell: unknown, submittedAt: Date): ParsedCampa
   if (cell instanceof Date && !isNaN(cell.getTime())) {
     const iso = toIsoDate(cell.getFullYear(), cell.getMonth() + 1, cell.getDate());
     if (iso) return accept(iso, null);
-    return { date: null, raw: cell.toString(), needsReview: true };
+    return { date: null, raw: cell.toDateString(), needsReview: true };
   }
 
   if (cell === null || cell === undefined) return { date: null, raw: null, needsReview: false };

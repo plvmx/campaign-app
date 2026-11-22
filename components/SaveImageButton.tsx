@@ -66,7 +66,7 @@ export default function SaveImageButton({ blob, filename, label = 'Save to Photo
   };
 
   return (
-    <div className="flex flex-col items-start gap-1">
+    <div data-ti="components/SaveImageButton.tsx" className="flex flex-col items-start gap-1">
       <button type="button" onClick={handleClick} disabled={isSharing} className={className}>
         {isSharing ? 'Opening…' : label}
       </button>

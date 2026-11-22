@@ -21,7 +21,7 @@ function timeAgo(iso: string | null, now: number = Date.now()): string {
 
 function nudgeMessage(leader: StuckLeader): string {
   const firstName = leader.name.replace(/_(AD|SR)$/i, '');
-  return `Hi ${firstName}, I can see you started setting up your secure AFJ sign-in but haven't finished. Can I help? Step-by-step guide: ${window.location.origin}/help/2fa`;
+  return `Hi ${firstName}, I can see you started setting up your secure TWOL sign-in but haven't finished. Can I help? Step-by-step guide: ${window.location.origin}/help/2fa`;
 }
 
 export default function StuckLeadersPage() {

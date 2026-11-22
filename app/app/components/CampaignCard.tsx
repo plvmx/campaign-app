@@ -3,7 +3,7 @@ import type { Campaign } from '@/lib/types';
 import type { LeaderShareOwner } from '@/lib/types';
 import { getStateColor } from '@/lib/stateColors';
 import { formatCampaignTimeDisplay, isCampaignPast } from '@/lib/campaignUtils';
-import { normalizeName, normalizeMobile } from '@/lib/auth';
+import { canRecordResultsFor } from '@/lib/recordResultsAccess';
 import { isRecognizedAdminStatus } from '@/lib/campaignFilter';
 import { combinePlaceAndSite } from '@/lib/placeSite';
 import { isTrainingCategory } from '@/lib/services/trainingInterestService';
@@ -22,23 +22,11 @@ function canRecordResults(
   sharedWithMeOwners: LeaderShareOwner[],
 ): boolean {
   if (!isCampaignPast(campaign.date, campaign.time)) return false;
-  if (adminStatus === 'AD') return true;
-  if (adminStatus === 'SR') {
-    return (campaign.state || '').toUpperCase().trim() === (userState || '').toUpperCase().trim();
-  }
-  const isOwn =
-    !!userMobileAndLeader?.leader &&
-    !!userState &&
-    normalizeName(campaign.leader || '') === normalizeName(userMobileAndLeader.leader) &&
-    (campaign.state || '').toUpperCase().trim() === userState.toUpperCase().trim() &&
-    !!userMobileAndLeader.mobile &&
-    normalizeMobile(campaign.mobile || '') === normalizeMobile(userMobileAndLeader.mobile);
-  const isShared = sharedWithMeOwners.some(
-    (o) =>
-      (o.owner_state || '').toUpperCase().trim() === (campaign.state || '').toUpperCase().trim() &&
-      normalizeName(o.owner_leader) === normalizeName(campaign.leader || ''),
+  return canRecordResultsFor(
+    campaign,
+    { adminStatus, state: userState, leader: userMobileAndLeader?.leader ?? null, mobile: userMobileAndLeader?.mobile ?? null },
+    sharedWithMeOwners,
   );
-  return isOwn || isShared;
 }
 
 interface Props {
@@ -73,7 +61,7 @@ export default function CampaignCard({
   const showTrainingInterest = isTrainingCategory(campaignCat);
 
   return (
-    <div className={`p-4 sm:p-5 ${stateColor.bg} border-b-2 border-gray-800 dark:border-gray-600`}>
+    <div data-ti="app/app/components/CampaignCard.tsx" className={`p-4 sm:p-5 ${stateColor.bg} border-b-2 border-gray-800 dark:border-gray-600`}>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="flex-1 min-w-0">
           <div className={`flex items-center justify-between gap-2 text-lg sm:text-xl font-bold ${stateColor.text} mb-2 break-words`}>

@@ -149,11 +149,11 @@ export default function RegisterInterestClient({ nextPeriod = false }: Props = {
   };
 
   return (
-    <div className="flex h-[calc(100dvh-var(--pwa-banner-height,0px))] flex-col p-4">
+    <div data-ti="components/registerInterest/RegisterInterestClient.tsx" className="flex h-dvh flex-col p-4">
       <div className="mb-3">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Register my Campaign Interest</h1>
         <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-          All Upcoming AFJ Campaigns for this fortnight are listed below. To <strong className="font-bold">join a campaign</strong>, or to <strong className="font-bold">get more information</strong> please enter your first name and either a mobile number or email address below, click on the campaign that you are interested in and then click on the green or orange button at the bottom of the page.
+          All Upcoming TWOL Campaigns for this fortnight are listed below. To <strong className="font-bold">join a campaign</strong>, or to <strong className="font-bold">get more information</strong> please enter your first name and either a mobile number or email address below, click on the campaign that you are interested in and then click on the green or orange button at the bottom of the page.
         </p>
       </div>
 

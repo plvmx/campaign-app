@@ -71,7 +71,7 @@ export default function PdfGuideViewer({ url, onError }: PdfGuideViewerProps) {
   }, [doc]);
 
   return (
-    <div ref={containerRef} className="mx-auto w-full max-w-3xl">
+    <div data-ti="components/PdfGuideViewer.tsx" ref={containerRef} className="mx-auto w-full max-w-3xl">
       {doc === null ? (
         <p className="p-8 text-center text-xl text-gray-700 dark:text-gray-300">Opening the guide…</p>
       ) : (

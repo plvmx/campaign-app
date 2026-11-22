@@ -184,7 +184,7 @@ export async function transformPendingStagingEvents(db: DbPort, options: Transfo
         registeredAt: fields.registeredAt,
         interestedInTraining: fields.interestedInTraining,
         churchLeader: fields.churchLeader,
-        churchName: fields.churchName,
+        ...(fields.churchName !== null ? { churchName: fields.churchName } : {}),
         // Tag/field-derived — included only when this sync found a real
         // signal (never `null`). Omitting the key leaves the existing
         // column untouched, so a routine re-sync can never erase a value

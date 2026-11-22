@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, useCallback, ReactNode } from 'react';
 import type { UserProfile } from '@/lib/types';
 import { getAuthenticatedUser } from '@/lib/services/authService';
 import { supabase } from '@/lib/supabaseClient';
@@ -30,6 +30,11 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const [userLeader, setUserLeader] = useState<string | null>(null);
   const [userMobile, setUserMobile] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  // Only the very first load shows the loading state. Later reloads (the auth
+  // client re-announces SIGNED_IN whenever the tab regains focus, e.g. after a
+  // file-picker closes) must not flip isLoading, or pages swap their content
+  // for a spinner and lose in-progress state such as a chosen upload file.
+  const hasLoadedRef = useRef(false);
 
   const clearUserState = useCallback(() => {
     setUser(null);
@@ -42,7 +47,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const load = useCallback(async () => {
-    setIsLoading(true);
+    if (!hasLoadedRef.current) setIsLoading(true);
     try {
       const result = await getAuthenticatedUser();
       if (!result) {
@@ -60,6 +65,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
       // On any auth error, clear stale state so pages redirect to login
       clearUserState();
     } finally {
+      hasLoadedRef.current = true;
       setIsLoading(false);
     }
   }, [clearUserState]);

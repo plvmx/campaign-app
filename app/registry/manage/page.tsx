@@ -25,7 +25,7 @@ import {
   type OtherFilterCategory,
   type PeriodCounts,
 } from '@/lib/registryPipeline/registrantCounts';
-import type { EditableRegistrantField } from '@/lib/registryPipeline/registrantValidation';
+import { CHURCH_NAME_MAX_LENGTH, type EditableRegistrantField } from '@/lib/registryPipeline/registrantValidation';
 import {
   LOOKUP_FIELDS,
   LOOKUP_FIELD_LABELS,
@@ -35,6 +35,16 @@ import {
   type LookupFilters,
   type LookupOption,
 } from '@/lib/registryPipeline/registrantLookupFilters';
+import {
+  PAGE_SIZE_OPTIONS,
+  DEFAULT_PAGE_SIZE,
+  getPageCount,
+  getPageSlice,
+  sortRegistrants,
+  type PageSize,
+  type RecordSortColumn,
+  type SortDirection,
+} from '@/lib/registryPipeline/registrantSort';
 import { getSlideStateShade } from '@/lib/slideLayout';
 import { AUSTRALIAN_STATES } from '@/lib/constants';
 
@@ -43,11 +53,6 @@ const ALLOW: MfaGateResult[] = ['ok'];
 // Cells (Total/Unknown) that aren't tied to a specific state color still
 // need a "selected" look — a neutral accent rather than no color at all.
 const NEUTRAL_HIGHLIGHT = 'rgba(37, 99, 235, 0.18)';
-
-// A cell's records list can get long (the unfiltered Total column is every
-// registrant) — capped so the pane stays scannable rather than dumping
-// thousands of rows into the DOM at once.
-const RECORDS_DISPLAY_LIMIT = 500;
 
 type RowKey = 'all' | 'primary' | 'other';
 
@@ -60,9 +65,7 @@ interface SelectedCell {
 
 type PaneMode = 'view' | 'edit';
 
-/** Which of the record pane's columns can be sorted, and which direction — deliberately just these three (First name/Last name/Postcode), per request; Registered defaults to newest-first and isn't clickable. */
-type RecordSortColumn = 'firstName' | 'lastName' | 'postcode' | 'registeredAt';
-type SortDirection = 'asc' | 'desc';
+const DEFAULT_SELECTED_CELL: SelectedCell = { row: 'all', rowLabel: 'All AFJ Registrations', column: 'total', columnLabel: 'Total' };
 
 type SaveEditResult = { ok: true } | { ok: false; error: string };
 
@@ -233,10 +236,11 @@ const TEXT_FIELD_SIZE: Partial<Record<EditableRegistrantField, { maxLength: numb
   postcode: { maxLength: 4, width: '4.5rem' },
   firstName: { maxLength: 20, width: '12rem' },
   lastName: { maxLength: 20, width: '12rem' },
+  churchName: { maxLength: CHURCH_NAME_MAX_LENGTH, width: '16rem' },
 };
 const editErrorStyle: CSSProperties = { color: 'crimson', fontSize: '0.75rem', marginTop: '0.15rem' };
 
-/** A free-text editable cell (First name / Last name / Postcode) — saves on blur or Enter, only if the value actually changed; reverts to the last-known-good value and shows an error inline if the save is rejected. */
+/** A free-text editable cell (First name / Last name / Postcode / Church) — saves on blur or Enter, only if the value actually changed; reverts to the last-known-good value and shows an error inline if the save is rejected. */
 function EditableTextCell({
   recordId,
   field,
@@ -476,7 +480,7 @@ function LookupSelect({
   );
 }
 
-/** The five "find a record by a specific value" dropdowns above the pane's table — one per field, each already populated from the values actually present among the selected cell's records. */
+/** The "find a record by a specific value" dropdowns above the pane's table — one per field, each already populated from the values actually present among the selected cell's records. */
 function LookupFiltersRow({
   options,
   filters,
@@ -524,6 +528,7 @@ function RecordsPane({
   lookupFilters,
   onLookupFilterChange,
   onResetLookups,
+  listKey,
 }: {
   selectedCell: SelectedCell;
   records: ManageRegistrant[];
@@ -537,6 +542,8 @@ function RecordsPane({
   lookupFilters: LookupFilters;
   onLookupFilterChange: (field: LookupField, value: string) => void;
   onResetLookups: () => void;
+  /** Changes whenever the listed set changes (selected cell or lookups) — the pane returns to page 1. */
+  listKey: string;
 }) {
   // Sort is a view preference, not tied to which cell is selected — unlike
   // paneMode/lookupFilters (reset on cell change since they concern that
@@ -547,6 +554,7 @@ function RecordsPane({
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
 
   function toggleSort(column: RecordSortColumn) {
+    setPage(1);
     if (column === sortColumn) {
       setSortDirection((d) => (d === 'asc' ? 'desc' : 'asc'));
     } else {
@@ -560,11 +568,60 @@ function RecordsPane({
     return sortDirection === 'asc' ? ' ▲' : ' ▼';
   }
 
-  const sorted = useMemo(() => {
-    const ascending = [...records].sort((a, b) => (a[sortColumn] ?? '').localeCompare(b[sortColumn] ?? ''));
-    return sortDirection === 'asc' ? ascending : ascending.reverse();
-  }, [records, sortColumn, sortDirection]);
-  const shown = sorted.slice(0, RECORDS_DISPLAY_LIMIT);
+  // The list is paged rather than capped: every record is reachable, however
+  // it's sorted. Page 1 again whenever what's listed (cell, lookups) changes.
+  const [pageSize, setPageSize] = useState<PageSize>(DEFAULT_PAGE_SIZE);
+  const [page, setPage] = useState(1);
+  const [seenListKey, setSeenListKey] = useState(listKey);
+  if (seenListKey !== listKey) {
+    setSeenListKey(listKey);
+    setPage(1);
+  }
+
+  const sorted = useMemo(() => sortRegistrants(records, sortColumn, sortDirection), [records, sortColumn, sortDirection]);
+  const pageCount = getPageCount(sorted.length, pageSize);
+  const currentPage = Math.min(page, pageCount);
+  const shown = getPageSlice(sorted, currentPage, pageSize);
+  const firstShown = sorted.length === 0 ? 0 : pageSize === 'all' ? 1 : (currentPage - 1) * pageSize + 1;
+  const lastShown = firstShown === 0 ? 0 : firstShown + shown.length - 1;
+
+  function sortableHeader(column: RecordSortColumn, label: string) {
+    const active = column === sortColumn;
+    return (
+      <th
+        style={sortableHeaderCellStyle}
+        onClick={() => toggleSort(column)}
+        aria-sort={active ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
+      >
+        {label}{sortIndicator(column)}
+      </th>
+    );
+  }
+
+  const pager = (
+    <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', margin: '0.5rem 0' }}>
+      <span>
+        Showing {firstShown.toLocaleString('en-AU')}–{lastShown.toLocaleString('en-AU')} of {sorted.length.toLocaleString('en-AU')}
+      </span>
+      <button type="button" onClick={() => setPage(Math.max(1, currentPage - 1))} disabled={currentPage <= 1}>← Previous</button>
+      <span>Page {currentPage.toLocaleString('en-AU')} of {pageCount.toLocaleString('en-AU')}</span>
+      <button type="button" onClick={() => setPage(Math.min(pageCount, currentPage + 1))} disabled={currentPage >= pageCount}>Next →</button>
+      <label>
+        Rows per page{' '}
+        <select
+          value={String(pageSize)}
+          onChange={(e) => {
+            setPageSize(e.target.value === 'all' ? 'all' : (Number(e.target.value) as PageSize));
+            setPage(1);
+          }}
+        >
+          {PAGE_SIZE_OPTIONS.map((o) => (
+            <option key={o} value={String(o)}>{o === 'all' ? 'All' : o}</option>
+          ))}
+        </select>
+      </label>
+    </div>
+  );
 
   return (
     <div style={{ marginTop: '1.5rem' }}>
@@ -595,32 +652,29 @@ function RecordsPane({
 
       {mode === 'edit' && (
         <p style={{ color: '#6b7280', fontSize: '0.85rem', marginTop: '0.35rem' }}>
-          Editing First name, Last name, State, Postcode, and NFC — each field saves on its own as soon as you leave it (or change the selection, for State/NFC). Email, Mobile, Date registered, and the webinar/Code of Conduct fields can&apos;t be changed here.
+          Editing First name, Last name, State, Postcode, NFC, and Church — each field saves on its own as soon as you leave it (or change the selection, for State/NFC). Email, Mobile, Date registered, and the webinar/Code of Conduct fields can&apos;t be changed here.
         </p>
       )}
 
-      {records.length > RECORDS_DISPLAY_LIMIT && (
-        <p style={{ color: '#6b7280', fontSize: '0.85rem' }}>
-          Showing the most recent {RECORDS_DISPLAY_LIMIT.toLocaleString('en-AU')} of {records.length.toLocaleString('en-AU')} matching records — narrow with the Primary Filter/Other Filters row or a lookup above to see the rest.
-        </p>
-      )}
+      {pager}
 
       <div style={{ overflowX: 'auto', marginTop: '0.5rem' }}>
-        <table aria-label="Matching records" style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1100 }}>
+        <table aria-label="Matching records" style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1300 }}>
           <thead>
             <tr>
-              <th style={sortableHeaderCellStyle} onClick={() => toggleSort('firstName')}>First name{sortIndicator('firstName')}</th>
-              <th style={sortableHeaderCellStyle} onClick={() => toggleSort('lastName')}>Last name{sortIndicator('lastName')}</th>
-              <th style={headerCellStyle}>Email</th>
-              <th style={headerCellStyle}>Mobile</th>
-              <th style={headerCellStyle}>State</th>
-              <th style={sortableHeaderCellStyle} onClick={() => toggleSort('postcode')}>Postcode{sortIndicator('postcode')}</th>
-              <th style={headerCellStyle}>NFC</th>
-              <th style={sortableHeaderCellStyle} onClick={() => toggleSort('registeredAt')}>Registered{sortIndicator('registeredAt')}</th>
-              <th style={headerCellStyle}>Webinar session</th>
-              <th style={headerCellStyle}>Webinar attended</th>
-              <th style={headerCellStyle}>Code agreed</th>
-              <th style={headerCellStyle}>Date agreed</th>
+              {sortableHeader('firstName', 'First name')}
+              {sortableHeader('lastName', 'Last name')}
+              {sortableHeader('email', 'Email')}
+              {sortableHeader('phone', 'Mobile')}
+              {sortableHeader('state', 'State')}
+              {sortableHeader('postcode', 'Postcode')}
+              {sortableHeader('nfc', 'NFC')}
+              {sortableHeader('churchName', 'Church')}
+              {sortableHeader('registeredAt', 'Registered')}
+              {sortableHeader('webinarSessionAt', 'Webinar session')}
+              {sortableHeader('webinarAttended', 'Webinar attended')}
+              {sortableHeader('codeOfConductAgreed', 'Code agreed')}
+              {sortableHeader('codeOfConductAgreedAt', 'Date agreed')}
             </tr>
           </thead>
           <tbody>
@@ -670,6 +724,11 @@ function RecordsPane({
                   ) : (
                     <td style={{ padding: '0.5rem' }}>{r.nfc ?? '—'}</td>
                   )}
+                  {mode === 'edit' ? (
+                    <EditableTextCell recordId={r.id} field="churchName" value={r.churchName} onSave={onSaveEdit} />
+                  ) : (
+                    <td style={{ padding: '0.5rem' }}>{r.churchName ?? '—'}</td>
+                  )}
                   <td style={{ padding: '0.5rem' }}>{formatDateOnly(r.registeredAt)}</td>
                   <td style={{ padding: '0.5rem' }}>{formatDateTime(r.webinarSessionAt)}</td>
                   <td style={{ padding: '0.5rem' }}>{r.webinarAttended ?? '—'}</td>
@@ -679,11 +738,12 @@ function RecordsPane({
               );
             })}
             {shown.length === 0 && (
-              <tr><td colSpan={12} style={{ padding: '1rem', textAlign: 'center' }}>No matching records.</td></tr>
+              <tr><td colSpan={13} style={{ padding: '1rem', textAlign: 'center' }}>No matching records.</td></tr>
             )}
           </tbody>
         </table>
       </div>
+      {shown.length > 10 && pager}
     </div>
   );
 }
@@ -695,7 +755,9 @@ export default function RegistryManagePage() {
   const [isLoading, setIsLoading] = useState(false);
   const [primaryPeriod, setPrimaryPeriod] = useState<FilterPeriod>('last_7_days');
   const [otherFilterCategory, setOtherFilterCategory] = useState<OtherFilterCategory>('unsubscribed');
-  const [selectedCell, setSelectedCell] = useState<SelectedCell | null>(null);
+  // Opens on the whole database (All AFJ Registrations × Total) so the full
+  // list is there to sort and page through without clicking anything first.
+  const [selectedCell, setSelectedCell] = useState<SelectedCell | null>(DEFAULT_SELECTED_CELL);
   const [paneMode, setPaneMode] = useState<PaneMode>('view');
   const [lookupFilters, setLookupFilters] = useState<LookupFilters>({});
   const [excludeUnsubscribed, setExcludeUnsubscribed] = useState(false);
@@ -872,6 +934,7 @@ export default function RegistryManagePage() {
         <Link href="/registry" style={{ justifySelf: 'start' }}>← Back to Registry</Link>
         <h1 style={{ margin: 0, fontSize: '2rem', fontWeight: 800, textAlign: 'center' }}>Registrations Management</h1>
         <div style={{ justifySelf: 'end', display: 'flex', gap: '1rem' }}>
+          <Link href="/registry/manage/registration-log">View Registration Log →</Link>
           <Link href="/registry/manage/whatsapp-invite-log">View WhatsApp Invite Log →</Link>
           <Link href="/registry/manage/edit-log">View Edit Log →</Link>
         </div>
@@ -979,6 +1042,7 @@ export default function RegistryManagePage() {
               lookupFilters={lookupFilters}
               onLookupFilterChange={updateLookupFilter}
               onResetLookups={resetLookupFilters}
+              listKey={`${selectedCell.row}|${selectedCell.column}|${JSON.stringify(lookupFilters)}`}
             />
           ) : (
             <p style={{ color: '#6b7280', marginTop: '1.5rem' }}>Click a number above to list the matching records here.</p>

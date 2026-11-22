@@ -41,7 +41,7 @@ export default function CampaignSlideView({ campaigns, adminStatus }: Props) {
 
   return (
     // Force white background so slide state colours (incl. black for NSW) remain legible
-    <div style={{ backgroundColor: '#ffffff' }}>
+    <div data-ti="app/app/components/CampaignSlideView.tsx" style={{ backgroundColor: '#ffffff' }}>
 
       {/* Colour key — admin only */}
       {adminStatus === 'AD' && (

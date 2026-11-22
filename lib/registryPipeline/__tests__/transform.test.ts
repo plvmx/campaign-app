@@ -66,7 +66,7 @@ describe('transformPendingStagingEvents', () => {
       registeredAt: '2026-01-15T10:00:00Z',
       interestedInTraining: null,
       churchLeader: null,
-      churchName: null,
+      // churchName is omitted (not null) when the contact has no church.
       // Tag [48] is present on this event's default payload (it's also the
       // known source tag), so codeOfConductAgreed derives to 'Yes' — the
       // other three tag/field-derived keys stay omitted (no webinar tags,
@@ -255,6 +255,21 @@ describe('transformPendingStagingEvents', () => {
     expect(db.upsertRegistrant).toHaveBeenCalledWith(
       expect.objectContaining({ churchLeader: 'Yes', churchName: 'Eaton Baptist Church' })
     );
+  });
+
+  it('reads the church from AC field [8], which the current Register Commitment form writes', async () => {
+    const db = makeDb([makeEvent(9, { fieldValues: [{ field: '6', value: 'WA' }, { field: '8', value: 'St Mary' }] })]);
+    await transformPendingStagingEvents(db);
+
+    expect(db.upsertRegistrant).toHaveBeenCalledWith(expect.objectContaining({ churchName: 'St Mary' }));
+  });
+
+  it('omits churchName entirely when the contact has no church, so a re-sync cannot blank a stored one', async () => {
+    const db = makeDb([makeEvent(10, { fieldValues: [{ field: '6', value: 'WA' }] })]);
+    await transformPendingStagingEvents(db);
+
+    const input = (db.upsertRegistrant as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect('churchName' in input).toBe(false);
   });
 
   it('routes an AC List [2] (/wayoflife-responder/) submission to twol_respondents, never registrants', async () => {

@@ -2089,3 +2089,101 @@ have already resolved one in the intervening 5 days — none had), excluded
 `carolinemusuka@gmail.com` by hardcoded email (the confirmed-invalid
 case), and overwrote the remaining 66. Backed up (pre-write state +
 intended patch) to `backups/` before writing, dry-run by default.
+
+## Registrants lost to the List [2] migration, and sheet-only people never loaded (2026-10-27)
+
+Triggered by two people Lorraine re-registered by hand ("not showing on the
+database") and a count that looked 60 short (9,327 → 9,308).
+
+**Cause 1 — migration premise was false.** The 2026-09-14
+`migrate_wayoflife_responders_to_twol_respondents.ts` moved registrants
+whose only `registration_events` were List `[2]`, on the premise that
+CSV-reloaded rows have no events. But `ac-sync` ran between the reload
+(09-08/09) and the migration and attached List `[2]` events to existing
+CSV rows by email, so ~31 CSV registrants qualified, were copied to
+`twol_respondents` and deleted. **Cause 2 — sheet-only people.** 45
+Australians were added to Lorraine's sheet after the September CSV export;
+they are not in AC, so no job could ever load them. **Cause 3 —
+placeholder email.** AC contact 6609 has `noemail@noemail.com`; the name
+pinned by its first sync stayed (registrantNameGuard).
+
+**Fix.** `scripts/restore_missing_registrants_from_sheet.ts` (planner:
+`lib/registryPipeline/sheetRestorePlan.ts`): 31 restored, 45 imported,
+1 name corrected (logged to `registrant_edits`); dry-run by default,
+backed up to `backups/`, idempotent, deletes nothing; `twol_respondents`
+left as an append-only record. Registrants 9,308 → 9,384. Overseas
+(OS/NZ/UK) sheet rows stay excluded as decided for the reload.
+
+**Why not 9,368.** Lorraine's expectation was 9,326 sheet rows + 42 new.
+The 42 is exact; the sheet's row count is not a head-count (151 overseas
+rows excluded by design, ~150 rows that are the same person as another,
+~320 registry people not on the sheet). Write-up for her:
+`reconciliation-for-lorraine-2026-10-27.md`.
+
+**Open.** ~192 registrants have emails with stray whitespace/footnote
+digits from the CSV (e.g. `x@gmail.com    1`) — a duplicate risk for
+`ac-sync`'s exact-email match; clean up separately. Fix the placeholder
+email on the AC contact. Chris/Yency NFC to be set by Lorraine in Manage.
+
+## Church never saved for new registrants; Registration Log added (2026-11-03)
+
+**Trigger.** Lorraine reported registrations on 28 and 31 Oct as missing. All
+were traced: seven were Way of Life responder submissions (stored in
+`registry.twol_respondents`, by design), the others were returning
+registrants (the sync matches by email, updates the existing row and leaves
+the registered date alone — so no new row and no change to the count).
+
+**Real bug found.** The current "AFJ Register Commitment" form writes the
+church to AC field `[8]`; `mapAcFields` only read `[26]`/`[14]`. Every
+registrant synced since ~10 Sept had a blank church (77 of 77), and because
+`upsertRegistrant` wrote `church_name: null` on each sync, a sync could also
+blank a church loaded from the CSV (1,676 synced registrants now have none;
+1,301 recoverable from saved staging payloads).
+
+**Fix.** `[8]` added as the last church fallback; `transform.ts` omits
+`churchName` when absent and `ac-sync/db.ts` omits the column (omit-on-
+undefined, like the webinar/tag fields). **Requires `ac-sync` to be
+redeployed** (`supabase functions deploy ac-sync`). Regression tests in
+`fieldMap.test.ts` / `transform.test.ts` (shown failing on the pre-fix
+sources). `scripts/backfill_church_from_staging.ts` — dry-run by default,
+fill-only (`church_name IS NULL` guard), backs up to `backups/`: applied
+`--since=2026-09-10` (73 of 77; 4 have no church in AC). The wider run
+(no `--since`) was then applied too: 1,215 more filled; "None"/"N/A"/"Nil"-style
+placeholders (13) deliberately skipped; 388 registrants have no church in AC.
+
+**Registration Log.** `/registry/manage/registration-log` shows what the
+sync did with each submission (see TECHNICAL_DOCS §17.4). Not distinguishable:
+a plain AC contact edit looks like a re-submission.
+
+## Duplicate / malformed emails from the CSV reload (2026-11-17)
+
+Lorraine reported duplicates in `/registry/manage`. Read-only investigation
+of the live registry (9,401 registrants): no email or `ac_contact_id` appears
+twice, but 193 emails carry stray whitespace or a trailing spreadsheet
+footnote digit (`kifinti52@hotmail.com    1` marks a second person on a
+shared address; `shippys @iinet.net.au` is a typo). They came from the CSV
+reload; `ac-sync` was not creating duplicates (none of the suspect rows were
+registered after Sept 2026).
+
+Cleaned, those emails give 134 shared addresses / 273 rows: **18 true
+duplicates** (same name), **116 couples** (different names — never merged),
+plus 76 same-name + same-phone groups with different emails that only a
+person can judge.
+
+**Tool.** `scripts/cleanup_registrant_duplicates.ts` (planner:
+`lib/registryPipeline/duplicateCleanupPlan.ts`). Dry run by default; always
+writes a backup JSON and a review CSV to `backups/`. Steps:
+
+1. Run `scripts/add_email_and_church_to_registrant_edits_check.sql` in the
+   Supabase SQL Editor (lets the audit table record `email` and `church_name`).
+2. `npx tsx scripts/cleanup_registrant_duplicates.ts` — read the plan.
+3. `... --apply` — merges certain duplicates, repairs safe emails.
+   `--include-guessed-emails` also applies repairs that delete spaces inside
+   an address (e.g. `laurie. msc@gmail.com`); review them first.
+4. Give Lorraine the review CSV; apply her decisions by hand in
+   `/registry/manage` or a follow-up script.
+
+Left alone on purpose: couples sharing an address (the second partner keeps
+the dirty email — the unique index allows an address on one row only), and
+emails that can't be repaired (`ann.harding`, `...@hotmail`). A longer-term
+fix for couples would be matching on email + name, a larger design change.

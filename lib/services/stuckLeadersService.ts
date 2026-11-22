@@ -87,7 +87,7 @@ const STAGES: Record<StuckStage, { label: string; action: string; adminOnly?: bo
   },
   '2fa-started': {
     label: 'Opened 2FA setup but did not finish',
-    action: 'Usually the 6-digit code. Check: newest AFJ entry in their app, phone clock on automatic, old AFJ entries deleted.',
+    action: 'Usually the 6-digit code. Check: newest TWOL entry in their app, phone clock on automatic, old TWOL entries deleted.',
   },
 };
 

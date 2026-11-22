@@ -27,7 +27,7 @@ export async function generateMetadata(): Promise<Metadata> {
       description,
       url: LINK.path,
       type: 'website',
-      siteName: 'AFJ Campaign App',
+      siteName: 'TWOL Campaign Activity System',
       images: [PUBLIC_LINK_OG_IMAGE],
     },
     twitter: {

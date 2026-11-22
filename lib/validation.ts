@@ -13,9 +13,4 @@ export function isValidMobile(value: string): boolean {
   return /^04\d{8}$/.test(normalizeMobile(value));
 }
 
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-/** True if the value is a plausible email address (basic shape check). */
-export function isValidEmail(value: string): boolean {
-  return EMAIL_PATTERN.test(value.trim());
-}
+export { isValidEmail } from './emailFormat';

@@ -395,6 +395,18 @@ CREATE POLICY "campaign_interest_sms_log: admin can read"
 
 
 -- =============================================================================
+-- legacy_report_visits  (visits to the "campaign reporting has moved" page)
+-- Admins can read. Only the service role writes (public API route).
+-- =============================================================================
+ALTER TABLE legacy_report_visits ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "legacy_report_visits: admin can read" ON legacy_report_visits;
+CREATE POLICY "legacy_report_visits: admin can read"
+  ON legacy_report_visits FOR SELECT TO authenticated
+  USING (public.is_admin());
+
+
+-- =============================================================================
 -- app_events  (analytics, append-only)
 -- =============================================================================
 ALTER TABLE app_events ENABLE ROW LEVEL SECURITY;
@@ -538,3 +550,29 @@ CREATE POLICY "campaign_reports: admin can read"
   USING (public.is_admin());
 
 -- No authenticated write policy — managed by service role only, for now.
+
+
+-- =============================================================================
+-- campaign_report_location_aliases  (Campaign Report project)
+-- Admin-confirmed sheet-location -> state/place mappings. Admin read only;
+-- written by the service role (see scripts/create_campaign_report_location_aliases_table.sql).
+-- =============================================================================
+ALTER TABLE campaign_report_location_aliases ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "campaign_report_location_aliases: admin can read" ON campaign_report_location_aliases;
+CREATE POLICY "campaign_report_location_aliases: admin can read"
+  ON campaign_report_location_aliases FOR SELECT TO authenticated
+  USING (public.is_admin());
+
+
+-- =============================================================================
+-- campaign_report_edits  (Campaign Report project)
+-- Audit trail of hand edits from /admin/campaign-reports. Admin read only;
+-- written by the service role (see scripts/create_campaign_report_edits_table.sql).
+-- =============================================================================
+ALTER TABLE campaign_report_edits ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "campaign_report_edits: admin can read" ON campaign_report_edits;
+CREATE POLICY "campaign_report_edits: admin can read"
+  ON campaign_report_edits FOR SELECT TO authenticated
+  USING (public.is_admin());

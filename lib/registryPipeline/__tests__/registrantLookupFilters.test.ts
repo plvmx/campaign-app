@@ -10,12 +10,12 @@ import {
 } from '../registrantLookupFilters';
 
 function record(overrides: Partial<LookupableRegistrant> = {}): LookupableRegistrant {
-  return { firstName: 'Vicky', lastName: 'Vale', email: 'vicky@example.com', phone: '+61400000001', postcode: '3000', ...overrides };
+  return { firstName: 'Vicky', lastName: 'Vale', email: 'vicky@example.com', phone: '+61400000001', postcode: '3000', churchName: 'Grace Church', webinarAttended: 'Yes', codeOfConductAgreed: null, ...overrides };
 }
 
 describe('LOOKUP_FIELDS / LOOKUP_FIELD_LABELS', () => {
-  it('covers exactly the five pane columns other than State and Date registered', () => {
-    expect(LOOKUP_FIELDS).toEqual(['firstName', 'lastName', 'email', 'phone', 'postcode']);
+  it('covers the pane\'s text columns other than State and the dates', () => {
+    expect(LOOKUP_FIELDS).toEqual(['firstName', 'lastName', 'email', 'phone', 'postcode', 'churchName', 'webinarAttended', 'codeOfConductAgreed']);
   });
 
   it('labels phone as "Mobile", matching the pane\'s own column header', () => {
@@ -60,6 +60,27 @@ describe('getLookupOptions', () => {
 
   it('returns no options for an empty record list', () => {
     expect(getLookupOptions([], 'firstName')).toEqual([]);
+  });
+});
+
+describe('church / webinar / code lookups', () => {
+  const records = [
+    record({ churchName: 'Grace Church', webinarAttended: 'Yes', codeOfConductAgreed: 'Yes' }),
+    record({ churchName: 'Hope Chapel', webinarAttended: null, codeOfConductAgreed: null }),
+    record({ churchName: null, webinarAttended: 'Yes', codeOfConductAgreed: null }),
+  ];
+
+  it('lists the distinct church names, with (blank) when some are missing', () => {
+    expect(getLookupOptions(records, 'churchName').map((o) => o.value)).toEqual([BLANK_VALUE_OPTION, 'Grace Church', 'Hope Chapel']);
+  });
+
+  it('finds everyone who agreed to the Code (or has not)', () => {
+    expect(filterByLookups(records, { codeOfConductAgreed: 'Yes' })).toHaveLength(1);
+    expect(filterByLookups(records, { codeOfConductAgreed: BLANK_VALUE_OPTION })).toHaveLength(2);
+  });
+
+  it('combines webinar attended with the Code', () => {
+    expect(filterByLookups(records, { webinarAttended: 'Yes', codeOfConductAgreed: BLANK_VALUE_OPTION })).toHaveLength(1);
   });
 });
 

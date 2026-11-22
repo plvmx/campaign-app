@@ -33,7 +33,7 @@ function formatCampaignLine(c: AriseCampaign): string {
 export default function InterestSummaryModal({ campaigns, onProceed, onCancel, isSubmitting = false, error = null }: Props) {
   return (
     <Modal onClose={isSubmitting ? undefined : onCancel}>
-      <div className="w-full max-w-sm rounded-xl border-2 border-gray-800 bg-white p-6 shadow-2xl dark:border-gray-600 dark:bg-gray-900">
+      <div data-ti="components/registerInterest/InterestSummaryModal.tsx" className="w-full max-w-sm rounded-xl border-2 border-gray-800 bg-white p-6 shadow-2xl dark:border-gray-600 dark:bg-gray-900">
         <p className="text-base font-semibold text-gray-900 dark:text-gray-100">
           You have selected the following campaign(s)
         </p>

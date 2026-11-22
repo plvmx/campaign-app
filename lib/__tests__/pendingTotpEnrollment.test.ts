@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { clearPendingTotpEnrollment, readPendingTotpEnrollment, savePendingTotpEnrollment } from '../pendingTotpEnrollment';
 
-const VALUE = { factorId: 'f1', uri: 'otpauth://totp/AFJ:a@x.com?secret=ABC', secret: 'ABC' };
+const VALUE = { factorId: 'f1', uri: 'otpauth://totp/TWOL:a@x.com?secret=ABC', secret: 'ABC' };
 const T0 = 5_000_000;
 
 beforeEach(() => localStorage.clear());

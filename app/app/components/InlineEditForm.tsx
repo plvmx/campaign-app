@@ -63,7 +63,7 @@ export default function InlineEditForm({ campaign, isAdmin, categories, onSave, 
   };
 
   return (
-    <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border-b-2 border-gray-800 dark:border-gray-600">
+    <div data-ti="app/app/components/InlineEditForm.tsx" className="p-4 bg-blue-50 dark:bg-blue-900/20 border-b-2 border-gray-800 dark:border-gray-600">
       {error && (
         <div className="mb-3 rounded-md bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-800 dark:bg-red-900/20 dark:border-red-800 dark:text-red-200">
           {error}

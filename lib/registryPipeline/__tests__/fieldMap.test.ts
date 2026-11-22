@@ -156,7 +156,19 @@ describe('mapAcFields', () => {
     expect(result.churchName).toBe('Lifesource');
   });
 
-  it('returns null churchName when neither field is present', () => {
+  it('reads churchName from field [8] Church — what the current Register Commitment form writes', () => {
+    const result = mapAcFields(makePayload({ fieldValues: [{ field: '8', value: 'St Mary' }] }));
+    expect(result.churchName).toBe('St Mary');
+  });
+
+  it('prefers [26] and [14] over [8] when several are present', () => {
+    const both26 = mapAcFields(makePayload({ fieldValues: [{ field: '8', value: 'Old' }, { field: '26', value: 'New' }] }));
+    expect(both26.churchName).toBe('New');
+    const both14 = mapAcFields(makePayload({ fieldValues: [{ field: '8', value: 'Eight' }, { field: '14', value: 'Fourteen' }] }));
+    expect(both14.churchName).toBe('Fourteen');
+  });
+
+  it('returns null churchName when none of the church fields is present', () => {
     const result = mapAcFields(makePayload({ fieldValues: [] }));
     expect(result.churchName).toBeNull();
   });

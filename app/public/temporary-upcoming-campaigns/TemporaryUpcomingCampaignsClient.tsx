@@ -21,20 +21,21 @@ import { generateAndDownloadSlidesFromData, type PublicSlideDay } from '@/lib/sl
 import type { AriseCampaign } from '@/lib/ariseLayout';
 import type { TemporaryUpcomingCampaignsResponse } from '@/app/api/public/temporary-upcoming-campaigns/route';
 
-const TITLE = 'Temporary AFJ Campaign Lists';
+const TITLE = 'Temporary TWOL Campaign Lists';
 const INTRO_TEXT = 'Here is the temporary upcoming campaign list for this fortnight.';
 
-/** Each bullet as [before, bold word, after] so the bold word can be styled inline. */
-const LEADER_BULLETS: [string, string, string][] = [
-  ['', 'Check', ' that your campaign details are correct'],
-  ['Click on the ', 'Edit', ' button to make changes'],
-  ['Click on the ', 'Download', ' button to save a copy'],
+/** Each step as [text, bold?] segments so the key words can be styled inline. */
+const LEADER_BULLETS: [string, boolean][][] = [
+  [['Check', true], [' that your campaign details are correct', false]],
+  [['If', true], [' anything is wrong, click on the ', false], ['Edit', true], [' button to fix it', false]],
+  [['If', true], [' you want to keep a copy, click on the ', false], ['Download', true], [' button to save it', false]],
 ];
 
 export default function TemporaryUpcomingCampaignsClient() {
   const router = useRouter();
   const [days, setDays] = useState<PublicSlideDay[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [showInstructions, setShowInstructions] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState('');
   const [downloadError, setDownloadError] = useState<string | null>(null);
@@ -78,20 +79,35 @@ export default function TemporaryUpcomingCampaignsClient() {
   };
 
   return (
-    <div className="flex h-[calc(100dvh-var(--pwa-banner-height,0px))] flex-col p-4">
+    <div data-ti="app/public/temporary-upcoming-campaigns/TemporaryUpcomingCampaignsClient.tsx" className="flex h-dvh flex-col p-4">
       <div className="mb-3">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{TITLE}</h1>
         <p className="mt-1 text-base text-gray-600 dark:text-gray-400">{INTRO_TEXT}</p>
-        <p className="mt-2 text-base text-gray-600 dark:text-gray-400">ALL LEADERS please:</p>
-        <ul className="mt-1 list-disc space-y-1 pl-5 text-base text-gray-600 dark:text-gray-400">
-          {LEADER_BULLETS.map(([before, bold, after]) => (
-            <li key={bold}>
-              {before}
-              <span className="font-bold">{bold}</span>
-              {after}
-            </li>
-          ))}
-        </ul>
+        {/* Collapsed by default so leaders can see more of the list. */}
+        <button
+          type="button"
+          onClick={() => setShowInstructions((v) => !v)}
+          aria-expanded={showInstructions}
+          aria-controls="leader-instructions"
+          className="mt-2 text-base font-bold text-blue-700 underline dark:text-blue-300"
+        >
+          CLICK HERE FOR INSTRUCTIONS
+        </button>
+        {showInstructions && (
+          <ol
+            id="leader-instructions"
+            className="mt-1 space-y-1 rounded-lg border border-blue-200 bg-blue-50 p-3 text-base font-medium text-blue-900 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-100"
+          >
+            {LEADER_BULLETS.map((segments, index) => (
+              <li key={index}>
+                <span className="font-bold">{index + 1}.</span>{' '}
+                {segments.map(([text, bold], i) =>
+                  bold ? <span key={i} className="font-bold">{text}</span> : text,
+                )}
+              </li>
+            ))}
+          </ol>
+        )}
       </div>
 
       {loadError && (

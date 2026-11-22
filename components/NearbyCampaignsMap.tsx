@@ -5,8 +5,9 @@ import { useEffect, useMemo, type ReactNode } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Circle, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { getStateMarkerIcon } from '@/lib/leafletMarkerIcon';
-import { formatCampaignDateTimeDisplay, getEarliestCampaign } from '@/lib/campaignUtils';
+import { formatCampaignDateTimeDisplay, sortCampaignsChronologically } from '@/lib/campaignUtils';
 import MapPopupActions from '@/components/MapPopupActions';
+import TechInsightsMapTag from '@/components/techInsights/TechInsightsMapTag';
 
 /**
  * Just enough of a campaign for this map's popup (id/date/time/leader) —
@@ -137,6 +138,7 @@ export default function NearbyCampaignsMap({
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         url="/api/tiles/{z}/{x}/{y}"
       />
+      <TechInsightsMapTag data-ti="components/NearbyCampaignsMap.tsx" />
       <FitBounds center={center} radiusKm={radiusKm} />
       <ResetViewControl center={center} radiusKm={radiusKm} />
       <Circle
@@ -153,8 +155,10 @@ export default function NearbyCampaignsMap({
         </Popup>
       </Marker>
       {markers.map(marker => {
-        const firstCampaign = getEarliestCampaign(marker.campaigns);
-        if (!firstCampaign) return null;
+        // Every campaign at this place is listed (earliest first) — showing
+        // only the first hid later days' campaigns from the visitor.
+        const campaigns = sortCampaignsChronologically(marker.campaigns);
+        if (campaigns.length === 0) return null;
         return (
           <Marker
             key={`${marker.state}::${marker.place}`}
@@ -168,9 +172,13 @@ export default function NearbyCampaignsMap({
               <div className="text-sm">
                 <p className="font-semibold">{marker.place}, {marker.state}</p>
                 <p className="mt-1">{marker.distanceKm} km away</p>
-                <p className="mt-1">{formatCampaignDateTimeDisplay(firstCampaign.date, firstCampaign.time)}</p>
-                <p>Leader: {firstCampaign.leader}</p>
-                {renderActions({ campaignId: firstCampaign.id, place: marker.place, state: marker.state })}
+                {campaigns.map(campaign => (
+                  <div key={campaign.id} className="mt-2 border-t border-gray-200 pt-2" data-testid="map-popup-campaign">
+                    <p>{formatCampaignDateTimeDisplay(campaign.date, campaign.time)}</p>
+                    <p>Leader: {campaign.leader}</p>
+                    {renderActions({ campaignId: campaign.id, place: marker.place, state: marker.state })}
+                  </div>
+                ))}
               </div>
             </Popup>
           </Marker>

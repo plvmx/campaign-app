@@ -26,7 +26,7 @@ export default function AdminQuickActions() {
   const router = useRouter();
 
   return (
-    <div className="mt-4 rounded-lg border-2 border-purple-300 bg-purple-50 p-3 dark:border-purple-700 dark:bg-purple-900/20">
+    <div data-ti="app/app/components/AdminQuickActions.tsx" className="mt-4 rounded-lg border-2 border-purple-300 bg-purple-50 p-3 dark:border-purple-700 dark:bg-purple-900/20">
       <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-purple-700 dark:text-purple-400">
         Admin Quick Actions
       </p>

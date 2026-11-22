@@ -13,10 +13,10 @@ describe('GetHelp', () => {
     expect(link).toHaveAttribute('target', '_blank');
   });
 
-  it('tells leaders to ask in the AFJ TWOL Leaders WhatsApp group, in bold, with no text-message link (sms: does nothing on a PC)', () => {
+  it('tells leaders to ask in the TWOL Leaders WhatsApp group, in bold, with no text-message link (sms: does nothing on a PC)', () => {
     vi.stubEnv('NEXT_PUBLIC_SUPPORT_MOBILE', '0429 028 464');
     render(<GetHelp />);
-    const bold = screen.getByText('ask for help on the AFJ TWOL Leaders WhatsApp group');
+    const bold = screen.getByText('ask for help on the TWOL Leaders WhatsApp group');
     expect(bold.tagName).toBe('STRONG');
     expect(screen.queryByRole('link', { name: /text us for help/i })).not.toBeInTheDocument();
     expect(document.querySelector('a[href^="sms:"]')).toBeNull();

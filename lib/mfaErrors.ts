@@ -13,8 +13,8 @@ export function describeMfaVerifyError(error: { message: string; code?: string |
 
   if (code === 'mfa_verification_failed' || message.includes('invalid totp')) {
     return (
-      "That code didn't work. Please check: (1) you are reading the newest \"AFJ Campaign App\" entry in your authenticator app — " +
-      'delete any older AFJ entries, as only the one from this page works; (2) your phone\'s date and time are set to "automatic"; ' +
+      "That code didn't work. Please check: (1) you are reading the newest \"TWOL Campaign Activity System\" entry in your authenticator app — " +
+      'delete any older TWOL entries, as only the one from this page works; (2) your phone\'s date and time are set to "automatic"; ' +
       '(3) type the code before it changes. Then try again.'
     );
   }
