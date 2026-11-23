@@ -84,6 +84,12 @@ describe('POST /api/member/request-codes', () => {
     expect(body.maskedEmail).toBe('j•••@gmail.com');
   });
 
+  it('masks the decoy email in lower case, exactly as a real send does (no case oracle)', async () => {
+    requestCodes.mockResolvedValue({ status: 'no_match' });
+    const res = await requestCodesPOST(json('/api/member/request-codes', { email: 'Jane@Gmail.COM', mobile: '0412 345 678' }, freshIp()));
+    expect((await res.json()).maskedEmail).toBe('j•••@gmail.com');
+  });
+
   it('tells an invite-link visitor plainly when the link cannot be used', async () => {
     requestCodes.mockResolvedValue({ status: 'no_match' });
     const res = await requestCodesPOST(json('/api/member/request-codes', { invite: TOKEN }, freshIp()));
@@ -152,6 +158,21 @@ describe('session-gated routes', () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ firstName: 'Jane' });
     expect(getMemberSession.mock.calls[0][2]).toBe('sid');
+  });
+
+  it('GET /me re-issues the same signed cookie with a fresh 90-day lifetime (so the cookie slides like the session)', async () => {
+    getMemberSession.mockResolvedValue({ registrantId: 'r1', firstName: 'Jane' });
+    const res = await meGET(signedIn());
+    const cookie = res.headers.get('set-cookie')!;
+    expect(cookie).toContain(`${MEMBER_SESSION_COOKIE}=${encodeURIComponent(signSessionCookie('sid', SECRET))}`);
+    expect(cookie).toMatch(/Max-Age=7776000/i);
+    expect(cookie.toLowerCase()).toContain('httponly');
+  });
+
+  it('GET /me sets no cookie when not signed in', async () => {
+    const res = await meGET(new NextRequest('http://localhost/api/member/me'));
+    expect(res.status).toBe(401);
+    expect(res.headers.get('set-cookie')).toBeNull();
   });
 
   it('is 401 with no cookie, a forged cookie, or a session the database does not know', async () => {

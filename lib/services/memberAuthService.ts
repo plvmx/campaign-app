@@ -22,13 +22,13 @@ import { maskEmail, maskMobile } from '@/lib/memberMasking';
 import { decideSend, MEMBER_THROTTLE, type ThrottleDecision } from '@/lib/memberThrottle';
 import { MEMBER_SESSION_TOUCH_AFTER_MS, MEMBER_SESSION_TTL_MS } from '@/lib/memberSession';
 import { buildMemberCodeEmail, buildMemberSmsBody, MEMBER_CODE_EXPIRY_MINUTES } from '@/lib/memberCodeMessages';
-import { isVerificationId, type RequestCodesInput, type VerifyInput } from '@/lib/memberSignInInput';
+import { isAustralianMobile, isVerificationId, type RequestCodesInput, type VerifyInput } from '@/lib/memberSignInInput';
 import type { OutgoingEmail } from '@/lib/resendClient';
 
 export const MEMBER_VERIFICATION_TTL_MS = MEMBER_CODE_EXPIRY_MINUTES * 60 * 1000;
 export const MEMBER_MAX_VERIFY_ATTEMPTS = 5;
-/** Wrong-code answers allowed from one IP per hour before it is refused outright. */
-export const MEMBER_VERIFY_FAILS_PER_IP_PER_HOUR = 20;
+/** Wrong-code answers allowed from one IP per hour before it is refused outright (high enough that a shared Wi-Fi can't be locked out by one person's typos). */
+export const MEMBER_VERIFY_FAILS_PER_IP_PER_HOUR = 60;
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
 const REGISTRANT_COLUMNS = 'id, first_name, email, phone';
@@ -59,9 +59,9 @@ export function isPlaceholderEmail(email: string): boolean {
   return lower.startsWith('noemail@') || lower.endsWith('@noemail.com') || lower.endsWith('@example.com');
 }
 
-/** Can this registrant sign in by themselves? Needs a usable email AND a mobile on file. */
+/** Can this registrant sign in by themselves? Needs a usable email AND an Australian mobile on file (a landline or overseas number can't be texted reliably — they get the help path). */
 export function isEligibleForSignIn(r: Pick<RegistrantRow, 'email' | 'phone'>): boolean {
-  return !!r.email && isValidEmail(r.email) && !isPlaceholderEmail(r.email) && !!r.phone && r.phone.replace(/\D/g, '').length >= 9;
+  return !!r.email && isValidEmail(r.email) && !isPlaceholderEmail(r.email) && !!r.phone && isAustralianMobile(r.phone);
 }
 
 async function logEvent(

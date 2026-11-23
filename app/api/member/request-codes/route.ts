@@ -48,9 +48,10 @@ export async function POST(request: NextRequest) {
             { status: 400, headers: NO_STORE },
           );
         }
-        // Typed details: indistinguishable from a real send.
+        // Typed details: indistinguishable from a real send — including the case of the masked
+        // email (a real send masks the stored, lower-case address).
         return NextResponse.json(
-          { success: true, verificationId: randomUUID(), maskedEmail: maskEmail(parsed.input.email), maskedMobile: maskMobile(parsed.input.mobile) },
+          { success: true, verificationId: randomUUID(), maskedEmail: maskEmail(parsed.input.email.toLowerCase()), maskedMobile: maskMobile(parsed.input.mobile) },
           { headers: NO_STORE },
         );
       case 'throttled':
