@@ -143,6 +143,6 @@ Shared server code: `lib/services/memberAuthService.ts` (injected client, same D
 3. **Changing email/mobile in the portal** — requires a code sent to the *new* address/number before saving (separate design).
 
 **Still open:**
-4. SMS **sender name** and any Australian sender-ID registration requirement.
+4. SMS **sender name** — Peter chose "AFJ" (email likewise). Code supports it via `MEMBER_SMS_SENDER_ID`; **still to do: register the "AFJ" sender ID with ClickSend and the ACMA** (needs the ABN), then set the variable.
 5. Spam Act review of the one-off invite wording and recipient filter.
 6. Confirm the global daily SMS ceiling and per-person limits in §8.

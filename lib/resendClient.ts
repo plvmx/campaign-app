@@ -11,7 +11,8 @@
 const RESEND_API_URL = 'https://api.resend.com/emails';
 export const DEFAULT_EMAIL_FROM = 'TWOL <noreply@afj.org.au>';
 
-export interface OutgoingEmail { to: string[]; subject: string; html: string; text: string }
+/** `from` overrides the default sender for this one email (e.g. the member sign-in email, which is not a TWOL report). */
+export interface OutgoingEmail { to: string[]; subject: string; html: string; text: string; from?: string }
 
 export async function sendEmail(
   email: OutgoingEmail,
@@ -24,7 +25,7 @@ export async function sendEmail(
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      from: process.env.CAMPAIGN_REPORT_EMAIL_FROM || DEFAULT_EMAIL_FROM,
+      from: email.from || process.env.CAMPAIGN_REPORT_EMAIL_FROM || DEFAULT_EMAIL_FROM,
       to: email.to,
       subject: email.subject,
       html: email.html,

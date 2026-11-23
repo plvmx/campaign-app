@@ -34,6 +34,14 @@ describe('sendEmail', () => {
     expect(JSON.parse((vi.mocked(fetchImpl).mock.calls[0][1] as RequestInit).body as string).from).toBe('TWOL Reports <reports@afj.org.au>');
   });
 
+  it('lets one email override the sender (member sign-in emails say AFJ, not TWOL)', async () => {
+    process.env.RESEND_API_KEY = 'key';
+    process.env.CAMPAIGN_REPORT_EMAIL_FROM = 'TWOL Reports <reports@afj.org.au>';
+    const fetchImpl = okFetch();
+    await sendEmail({ ...email, from: 'AFJ <noreply@afj.org.au>' }, fetchImpl);
+    expect(JSON.parse((vi.mocked(fetchImpl).mock.calls[0][1] as RequestInit).body as string).from).toBe('AFJ <noreply@afj.org.au>');
+  });
+
   it("throws Resend's message when the request is rejected", async () => {
     process.env.RESEND_API_KEY = 'key';
     const fetchImpl = vi.fn().mockResolvedValue({ ok: false, status: 403, json: async () => ({ message: 'domain not verified' }) }) as unknown as typeof fetch;
