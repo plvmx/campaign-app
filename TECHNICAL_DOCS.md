@@ -320,7 +320,7 @@ campaign-app/
 │   ├── ariseLayout.ts          # Arise canvas constants, types, column simulation
 │   ├── ariseCanvas.ts          # Arise canvas draw helpers + renderAriseCanvas()
 │   ├── ariseGenerator.ts       # Arise public API: fetchCampaignsForDate() + generateAndDownloadAriseList()
-│   ├── reportGenerator.ts      # Canvas-based PDF report generation
+│   ├── reportGenerator.ts      # Canvas-based report generation; splitFullPresentationNames() lists a name recorded under both Full and Sinner's Prayer only in "FP & SP"
 │   ├── reportCanvas.ts         # Canvas drawing helpers for reports
 │   ├── leaderShares.ts         # Campaign sharing logic
 │   ├── location.ts             # Geolocation → state code

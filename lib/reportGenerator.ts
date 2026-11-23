@@ -59,6 +59,31 @@ export interface GenerateReportOptions {
 // ---------------------------------------------------------------------------
 
 /**
+ * Full Presentation names are saved under `F`, Sinner's Prayer names under
+ * `SP` — a person who prayed is listed under both. The slide has one column
+ * for "FP & SP" and one for "FP only", so a name typed under Full that also
+ * appears under Sinner's Prayer belongs in the first column only. Matching is
+ * case/space-insensitive and one-for-one (two different people called "Ivy",
+ * only one of whom prayed, leaves one Ivy in "FP only"). A name under SP
+ * alone (old-style records, or no matching Full entry) is still FP & SP.
+ */
+export function splitFullPresentationNames(
+  full: string[],
+  sinnersPrayers: string[],
+): { fpAndSp: string[]; fpOnly: string[] } {
+  const key = (n: string) => n.trim().toLowerCase();
+  const remaining = new Map<string, number>();
+  sinnersPrayers.forEach(n => remaining.set(key(n), (remaining.get(key(n)) ?? 0) + 1));
+  const fpOnly: string[] = [];
+  full.forEach(n => {
+    const left = remaining.get(key(n)) ?? 0;
+    if (left > 0) remaining.set(key(n), left - 1);
+    else fpOnly.push(n);
+  });
+  return { fpAndSp: [...sinnersPrayers], fpOnly };
+}
+
+/**
  * Fetches and shapes campaign results into report rows for `startDate`–`endDate`.
  * Exported for reuse by /api/public/campaign-results, which calls this with a
  * service-role client and no adminStatus/userState (all states, unauthenticated).
@@ -107,17 +132,14 @@ export async function fetchReportRows(options: GenerateReportOptions): Promise<R
     .map(c => {
       const d = new Date(c.date);
       const dateLocation = `${d.getDate()}/${d.getMonth() + 1} ${c.place} ${c.state}`;
-      const fpAndSp: string[] = [];
-      const fpOnly:  string[] = [];
-      const pp:      string[] = [];
-
+      const names = { F: [] as string[], SP: [] as string[], P: [] as string[] };
       (byId.get(c.id) ?? []).forEach(r => {
-        switch (r.category_code) {
-          case 'SP': fpAndSp.push(r.first_name); break;
-          case 'F':  fpOnly.push(r.first_name);  break;
-          case 'P':  pp.push(r.first_name);       break;
+        if (r.category_code === 'F' || r.category_code === 'SP' || r.category_code === 'P') {
+          names[r.category_code].push(r.first_name);
         }
       });
+      const { fpAndSp, fpOnly } = splitFullPresentationNames(names.F, names.SP);
+      const pp = names.P;
 
       return { dateLocation, state: c.state, fpAndSp, fpOnly, pp };
     })
