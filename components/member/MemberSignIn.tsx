@@ -223,6 +223,9 @@ export default function MemberSignIn() {
           Please find those messages and type the code from each into the boxes below. When you have done that, tap Validate.
           The codes work for 10 minutes.
         </p>
+        <p className={bodyTextClass}>
+          Nothing arrived? Check your junk or spam folder, and that these are the email address and mobile number you registered with.
+        </p>
         <div>
           <label htmlFor="member-email-code" className={labelClass}>Code from the email</label>
           <input
