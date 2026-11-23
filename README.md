@@ -42,12 +42,14 @@ For the full architecture, page-by-page route map, database schema, testing poli
    RESEND_API_KEY=your_resend_api_key
    CLICKSEND_USERNAME=your_clicksend_username
    CLICKSEND_API_KEY=your_clicksend_api_key
+   MEMBER_AUTH_SECRET=at-least-32-random-characters
    ```
 
    - `SUPABASE_SERVICE_ROLE_KEY` is required for the server-side leader-lookup and cron API routes (`app/api/auth/validate-leader`, `app/api/cron/weekly-refresh`) — keep it out of anything committed.
    - `CRON_SECRET` just needs to match what you send when hitting the cron route manually in dev; it doesn't need to be the real production value.
    - `RESEND_API_KEY` (and optionally `CAMPAIGN_REPORT_EMAIL_FROM`, a sender on a Resend-verified domain) is needed to email the TWOL Campaign Report to management when a leader presses Save on `/record-results/report` — without it the report is still saved, but the page tells the leader the email could not be sent. Switch it on and set the recipients on the `/admin` hub. The same key also sends the Bank Transfer Donation Notice email from `/public/donate` (§18.5 of `TECHNICAL_DOCS.md`) — switch and recipients are a separate setting on the same hub.
    - `CLICKSEND_USERNAME`/`CLICKSEND_API_KEY` are required for `lib/clickSendClient.ts` to text a campaign's leader when someone registers interest (`lib/services/campaignInterestSmsService.ts`) — without them, that notification fails (and is logged to `campaign_interest_sms_log` as `failed`), but registering interest itself still succeeds.
+   - `MEMBER_AUTH_SECRET` (32+ random characters, e.g. `openssl rand -base64 48`) is required by the member portal sign-in routes (`app/api/member/*`) — without it they return 500 rather than sign in weakly. Those routes also need `RESEND_API_KEY` and the ClickSend keys (they email one code and text another), and the tables from `scripts/create_member_portal_auth_tables.sql`.
 
 3. Database: the schema has grown through many incremental SQL scripts in [`scripts/`](./scripts) and [`docs/migrations/`](./docs/migrations) rather than one canonical setup file. There's no supported "create every table from scratch" path — for a new environment, get a schema clone or a data export from Peter (see `/admin/backup` for exporting/restoring the admin-curated tables once you have access to a running instance). [`supabase/rls-policies.sql`](./supabase/rls-policies.sql) has the current Row Level Security policies for reference.
 

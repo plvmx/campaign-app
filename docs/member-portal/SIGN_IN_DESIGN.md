@@ -1,6 +1,6 @@
 # Member Portal — Sign-in Design (Phase 2, Step 1)
 
-Status: **DESIGN ONLY — nothing built.** Written 2026-11-22.
+Status: **PR A (backend: tables, helpers, service, routes, tests) built 2026-11-23; screens, middleware guard and invites not yet.** Designed 2026-11-22. As-built notes are in `TECHNICAL_DOCS.md` §18.6.
 Context: "Native Registration & Member Portal — Business Case", roadmap Step 3 ("Member Area").
 This document covers sign-in only. What the portal shows after sign-in is a later design.
 
@@ -60,7 +60,7 @@ Copy notes: say "codes expire in 10 minutes"; label boxes "Code from the email" 
 
 ## 5. Data model (new, in `registry` schema; RLS enabled, no policies, `REVOKE` from anon/authenticated — same pattern as the other registry tables)
 
-All use `GENERATED ALWAYS AS IDENTITY` ids (not `BIGSERIAL` — see the 2026-09-17 sequence-grant incident).
+All use `GENERATED ALWAYS AS IDENTITY` ids (not `BIGSERIAL` — see the 2026-09-17 sequence-grant incident), except `member_verifications`, whose id is handed to the browser and so is a random UUID.
 
 | Table | Purpose | Key columns |
 |---|---|---|
@@ -135,11 +135,14 @@ Shared server code: `lib/services/memberAuthService.ts` (injected client, same D
 4. Bulk invite script (dry-run first), staged in batches (e.g. 500/day) so help requests are manageable.
 5. Pre-PR checklist items per PR: backups (excluded — say why), docs, quality pass.
 
-## 13. Open questions (defaults assumed above)
+## 13. Decisions and open questions
 
-1. **Returning visits** — default: both codes on a new device, then 90-day remembered session. Alternative: email-only re-verification on new devices to save SMS cost.
-2. **Help path** for no-mobile / lost-phone — default assumed: contact link to a human (admin list of "unable to verify"); an email-only reduced-privilege sign-in is the alternative.
-3. **Changing email/mobile in the portal** — default: requires a code sent to the *new* address/number before saving (separate design).
+**Decided by Peter, 2026-11-22 (defaults accepted):**
+1. **Returning visits** — both codes on a new device, then a 90-day remembered session.
+2. **Help path** for no-mobile / lost-phone — contact link to a human, plus an admin "unable to verify" list.
+3. **Changing email/mobile in the portal** — requires a code sent to the *new* address/number before saving (separate design).
+
+**Still open:**
 4. SMS **sender name** and any Australian sender-ID registration requirement.
 5. Spam Act review of the one-off invite wording and recipient filter.
 6. Confirm the global daily SMS ceiling and per-person limits in §8.
