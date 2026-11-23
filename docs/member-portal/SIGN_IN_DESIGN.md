@@ -1,6 +1,6 @@
 # Member Portal — Sign-in Design (Phase 2, Step 1)
 
-Status: **PR A (backend) and PR B (sign-in screens, `/member` shell, middleware guard) built 2026-11-23; invites and portal features not yet.** Designed 2026-11-22. As-built notes are in `TECHNICAL_DOCS.md` §18.6.
+Status: **PR A (backend) and PR B (sign-in screens, `/member` shell, middleware guard) and the pilot invite script + monitoring queries built 2026-11-23; bulk emailed invites and portal features not yet.** Designed 2026-11-22. As-built notes are in `TECHNICAL_DOCS.md` §18.6.
 Context: "Native Registration & Member Portal — Business Case", roadmap Step 3 ("Member Area").
 This document covers sign-in only. What the portal shows after sign-in is a later design.
 
