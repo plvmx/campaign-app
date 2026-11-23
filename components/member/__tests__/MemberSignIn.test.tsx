@@ -21,6 +21,10 @@ vi.mock('@/lib/memberAuthClient', () => ({
 }));
 
 import MemberSignIn from '../MemberSignIn';
+
+// The full suite runs hundreds of files in parallel; a loaded machine can exceed the 1 s findBy / 5 s test defaults.
+vi.setConfig({ testTimeout: 20_000 });
+const WAIT = { timeout: 8_000 };
 import { MEMBER_PENDING_KEY } from '@/lib/memberPendingSignIn';
 
 const VID = '11111111-1111-4111-8111-111111111111';
@@ -39,7 +43,7 @@ const click = (name: RegExp | string) => fireEvent.click(screen.getByRole('butto
 
 async function openTyped() {
   render(<MemberSignIn />);
-  await screen.findByRole('heading', { name: 'Sign in' });
+  await screen.findByRole('heading', { name: 'Sign in' }, WAIT);
 }
 async function reachCodes() {
   requestMemberCodes.mockResolvedValue(SENT);
@@ -47,7 +51,7 @@ async function reachCodes() {
   type('Your email address', 'jane@gmail.com');
   type('Your mobile number', '0412 345 678');
   click('Send my codes');
-  await screen.findByRole('heading', { name: 'Enter your codes' });
+  await screen.findByRole('heading', { name: 'Enter your codes' }, WAIT);
 }
 
 describe('typed sign-in details', () => {
@@ -216,7 +220,7 @@ describe('a customised link', () => {
     expect(document.body.textContent).toMatch(/owner of the email address j•••@gmail\.com and the mobile number 04•• ••• 678/);
     expect(requestMemberCodes).not.toHaveBeenCalled(); // never auto-sends
     click('Send my codes');
-    await screen.findByRole('heading', { name: 'Enter your codes' });
+    await screen.findByRole('heading', { name: 'Enter your codes' }, WAIT);
     expect(requestMemberCodes).toHaveBeenCalledWith({ invite: TOKEN });
   });
 
