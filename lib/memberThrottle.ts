@@ -12,7 +12,9 @@ export const MEMBER_THROTTLE = {
   perPersonWindowMax: 3,
   perPersonDayMax: 10,
   perIpWindowMs: 60 * 60 * 1000,
-  perIpWindowMax: 10,
+  // Generous on purpose: members at one event or church share a Wi-Fi/carrier address. The per-person
+  // limits and the daily text ceiling are what actually cap cost; this only blunts one address hammering.
+  perIpWindowMax: 30,
   /** Default for the global ceiling; an admin can override via app_settings `member_sms_daily_ceiling`. */
   defaultDailySmsCeiling: 1500,
 } as const;

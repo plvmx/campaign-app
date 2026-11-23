@@ -57,6 +57,9 @@ describe('isPlaceholderEmail / isEligibleForSignIn', () => {
     expect(isEligibleForSignIn({ email: 'jane@gmail.com', phone: '+61412345678' })).toBe(true);
     expect(isEligibleForSignIn({ email: 'jane@gmail.com', phone: null })).toBe(false);
     expect(isEligibleForSignIn({ email: null, phone: '+61412345678' })).toBe(false);
+    // A landline or an overseas number can't be texted reliably — help path, not a failed send.
+    expect(isEligibleForSignIn({ email: 'jane@gmail.com', phone: '+61298765432' })).toBe(false);
+    expect(isEligibleForSignIn({ email: 'jane@gmail.com', phone: '+14155550123' })).toBe(false);
     expect(isEligibleForSignIn({ email: 'noemail@noemail.com', phone: '+61412345678' })).toBe(false);
   });
 });

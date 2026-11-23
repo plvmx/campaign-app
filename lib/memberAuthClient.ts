@@ -39,12 +39,13 @@ export async function fetchMemberInvite(token: string, fetchImpl: FetchLike = fe
   };
 }
 
-export type RequestCodesInput = { invite: string } | { email: string; mobile: string };
+/** The request body sent to /api/member/request-codes (distinct from the server's parsed shape in lib/memberSignInInput.ts). */
+export type RequestCodesBody = { invite: string } | { email: string; mobile: string };
 export type RequestCodesResult =
   | { status: 'sent'; verificationId: string; maskedEmail: string; maskedMobile: string }
   | { status: 'error'; message: string };
 
-export async function requestMemberCodes(input: RequestCodesInput, fetchImpl: FetchLike = fetch): Promise<RequestCodesResult> {
+export async function requestMemberCodes(input: RequestCodesBody, fetchImpl: FetchLike = fetch): Promise<RequestCodesResult> {
   const r = await call('/api/member/request-codes', jsonPost(input), fetchImpl);
   if (!r) return { status: 'error', message: MEMBER_NETWORK_ERROR };
   if (r.status === 200 && r.body.success === true && typeof r.body.verificationId === 'string') {
