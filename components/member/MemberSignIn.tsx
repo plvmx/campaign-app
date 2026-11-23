@@ -15,6 +15,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import {
   bodyTextClass, cardClass, errorBannerClass, headingClass, inputClass, labelClass, primaryButtonClass, secondaryButtonClass,
 } from '@/components/auth/CodeEntryScreen';
+import { MemberBanner } from '@/components/member/MemberBanner';
 import { MemberHelp } from '@/components/member/MemberHelp';
 import {
   fetchMemberInvite, fetchMemberMe, requestMemberCodes, verifyMemberCodes,
@@ -164,7 +165,7 @@ export default function MemberSignIn() {
       <>
         <h1 className={headingClass}>Let&apos;s make sure it&apos;s you</h1>
         <p className={bodyTextClass}>
-          To sign you in and keep your information safe, we first need to check that you are the owner of the email
+          To <strong>sign you in</strong> and keep your information safe, we first need to check that you are the owner of the email
           address <strong>{phase.maskedEmail}</strong> and the mobile number <strong>{phase.maskedMobile}</strong>.
         </p>
         <p className={bodyTextClass}>Tap the button below and we&apos;ll send you an email and a text message. Each one has a code in it.</p>
@@ -180,10 +181,10 @@ export default function MemberSignIn() {
   } else if (phase.kind === 'typed') {
     content = (
       <form noValidate onSubmit={(e: FormEvent) => { e.preventDefault(); void sendCodes('typed'); }} className="space-y-6">
-        <h1 className={headingClass}>Sign in</h1>
+        <h1 className={headingClass}>Welcome to the AFJ Member Portal</h1>
         {phase.notice && <p role="alert" className={errorBannerClass}>{phase.notice}</p>}
         <p className={bodyTextClass}>
-          To sign you in and keep your information safe, we first need to check that you are the owner of your email address
+          To <strong>sign you in</strong> and keep your information safe, we first need to check that you are the owner of your email address
           and mobile number. Please type them in the way you gave them to us when you registered.
         </p>
         <div>
@@ -261,7 +262,10 @@ export default function MemberSignIn() {
 
   return (
     <main data-ti="components/member/MemberSignIn.tsx" className="flex min-h-screen items-center justify-center bg-gray-50 p-4 dark:bg-gray-950">
-      <div className={`${cardClass} space-y-6`}>{content}</div>
+      <div className={`${cardClass} space-y-6`}>
+        <MemberBanner />
+        {content}
+      </div>
     </main>
   );
 }

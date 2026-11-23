@@ -43,7 +43,7 @@ const click = (name: RegExp | string) => fireEvent.click(screen.getByRole('butto
 
 async function openTyped() {
   render(<MemberSignIn />);
-  await screen.findByRole('heading', { name: 'Sign in' }, WAIT);
+  await screen.findByRole('heading', { name: 'Welcome to the AFJ Member Portal' }, WAIT);
 }
 async function reachCodes() {
   requestMemberCodes.mockResolvedValue(SENT);
@@ -53,6 +53,27 @@ async function reachCodes() {
   click('Send my codes');
   await screen.findByRole('heading', { name: 'Enter your codes' }, WAIT);
 }
+
+describe('branding', () => {
+  it('shows the AFJ banner on the sign-in screen, with a text alternative', async () => {
+    await openTyped();
+    const banner = screen.getByRole('img', { name: 'Australia For Jesus — Bringing Others to Christ' });
+    expect(banner).toBeInTheDocument();
+    expect(banner.getAttribute('src')).toContain('afj-logo-reversed.svg');
+  });
+
+  it('keeps the banner on the later screens too (code boxes), so the page looks the same throughout', async () => {
+    await reachCodes();
+    expect(screen.getByRole('img', { name: /Australia For Jesus/ })).toBeInTheDocument();
+  });
+
+  it('highlights "sign you in" in bold in the explanation', async () => {
+    await openTyped();
+    const bold = [...document.querySelectorAll('strong')].map((e) => e.textContent);
+    expect(bold).toContain('sign you in');
+    expect(document.body.textContent).toMatch(/To sign you in and keep your information safe/);
+  });
+});
 
 describe('typed sign-in details', () => {
   it('shows the explanation and never uses technical jargon', async () => {
@@ -111,7 +132,7 @@ describe('typed sign-in details', () => {
     type('Your mobile number', '0412345678');
     click('Send my codes');
     expect(await screen.findByText(/wait a minute/)).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Sign in' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Welcome to the AFJ Member Portal' })).toBeInTheDocument();
   });
 });
 
