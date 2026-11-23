@@ -1,6 +1,6 @@
 # Member Portal — Sign-in Design (Phase 2, Step 1)
 
-Status: **PR A (backend: tables, helpers, service, routes, tests) built 2026-11-23; screens, middleware guard and invites not yet.** Designed 2026-11-22. As-built notes are in `TECHNICAL_DOCS.md` §18.6.
+Status: **PR A (backend) and PR B (sign-in screens, `/member` shell, middleware guard) built 2026-11-23; invites and portal features not yet.** Designed 2026-11-22. As-built notes are in `TECHNICAL_DOCS.md` §18.6.
 Context: "Native Registration & Member Portal — Business Case", roadmap Step 3 ("Member Area").
 This document covers sign-in only. What the portal shows after sign-in is a later design.
 
@@ -125,7 +125,7 @@ Shared server code: `lib/services/memberAuthService.ts` (injected client, same D
 - Service tests with `supabaseMock.ts`: request-codes (match, no match, one-channel match, rate-limited, provider failure), verify (ok, wrong, expired, locked, reuse), session lookup/revoke.
 - Route tests: generic responses identical for known/unknown details; origin enforced.
 - Page test for the sign-in screens' validation: code boxes digits-only (`normalizeOtpInput`), both required before Validate enabled, inline `role="alert"` errors, nothing submits with errors (UI validation standing rule). **Rules to confirm:** exactly 6 digits each; typed-path email format via `isValidEmail`, mobile via `isValidMobile`.
-- Draft backup: sign-in form deliberately **without** a local backup (codes expire; email/mobile are the member's own details but codes are secrets) — state in PR.
+- Draft backup: the typed codes and details are deliberately **not** mirrored (codes are secrets and expire). The one thing kept on the device is the "codes sent" step — verification id + masked details, 10-minute expiry, never a code — so an iPhone reload while reading the email/text doesn't force a second (rate-limited, paid) send. Added in PR B.
 
 ## 12. Rollout plan
 

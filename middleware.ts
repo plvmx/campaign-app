@@ -38,6 +38,12 @@ const REGISTRY_PUBLIC_PATHS = ['/registry/login', '/registry/auth/callback', '/r
 const REGISTRY_PARTIAL_AUTH_PATHS = ['/registry/mfa/enroll', '/registry/mfa/challenge'];
 const REGISTRY_LOGIN_PATH = '/registry/login';
 
+// The member portal (registrants' own area — a separate login from leaders and from
+// /registry; see docs/member-portal/SIGN_IN_DESIGN.md). Only the sign-in screen is open.
+// `member_session` is a signed httpOnly cookie, but like the others this check only
+// looks for its presence (UX); every /api/member/* route verifies it properly.
+const MEMBER_SIGN_IN_PATH = '/member/sign-in';
+
 function redirectTo(request: NextRequest, pathname: string) {
   const url = request.nextUrl.clone();
   url.pathname = pathname;
@@ -57,6 +63,11 @@ export function middleware(request: NextRequest) {
     }
     // Every other /registry/* path needs the full, MFA-cleared session.
     return request.cookies.has('registry_session') ? NextResponse.next() : redirectTo(request, REGISTRY_LOGIN_PATH);
+  }
+
+  if (pathname === '/member' || pathname.startsWith('/member/')) {
+    if (pathname === MEMBER_SIGN_IN_PATH || pathname.startsWith(`${MEMBER_SIGN_IN_PATH}/`)) return NextResponse.next();
+    return request.cookies.has('member_session') ? NextResponse.next() : redirectTo(request, MEMBER_SIGN_IN_PATH);
   }
 
   const isProtected = PROTECTED_PREFIXES.some((prefix) => pathname.startsWith(prefix));

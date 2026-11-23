@@ -11,7 +11,9 @@
  */
 import { createHash, createHmac, randomBytes, randomInt, timingSafeEqual } from 'crypto';
 
-export const MEMBER_CODE_LENGTH = 6;
+import { MEMBER_CODE_LENGTH } from './memberFormat';
+
+export { MEMBER_CODE_LENGTH };
 
 export type CodeChannel = 'email' | 'sms';
 
