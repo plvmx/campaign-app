@@ -105,12 +105,12 @@ Shared server code: `lib/services/memberAuthService.ts` (injected client, same D
 
 | Case | Handling |
 |---|---|
-| No mobile on file / placeholder email | Not eligible for self-serve sign-in; "get help" path (Q2). Excluded from the invite blast. |
+| No mobile on file / placeholder email | Not eligible for self-serve sign-in; "get help" path (Q2). Not offered a self-serve path; the help screen applies. |
 | Mobile not receiving (number changed, overseas, landline) | "These aren't my details / I can't get the text" → help path (Q2); admin sees it in an "unable to verify" list (like `/admin/stuck-leaders`). |
 | Email changed | Same help path. |
 | Shared household mobile | Identity anchored on email; mobile is a second proof, may coincide across rows without harm. |
 | Registrant is also a leader | No link between the two logins in this phase. |
-| Unsubscribed / NFC | May sign in if they ask, but are never in the invite blast. |
+| Unsubscribed / NFC | May sign in if they ask; the launch email is sent by ActiveCampaign, which already excludes them (§14). |
 | Stray whitespace / footnote digits in legacy emails (known ~192) | Typed path normalises by trimming/lower-casing only; unmatched ones fall to the help path. Fixing the data is separate. |
 
 ## 10. Security properties and honest limits
@@ -132,7 +132,7 @@ Shared server code: `lib/services/memberAuthService.ts` (injected client, same D
 1. PR A — migrations, pure helpers, service, routes, tests, `TECHNICAL_DOCS.md`/`CLAUDE.md` updates. No UI, no invites.
 2. PR B — `/member/sign-in` screens + minimal `/member` shell showing "Signed in as <first name>" and Sign out.
 3. Pilot: invite ~20 leaders/friendlies; watch `member_auth_events` (and Resend/ClickSend delivery).
-4. Bulk invite script (dry-run first), staged in batches (e.g. 500/day) so help requests are manageable.
+4. ~~Bulk invite script~~ — **dropped 2026-11-23 (Peter).** At launch ActiveCampaign, which already emails the registrants and handles unsubscribes, sends everyone the plain `/member/sign-in` link (typed email + mobile). See §14.
 5. Pre-PR checklist items per PR: backups (excluded — say why), docs, quality pass.
 
 ## 13. Decisions and open questions
@@ -146,3 +146,10 @@ Shared server code: `lib/services/memberAuthService.ts` (injected client, same D
 4. SMS **sender name** — Peter chose "AFJ" (email likewise). Code supports it via `MEMBER_SMS_SENDER_ID`; **still to do: register the "AFJ" sender ID with ClickSend and the ACMA** (needs the ABN), then set the variable.
 5. Spam Act review of the one-off invite wording and recipient filter.
 6. Confirm the global daily SMS ceiling and per-person limits in §8.
+5. ~~Spam Act review of the one-off invite wording and recipient filter~~ — **no longer our build.** The launch email goes out from ActiveCampaign under its existing consent/unsubscribe handling.
+
+## 14. Launch plan (decided by Peter, 2026-11-23)
+
+- **No bulk invite from this app.** The planned batched, emailed invite (and its Spam Act review) is dropped. When the member portal is ready for release, ActiveCampaign emails all registrants a link to the plain `/member/sign-in` page. No per-person tokens: a generic link needs no change here, because the typed email + mobile path already works. `scripts/create_member_invite.ts` stays for pilots and for helping one person.
+- **"We couldn't find your registration" is deliberately never shown** — it would let anyone test whether a person is registered. A typed no-match gets exactly the same "Enter your codes" screen as a real send. That screen instead says, to everyone, "Nothing arrived? Check your junk or spam folder, and that these are the email address and mobile number you registered with", and offers **I didn't get a message, or I need help**.
+- **Before the ActiveCampaign send:** (1) raise `member_sms_daily_ceiling` (set to 40 for the pilot) to suit ~9,000 registrants, each sign-in being one text; (2) register the "AFJ" SMS sender ID with ClickSend and the ACMA, then set `MEMBER_SMS_SENDER_ID`; (3) clean the ~192 registrant emails with stray whitespace/digits, which cannot sign in by typing; (4) set `NEXT_PUBLIC_MEMBER_HELP_EMAIL`.

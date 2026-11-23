@@ -54,6 +54,15 @@ async function reachCodes() {
   await screen.findByRole('heading', { name: 'Enter your codes' }, WAIT);
 }
 
+describe('nothing arrived', () => {
+  it('tells the member what to check without saying whether they are registered', async () => {
+    await reachCodes();
+    expect(screen.getByText(/Nothing arrived\? Check your junk or spam folder/)).toBeInTheDocument();
+    expect(screen.getByText(/email address and mobile number you registered with/)).toBeInTheDocument();
+    expect(screen.queryByText(/not registered|couldn't find|no record/i)).not.toBeInTheDocument();
+  });
+});
+
 describe('branding', () => {
   it('shows the AFJ banner on the sign-in screen, with a text alternative', async () => {
     await openTyped();
