@@ -48,6 +48,16 @@ describe('sendSms', () => {
     expect(result).toEqual({ messageId: 'msg-123' });
   });
 
+  it('sends a sender ID as "from" only when one is given (otherwise the account default applies)', async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true, status: 200, json: async () => ({ data: { messages: [{ status: 'SUCCESS', message_id: 'm' }] } }),
+    } as Response);
+    await sendSms('+61412345678', 'Your code', { from: 'AFJ' });
+    expect(JSON.parse(vi.mocked(fetch).mock.calls[0][1]?.body as string).messages[0]).toEqual({ source: 'campaign-app', to: '+61412345678', body: 'Your code', from: 'AFJ' });
+    await sendSms('+61412345678', 'Your code', {});
+    expect(JSON.parse(vi.mocked(fetch).mock.calls[1][1]?.body as string).messages[0]).not.toHaveProperty('from');
+  });
+
   it('throws with ClickSend\'s own error message on a non-ok response', async () => {
     vi.mocked(fetch).mockResolvedValue({
       ok: false,
