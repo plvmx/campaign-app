@@ -14,7 +14,16 @@
 
 const CLICKSEND_SEND_URL = 'https://rest.clicksend.com/v3/sms/send';
 
-export async function sendSms(toE164: string, body: string): Promise<{ messageId: string | null }> {
+export interface SendSmsOptions {
+  /**
+   * The sender the recipient sees: a registered alphanumeric sender ID (e.g. "AFJ"; at most 11
+   * letters/digits). Omitted → ClickSend's account default (a number). Australian alphanumeric
+   * IDs must be registered with ClickSend and the ACMA before they will show as the name.
+   */
+  from?: string;
+}
+
+export async function sendSms(toE164: string, body: string, options: SendSmsOptions = {}): Promise<{ messageId: string | null }> {
   const username = process.env.CLICKSEND_USERNAME;
   const apiKey = process.env.CLICKSEND_API_KEY;
   if (!username || !apiKey) {
@@ -27,7 +36,7 @@ export async function sendSms(toE164: string, body: string): Promise<{ messageId
       Authorization: `Basic ${Buffer.from(`${username}:${apiKey}`).toString('base64')}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ messages: [{ source: 'campaign-app', to: toE164, body }] }),
+    body: JSON.stringify({ messages: [{ source: 'campaign-app', to: toE164, body, ...(options.from ? { from: options.from } : {}) }] }),
   });
 
   const payload: unknown = await res.json().catch(() => null);
