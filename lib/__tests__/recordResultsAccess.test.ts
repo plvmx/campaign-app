@@ -28,13 +28,20 @@ describe('canRecordResultsFor', () => {
 
   it.each<[string, Partial<RecordResultsCaller>]>([
     ['a different leader name', { leader: 'John Smith' }],
-    ['a different state', { state: 'NSW' }],
     ['a different mobile', { mobile: '0499999999' }],
     ['no mobile on file', { mobile: null }],
     ['no leader name', { leader: null }],
-    ['no state', { state: null }],
   ])('refuses a plain leader with %s', (_label, over) => {
     expect(canRecordResultsFor(campaign, caller(over), [])).toBe(false);
+  });
+
+  it('lets a leader record for their own campaign in another state than the row they signed in with (same name + mobile)', () => {
+    // Mary Mc: an NSW admin row with no mobile, and an ACT row with her mobile.
+    // She signs in on the ACT row but her campaign is NSW — the feed shows it
+    // (matches by name + mobile), so the button must appear too.
+    expect(canRecordResultsFor({ ...campaign, state: 'NSW' }, caller({ state: 'ACT' }), [])).toBe(true);
+    expect(canRecordResultsFor({ ...campaign, state: 'NSW' }, caller({ state: null }), [])).toBe(true);
+    expect(canRecordResultsFor({ ...campaign, state: 'NSW' }, caller({ state: 'ACT', mobile: '0499999999' }), [])).toBe(false);
   });
 
   it('lets a plain leader record for a campaign another leader shared with them, and only that one', () => {
